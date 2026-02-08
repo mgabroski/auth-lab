@@ -1,0 +1,77 @@
+# infra/docker-compose.yml
+#
+# WHY:
+# - Local development should be fast and consistent across machines.
+# - We run ONLY infrastructure in Docker (Postgres + Redis).
+# - The backend runs on the host machine using hot reload (tsx watch),
+#   so developers never rebuild Docker images while coding.
+#
+# HOW TO USE (IMPORTANT):
+# - Use the project scripts (single source of truth):
+#     ./scripts/dev.sh       -> starts infra (and later will also run migrations + start backend)
+#     ./scripts/stop.sh      -> stops infra
+#     ./scripts/reset-db.sh  -> deletes local DB data (volumes) for a clean reset
+#
+# NOTE:
+# - You can run docker compose manually for debugging, but scripts are the official path.
+
+name: auth-lab
+
+services:
+  postgres:
+    # WHY:
+    # - Postgres is our primary datastore (matches our architecture).
+    # - We pin a major version to avoid "it works on my machine" differences.
+    image: postgres:17
+    container_name: auth-lab-postgres
+    environment:
+      # WHY:
+      # - These are safe LOCAL defaults for dev only.
+      # - In production we will inject real secrets via environment variables / secret manager.
+      POSTGRES_DB: auth_lab
+      POSTGRES_USER: auth_lab
+      POSTGRES_PASSWORD: auth_lab
+    ports:
+      # WHY:
+      # - Expose to host so the backend (running on host) can connect.
+      - "5432:5432"
+    volumes:
+      # WHY:
+      # - Persist DB data between restarts.
+      # - Deleted by scripts/reset-db.sh when you want a clean slate.
+      - auth_lab_pg:/var/lib/postgresql/data
+    healthcheck:
+      # WHY:
+      # - scripts/dev.sh waits for DB readiness before running migrations.
+      test: ["CMD-SHELL", "pg_isready -U auth_lab -d auth_lab"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    # WHY:
+    # - Redis is optional in Phase 1 but we include it early for:
+    #   rate limiting, session-like state, and future queue/outbox patterns.
+    image: redis:7-alpine
+    container_name: auth-lab-redis
+    ports:
+      # WHY:
+      # - Expose to host so backend can connect.
+      - "6379:6379"
+    volumes:
+      # WHY:
+      # - Keep redis data between restarts (useful in debugging).
+      - auth_lab_redis:/data
+    healthcheck:
+      # WHY:
+      # - Lets us verify container is responding if we ever add readiness gating.
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  # WHY:
+  # - Named volumes are the simplest reliable persistence mechanism for local Docker.
+  auth_lab_pg:
+  auth_lab_redis:
