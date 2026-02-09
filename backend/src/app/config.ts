@@ -16,8 +16,13 @@ import { z } from 'zod';
 const ConfigSchema = z.object({
   NODE_ENV: z.string().default('development'),
   PORT: z.coerce.number().default(3000),
+
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
+
+  // Logging / service identity
+  LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
+  SERVICE_NAME: z.string().default('auth-lab-backend'),
 });
 
 export type AppConfig = {
@@ -25,6 +30,9 @@ export type AppConfig = {
   port: number;
   databaseUrl: string;
   redisUrl: string;
+
+  logLevel: string;
+  serviceName: string;
 };
 
 export function buildConfig(): AppConfig {
@@ -35,5 +43,8 @@ export function buildConfig(): AppConfig {
     port: parsed.PORT,
     databaseUrl: parsed.DATABASE_URL,
     redisUrl: parsed.REDIS_URL,
+
+    logLevel: parsed.LOG_LEVEL,
+    serviceName: parsed.SERVICE_NAME,
   };
 }

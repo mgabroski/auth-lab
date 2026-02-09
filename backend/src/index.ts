@@ -20,10 +20,15 @@ async function main(): Promise<void> {
   const app = await buildServer({ config });
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
-  logger.info(`API listening on port ${config.port}`);
+
+  logger.info('server.listening', {
+    port: config.port,
+    env: config.nodeEnv,
+    service: config.serviceName,
+  });
 }
 
 void main().catch((err: unknown) => {
-  logger.error('Fatal startup error', { err });
+  logger.error('server.fatal_startup_error', { err });
   process.exit(1);
 });

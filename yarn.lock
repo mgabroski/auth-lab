@@ -1221,6 +1221,7 @@ __metadata:
     husky: "npm:^9.0.0"
     lint-staged: "npm:^15.2.0"
     prettier: "npm:^3.2.5"
+    typescript: "npm:^5.4.5"
     typescript-eslint: "npm:^8.0.0"
   languageName: unknown
   linkType: soft
