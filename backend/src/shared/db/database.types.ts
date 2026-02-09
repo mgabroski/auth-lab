@@ -10,12 +10,103 @@ export type Generated<T> =
     ? ColumnType<S, I | undefined, U>
     : ColumnType<T, T | undefined, T>;
 
+export type Json = JsonValue;
+
+export type JsonArray = JsonValue[];
+
+export type JsonObject = {
+  [x: string]: JsonValue | undefined;
+};
+
+export type JsonPrimitive = boolean | number | string | null;
+
+export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
+
+export type Timestamp = ColumnType<Date, Date | string>;
+
+export interface AuditEvents {
+  action: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  ip: string | null;
+  membership_id: string | null;
+  metadata: Generated<Json>;
+  request_id: string | null;
+  tenant_id: string | null;
+  user_agent: string | null;
+  user_id: string | null;
+}
+
+export interface AuthIdentities {
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  password_hash: string | null;
+  provider: string;
+  provider_subject: string | null;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+}
+
+export interface Invites {
+  created_at: Generated<Timestamp>;
+  created_by_user_id: string | null;
+  email: string;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  role: string;
+  status: string;
+  tenant_id: string;
+  token_hash: string;
+  used_at: Timestamp | null;
+}
+
+export interface Memberships {
+  accepted_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  invited_at: Generated<Timestamp>;
+  role: string;
+  status: string;
+  suspended_at: Timestamp | null;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+}
+
+export interface PasswordResetTokens {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  token_hash: string;
+  used_at: Timestamp | null;
+  user_id: string;
+}
+
+export interface Tenants {
+  allowed_email_domains: Generated<Json>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  is_active: Generated<boolean>;
+  key: string;
+  member_mfa_required: Generated<boolean>;
+  name: string;
+  public_signup_enabled: Generated<boolean>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface Users {
+  created_at: Generated<Timestamp>;
   email: string;
   id: Generated<string>;
-  password_hash: string;
+  updated_at: Generated<Timestamp>;
 }
 
 export interface DB {
+  audit_events: AuditEvents;
+  auth_identities: AuthIdentities;
+  invites: Invites;
+  memberships: Memberships;
+  password_reset_tokens: PasswordResetTokens;
+  tenants: Tenants;
   users: Users;
 }
