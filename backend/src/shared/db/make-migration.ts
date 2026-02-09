@@ -17,16 +17,16 @@
  *     backend/src/shared/db/migrations/0001_create_users_table.ts
  */
 
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 
 function normalizeMigrationName(input: string): string {
   // Converts: "Create Users Table" -> "create_users_table"
   return input
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_]/g, "");
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
 }
 
 function getNextMigrationNumber(existingFiles: string[]): string {
@@ -37,7 +37,7 @@ function getNextMigrationNumber(existingFiles: string[]): string {
     .map((m) => Number(m[1]));
 
   const max = numbers.length ? Math.max(...numbers) : 0;
-  return String(max + 1).padStart(4, "0");
+  return String(max + 1).padStart(4, '0');
 }
 
 function buildMigrationFileContents(fileName: string): string {
@@ -65,14 +65,12 @@ export async function down(db: Kysely<any>): Promise<void> {
 `;
 }
 
-function main() {
+async function main(): Promise<void> {
   const rawName = process.argv[2];
 
   if (!rawName) {
-    console.error("❌ Missing migration name.");
-    console.error(
-      "Example: yarn workspace @auth-lab/backend db:make create_users_table"
-    );
+    console.error('❌ Missing migration name.');
+    console.error('Example: yarn workspace @auth-lab/backend db:make create_users_table');
     process.exit(1);
   }
 
@@ -80,7 +78,7 @@ function main() {
 
   // We run this script from backend/ (because the package script runs there),
   // so process.cwd() is backend/.
-  const migrationsDir = path.join(process.cwd(), "src/shared/db/migrations");
+  const migrationsDir = path.join(process.cwd(), 'src/shared/db/migrations');
 
   if (!fs.existsSync(migrationsDir)) {
     fs.mkdirSync(migrationsDir, { recursive: true });
@@ -98,9 +96,12 @@ function main() {
   }
 
   const fileContents = buildMigrationFileContents(fileName);
-  fs.writeFileSync(fullPath, fileContents, "utf8");
+  fs.writeFileSync(fullPath, fileContents, 'utf8');
 
   console.log(`✅ Created migration: ${fullPath}`);
 }
 
-main();
+void main().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});

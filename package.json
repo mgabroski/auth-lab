@@ -9,6 +9,31 @@
     "dev": "./scripts/dev.sh",
     "stop": "./scripts/stop.sh",
     "status": "./scripts/status.sh",
-    "reset-db": "./scripts/reset-db.sh"
+    "reset-db": "./scripts/reset-db.sh",
+    "fmt": "prettier . --write",
+    "fmt:check": "prettier . --check",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "yarn workspace @auth-lab/backend typecheck",
+    "test": "yarn workspace @auth-lab/backend test",
+    "test:watch": "yarn workspace @auth-lab/backend test:watch",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.5",
+    "typescript-eslint": "^8.0.0",
+    "typescript": "^5.4.5"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,tsx,json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*.{js,mjs,cjs,ts,tsx}": [
+      "eslint --fix"
+    ]
   }
 }

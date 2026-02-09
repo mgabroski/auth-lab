@@ -12,10 +12,10 @@
  * - Then Kysely queries become fully typed using the generated Database interface.
  */
 
-import pg from "pg";
-import { Kysely, PostgresDialect } from "kysely";
+import pg from 'pg';
+import { Kysely, PostgresDialect } from 'kysely';
 
-import type { DB } from "./database.types";
+import type { DB } from './database.types';
 
 export function createDb(databaseUrl: string) {
   const pool = new pg.Pool({ connectionString: databaseUrl });

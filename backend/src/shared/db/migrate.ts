@@ -11,34 +11,32 @@
  * - root `yarn dev` calls this automatically via scripts/dev.sh
  */
 
-import "dotenv/config";
+import 'dotenv/config';
 
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { readdir } from "node:fs/promises";
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { readdir } from 'node:fs/promises';
 
-import { Migrator } from "kysely";
-import { createDb } from "./db.js";
-import { buildConfig } from "../../app/config.js";
-import { logger } from "../logger/logger.js";
+import { Migrator } from 'kysely';
+import { createDb } from './db.js';
+import { buildConfig } from '../../app/config.js';
+import { logger } from '../logger/logger.js';
 
-async function runMigrations() {
+async function runMigrations(): Promise<void> {
   const config = buildConfig();
   const db = createDb(config.databaseUrl);
 
   // IMPORTANT:
   // We point directly to the SOURCE migrations folder.
   // This avoids any dist/path confusion.
-  const migrationsDir = path.join(process.cwd(), "src/shared/db/migrations");
+  const migrationsDir = path.join(process.cwd(), 'src/shared/db/migrations');
 
   // Provider that loads TS migrations reliably in dev via tsx.
   const provider = {
     async getMigrations() {
-      const files = (await readdir(migrationsDir))
-        .filter((f) => f.endsWith(".ts"))
-        .sort();
+      const files = (await readdir(migrationsDir)).filter((f) => f.endsWith('.ts')).sort();
 
-      logger.info("Found migration files", { count: files.length, files });
+      logger.info('Found migration files', { count: files.length, files });
 
       const migrations: Record<string, { up: any; down: any }> = {};
 
@@ -49,7 +47,7 @@ async function runMigrations() {
         // tsx will allow importing TS here
         const mod: any = await import(url);
 
-        const name = file.replace(/\.ts$/, "");
+        const name = file.replace(/\.ts$/, '');
         migrations[name] = { up: mod.up, down: mod.down };
       }
 
@@ -62,19 +60,20 @@ async function runMigrations() {
   const { error, results } = await migrator.migrateToLatest();
 
   results?.forEach((r) => {
-    if (r.status === "Success")
-      logger.info("migration success", { migration: r.migrationName });
-    if (r.status === "Error")
-      logger.error("migration error", { migration: r.migrationName });
+    if (r.status === 'Success') logger.info('migration success', { migration: r.migrationName });
+    if (r.status === 'Error') logger.error('migration error', { migration: r.migrationName });
   });
 
   if (error) {
-    logger.error("Migration failed", { error });
+    logger.error('Migration failed', { error });
     process.exit(1);
   }
 
   await db.destroy();
-  logger.info("Migrations up to date");
+  logger.info('Migrations up to date');
 }
 
-runMigrations();
+void runMigrations().catch((err: unknown) => {
+  logger.error('Migration runner crashed', { err });
+  process.exit(1);
+});

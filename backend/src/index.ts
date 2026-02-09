@@ -10,20 +10,20 @@
  * - Later prod: `yarn build && yarn start` (runs dist/)
  */
 
-import { buildConfig } from "./app/config";
-import { buildServer } from "./app/server";
-import { logger } from "./shared/logger/logger";
+import { buildConfig } from './app/config.js';
+import { buildServer } from './app/server.js';
+import { logger } from './shared/logger/logger.js';
 
-async function main() {
+async function main(): Promise<void> {
   const config = buildConfig();
 
   const app = await buildServer({ config });
 
-  await app.listen({ port: config.port, host: "0.0.0.0" });
+  await app.listen({ port: config.port, host: '0.0.0.0' });
   logger.info(`API listening on port ${config.port}`);
 }
 
-main().catch((err) => {
-  logger.error("Fatal startup error", { err });
+void main().catch((err: unknown) => {
+  logger.error('Fatal startup error', { err });
   process.exit(1);
 });

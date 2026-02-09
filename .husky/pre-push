@@ -1,0 +1,4 @@
+yarn fmt:check
+yarn lint
+yarn typecheck
+yarn test

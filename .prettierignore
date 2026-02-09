@@ -1,0 +1,7 @@
+**/dist/**
+**/build/**
+**/.yarn/**
+**/.pnp.*
+**/node_modules/**
+**/coverage/**
+**/*.log

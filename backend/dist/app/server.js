@@ -16,7 +16,7 @@ export async function buildServer(opts) {
         logger: false, // we use our own Winston logger (matches architecture direction)
     });
     // Simple health endpoint (useful for dev + future deployments)
-    app.get("/health", async () => {
+    app.get("/health", () => {
         return { ok: true, env: opts.config.nodeEnv };
     });
     // Basic request logging (minimal now; later we’ll add requestId + context)

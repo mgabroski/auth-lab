@@ -16,11 +16,11 @@
  * - Writes: src/shared/db/database.types.ts
  */
 
-import "dotenv/config";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { z } from "zod";
-import { execSync } from "node:child_process";
+import 'dotenv/config';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { z } from 'zod';
 
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
@@ -30,30 +30,33 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // We generate types into this file:
-const OUT_FILE = path.join(__dirname, "database.types.ts");
+const OUT_FILE = path.join(__dirname, 'database.types.ts');
 
-function main() {
+async function main(): Promise<void> {
   const env = EnvSchema.parse(process.env);
 
   // We call the official CLI under the hood so we don't reinvent it.
   // This keeps behavior consistent with the upstream tool.
   const cmd = [
-    "kysely-codegen",
-    "--dialect",
-    "postgres",
-    "--url",
+    'kysely-codegen',
+    '--dialect',
+    'postgres',
+    '--url',
     `"${env.DATABASE_URL}"`,
-    "--out-file",
+    '--out-file',
     `"${OUT_FILE}"`,
-  ].join(" ");
+  ].join(' ');
 
-  console.log("🔧 Generating Kysely Database types from Postgres schema...");
+  console.log('🔧 Generating Kysely Database types from Postgres schema...');
   console.log(`➡️  Output: ${OUT_FILE}`);
 
-  execSync(cmd, { stdio: "inherit" });
+  execSync(cmd, { stdio: 'inherit' });
 
-  console.log("✅ Type generation complete.");
-  console.log("Tip: If you changed schema, re-run db:types after migrations.");
+  console.log('✅ Type generation complete.');
+  console.log('Tip: If you changed schema, re-run db:types after migrations.');
 }
 
-main();
+void main().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});

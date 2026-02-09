@@ -34,7 +34,7 @@ services:
     ports:
       # WHY:
       # - Expose to host so the backend (running on host) can connect.
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       # WHY:
       # - Persist DB data between restarts.
@@ -43,7 +43,7 @@ services:
     healthcheck:
       # WHY:
       # - scripts/dev.sh waits for DB readiness before running migrations.
-      test: ["CMD-SHELL", "pg_isready -U auth_lab -d auth_lab"]
+      test: ['CMD-SHELL', 'pg_isready -U auth_lab -d auth_lab']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -57,7 +57,7 @@ services:
     ports:
       # WHY:
       # - Expose to host so backend can connect.
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       # WHY:
       # - Keep redis data between restarts (useful in debugging).
@@ -65,7 +65,7 @@ services:
     healthcheck:
       # WHY:
       # - Lets us verify container is responding if we ever add readiness gating.
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 20
