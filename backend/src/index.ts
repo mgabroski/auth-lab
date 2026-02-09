@@ -3,19 +3,16 @@
  *
  * WHY:
  * - Single entrypoint for the backend application.
- * - Keeps startup logic small: load config -> build deps -> build server -> listen.
+ * - Keeps startup logic small: load config -> build app -> listen.
  */
 
 import { buildConfig } from './app/config';
-import { buildServer } from './app/server';
+import { buildApp } from './app/build-app';
 import { logger } from './shared/logger/logger';
-import { buildDeps } from './app/di';
 
 async function main(): Promise<void> {
   const config = buildConfig();
-  const deps = await buildDeps(config);
-
-  const app = await buildServer({ config, deps });
+  const { app, close } = await buildApp(config);
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
 
@@ -27,8 +24,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string) => {
     logger.info('server.shutdown', { signal });
-    await deps.close();
-    await app.close();
+    await close();
     process.exit(0);
   };
 

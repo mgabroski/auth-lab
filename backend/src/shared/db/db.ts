@@ -17,8 +17,23 @@ import { Kysely, PostgresDialect } from 'kysely';
 
 import type { DB } from './database.types';
 
-export function createDb(databaseUrl: string) {
-  const pool = new pg.Pool({ connectionString: databaseUrl });
+export type Db = Kysely<DB>;
+
+/**
+ * DbExecutor is the only DB "capability" DAL/queries should accept.
+ * - Works for both main DB and transactions (later we will pass `trx`).
+ * - Prevents leaking concrete DB construction into modules.
+ */
+export type DbExecutor = Kysely<DB>;
+
+export function createDb(databaseUrl: string): Db {
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    // Safe defaults; you can tune later
+    max: 10,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+  });
 
   return new Kysely<DB>({
     dialect: new PostgresDialect({ pool }),

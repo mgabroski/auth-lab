@@ -25,6 +25,18 @@ const ConfigSchema = z.object({
   SERVICE_NAME: z.string().default('auth-lab-backend'),
 
   BCRYPT_COST: z.coerce.number().int().min(10).max(15).default(12),
+
+  // DEV seed bootstrap (idempotent)
+  SEED_ON_START: z.coerce.boolean().default(false),
+  SEED_TENANT_KEY: z.string().default('goodwill-ca'),
+  SEED_TENANT_NAME: z.string().default('GoodWill California'),
+  SEED_ADMIN_EMAIL: z.string().email().default('admin@example.com'),
+  SEED_INVITE_TTL_HOURS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(24 * 30)
+    .default(24 * 7),
 });
 
 export type AppConfig = {
@@ -37,6 +49,14 @@ export type AppConfig = {
   serviceName: string;
 
   bcryptCost: number;
+
+  seed: {
+    enabled: boolean;
+    tenantKey: string;
+    tenantName: string;
+    adminEmail: string;
+    inviteTtlHours: number;
+  };
 };
 
 export function buildConfig(): AppConfig {
@@ -52,5 +72,13 @@ export function buildConfig(): AppConfig {
     serviceName: parsed.SERVICE_NAME,
 
     bcryptCost: parsed.BCRYPT_COST,
+
+    seed: {
+      enabled: parsed.SEED_ON_START,
+      tenantKey: parsed.SEED_TENANT_KEY,
+      tenantName: parsed.SEED_TENANT_NAME,
+      adminEmail: parsed.SEED_ADMIN_EMAIL,
+      inviteTtlHours: parsed.SEED_INVITE_TTL_HOURS,
+    },
   };
 }

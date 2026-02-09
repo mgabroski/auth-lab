@@ -8,8 +8,8 @@
     "db:migrate": "tsx src/shared/db/migrate.ts",
     "db:types": "tsx src/shared/db/codegen.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

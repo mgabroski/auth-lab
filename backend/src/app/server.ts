@@ -3,21 +3,21 @@
  *
  * WHY:
  * - Builds the Fastify server and registers global plugins/hooks.
- * - Keeps "build app" separate from "start listening" (test-friendly).
+ * - Keeps "build server" separate from "register routes" (test-friendly).
  *
- * HOW TO USE:
- * - Called from src/index.ts
- * - Global request context is attached here (requestId + tenant key from URL).
+ * RULES:
+ * - No routes here (routes.ts owns endpoints).
+ * - Global hooks only (context, auth context, logging).
  */
 
 import Fastify from 'fastify';
 import type { AppConfig } from './config';
 import type { AppDeps } from './di';
-import { logger } from '../shared/logger/logger';
 import { registerRequestContext } from '../shared/http/request-context';
 import { registerAuthContext } from '../shared/http/auth-context';
+import { withRequestContext } from '../shared/logger/with-context';
 
-export async function buildServer(opts: { config: AppConfig; deps: AppDeps }) {
+export async function buildServer(_opts: { config: AppConfig; deps: AppDeps }) {
   const app = Fastify({
     logger: false,
   });
@@ -25,24 +25,13 @@ export async function buildServer(opts: { config: AppConfig; deps: AppDeps }) {
   registerRequestContext(app);
   registerAuthContext(app);
 
-  app.get('/health', (req) => {
-    return {
-      ok: true,
-      env: opts.config.nodeEnv,
-      requestId: req.requestContext.requestId,
-      tenantKey: req.requestContext.tenantKey,
-    };
-  });
-
+  // Global request log (observability)
   app.addHook('onRequest', (req, _reply, done) => {
-    logger.info('request', {
+    withRequestContext(req).info('request', {
+      flow: 'http.request',
       method: req.method,
       url: req.url,
-      requestId: req.requestContext.requestId,
-      host: req.requestContext.host,
-      tenantKey: req.requestContext.tenantKey,
     });
-
     done();
   });
 

@@ -28,6 +28,9 @@ import { Sha256TokenHasher } from '../shared/security/sha256-token-hasher';
 import type { PasswordHasher } from '../shared/security/password-hasher';
 import { BcryptPasswordHasher } from '../shared/security/bcrypt-password-hasher';
 
+import { createTenantModule } from '../modules/tenants/tenant.module';
+import type { TenantModule } from '../modules/tenants/tenant.module';
+
 export type AppDeps = {
   db: ReturnType<typeof createDb>;
   cache: Cache;
@@ -35,6 +38,9 @@ export type AppDeps = {
   rateLimiter: RateLimiter;
   tokenHasher: TokenHasher;
   passwordHasher: PasswordHasher;
+
+  // modules
+  tenants: TenantModule;
 
   // lifecycle
   close: () => Promise<void>;
@@ -53,12 +59,16 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
 
   const rateLimiter = new RateLimiter(redis, { prefix: 'rl' });
 
+  // modules (no HTTP / no business logic here)
+  const tenants = createTenantModule({ db });
+
   return {
     db,
     cache: redis,
     rateLimiter,
     tokenHasher,
     passwordHasher,
+    tenants,
     close: async () => {
       await redis.close();
       await db.destroy();
