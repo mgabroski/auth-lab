@@ -3,21 +3,19 @@
  *
  * WHY:
  * - Single entrypoint for the backend application.
- * - Keeps startup logic small: load config -> build server -> listen.
- *
- * HOW TO USE:
- * - Dev: `yarn dev` (runs via tsx watch)
- * - Later prod: `yarn build && yarn start` (runs dist/)
+ * - Keeps startup logic small: load config -> build deps -> build server -> listen.
  */
 
-import { buildConfig } from './app/config.js';
-import { buildServer } from './app/server.js';
-import { logger } from './shared/logger/logger.js';
+import { buildConfig } from './app/config';
+import { buildServer } from './app/server';
+import { logger } from './shared/logger/logger';
+import { buildDeps } from './app/di';
 
 async function main(): Promise<void> {
   const config = buildConfig();
+  const deps = await buildDeps(config);
 
-  const app = await buildServer({ config });
+  const app = await buildServer({ config, deps });
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
 
@@ -26,6 +24,16 @@ async function main(): Promise<void> {
     env: config.nodeEnv,
     service: config.serviceName,
   });
+
+  const shutdown = async (signal: string) => {
+    logger.info('server.shutdown', { signal });
+    await deps.close();
+    await app.close();
+    process.exit(0);
+  };
+
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
 }
 
 void main().catch((err: unknown) => {

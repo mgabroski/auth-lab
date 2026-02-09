@@ -23,6 +23,8 @@ const ConfigSchema = z.object({
   // Logging / service identity
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   SERVICE_NAME: z.string().default('auth-lab-backend'),
+
+  BCRYPT_COST: z.coerce.number().int().min(10).max(15).default(12),
 });
 
 export type AppConfig = {
@@ -33,6 +35,8 @@ export type AppConfig = {
 
   logLevel: string;
   serviceName: string;
+
+  bcryptCost: number;
 };
 
 export function buildConfig(): AppConfig {
@@ -46,5 +50,7 @@ export function buildConfig(): AppConfig {
 
     logLevel: parsed.LOG_LEVEL,
     serviceName: parsed.SERVICE_NAME,
+
+    bcryptCost: parsed.BCRYPT_COST,
   };
 }

@@ -11,7 +11,7 @@
  */
 
 import type { FastifyRequest } from 'fastify';
-import { logger } from './logger.js';
+import { logger } from './logger';
 
 type LogMeta = Record<string, unknown>;
 

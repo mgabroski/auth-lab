@@ -18,9 +18,9 @@ import { pathToFileURL } from 'node:url';
 import { readdir } from 'node:fs/promises';
 
 import { Migrator } from 'kysely';
-import { createDb } from './db.js';
-import { buildConfig } from '../../app/config.js';
-import { logger } from '../logger/logger.js';
+import { createDb } from './db';
+import { buildConfig } from '../../app/config';
+import { logger } from '../logger/logger';
 
 async function runMigrations(): Promise<void> {
   const config = buildConfig();

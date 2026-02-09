@@ -8,36 +8,33 @@
  * HOW TO USE:
  * - Called from src/index.ts
  * - Global request context is attached here (requestId + tenant key from URL).
- * - Later we will register module routes via app/routes.ts (Brick 0/next).
  */
 
 import Fastify from 'fastify';
-
-import type { AppConfig } from './config.js';
-import { logger } from '../shared/logger/logger.js';
+import type { AppConfig } from './config';
+import type { AppDeps } from './di';
+import { logger } from '../shared/logger/logger';
 import { registerRequestContext } from '../shared/http/request-context';
 import { registerAuthContext } from '../shared/http/auth-context';
 
-export async function buildServer(opts: { config: AppConfig }) {
+export async function buildServer(opts: { config: AppConfig; deps: AppDeps }) {
   const app = Fastify({
-    logger: false, // we use our own Winston logger (matches architecture direction)
+    logger: false,
   });
 
-  // Global context plugins (Brick 1)
   registerRequestContext(app);
-  registerAuthContext(app); // stub for later bricks (auth attaches user + membership here)
+  registerAuthContext(app);
 
-  // Simple health endpoint (useful for dev + future deployments)
   app.get('/health', (req) => {
     return {
       ok: true,
       env: opts.config.nodeEnv,
       requestId: req.requestContext.requestId,
+      tenantKey: req.requestContext.tenantKey,
     };
   });
 
-  // Basic request logging (now includes requestId + tenantKey/subdomain)
-  app.addHook('onRequest', (req) => {
+  app.addHook('onRequest', (req, _reply, done) => {
     logger.info('request', {
       method: req.method,
       url: req.url,
@@ -45,6 +42,8 @@ export async function buildServer(opts: { config: AppConfig }) {
       host: req.requestContext.host,
       tenantKey: req.requestContext.tenantKey,
     });
+
+    done();
   });
 
   return app;
