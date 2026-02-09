@@ -2,19 +2,14 @@
 # scripts/dev.sh
 #
 # WHY:
-# - Single command to start the local development infrastructure (Postgres + Redis).
-# - We intentionally keep infra startup in a script so later we can add:
-#   - running Kysely migrations
-#   - starting the backend in watch mode
-#   without changing how developers work.
+# - One command for local dev:
+#   1) start infra (postgres + redis)
+#   2) run migrations
+#   3) generate DB types
+#   4) start backend watch
 #
-# HOW TO USE:
-#   chmod +x scripts/*.sh
-#   ./scripts/dev.sh
-#
-# WHAT IT DOES:
-# 1) docker compose up -d (infra only)
-# 2) waits until Postgres is ready (so future migrations won't fail)
+# HOW:
+# - `yarn dev`
 
 set -euo pipefail
 
@@ -29,5 +24,23 @@ until docker exec auth-lab-postgres pg_isready -U auth_lab -d auth_lab >/dev/nul
 done
 
 echo "✅ Infra is up."
-echo ""
-echo "Next (when backend exists): we'll run migrations and start the API automatically from here."
+
+echo "📦 Installing dependencies (workspace)..."
+cd "$ROOT_DIR"
+yarn install
+
+echo "🧩 Ensuring backend env file exists..."
+cd "$ROOT_DIR/backend"
+if [ ! -f .env ]; then
+  cp .env.example .env
+  echo "✅ Created backend/.env from backend/.env.example"
+fi
+
+echo "🗄️  Running migrations..."
+yarn db:migrate
+
+echo "🧬 Generating DB types..."
+yarn db:types
+
+echo "🚀 Starting backend (hot reload)..."
+yarn dev
