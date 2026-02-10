@@ -28,6 +28,10 @@ export function registerRoutes(app: FastifyInstance, opts: { config: AppConfig; 
     };
   });
 
+  // Module routes
+  opts.deps.invites.registerRoutes(app);
+
   // Future:
+  // opts.deps.tenants.registerRoutes(app);
   // app.register(authRoutes, { prefix: '/api/auth', deps: opts.deps });
 }

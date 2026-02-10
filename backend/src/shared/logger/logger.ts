@@ -31,3 +31,10 @@ export const logger = winston.createLogger({
   },
   transports: [new winston.transports.Console()],
 });
+
+/**
+ * WHY:
+ * - Allows services/modules to depend on a stable Logger type without importing winston directly.
+ * - Keeps DI clean and makes mocking easier in tests later.
+ */
+export type Logger = typeof logger;
