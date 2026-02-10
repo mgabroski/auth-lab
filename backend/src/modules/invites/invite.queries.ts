@@ -43,10 +43,10 @@ export async function getInviteByTenantAndTokenHash(
 
     tokenHash: row.token_hash,
 
-    expiresAt: row.expires_at as unknown as Date,
-    usedAt: (row.used_at as unknown as Date) ?? null,
+    expiresAt: row.expires_at,
+    usedAt: row.used_at ?? null,
 
-    createdAt: row.created_at as unknown as Date,
+    createdAt: row.created_at,
     createdByUserId: row.created_by_user_id ?? null,
   };
 }

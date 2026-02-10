@@ -8,12 +8,21 @@
  * - No transactions started here (service owns tx).
  * - No AppError.
  * - No policies.
+ * - Supports withDb() for transaction binding (same pattern as AuditRepo).
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
 
 export class InviteRepo {
   constructor(private readonly db: DbExecutor) {}
+
+  /**
+   * Returns a repo bound to a different executor (e.g. a transaction).
+   * This keeps the "repo instance" pattern while supporting trx usage.
+   */
+  withDb(db: DbExecutor): InviteRepo {
+    return new InviteRepo(db);
+  }
 
   /**
    * Marks an invite as accepted only if still PENDING.

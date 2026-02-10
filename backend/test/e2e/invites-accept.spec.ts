@@ -97,88 +97,7 @@ describe('POST /auth/invites/accept', () => {
   it('accepts a valid pending invite, marks it used, and writes audit event', async () => {
     const { app, deps, close } = await buildTestApp();
 
-    // WHY:
-    // - buildTestApp deps typing may be widened by buildApp return shape.
-    // - Cast through unknown to satisfy strict eslint rules without using `any`.
-    const db: DbExecutor = deps.db as unknown as DbExecutor;
-    const tokenHasher: TokenHasher = deps.tokenHasher as unknown as TokenHasher;
-
-    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
-
-    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`; // long enough; never log
-    const email = `user-${randomUUID().slice(0, 8)}@example.com`;
-
-    try {
-      const tenant = await createTenant({
-        db,
-        tenantKey,
-        tenantName: `Tenant ${tenantKey}`,
-        isActive: true,
-      });
-
-      const invite = await createInvite({
-        db,
-        tokenHasher,
-        tenantId: tenant.id,
-        email,
-        role: 'MEMBER',
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // +1h
-        tokenRaw,
-      });
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/invites/accept',
-        headers: { host },
-        payload: { token: tokenRaw },
-      });
-
-      expect(res.statusCode).toBe(200);
-
-      const parsed: AcceptInviteResponse = AcceptInviteResponseSchema.parse(res.json());
-      expect(parsed.status).toBe('ACCEPTED');
-
-      // DB: invite should be accepted/used
-      const inviteRow = await db
-        .selectFrom('invites')
-        .select(['id', 'status', 'used_at', 'tenant_id'])
-        .where('id', '=', invite.id)
-        .executeTakeFirstOrThrow();
-
-      expect(inviteRow.tenant_id).toBe(tenant.id);
-      expect(inviteRow.used_at).not.toBeNull();
-      expect(inviteRow.status).toBe('ACCEPTED');
-
-      // DB: audit event exists
-      const auditRows = await db
-        .selectFrom('audit_events')
-        .select(['id', 'action', 'tenant_id', 'metadata'])
-        .where('tenant_id', '=', tenant.id)
-        .where('action', '=', 'invite.accepted')
-        .execute();
-
-      expect(auditRows).toHaveLength(1);
-      expect(auditRows[0].tenant_id).toBe(tenant.id);
-
-      // Metadata: validate shape (no unsafe access)
-      const meta: AuditInviteAcceptedMeta = AuditInviteAcceptedMetaSchema.parse(
-        auditRows[0].metadata,
-      );
-
-      expect(meta.inviteId).toBe(invite.id);
-      expect(meta.email).toBe(email.toLowerCase());
-      expect(meta.role).toBe('MEMBER');
-    } finally {
-      await close();
-    }
-  });
-
-  it('rejects an expired invite (conflict) and does not write audit event', async () => {
-    const { app, deps, close } = await buildTestApp();
-
-    const db: DbExecutor = deps.db as unknown as DbExecutor;
-    const tokenHasher: TokenHasher = deps.tokenHasher as unknown as TokenHasher;
+    const { db, tokenHasher } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
     const host = `${tenantKey}.localhost:3000`;
@@ -200,7 +119,80 @@ describe('POST /auth/invites/accept', () => {
         tenantId: tenant.id,
         email,
         role: 'MEMBER',
-        expiresAt: new Date(Date.now() - 60 * 1000), // expired 1 min ago
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        tokenRaw,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/invites/accept',
+        headers: { host },
+        payload: { token: tokenRaw },
+      });
+
+      expect(res.statusCode).toBe(200);
+
+      const parsed: AcceptInviteResponse = AcceptInviteResponseSchema.parse(res.json());
+      expect(parsed.status).toBe('ACCEPTED');
+
+      const inviteRow = await db
+        .selectFrom('invites')
+        .select(['id', 'status', 'used_at', 'tenant_id'])
+        .where('id', '=', invite.id)
+        .executeTakeFirstOrThrow();
+
+      expect(inviteRow.tenant_id).toBe(tenant.id);
+      expect(inviteRow.used_at).not.toBeNull();
+      expect(inviteRow.status).toBe('ACCEPTED');
+
+      const auditRows = await db
+        .selectFrom('audit_events')
+        .select(['id', 'action', 'tenant_id', 'metadata'])
+        .where('tenant_id', '=', tenant.id)
+        .where('action', '=', 'invite.accepted')
+        .execute();
+
+      expect(auditRows).toHaveLength(1);
+      expect(auditRows[0].tenant_id).toBe(tenant.id);
+
+      const meta: AuditInviteAcceptedMeta = AuditInviteAcceptedMetaSchema.parse(
+        auditRows[0].metadata,
+      );
+
+      expect(meta.inviteId).toBe(invite.id);
+      expect(meta.email).toBe(email.toLowerCase());
+      expect(meta.role).toBe('MEMBER');
+    } finally {
+      await close();
+    }
+  });
+
+  it('rejects an expired invite (conflict) and does not write audit event', async () => {
+    const { app, deps, close } = await buildTestApp();
+
+    const { db, tokenHasher } = deps;
+
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`;
+    const email = `user-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createTenant({
+        db,
+        tenantKey,
+        tenantName: `Tenant ${tenantKey}`,
+        isActive: true,
+      });
+
+      const invite = await createInvite({
+        db,
+        tokenHasher,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        expiresAt: new Date(Date.now() - 60 * 1000),
         tokenRaw,
       });
 
@@ -213,7 +205,6 @@ describe('POST /auth/invites/accept', () => {
 
       expect(res.statusCode).toBe(409);
 
-      // Invite should remain un-used
       const inviteRow = await db
         .selectFrom('invites')
         .select(['id', 'status', 'used_at'])
@@ -223,7 +214,6 @@ describe('POST /auth/invites/accept', () => {
       expect(inviteRow.used_at).toBeNull();
       expect(inviteRow.status).toBe('PENDING');
 
-      // No audit event should be written
       const auditRows = await db
         .selectFrom('audit_events')
         .select(['id'])

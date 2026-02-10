@@ -98,6 +98,7 @@ export interface Users {
   created_at: Generated<Timestamp>;
   email: string;
   id: Generated<string>;
+  name: string | null;
   updated_at: Generated<Timestamp>;
 }
 

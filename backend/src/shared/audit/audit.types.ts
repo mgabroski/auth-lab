@@ -4,19 +4,41 @@
  * WHY:
  * - Central audit event types (compliance trail stored in DB).
  * - Keeps audit writes consistent across all modules.
+ * - AuditContext groups the request-level fields that repeat on every event.
+ * - AuditAction uses a union + escape hatch to catch typos early
+ *   while still allowing new actions without touching this file.
  *
  * RULES:
  * - Keep types explicit and safe.
  * - Metadata is a plain object (repo serializes to JSON for DB).
+ * - Add known actions to the union as modules grow.
+ * - Never import module types here (shared must stay module-agnostic).
  */
 
-export type AuditAction = string;
+// Known audit actions (add as modules grow)
+export type KnownAuditAction =
+  | 'invite.accepted'
+  | 'invite.created'
+  | 'invite.cancelled'
+  | 'invite.resent';
+
+// Escape hatch: allows new actions without updating this file every time.
+// Remove the escape hatch once all modules are stable.
+export type AuditAction = KnownAuditAction | (string & {});
 
 export type AuditMetadata = Record<string, unknown>;
 
-export type AuditEventInsert = {
-  action: AuditAction;
-
+/**
+ * Request-level context that is identical across every audit event
+ * within a single request. Built progressively as the service resolves
+ * tenant → user → membership.
+ *
+ * All fields are nullable because context is built incrementally:
+ * - Start of tx:       requestId, ip, userAgent
+ * - After tenant:      + tenantId
+ * - After auth (B7+):  + userId, membershipId
+ */
+export type AuditContext = {
   tenantId: string | null;
   userId: string | null;
   membershipId: string | null;
@@ -24,6 +46,13 @@ export type AuditEventInsert = {
   requestId: string | null;
   ip: string | null;
   userAgent: string | null;
+};
 
+/**
+ * Full audit event shape for DB insertion.
+ * Used by AuditRepo only (low-level).
+ */
+export type AuditEventInsert = AuditContext & {
+  action: AuditAction;
   metadata?: AuditMetadata;
 };

@@ -9,13 +9,14 @@
  * - No raw DB access outside queries/DAL.
  * - Enforce tenant safety here.
  * - Never store/log raw tokens (hash immediately).
- * - Audit meaningful actions to DB (append-only).
+ * - Audit meaningful actions via AuditWriter (context built progressively).
  */
 
 import type { DbExecutor } from '../../shared/db/db';
 import type { TokenHasher } from '../../shared/security/token-hasher';
 import type { Logger } from '../../shared/logger/logger';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
+import { AuditWriter } from '../../shared/audit/audit.writer';
 
 import {
   assertTenantExists,
@@ -32,6 +33,7 @@ import {
   assertInviteNotExpired,
 } from './policies/invite.policy';
 import { InviteErrors } from './invite.errors';
+import { auditInviteAccepted } from './invite.audit';
 
 import type { InviteRepo } from './dal/invite.repo';
 
@@ -45,6 +47,10 @@ export type AcceptInviteParams = {
 
 export type AcceptInviteResult = {
   status: 'ACCEPTED';
+  // TODO(brick-7): Derive nextAction from user state:
+  //   - User exists + has password → 'SIGN_IN'
+  //   - User exists + admin without MFA → 'MFA_SETUP_REQUIRED'
+  //   - User is new → 'SET_PASSWORD'
   nextAction: 'SET_PASSWORD' | 'SIGN_IN' | 'MFA_SETUP_REQUIRED';
 };
 
@@ -71,8 +77,15 @@ export class InviteService {
     });
 
     return this.deps.db.transaction().execute(async (trx) => {
-      // bind audit repo to trx (append-only within same tx boundary)
-      const auditRepo = this.deps.auditRepo.withDb(trx);
+      // Bind repos to transaction
+      const inviteRepo = this.deps.inviteRepo.withDb(trx);
+
+      // Audit writer: start with request-level context, enrich as we resolve
+      const audit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
+        requestId: params.requestId,
+        ip: params.ip,
+        userAgent: params.userAgent,
+      });
 
       // 1) Tenant boundary (LOCKED)
       assertTenantKeyPresent(params.tenantKey);
@@ -80,6 +93,9 @@ export class InviteService {
       const tenant = await getTenantByKey(trx, params.tenantKey);
       assertTenantExists(tenant, params.tenantKey);
       assertTenantIsActive(tenant);
+
+      // Enrich audit context with resolved tenant
+      const tenantAudit = audit.withContext({ tenantId: tenant.id });
 
       // 2) Hash token immediately (never store raw token)
       const tokenHash = this.deps.tokenHasher.hash(params.token);
@@ -97,7 +113,7 @@ export class InviteService {
       assertInviteNotExpired(invite, now);
 
       // 5) Write: mark accepted (idempotency guard)
-      const updated = await this.deps.inviteRepo.markAccepted({
+      const updated = await inviteRepo.markAccepted({
         inviteId: invite.id,
         usedAt: now,
       });
@@ -107,20 +123,7 @@ export class InviteService {
       }
 
       // 6) Audit (DB) — meaningful action
-      await auditRepo.append({
-        action: 'invite.accepted',
-        tenantId: tenant.id,
-        userId: null, // Brick 6 doesn’t authenticate a user yet
-        membershipId: null, // Brick 6 doesn’t create/activate membership yet
-        requestId: params.requestId,
-        ip: params.ip,
-        userAgent: params.userAgent,
-        metadata: {
-          inviteId: invite.id,
-          email: invite.email,
-          role: invite.role,
-        },
-      });
+      await auditInviteAccepted(tenantAudit, invite);
 
       this.deps.logger.info({
         msg: 'invites.accept.success',

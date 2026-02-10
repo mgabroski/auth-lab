@@ -1,14 +1,20 @@
+/**
+ * backend/src/modules/tenants/tenant.queries.ts
+ *
+ * WHY:
+ * - Queries are read-only and side-effect free.
+ * - They shape DB rows into Tenant domain types.
+ *
+ * RULES:
+ * - Read-only.
+ * - Tenant-scoped when applicable.
+ * - No AppError.
+ */
+
 import type { DbExecutor } from '../../shared/db/db';
 import type { JsonValue } from '../../shared/db/database.types';
 import type { Tenant, TenantAllowedEmailDomains, TenantKey } from './tenant.types';
 import { findTenantByKeySql } from './dal/tenant.query-sql';
-
-/**
- * Queries are:
- * - read-only
- * - side-effect free
- * - they shape DB rows into domain types
- */
 
 function parseAllowedEmailDomains(value: JsonValue): TenantAllowedEmailDomains {
   if (!Array.isArray(value)) return [];
@@ -40,7 +46,7 @@ export async function getTenantByKey(
     memberMfaRequired: row.member_mfa_required,
     allowedEmailDomains: parseAllowedEmailDomains(row.allowed_email_domains),
 
-    createdAt: row.created_at as unknown as Date,
-    updatedAt: row.updated_at as unknown as Date,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
