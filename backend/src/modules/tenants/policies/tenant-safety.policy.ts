@@ -1,4 +1,4 @@
-import { AppError } from '../../../shared/http/errors';
+import { TenantErrors } from '../tenant.errors';
 import type { Tenant } from '../tenant.types';
 
 /**
@@ -9,7 +9,7 @@ import type { Tenant } from '../tenant.types';
 
 export function assertTenantKeyPresent(tenantKey: string | null): asserts tenantKey is string {
   if (!tenantKey) {
-    throw AppError.tenantKeyMissing();
+    throw TenantErrors.tenantKeyMissing();
   }
 }
 
@@ -18,13 +18,13 @@ export function assertTenantExists(
   tenantKey: string,
 ): asserts tenant is Tenant {
   if (!tenant) {
-    throw AppError.tenantNotFound({ tenantKey });
+    throw TenantErrors.tenantNotFound({ tenantKey });
   }
 }
 
 export function assertTenantIsActive(tenant: Tenant): void {
   if (!tenant.isActive) {
-    throw AppError.tenantInactive({
+    throw TenantErrors.tenantInactive({
       tenantId: tenant.id,
       tenantKey: tenant.key,
     });
