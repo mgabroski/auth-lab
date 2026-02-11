@@ -26,6 +26,9 @@ const ConfigSchema = z.object({
 
   BCRYPT_COST: z.coerce.number().int().min(10).max(15).default(12),
 
+  // Session
+  SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(604800).default(86400),
+
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),
   SEED_TENANT_KEY: z.string().default('goodwill-ca'),
@@ -50,6 +53,8 @@ export type AppConfig = {
 
   bcryptCost: number;
 
+  sessionTtlSeconds: number;
+
   seed: {
     enabled: boolean;
     tenantKey: string;
@@ -72,6 +77,8 @@ export function buildConfig(): AppConfig {
     serviceName: parsed.SERVICE_NAME,
 
     bcryptCost: parsed.BCRYPT_COST,
+
+    sessionTtlSeconds: parsed.SESSION_TTL_SECONDS,
 
     seed: {
       enabled: parsed.SEED_ON_START,

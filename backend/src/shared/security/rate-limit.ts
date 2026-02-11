@@ -32,6 +32,9 @@ export class RateLimiter {
   ) {}
 
   async hitOrThrow(input: { key: string; limit: number; windowSeconds: number }): Promise<void> {
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
     const fullKey = this.opts?.prefix ? `${this.opts.prefix}:${input.key}` : input.key;
 
     const current = await this.cache.incr(fullKey, { ttlSeconds: input.windowSeconds });

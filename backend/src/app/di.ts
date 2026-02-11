@@ -28,12 +28,22 @@ import { logger } from '../shared/logger/logger';
 import type { Logger } from '../shared/logger/logger';
 
 import { AuditRepo } from '../shared/audit/audit.repo';
+import { SessionStore } from '../shared/session/session.store';
 
 import { createTenantModule } from '../modules/tenants/tenant.module';
 import type { TenantModule } from '../modules/tenants/tenant.module';
 
 import { createInviteModule } from '../modules/invites/invite.module';
 import type { InviteModule } from '../modules/invites/invite.module';
+
+import { createUserModule } from '../modules/users/user.module';
+import type { UserModule } from '../modules/users/user.module';
+
+import { createMembershipModule } from '../modules/memberships/membership.module';
+import type { MembershipModule } from '../modules/memberships/membership.module';
+
+import { createAuthModule } from '../modules/auth/auth.module';
+import type { AuthModule } from '../modules/auth/auth.module';
 
 export type AppDeps = {
   db: ReturnType<typeof createDb>;
@@ -45,12 +55,16 @@ export type AppDeps = {
   tokenHasher: TokenHasher;
   passwordHasher: PasswordHasher;
 
-  // shared repos
+  // shared repos / stores
   auditRepo: AuditRepo;
+  sessionStore: SessionStore;
 
   // modules
   tenants: TenantModule;
   invites: InviteModule;
+  users: UserModule;
+  memberships: MembershipModule;
+  auth: AuthModule;
 
   // lifecycle
   close: () => Promise<void>;
@@ -69,12 +83,27 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
 
   const rateLimiter = new RateLimiter(redis, { prefix: 'rl' });
 
-  // shared repos
+  // shared repos / stores
   const auditRepo = new AuditRepo(db);
+  const sessionStore = new SessionStore(redis, config.sessionTtlSeconds);
 
   // modules (no HTTP / no business logic here)
   const tenants = createTenantModule({ db });
   const invites = createInviteModule({ db, tokenHasher, logger, auditRepo });
+  const users = createUserModule({ db });
+  const memberships = createMembershipModule({ db });
+  const auth = createAuthModule({
+    db,
+    tokenHasher,
+    passwordHasher,
+    logger,
+    rateLimiter,
+    auditRepo,
+    sessionStore,
+    userRepo: users.userRepo,
+    membershipRepo: memberships.membershipRepo,
+    isProduction: config.nodeEnv === 'production',
+  });
 
   return {
     db,
@@ -84,8 +113,12 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     tokenHasher,
     passwordHasher,
     auditRepo,
+    sessionStore,
     tenants,
     invites,
+    users,
+    memberships,
+    auth,
     close: async () => {
       await redis.close();
       await db.destroy();

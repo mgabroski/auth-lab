@@ -17,10 +17,20 @@
 
 // Known audit actions (add as modules grow)
 export type KnownAuditAction =
+  // Invites (Brick 6)
   | 'invite.accepted'
   | 'invite.created'
   | 'invite.cancelled'
-  | 'invite.resent';
+  | 'invite.resent'
+  // Auth (Brick 7)
+  | 'auth.register.success'
+  | 'auth.login.success'
+  | 'auth.login.failed'
+  // Users (Brick 7)
+  | 'user.created'
+  // Memberships (Brick 7)
+  | 'membership.activated'
+  | 'membership.created';
 
 // Escape hatch: allows new actions without updating this file every time.
 // Remove the escape hatch once all modules are stable.

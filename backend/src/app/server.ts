@@ -16,6 +16,7 @@ import type { AppDeps } from './di';
 import { registerRequestContext } from '../shared/http/request-context';
 import { registerAuthContext } from '../shared/http/auth-context';
 import { registerErrorHandler } from '../shared/http/error-handler';
+import { registerSessionMiddleware } from '../shared/session/session.middleware';
 import { withRequestContext } from '../shared/logger/with-context';
 
 export async function buildServer(_opts: { config: AppConfig; deps: AppDeps }) {
@@ -25,6 +26,7 @@ export async function buildServer(_opts: { config: AppConfig; deps: AppDeps }) {
 
   registerRequestContext(app);
   registerAuthContext(app);
+  registerSessionMiddleware(app, _opts.deps.sessionStore);
   registerErrorHandler(app);
 
   // Global request log (observability)

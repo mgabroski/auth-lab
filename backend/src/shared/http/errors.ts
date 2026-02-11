@@ -37,8 +37,8 @@ export class AppError extends Error {
     this.meta = opts.meta;
   }
 
-  static unauthorized(meta?: AppErrorMeta) {
-    return new AppError({ code: 'UNAUTHORIZED', status: 401, message: 'Unauthorized', meta });
+  static unauthorized(message = 'Unauthorized', meta?: AppErrorMeta) {
+    return new AppError({ code: 'UNAUTHORIZED', status: 401, message, meta });
   }
 
   static forbidden(message = 'Forbidden', meta?: AppErrorMeta) {

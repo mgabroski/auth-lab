@@ -3,11 +3,13 @@
  *
  * WHY:
  * - Authentication and access are separate concepts.
- * - After auth (later), we attach user + membership info into request context.
+ * - After session middleware (Brick 7d), this is populated from server-side session.
+ * - Before that, all fields are null (unauthenticated request).
  *
- * HOW TO USE:
- * - Registered once in app/server.ts via registerAuthContext(app).
- * - For now it's a stub (Brick 1).
+ * HOW IT WORKS:
+ * 1. registerAuthContext() sets stub (all null) on every request.
+ * 2. Session middleware (Brick 7d) overwrites with real values if valid cookie exists.
+ * 3. Controllers/services read req.authContext to determine authentication state.
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -18,6 +20,11 @@ export type AuthContext = {
   userId: string | null;
   membershipId: string | null;
   role: Role | null;
+
+  // Session fields (populated by session middleware, Brick 7d)
+  sessionId: string | null;
+  mfaVerified: boolean;
+  tenantId: string | null;
 };
 
 declare module 'fastify' {
@@ -34,6 +41,9 @@ export function registerAuthContext(app: FastifyInstance) {
       userId: null,
       membershipId: null,
       role: null,
+      sessionId: null,
+      mfaVerified: false,
+      tenantId: null,
     };
 
     done();

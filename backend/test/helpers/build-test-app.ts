@@ -29,6 +29,8 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
 
     bcryptCost: Number(process.env.BCRYPT_COST ?? 12),
 
+    sessionTtlSeconds: 3600, // 1 hour for tests
+
     seed: {
       enabled: false, // IMPORTANT: OFF in tests by default
       tenantKey: 'goodwill-ca',
