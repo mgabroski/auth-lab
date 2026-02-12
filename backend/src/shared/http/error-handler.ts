@@ -17,6 +17,8 @@
  * - No business logic here.
  * - Never expose .meta or stack traces in responses.
  * - Log full error details (including meta) for observability.
+ * - Always use withRequestContext(req) so requestId, tenantKey, userId,
+ *   and role are automatically included in every log line.
  *
  * TODO:
  * - Sentry capture for unexpected errors (observability/sentry.ts).
@@ -25,7 +27,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AppError } from './errors';
 import { RateLimitError } from '../security/rate-limit';
-import { logger } from '../logger/logger';
+import { withRequestContext } from '../logger/with-context';
 
 type ErrorResponseBody = {
   error: {
@@ -40,16 +42,16 @@ function buildResponse(code: string, message: string): ErrorResponseBody {
 
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((err: Error, req: FastifyRequest, reply: FastifyReply) => {
+    const log = withRequestContext(req);
+
     // 1) Known application errors
     if (err instanceof AppError) {
-      logger.warn('app_error', {
+      log.warn('app_error', {
         flow: 'http.error',
         code: err.code,
         status: err.status,
         message: err.message,
         meta: err.meta,
-        requestId: req.requestContext?.requestId,
-        tenantKey: req.requestContext?.tenantKey,
       });
 
       return reply.status(err.status).send(buildResponse(err.code, err.message));
@@ -57,13 +59,11 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     // 2) Rate limit errors
     if (err instanceof RateLimitError) {
-      logger.warn('rate_limit', {
+      log.warn('rate_limit', {
         flow: 'http.error',
         key: err.key,
         limit: err.limit,
         windowSeconds: err.windowSeconds,
-        requestId: req.requestContext?.requestId,
-        tenantKey: req.requestContext?.tenantKey,
       });
 
       return reply
@@ -73,12 +73,10 @@ export function registerErrorHandler(app: FastifyInstance): void {
 
     // 3) Unexpected errors — never leak internals
     // TODO: Sentry.captureException(err)
-    logger.error('unhandled_error', {
+    log.error('unhandled_error', {
       flow: 'http.error',
       message: err.message,
       stack: err.stack,
-      requestId: req.requestContext?.requestId,
-      tenantKey: req.requestContext?.tenantKey,
     });
 
     return reply.status(500).send(buildResponse('INTERNAL', 'Internal server error'));

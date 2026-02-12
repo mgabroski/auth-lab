@@ -9,30 +9,20 @@
  * RULES:
  * - No DB access here.
  * - No business rules here.
- * - Validate with Zod and throw AppError.
+ * - Cookie logic lives in shared/session/set-session-cookie (DRY — reused by SSO, MFA, logout).
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { registerSchema, loginSchema } from './auth.schemas';
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
-import { SESSION_COOKIE_NAME } from '../../shared/session/session.types';
+import { setSessionCookie } from '../../shared/session/set-session-cookie';
 
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly isProduction: boolean,
   ) {}
-
-  private setSessionCookie(reply: FastifyReply, sessionId: string): void {
-    const parts = [`${SESSION_COOKIE_NAME}=${sessionId}`, 'Path=/', 'HttpOnly', 'SameSite=Strict'];
-
-    if (this.isProduction) {
-      parts.push('Secure');
-    }
-
-    reply.header('Set-Cookie', parts.join('; '));
-  }
 
   async register(req: FastifyRequest, reply: FastifyReply) {
     const parsed = registerSchema.safeParse(req.body);
@@ -53,7 +43,7 @@ export class AuthController {
       requestId: req.requestContext.requestId,
     });
 
-    this.setSessionCookie(reply, sessionId);
+    setSessionCookie(reply, sessionId, this.isProduction);
 
     return reply.status(201).send(result);
   }
@@ -75,7 +65,7 @@ export class AuthController {
       requestId: req.requestContext.requestId,
     });
 
-    this.setSessionCookie(reply, sessionId);
+    setSessionCookie(reply, sessionId, this.isProduction);
 
     return reply.status(200).send(result);
   }

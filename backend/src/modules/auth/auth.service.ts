@@ -4,7 +4,6 @@
  * WHY:
  * - Orchestrates password registration (7b) and login (7c) end-to-end.
  * - Only place in the auth module allowed to start transactions.
- * - Creates users, auth identities, activates memberships, creates sessions.
  *
  * RULES:
  * - No raw DB access outside queries/DAL.
@@ -13,11 +12,18 @@
  * - Audit meaningful actions via AuditWriter (progressive context enrichment).
  * - Rate limit at the start of each flow (before any DB work).
  *
- * LOGIN AUDIT PATTERN:
- * - Success audits are written INSIDE the transaction (committed atomically with reads).
- * - Failure audits are written OUTSIDE the transaction (in the catch block) so they
- *   survive the rollback. If we wrote them inside and then threw, the rollback would
- *   wipe the audit row.
+ * STRUCTURE:
+ * - register(): slim orchestrator — calls helpers for each distinct responsibility.
+ * - login(): keeps credential/membership checks inline because the two-phase audit
+ *   pattern (success inside tx, failure outside tx) would become MORE complex if
+ *   those checks were extracted — the failure context must be built progressively
+ *   as each check fails, and the catch block needs it to survive the rollback.
+ *
+ * LOGIN AUDIT PATTERN (two-phase):
+ * - Success audits are written INSIDE the transaction (committed atomically).
+ * - Failure audits are written OUTSIDE the transaction (catch block) so they
+ *   survive the rollback. Writing them inside and then throwing would wipe
+ *   the audit row on rollback.
  */
 
 import type { DbExecutor } from '../../shared/db/db';
@@ -27,37 +33,29 @@ import type { Logger } from '../../shared/logger/logger';
 import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import { AuditWriter } from '../../shared/audit/audit.writer';
-
 import type { SessionStore } from '../../shared/session/session.store';
 
-import {
-  assertTenantExists,
-  assertTenantIsActive,
-  assertTenantKeyPresent,
-} from '../tenants/policies/tenant-safety.policy';
-import { getTenantByKey } from '../tenants/tenant.queries';
-import type { Tenant } from '../tenants/tenant.types';
-
-import { getUserByEmail } from '../users/user.queries';
 import type { UserRepo } from '../users/dal/user.repo';
-
-import { getMembershipByTenantAndUser } from '../memberships/membership.queries';
 import type { MembershipRepo } from '../memberships/dal/membership.repo';
 
-import { getInviteByTenantAndTokenHash } from '../invites/invite.queries';
-
-import { getPasswordIdentityWithHash } from './auth.queries';
 import type { AuthRepo } from './dal/auth.repo';
 import { AuthErrors } from './auth.errors';
-import type { AuthResult, MfaNextAction } from './auth.types';
-import {
-  auditRegisterSuccess,
-  auditUserCreated,
-  auditMembershipActivated,
-  auditMembershipCreated,
-  auditLoginSuccess,
-  auditLoginFailed,
-} from './auth.audit';
+import type { AuthResult } from './auth.types';
+
+import { auditLoginSuccess, auditLoginFailed } from './auth.audit';
+
+import { resolveTenantForAuth } from './helpers/resolve-tenant-for-auth';
+import { validateInviteForRegister } from './helpers/validate-invite-for-register';
+import { ensurePasswordIdentity } from './helpers/ensure-password-identity';
+import { provisionUserToTenant } from '../_shared/use-cases/provision-user-to-tenant.usecase';
+import { writeRegisterAudits } from './helpers/write-register-audits';
+import { createAuthSession } from './helpers/create-auth-session';
+import { buildAuthResult } from './helpers/build-auth-result';
+
+import { getUserByEmail } from '../users/user.queries';
+import { getMembershipByTenantAndUser } from '../memberships/membership.queries';
+import { getPasswordIdentityWithHash } from './auth.queries';
+import type { Tenant } from '../tenants/tenant.types';
 
 // ── Params ──────────────────────────────────────────────────
 
@@ -99,13 +97,7 @@ type LoginFailureContext = {
   error: Error;
 };
 
-// ── Transaction result types (no any) ───────────────────────
-
-type RegisterTxResult = {
-  user: { id: string; email: string; name: string | null };
-  membership: { id: string; role: 'ADMIN' | 'MEMBER' };
-  tenant: Tenant;
-};
+// ── Transaction result types ─────────────────────────────────
 
 type LoginTxResult = {
   user: { id: string; email: string; name: string | null };
@@ -131,7 +123,7 @@ export class AuthService {
     },
   ) {}
 
-  // ── Register (Brick 7b) ─────────────────────────────────
+  // ── Register (Brick 7b) ──────────────────────────────────
 
   async register(params: RegisterParams): Promise<{ result: AuthResult; sessionId: string }> {
     const email = params.email.toLowerCase();
@@ -155,173 +147,74 @@ export class AuthService {
       ...REGISTER_LIMIT_PER_IP,
     });
 
-    // Transaction: create user + identity + membership + audit
-    const txResult = await this.deps.db
-      .transaction()
-      .execute(async (trx): Promise<RegisterTxResult> => {
-        // Bind repos to transaction
-        const userRepo = this.deps.userRepo.withDb(trx);
-        const membershipRepo = this.deps.membershipRepo.withDb(trx);
-        const authRepo = this.deps.authRepo.withDb(trx);
+    // Transaction: resolve tenant → validate invite → provision user
+    //              → ensure identity → write audits
+    const { user, membership, tenant } = await this.deps.db.transaction().execute(async (trx) => {
+      const userRepo = this.deps.userRepo.withDb(trx);
+      const membershipRepo = this.deps.membershipRepo.withDb(trx);
+      const authRepo = this.deps.authRepo.withDb(trx);
 
-        // Audit writer with request context
-        const audit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
-          requestId: params.requestId,
-          ip: params.ip,
-          userAgent: params.userAgent,
-        });
-
-        // 1) Tenant resolution
-        assertTenantKeyPresent(params.tenantKey);
-        const tenant = await getTenantByKey(trx, params.tenantKey);
-        assertTenantExists(tenant, params.tenantKey);
-        assertTenantIsActive(tenant);
-
-        const tenantAudit = audit.withContext({ tenantId: tenant.id });
-
-        // 2) Validate invite token
-        const tokenHash = this.deps.tokenHasher.hash(params.inviteToken);
-        const invite = await getInviteByTenantAndTokenHash(trx, {
-          tenantId: tenant.id,
-          tokenHash,
-        });
-
-        if (!invite || invite.status !== 'ACCEPTED') {
-          throw AuthErrors.inviteNotAccepted();
-        }
-
-        // 3) Email must match invite
-        if (invite.email.toLowerCase() !== email) {
-          throw AuthErrors.emailMismatch();
-        }
-
-        // 4) Find or create user (global)
-        let user = await getUserByEmail(trx, email);
-        let userCreated = false;
-
-        if (!user) {
-          const created = await userRepo.insertUser({ email, name: params.name });
-          user = {
-            id: created.id,
-            email: created.email,
-            name: params.name,
-            createdAt: now,
-            updatedAt: now,
-          };
-          userCreated = true;
-        }
-
-        const userAudit = tenantAudit.withContext({ userId: user.id });
-
-        // 5) Create password identity (reject if already exists)
-        const existingIdentity = await getPasswordIdentityWithHash(trx, user.id);
-        if (existingIdentity) {
-          throw AuthErrors.alreadyRegistered();
-        }
-
-        const passwordHash = await this.deps.passwordHasher.hash(params.password);
-        await authRepo.insertPasswordIdentity({
-          userId: user.id,
-          passwordHash,
-        });
-
-        // 6) Create or activate membership
-        let membership = await getMembershipByTenantAndUser(trx, {
-          tenantId: tenant.id,
-          userId: user.id,
-        });
-
-        let membershipActivated = false;
-        let membershipCreated = false;
-
-        if (membership) {
-          if (membership.status === 'SUSPENDED') {
-            throw AuthErrors.accountSuspended();
-          }
-          if (membership.status === 'INVITED') {
-            const activated = await membershipRepo.activateMembership({
-              membershipId: membership.id,
-              acceptedAt: now,
-            });
-            if (activated) {
-              membership = { ...membership, status: 'ACTIVE', acceptedAt: now };
-              membershipActivated = true;
-            }
-          }
-          // ACTIVE → ok (idempotent)
-        } else {
-          const role: 'ADMIN' | 'MEMBER' = invite.role === 'ADMIN' ? 'ADMIN' : 'MEMBER';
-
-          const created = await membershipRepo.insertMembership({
-            tenantId: tenant.id,
-            userId: user.id,
-            role,
-            status: 'ACTIVE',
-            invitedAt: now,
-          });
-
-          membership = {
-            id: created.id,
-            tenantId: tenant.id,
-            userId: user.id,
-            role,
-            status: 'ACTIVE',
-            invitedAt: now,
-            acceptedAt: now,
-            suspendedAt: null,
-            createdAt: now,
-            updatedAt: now,
-          };
-          membershipCreated = true;
-        }
-
-        const fullAudit = userAudit.withContext({ membershipId: membership.id });
-
-        // 7) Audit events
-        if (userCreated) {
-          await auditUserCreated(fullAudit, { userId: user.id, email: user.email });
-        }
-        if (membershipActivated) {
-          await auditMembershipActivated(fullAudit, {
-            membershipId: membership.id,
-            userId: user.id,
-            role: membership.role,
-          });
-        }
-        if (membershipCreated) {
-          await auditMembershipCreated(fullAudit, {
-            membershipId: membership.id,
-            userId: user.id,
-            role: membership.role,
-          });
-        }
-        await auditRegisterSuccess(fullAudit, {
-          userId: user.id,
-          email: user.email,
-          membershipId: membership.id,
-          role: membership.role,
-        });
-
-        return {
-          user: { id: user.id, email: user.email, name: user.name ?? null },
-          membership: { id: membership.id, role: membership.role },
-          tenant,
-        };
+      const baseAudit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
+        requestId: params.requestId,
+        ip: params.ip,
+        userAgent: params.userAgent,
       });
 
-    const { user, membership, tenant } = txResult;
+      // 1) Resolve + assert tenant
+      const tenant = await resolveTenantForAuth(trx, params.tenantKey);
 
-    // 8) Create session (outside tx — Redis, not Postgres)
-    const nextAction = this.determineMfaNextAction(membership.role, tenant);
+      // 2) Validate invite (ACCEPTED + email match)
+      const invite = await validateInviteForRegister({
+        trx,
+        tokenHasher: this.deps.tokenHasher,
+        tenantId: tenant.id,
+        inviteToken: params.inviteToken,
+        email,
+      });
 
-    const sessionId = await this.deps.sessionStore.create({
+      // 3) Find-or-create user + create/activate membership
+      const provisionResult = await provisionUserToTenant({
+        trx,
+        userRepo,
+        membershipRepo,
+        email,
+        name: params.name,
+        tenantId: tenant.id,
+        role: invite.role,
+        now,
+      });
+
+      // 4) Guard duplicate registration + hash + insert password identity
+      await ensurePasswordIdentity({
+        trx,
+        authRepo,
+        passwordHasher: this.deps.passwordHasher,
+        userId: provisionResult.user.id,
+        rawPassword: params.password,
+      });
+
+      // 5) Write all applicable audit events
+      const fullAudit = baseAudit.withContext({
+        tenantId: tenant.id,
+        userId: provisionResult.user.id,
+        membershipId: provisionResult.membership.id,
+      });
+
+      await writeRegisterAudits(fullAudit, provisionResult);
+
+      return { ...provisionResult, tenant };
+    });
+
+    // 6) Create session (outside tx — Redis, not Postgres)
+    const { sessionId, nextAction } = await createAuthSession({
+      sessionStore: this.deps.sessionStore,
       userId: user.id,
       tenantId: tenant.id,
-      tenantKey: tenant.key, // for session middleware tenant safety check
+      tenantKey: tenant.key,
       membershipId: membership.id,
       role: membership.role,
-      mfaVerified: nextAction === 'NONE', // fully verified only if no MFA needed
-      createdAt: now.toISOString(),
+      tenant,
+      now,
     });
 
     this.deps.logger.info({
@@ -336,16 +229,11 @@ export class AuthService {
 
     return {
       sessionId,
-      result: {
-        status: 'AUTHENTICATED',
-        nextAction,
-        user: { id: user.id, email: user.email, name: user.name ?? '' },
-        membership: { id: membership.id, role: membership.role },
-      },
+      result: buildAuthResult({ nextAction, user, membership }),
     };
   }
 
-  // ── Login (Brick 7c) ───────────────────────────────────
+  // ── Login (Brick 7c) ─────────────────────────────────────
 
   async login(params: LoginParams): Promise<{ result: AuthResult; sessionId: string }> {
     const email = params.email.toLowerCase();
@@ -372,18 +260,15 @@ export class AuthService {
 
     try {
       txResult = await this.deps.db.transaction().execute(async (trx): Promise<LoginTxResult> => {
-        // Audit writer bound to transaction (for success path ONLY)
+        // Audit writer bound to transaction (success path only)
         const audit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
           requestId: params.requestId,
           ip: params.ip,
           userAgent: params.userAgent,
         });
 
-        // 1) Tenant resolution
-        assertTenantKeyPresent(params.tenantKey);
-        const tenant = await getTenantByKey(trx, params.tenantKey);
-        assertTenantExists(tenant, params.tenantKey);
-        assertTenantIsActive(tenant);
+        // 1) Resolve + assert tenant
+        const tenant = await resolveTenantForAuth(trx, params.tenantKey);
 
         // 2) Find user by email (global)
         const user = await getUserByEmail(trx, email);
@@ -468,11 +353,11 @@ export class AuthService {
           throw failureCtx.error;
         }
 
+        // 7) Audit success (inside tx — committed atomically with reads)
         const fullAudit = audit
           .withContext({ tenantId: tenant.id })
           .withContext({ userId: user.id, membershipId: membership.id });
 
-        // 7) Audit success (inside tx — committed atomically with reads)
         await auditLoginSuccess(fullAudit, {
           userId: user.id,
           email: user.email,
@@ -487,7 +372,8 @@ export class AuthService {
         };
       });
     } catch (err) {
-      // Phase 2: write failure audit OUTSIDE the rolled-back transaction
+      // Phase 2: write failure audit OUTSIDE the rolled-back transaction.
+      // This is intentional — the audit row must survive the rollback.
       if (failureCtx) {
         const ctx = failureCtx as LoginFailureContext;
 
@@ -517,16 +403,15 @@ export class AuthService {
     const { user, membership, tenant } = txResult;
 
     // 8) Create session (outside tx — Redis)
-    const nextAction = this.determineMfaNextAction(membership.role, tenant);
-
-    const sessionId = await this.deps.sessionStore.create({
+    const { sessionId, nextAction } = await createAuthSession({
+      sessionStore: this.deps.sessionStore,
       userId: user.id,
       tenantId: tenant.id,
-      tenantKey: tenant.key, // for session middleware tenant safety check
+      tenantKey: tenant.key,
       membershipId: membership.id,
       role: membership.role,
-      mfaVerified: nextAction === 'NONE',
-      createdAt: new Date().toISOString(),
+      tenant,
+      now: new Date(),
     });
 
     this.deps.logger.info({
@@ -540,26 +425,7 @@ export class AuthService {
 
     return {
       sessionId,
-      result: {
-        status: 'AUTHENTICATED',
-        nextAction,
-        user: { id: user.id, email: user.email, name: user.name ?? '' },
-        membership: { id: membership.id, role: membership.role },
-      },
+      result: buildAuthResult({ nextAction, user, membership }),
     };
-  }
-
-  // ── MFA requirement helper ────────────────────────────
-
-  private determineMfaNextAction(role: 'ADMIN' | 'MEMBER', tenant: Tenant): MfaNextAction {
-    if (role === 'ADMIN') {
-      return 'MFA_SETUP_REQUIRED';
-    }
-
-    if (tenant.memberMfaRequired) {
-      return 'MFA_SETUP_REQUIRED';
-    }
-
-    return 'NONE';
   }
 }

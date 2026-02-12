@@ -10,6 +10,12 @@
  * 1. registerAuthContext() sets stub (all null) on every request.
  * 2. Session middleware (Brick 7d) overwrites with real values if valid cookie exists.
  * 3. Controllers/services read req.authContext to determine authentication state.
+ *
+ * RULES:
+ * - decorateRequest uses `null as unknown as AuthContext` — same pattern as
+ *   request-context.ts. This ensures TypeScript sees the correct type for the
+ *   property before the onRequest hook fires, avoiding subtle TS edge cases when
+ *   the property is accessed in other decorators or early hooks.
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -34,7 +40,9 @@ declare module 'fastify' {
 }
 
 export function registerAuthContext(app: FastifyInstance) {
-  app.decorateRequest('authContext', null);
+  // Matches the pattern in request-context.ts: cast to the real type so TypeScript
+  // understands the decorated property shape before the hook assigns the real value.
+  app.decorateRequest('authContext', null as unknown as AuthContext);
 
   app.addHook('onRequest', (req: FastifyRequest, _reply, done) => {
     req.authContext = {

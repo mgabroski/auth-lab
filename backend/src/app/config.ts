@@ -8,13 +8,21 @@
  * HOW TO USE:
  * - In dev, we load backend/.env via dotenv.
  * - In prod later, platform injects env vars (no file).
+ *
+ * TYPING:
+ * - nodeEnv is a union ('development' | 'test' | 'production'), not a plain string.
+ *   This ensures that comparisons in di.ts (nodeEnv === 'test', nodeEnv === 'production')
+ *   are exhaustive and that invalid values ('prod', 'staging') are caught at startup
+ *   by Zod rather than silently falling through to the wrong branch.
  */
 
 import 'dotenv/config';
 import { z } from 'zod';
 
+const NodeEnvSchema = z.enum(['development', 'test', 'production']).default('development');
+
 const ConfigSchema = z.object({
-  NODE_ENV: z.string().default('development'),
+  NODE_ENV: NodeEnvSchema,
   PORT: z.coerce.number().default(3000),
 
   DATABASE_URL: z.string().min(1),
@@ -42,8 +50,10 @@ const ConfigSchema = z.object({
     .default(24 * 7),
 });
 
+export type NodeEnv = z.infer<typeof NodeEnvSchema>;
+
 export type AppConfig = {
-  nodeEnv: string;
+  nodeEnv: NodeEnv;
   port: number;
   databaseUrl: string;
   redisUrl: string;

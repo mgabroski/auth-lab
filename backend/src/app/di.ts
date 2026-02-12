@@ -9,6 +9,8 @@
  * RULES:
  * - No business logic here.
  * - No HTTP logic here.
+ * - Environment-dependent decisions (e.g. disable rate limits in test) belong HERE,
+ *   not inside the classes themselves (DIP).
  */
 
 import type { AppConfig } from './config';
@@ -81,7 +83,12 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     cost: config.bcryptCost,
   });
 
-  const rateLimiter = new RateLimiter(redis, { prefix: 'rl' });
+  // Composition root decides when rate limiting is disabled.
+  // The RateLimiter class itself has no knowledge of environments.
+  const rateLimiter = new RateLimiter(redis, {
+    prefix: 'rl',
+    disabled: config.nodeEnv === 'test',
+  });
 
   // shared repos / stores
   const auditRepo = new AuditRepo(db);
