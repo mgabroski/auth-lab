@@ -1,5 +1,5 @@
 /**
- * backend/src/app/di.ts
+ * src/app/di.ts
  *
  * WHY:
  * - Single dependency graph for the whole app.
@@ -32,6 +32,9 @@ import type { Logger } from '../shared/logger/logger';
 import { AuditRepo } from '../shared/audit/audit.repo';
 import { SessionStore } from '../shared/session/session.store';
 
+import { InMemQueue } from '../shared/messaging/inmem-queue';
+import type { Queue } from '../shared/messaging/queue';
+
 import { createTenantModule } from '../modules/tenants/tenant.module';
 import type { TenantModule } from '../modules/tenants/tenant.module';
 
@@ -60,6 +63,9 @@ export type AppDeps = {
   // shared repos / stores
   auditRepo: AuditRepo;
   sessionStore: SessionStore;
+
+  // messaging
+  queue: Queue;
 
   // modules
   tenants: TenantModule;
@@ -94,6 +100,9 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
   const auditRepo = new AuditRepo(db);
   const sessionStore = new SessionStore(redis, config.sessionTtlSeconds);
 
+  // Phase 1: in-memory queue (swap for SQS/SendGrid adapter here in production)
+  const queue: Queue = new InMemQueue();
+
   // modules (no HTTP / no business logic here)
   const tenants = createTenantModule({ db });
   const invites = createInviteModule({ db, tokenHasher, logger, auditRepo });
@@ -107,6 +116,7 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     rateLimiter,
     auditRepo,
     sessionStore,
+    queue,
     userRepo: users.userRepo,
     membershipRepo: memberships.membershipRepo,
     isProduction: config.nodeEnv === 'production',
@@ -121,6 +131,7 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     passwordHasher,
     auditRepo,
     sessionStore,
+    queue,
     tenants,
     invites,
     users,

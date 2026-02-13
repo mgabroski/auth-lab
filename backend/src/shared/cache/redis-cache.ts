@@ -1,5 +1,5 @@
 /**
- * backend/src/shared/cache/redis-cache.ts
+ * src/shared/cache/redis-cache.ts
  *
  * WHY:
  * - Redis implementation of Cache used for rate limiting, tokens, small ephemeral state.
@@ -9,9 +9,9 @@
  *   @redis/client exist. We avoid that by deriving the client type from createClient().
  *
  * LOGGING:
- * - Redis connection errors fire outside any request context (they are client-level events,
+ * - Redis connection errors fire outside any request context (client-level events,
  *   not request-level). We use the global logger directly — withRequestContext() is not
- *   applicable here. This is the same approach used by logger.ts for app-level concerns.
+ *   applicable here. This is the same approach as other app-level concerns.
  */
 
 import { createClient } from 'redis';
@@ -27,8 +27,6 @@ export class RedisCache implements Cache {
     const client = createClient({ url: redisUrl });
 
     client.on('error', (err: Error) => {
-      // Connection-level error: no request context available.
-      // Structured JSON log routes through the same transport as all other logs.
       logger.error('redis.client_error', {
         flow: 'redis',
         message: err.message,
@@ -71,5 +69,23 @@ export class RedisCache implements Cache {
     }
 
     return value;
+  }
+
+  async sadd(key: string, member: string, opts?: { ttlSeconds?: number }): Promise<void> {
+    await this.client.sAdd(key, member);
+
+    if (opts?.ttlSeconds) {
+      // Refresh TTL on the set key every time a new session is added.
+      // This prevents the index from expiring while some member sessions are still alive.
+      await this.client.expire(key, opts.ttlSeconds);
+    }
+  }
+
+  async smembers(key: string): Promise<string[]> {
+    return this.client.sMembers(key);
+  }
+
+  async srem(key: string, member: string): Promise<void> {
+    await this.client.sRem(key, member);
   }
 }

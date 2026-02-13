@@ -1,5 +1,5 @@
 /**
- * backend/src/shared/audit/audit.types.ts
+ * src/shared/audit/audit.types.ts
  *
  * WHY:
  * - Central audit event types (compliance trail stored in DB).
@@ -26,6 +26,9 @@ export type KnownAuditAction =
   | 'auth.register.success'
   | 'auth.login.success'
   | 'auth.login.failed'
+  // Auth — Password Reset (Brick 8)
+  | 'auth.password_reset.requested'
+  | 'auth.password_reset.completed'
   // Users (Brick 7)
   | 'user.created'
   // Memberships (Brick 7)

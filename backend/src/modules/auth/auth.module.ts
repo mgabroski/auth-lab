@@ -1,10 +1,10 @@
 /**
- * backend/src/modules/auth/auth.module.ts
+ * src/modules/auth/auth.module.ts
  *
  * WHY:
  * - Encapsulates Auth module wiring.
  * - DI creates infra; module composes domain units.
- * - Auth module owns register + login routes.
+ * - Auth module owns register + login + forgot-password + reset-password routes.
  *
  * RULES:
  * - No infra creation here (DI passes deps in).
@@ -19,6 +19,7 @@ import type { Logger } from '../../shared/logger/logger';
 import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { SessionStore } from '../../shared/session/session.store';
+import type { Queue } from '../../shared/messaging/queue';
 import type { UserRepo } from '../users/dal/user.repo';
 import type { MembershipRepo } from '../memberships/dal/membership.repo';
 
@@ -37,6 +38,7 @@ export function createAuthModule(deps: {
   rateLimiter: RateLimiter;
   auditRepo: AuditRepo;
   sessionStore: SessionStore;
+  queue: Queue;
   userRepo: UserRepo;
   membershipRepo: MembershipRepo;
   isProduction: boolean;
@@ -51,6 +53,7 @@ export function createAuthModule(deps: {
     rateLimiter: deps.rateLimiter,
     auditRepo: deps.auditRepo,
     sessionStore: deps.sessionStore,
+    queue: deps.queue,
     userRepo: deps.userRepo,
     membershipRepo: deps.membershipRepo,
     authRepo,

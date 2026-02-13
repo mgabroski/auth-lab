@@ -1,5 +1,5 @@
 /**
- * backend/src/shared/session/session.types.ts
+ * src/shared/session/session.types.ts
  *
  * WHY:
  * - Defines the server-side session data model.
@@ -27,6 +27,22 @@ export const SESSION_COOKIE_NAME = 'sid';
 
 /**
  * Session prefix in Redis. Full key: `session:{sessionId}`.
- * This keeps session keys isolated from other cache entries.
+ * Keeps session keys isolated from other cache entries.
  */
 export const SESSION_KEY_PREFIX = 'session';
+
+/**
+ * User-sessions index prefix in Redis. Full key: `session:user:{userId}`.
+ *
+ * WHY:
+ * - Redis has no safe "find all keys by pattern" at scale.
+ * - Instead, SessionStore maintains a Redis SET per user that tracks all
+ *   active session IDs for that user.
+ * - Used by destroyAllForUser() when a credential changes (password reset,
+ *   future: admin suspend, MFA revocation).
+ * - Native Redis SET (SADD / SMEMBERS / SREM / EXPIRE) handles:
+ *   - Duplicates: SADD is idempotent
+ *   - Concurrency: SET ops are atomic
+ *   - Stale IDs: TTL on the index is refreshed on every session creation
+ */
+export const SESSION_USER_INDEX_PREFIX = 'session:user';

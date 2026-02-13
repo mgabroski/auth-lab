@@ -1,14 +1,15 @@
 /**
- * backend/src/modules/auth/auth.types.ts
+ * src/modules/auth/auth.types.ts
  *
  * WHY:
  * - Domain types for the Auth module.
  * - AuthIdentity represents a login method for a user (password, google, microsoft).
  * - Response types define what register/login endpoints return.
+ * - PasswordResetToken represents an active reset token (used_at IS NULL).
  *
  * RULES:
  * - Keep aligned with DB schema.
- * - Never include raw passwords or hashes in response types.
+ * - Never include raw passwords, hashes, or tokens in response types.
  */
 
 export type AuthProvider = 'password' | 'google' | 'microsoft';
@@ -21,6 +22,18 @@ export type AuthIdentity = {
   // passwordHash intentionally excluded from domain type
   createdAt: Date;
   updatedAt: Date;
+};
+
+/**
+ * Represents a valid (not-yet-used, not-expired) password reset token.
+ * The raw token is never stored here — only the hash lives in the DB.
+ */
+export type PasswordResetToken = {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  createdAt: Date;
 };
 
 /**

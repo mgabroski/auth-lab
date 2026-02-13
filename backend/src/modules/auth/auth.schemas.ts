@@ -1,5 +1,5 @@
 /**
- * backend/src/modules/auth/auth.schemas.ts
+ * src/modules/auth/auth.schemas.ts
  *
  * WHY:
  * - Centralizes request validation for the Auth module.
@@ -9,6 +9,8 @@
  * - Use Zod for runtime validation.
  * - Password rules: 8+ chars (more rules can be added later).
  * - Email normalized to lowercase in service, not here.
+ * - Token min-length guards against obviously garbage values but does not
+ *   validate the token cryptographically (that is the service's job).
  */
 
 import { z } from 'zod';
@@ -28,3 +30,21 @@ export const loginSchema = z.object({
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email('Invalid email address'),
+});
+
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  /**
+   * Raw reset token from the email link.
+   * min(20) guards against obviously empty/garbage values.
+   * The service validates cryptographic correctness (hash lookup + expiry).
+   */
+  token: z.string().min(20, 'Invalid reset token'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

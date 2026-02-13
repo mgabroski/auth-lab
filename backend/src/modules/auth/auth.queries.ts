@@ -1,9 +1,9 @@
 /**
- * backend/src/modules/auth/auth.queries.ts
+ * src/modules/auth/auth.queries.ts
  *
  * WHY:
  * - Queries are read-only and side-effect free.
- * - Shape auth_identity rows into domain types.
+ * - Shape auth_identity and password_reset_token rows into domain types.
  * - Exposes password hash separately for verification (never in domain type).
  *
  * RULES:
@@ -12,8 +12,11 @@
  */
 
 import type { DbExecutor } from '../../shared/db/db';
-import { selectAuthIdentityByUserAndProviderSql } from './dal/auth.query-sql';
-import type { AuthIdentity, AuthProvider } from './auth.types';
+import {
+  selectAuthIdentityByUserAndProviderSql,
+  selectValidResetTokenSql,
+} from './dal/auth.query-sql';
+import type { AuthIdentity, AuthProvider, PasswordResetToken } from './auth.types';
 
 function parseProvider(value: string): AuthProvider {
   if (value === 'password' || value === 'google' || value === 'microsoft') return value;
@@ -58,4 +61,24 @@ export async function hasAuthIdentity(
 ): Promise<boolean> {
   const row = await selectAuthIdentityByUserAndProviderSql(db, params);
   return !!row;
+}
+
+/**
+ * Returns a valid (not-yet-used, not-expired) password reset token by token hash.
+ * Returns undefined if the token is missing, expired, or already used.
+ */
+export async function getValidResetToken(
+  db: DbExecutor,
+  tokenHash: string,
+): Promise<PasswordResetToken | undefined> {
+  const row = await selectValidResetTokenSql(db, tokenHash);
+  if (!row) return undefined;
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    tokenHash: row.token_hash,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  };
 }

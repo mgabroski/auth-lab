@@ -1,5 +1,5 @@
 /**
- * backend/src/modules/auth/auth.errors.ts
+ * src/modules/auth/auth.errors.ts
  *
  * WHY:
  * - Auth module owns its domain-specific error semantics.
@@ -51,5 +51,21 @@ export const AuthErrors = {
   /** No membership for this tenant. */
   noAccess(meta?: AppErrorMeta) {
     return AppError.forbidden("You don't have access to this workspace.", meta);
+  },
+
+  /**
+   * Password reset token is invalid, expired, or already used.
+   *
+   * SECURITY: A single error covers all three conditions intentionally.
+   * Separate errors (token_not_found vs token_expired vs token_used) would
+   * let an attacker determine whether a token exists in the system, whether
+   * it was recently consumed, or whether it was ever issued — providing an
+   * oracle that could aid targeted attacks.
+   */
+  resetTokenInvalid(meta?: AppErrorMeta) {
+    return AppError.validationError(
+      'This password reset link is invalid or has expired. Please request a new one.',
+      meta,
+    );
   },
 } as const;
