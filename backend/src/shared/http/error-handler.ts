@@ -16,7 +16,7 @@
  * RULES:
  * - No business logic here.
  * - Never expose .meta or stack traces in responses.
- * - Log full error details (including meta) for observability.
+ * - Log full error details (including REDACTED meta) for observability.
  * - Always use withRequestContext(req) so requestId, tenantKey, userId,
  *   and role are automatically included in every log line.
  *
@@ -36,6 +36,32 @@ type ErrorResponseBody = {
   };
 };
 
+const SENSITIVE_META_KEYS = new Set([
+  'token',
+  'accessToken',
+  'refreshToken',
+  'sessionId',
+  'password',
+  'passwordHash',
+  'inviteToken',
+  'resetToken',
+  'mfaSecret',
+  'secret',
+  'recoveryCode',
+  'recoveryCodes',
+  'code',
+]);
+
+function redactMeta(meta: unknown): unknown {
+  if (!meta || typeof meta !== 'object') return meta;
+
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(meta as Record<string, unknown>)) {
+    out[k] = SENSITIVE_META_KEYS.has(k) ? '[REDACTED]' : v;
+  }
+  return out;
+}
+
 function buildResponse(code: string, message: string): ErrorResponseBody {
   return { error: { code, message } };
 }
@@ -51,7 +77,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
         code: err.code,
         status: err.status,
         message: err.message,
-        meta: err.meta,
+        meta: redactMeta(err.meta),
       });
 
       return reply.status(err.status).send(buildResponse(err.code, err.message));

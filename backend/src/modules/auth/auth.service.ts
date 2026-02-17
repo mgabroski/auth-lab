@@ -85,6 +85,14 @@ import type { Tenant } from '../tenants/tenant.types';
 // Brick 9 (MFA queries)
 import { getMfaSecretForUser } from './mfa.queries';
 
+// ── PII-safe helpers ─────────────────────────────────────────
+// We avoid putting raw emails into infra keys (Redis) or operational logs.
+// Audits may still include email where needed for admin/compliance.
+function emailDomain(email: string): string {
+  const at = email.lastIndexOf('@');
+  return at >= 0 ? email.slice(at + 1) : '';
+}
+
 // ── Params ──────────────────────────────────────────────────
 
 export type RegisterParams = {
@@ -222,6 +230,7 @@ export class AuthService {
 
   async register(params: RegisterParams): Promise<{ result: AuthResult; sessionId: string }> {
     const email = params.email.toLowerCase();
+    const emailKey = this.deps.tokenHasher.hash(email);
     const now = new Date();
 
     this.deps.logger.info({
@@ -229,11 +238,12 @@ export class AuthService {
       flow: 'auth.register',
       requestId: params.requestId,
       tenantKey: params.tenantKey,
-      email,
+      emailDomain: emailDomain(email),
+      emailKey,
     });
 
     await this.deps.rateLimiter.hitOrThrow({
-      key: `register:email:${email}`,
+      key: `register:email:${emailKey}`,
       ...REGISTER_LIMIT_PER_EMAIL,
     });
     await this.deps.rateLimiter.hitOrThrow({
@@ -327,16 +337,19 @@ export class AuthService {
 
   async login(params: LoginParams): Promise<{ result: AuthResult; sessionId: string }> {
     const email = params.email.toLowerCase();
+    const emailKey = this.deps.tokenHasher.hash(email);
 
     this.deps.logger.info({
       msg: 'auth.login.start',
       flow: 'auth.login',
       requestId: params.requestId,
       tenantKey: params.tenantKey,
+      emailDomain: emailDomain(email),
+      emailKey,
     });
 
     await this.deps.rateLimiter.hitOrThrow({
-      key: `login:email:${email}`,
+      key: `login:email:${emailKey}`,
       ...LOGIN_LIMIT_PER_EMAIL,
     });
     await this.deps.rateLimiter.hitOrThrow({
@@ -518,6 +531,7 @@ export class AuthService {
 
   async requestPasswordReset(params: RequestPasswordResetParams): Promise<void> {
     const email = params.email.toLowerCase();
+    const emailKey = this.deps.tokenHasher.hash(email);
 
     // Base audit writer — no tenant/user context yet (we may not find them)
     const audit = new AuditWriter(this.deps.auditRepo, {
@@ -528,7 +542,7 @@ export class AuthService {
 
     // ── 1. Silent rate limit ─────────────────────────────────
     const withinLimit = await this.deps.rateLimiter.hitOrSkip({
-      key: `forgot:email:${email}`,
+      key: `forgot:email:${emailKey}`,
       ...FORGOT_PASSWORD_LIMIT_PER_EMAIL,
     });
 
@@ -741,7 +755,6 @@ export class AuthService {
     const plaintextSecret = this.deps.encryptionService.decrypt(secretRow.secretEncrypted);
     const ok = this.deps.totpService.verify(plaintextSecret, params.code);
     if (!ok) {
-      // optional: tests might not check this audit, but it's consistent to keep it
       await auditMfaVerifyFailed(audit, { userId: params.userId });
       throw MfaErrors.invalidCode();
     }
