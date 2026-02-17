@@ -4,22 +4,17 @@
  * WHY:
  * - Central place for env parsing + validation (12-factor friendly).
  * - Prevents "undefined env var" bugs at runtime.
- *
- * HOW TO USE:
- * - In dev, we load backend/.env via dotenv.
- * - In prod later, platform injects env vars (no file).
- *
- * TYPING:
- * - nodeEnv is a union ('development' | 'test' | 'production'), not a plain string.
- *   This ensures that comparisons in di.ts (nodeEnv === 'test', nodeEnv === 'production')
- *   are exhaustive and that invalid values ('prod', 'staging') are caught at startup
- *   by Zod rather than silently falling through to the wrong branch.
  */
 
 import 'dotenv/config';
 import { z } from 'zod';
 
 const NodeEnvSchema = z.enum(['development', 'test', 'production']).default('development');
+
+const Base64Schema = z
+  .string()
+  .min(1)
+  .regex(/^[A-Za-z0-9+/=]+$/, 'Must be base64');
 
 const ConfigSchema = z.object({
   NODE_ENV: NodeEnvSchema,
@@ -36,6 +31,17 @@ const ConfigSchema = z.object({
 
   // Session
   SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(604800).default(86400),
+
+  // MFA (Brick 9)
+  MFA_ISSUER: z.string().min(1).default('Hubins'),
+
+  // Must decode to 32 bytes (validated in EncryptionService ctor).
+  MFA_ENCRYPTION_KEY_BASE64: Base64Schema,
+
+  // Must be >= 16 bytes (validated in KeyedHasher ctor).
+  MFA_HMAC_KEY_BASE64: Base64Schema,
+
+  MFA_RECOVERY_CODES_COUNT: z.coerce.number().int().min(5).max(20).default(8),
 
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),
@@ -65,6 +71,13 @@ export type AppConfig = {
 
   sessionTtlSeconds: number;
 
+  mfa: {
+    issuer: string;
+    encryptionKeyBase64: string;
+    hmacKeyBase64: string;
+    recoveryCodesCount: number;
+  };
+
   seed: {
     enabled: boolean;
     tenantKey: string;
@@ -89,6 +102,13 @@ export function buildConfig(): AppConfig {
     bcryptCost: parsed.BCRYPT_COST,
 
     sessionTtlSeconds: parsed.SESSION_TTL_SECONDS,
+
+    mfa: {
+      issuer: parsed.MFA_ISSUER,
+      encryptionKeyBase64: parsed.MFA_ENCRYPTION_KEY_BASE64,
+      hmacKeyBase64: parsed.MFA_HMAC_KEY_BASE64,
+      recoveryCodesCount: parsed.MFA_RECOVERY_CODES_COUNT,
+    },
 
     seed: {
       enabled: parsed.SEED_ON_START,

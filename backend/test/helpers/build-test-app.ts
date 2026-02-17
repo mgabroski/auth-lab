@@ -31,6 +31,13 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
 
     sessionTtlSeconds: 3600, // 1 hour for tests
 
+    mfa: {
+      issuer: process.env.MFA_ISSUER ?? 'Hubins',
+      encryptionKeyBase64: requireEnv('MFA_ENCRYPTION_KEY_BASE64'),
+      hmacKeyBase64: requireEnv('MFA_HMAC_KEY_BASE64'),
+      recoveryCodesCount: Number(process.env.MFA_RECOVERY_CODES_COUNT ?? 10),
+    },
+
     seed: {
       enabled: false, // IMPORTANT: OFF in tests by default
       tenantKey: 'goodwill-ca',
@@ -43,11 +50,24 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
   const config: AppConfig = {
     ...baseConfig,
     ...overrides,
+    // ensure nested objects merge correctly
+    mfa: {
+      ...baseConfig.mfa,
+      ...(overrides.mfa ?? {}),
+    },
     seed: {
       ...baseConfig.seed,
       ...(overrides.seed ?? {}),
     },
   };
 
-  return buildApp(config);
+  const built = await buildApp(config);
+
+  // IMPORTANT:
+  // Tests expect { app: FastifyInstance, deps } (not the wrapper object).
+  return {
+    app: built.app,
+    deps: built.deps,
+    close: built.close,
+  };
 }

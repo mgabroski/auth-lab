@@ -11,15 +11,11 @@
  * - No business rules here.
  * - Cookie logic lives in shared/session/set-session-cookie (DRY).
  *
- * FORGOT-PASSWORD RESPONSE:
- * - Always returns 200 with the same body regardless of whether the email
- *   exists, is SSO-only, or hit a rate limit.
- * - The response body must never change between paths — even subtle wording
- *   differences could leak information to an attacker.
- *
- * RESET-PASSWORD RESPONSE:
- * - Returns 200 on success. No session cookie is set.
- * - User must sign in again with the new password.
+ * MFA (Brick 9):
+ * - /auth/mfa/setup: requires an authenticated session (from login/register)
+ * - /auth/mfa/verify-setup: verifies the provisional secret and flips session.mfaVerified
+ * - /auth/mfa/verify: verifies MFA for a partially authenticated session (mfaVerified=false)
+ * - /auth/mfa/recover: uses a recovery code, flips session.mfaVerified
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -28,6 +24,8 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  mfaCodeSchema,
+  mfaRecoverSchema,
 } from './auth.schemas';
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
@@ -46,6 +44,31 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly isProduction: boolean,
   ) {}
+
+  private requireSession(req: FastifyRequest): {
+    sessionId: string;
+    userId: string;
+    tenantId: string;
+    membershipId: string;
+    role: 'ADMIN' | 'MEMBER';
+    mfaVerified: boolean;
+  } {
+    const ctx = req.authContext;
+    if (!ctx) throw AppError.unauthorized('Not authenticated');
+
+    if (!ctx.sessionId || !ctx.userId || !ctx.tenantId || !ctx.membershipId || !ctx.role) {
+      throw AppError.unauthorized('Not authenticated');
+    }
+
+    return {
+      sessionId: ctx.sessionId,
+      userId: ctx.userId,
+      tenantId: ctx.tenantId,
+      membershipId: ctx.membershipId,
+      role: ctx.role,
+      mfaVerified: ctx.mfaVerified,
+    };
+  }
 
   async register(req: FastifyRequest, reply: FastifyReply) {
     const parsed = registerSchema.safeParse(req.body);
@@ -67,7 +90,6 @@ export class AuthController {
     });
 
     setSessionCookie(reply, sessionId, this.isProduction);
-
     return reply.status(201).send(result);
   }
 
@@ -89,7 +111,6 @@ export class AuthController {
     });
 
     setSessionCookie(reply, sessionId, this.isProduction);
-
     return reply.status(200).send(result);
   }
 
@@ -109,7 +130,6 @@ export class AuthController {
       requestId: req.requestContext.requestId,
     });
 
-    // Always return the same response — service handles all silent paths.
     return reply.status(200).send(FORGOT_PASSWORD_RESPONSE);
   }
 
@@ -130,7 +150,100 @@ export class AuthController {
       requestId: req.requestContext.requestId,
     });
 
-    // No session cookie — user must sign in again.
     return reply.status(200).send(RESET_PASSWORD_RESPONSE);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MFA (Brick 9)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async mfaSetup(req: FastifyRequest, reply: FastifyReply) {
+    const session = this.requireSession(req);
+
+    const result = await this.authService.setupMfa({
+      sessionId: session.sessionId,
+      userId: session.userId,
+      tenantId: session.tenantId, // ✅ needed for audit scope
+      membershipId: session.membershipId, // ✅ needed for audit scope
+      requestId: req.requestContext.requestId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+
+    return reply.status(200).send(result);
+  }
+
+  async mfaVerifySetup(req: FastifyRequest, reply: FastifyReply) {
+    const session = this.requireSession(req);
+
+    const parsed = mfaCodeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const result = await this.authService.verifyMfaSetup({
+      sessionId: session.sessionId,
+      userId: session.userId,
+      tenantId: session.tenantId, // ✅ needed for audit scope
+      membershipId: session.membershipId, // ✅ needed for audit scope
+      code: parsed.data.code,
+      requestId: req.requestContext.requestId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+
+    return reply.status(200).send(result);
+  }
+
+  async mfaVerify(req: FastifyRequest, reply: FastifyReply) {
+    const session = this.requireSession(req);
+
+    const parsed = mfaCodeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const result = await this.authService.verifyMfa({
+      sessionId: session.sessionId,
+      userId: session.userId,
+      tenantId: session.tenantId, // ✅ needed for audit scope
+      membershipId: session.membershipId, // ✅ needed for audit scope
+      mfaVerified: session.mfaVerified,
+      code: parsed.data.code,
+      requestId: req.requestContext.requestId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+
+    return reply.status(200).send(result);
+  }
+
+  async mfaRecover(req: FastifyRequest, reply: FastifyReply) {
+    const session = this.requireSession(req);
+
+    const parsed = mfaRecoverSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const result = await this.authService.recoverMfa({
+      sessionId: session.sessionId,
+      userId: session.userId,
+      tenantId: session.tenantId,
+      membershipId: session.membershipId,
+      mfaVerified: session.mfaVerified,
+      recoveryCode: parsed.data.recoveryCode,
+      requestId: req.requestContext.requestId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+
+    return reply.status(200).send(result);
   }
 }

@@ -1,21 +1,9 @@
 /**
  * src/shared/cache/redis-cache.ts
- *
- * WHY:
- * - Redis implementation of Cache used for rate limiting, tokens, small ephemeral state.
- *
- * IMPORTANT:
- * - In monorepos, importing RedisClientType can cause type conflicts if multiple copies of
- *   @redis/client exist. We avoid that by deriving the client type from createClient().
- *
- * LOGGING:
- * - Redis connection errors fire outside any request context (client-level events,
- *   not request-level). We use the global logger directly — withRequestContext() is not
- *   applicable here. This is the same approach as other app-level concerns.
  */
 
 import { createClient } from 'redis';
-import type { Cache } from './cache';
+import type { Cache, CacheSetOptions } from './cache';
 import { logger } from '../logger/logger';
 
 type RedisClient = ReturnType<typeof createClient>;
@@ -46,11 +34,24 @@ export class RedisCache implements Cache {
     return this.client.get(key);
   }
 
-  async set(key: string, value: string, opts?: { ttlSeconds?: number }): Promise<void> {
-    if (opts?.ttlSeconds) {
+  async set(key: string, value: string, opts?: CacheSetOptions): Promise<void> {
+    // NOTE:
+    // - If ttlSeconds is provided: set with EX.
+    // - If keepTtl is true: set with KEEPTTL (does not change existing TTL).
+    // - If neither provided: plain set.
+    //
+    // If both are provided, ttlSeconds wins (explicit TTL is intentional).
+    if (opts?.ttlSeconds !== undefined) {
       await this.client.set(key, value, { EX: opts.ttlSeconds });
       return;
     }
+
+    if (opts?.keepTtl) {
+      // Redis >= 6 supports KEEPTTL.
+      await this.client.set(key, value, { KEEPTTL: true });
+      return;
+    }
+
     await this.client.set(key, value);
   }
 
@@ -75,8 +76,6 @@ export class RedisCache implements Cache {
     await this.client.sAdd(key, member);
 
     if (opts?.ttlSeconds) {
-      // Refresh TTL on the set key every time a new session is added.
-      // This prevents the index from expiring while some member sessions are still alive.
       await this.client.expire(key, opts.ttlSeconds);
     }
   }

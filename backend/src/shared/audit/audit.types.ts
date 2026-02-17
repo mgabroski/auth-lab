@@ -29,6 +29,13 @@ export type KnownAuditAction =
   // Auth — Password Reset (Brick 8)
   | 'auth.password_reset.requested'
   | 'auth.password_reset.completed'
+  // Auth — MFA (Brick 9) (dots-only naming)
+  | 'auth.mfa.setup.started'
+  | 'auth.mfa.setup.completed'
+  | 'auth.mfa.verify.succeeded'
+  | 'auth.mfa.verify.failed'
+  | 'auth.mfa.recovery.used'
+  | 'auth.mfa.recovery.failed'
   // Users (Brick 7)
   | 'user.created'
   // Memberships (Brick 7)

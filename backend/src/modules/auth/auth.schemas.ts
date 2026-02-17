@@ -48,3 +48,21 @@ export const resetPasswordSchema = z.object({
 });
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MFA (Brick 9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const mfaCodeSchema = z.object({
+  // 6-digit TOTP code
+  code: z.string().regex(/^\d{6}$/, 'Code must be a 6-digit number'),
+});
+
+export type MfaCodeInput = z.infer<typeof mfaCodeSchema>;
+
+export const mfaRecoverSchema = z.object({
+  // Recovery codes are short printable tokens; exact validation is service-side.
+  recoveryCode: z.string().min(8, 'Invalid recovery code').max(64, 'Invalid recovery code'),
+});
+
+export type MfaRecoverInput = z.infer<typeof mfaRecoverSchema>;

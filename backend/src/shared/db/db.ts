@@ -13,7 +13,7 @@
  */
 
 import pg from 'pg';
-import { Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect, type Transaction } from 'kysely';
 
 import type { DB } from './database.types';
 
@@ -25,6 +25,15 @@ export type Db = Kysely<DB>;
  * - Prevents leaking concrete DB construction into modules.
  */
 export type DbExecutor = Kysely<DB>;
+
+/**
+ * DbTx is the typed Kysely transaction object.
+ *
+ * WHY:
+ * - Lets DAL methods accept a transaction without importing Kysely internals everywhere.
+ * - Keeps transaction typing consistent across the codebase.
+ */
+export type DbTx = Transaction<DB>;
 
 export function createDb(databaseUrl: string): Db {
   const pool = new pg.Pool({

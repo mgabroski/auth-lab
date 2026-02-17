@@ -17,6 +17,7 @@ __metadata:
     fastify: "npm:^4.28.1"
     kysely: "npm:^0.27.4"
     kysely-codegen: "npm:^0.16.0"
+    otpauth: "npm:^9.5.0"
     pg: "npm:^8.13.1"
     redis: "npm:^5.10.0"
     tsx: "npm:^4.19.2"
@@ -572,6 +573,13 @@ __metadata:
   version: 1.5.5
   resolution: "@jridgewell/sourcemap-codec@npm:1.5.5"
   checksum: 10c0/f9e538f302b63c0ebc06eecb1dd9918dd4289ed36147a0ddce35d6ea4d7ebbda243cda7b2213b6a5e1d8087a298d5cf630fb2bd39329cdecb82017023f6081a0
+  languageName: node
+  linkType: hard
+
+"@noble/hashes@npm:2.0.1":
+  version: 2.0.1
+  resolution: "@noble/hashes@npm:2.0.1"
+  checksum: 10c0/e81769ce21c3b1c80141a3b99bd001f17edea09879aa936692ae39525477386d696101cd573928a304806efb2b9fa751e1dd83241c67d0c84d30091e85c79bdb
   languageName: node
   linkType: hard
 
@@ -3105,6 +3113,15 @@ __metadata:
     type-check: "npm:^0.4.0"
     word-wrap: "npm:^1.2.5"
   checksum: 10c0/4afb687a059ee65b61df74dfe87d8d6815cd6883cb8b3d5883a910df72d0f5d029821f37025e4bccf4048873dbdb09acc6d303d27b8f76b1a80dd5a7d5334675
+  languageName: node
+  linkType: hard
+
+"otpauth@npm:^9.5.0":
+  version: 9.5.0
+  resolution: "otpauth@npm:9.5.0"
+  dependencies:
+    "@noble/hashes": "npm:2.0.1"
+  checksum: 10c0/2704302beaf5c4e4111144977615f4bf0c071ab6d141e75a4b4131d10470ef0264b83d89fa316218180541e31caa0ab2ff099a755316a5c9a26e3ee2d2a6ce7e
   languageName: node
   linkType: hard
 

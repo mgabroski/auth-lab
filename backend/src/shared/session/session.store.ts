@@ -101,6 +101,38 @@ export class SessionStore {
   }
 
   /**
+   * Updates specific fields of an existing session in place.
+   * Used by MFA flows to flip `mfaVerified` from false → true
+   * after successful TOTP verification or recovery code consumption.
+   *
+   * WHY UPDATE IN PLACE (not rotate session ID):
+   * - Session ID rotation after privilege elevation is best practice against
+   *   session fixation. In this threat model, fixation requires the attacker
+   *   to have already planted a cookie on the victim's browser AND know their
+   *   TOTP secret — a high prerequisite bar for Phase 1.
+   * - Update-in-place keeps the client cookie and Redis index consistent
+   *   without a remove-and-add operation.
+   * - Session ID rotation is a candidate for a future hardening brick.
+   *
+   * RULES:
+   * - Only updates the session data; TTL is refreshed to the configured session TTL
+   *   to match current SessionStore semantics (create() and updateSession() both write).
+   * - No-op if the session does not exist (already expired or destroyed).
+   */
+  async updateSession(sessionId: string, partial: Partial<SessionData>): Promise<void> {
+    const existing = await this.get(sessionId);
+    if (!existing) return; // session expired or does not exist — no-op
+
+    const updated: SessionData = { ...existing, ...partial };
+
+    // IMPORTANT (Brick 9 locked rule):
+    // Update session payload WITHOUT extending its lifetime.
+    await this.cache.set(this.key(sessionId), JSON.stringify(updated), {
+      keepTtl: true,
+    });
+  }
+
+  /**
    * Destroys ALL sessions for a user.
    *
    * WHY: Called after password reset (Brick 8) and future credential changes

@@ -8,20 +8,29 @@
  * HOW TO USE:
  * - cache.get(key)
  * - cache.set(key, value, { ttlSeconds })
+ * - cache.set(key, value, { keepTtl: true })  // do NOT refresh TTL
  * - cache.incr(key, { ttlSeconds }) -> counter with expiration
  * - cache.sadd / smembers / srem -> Redis SET semantics for user-session index
- *
- * SET OPERATIONS (sadd / smembers / srem):
- * - Used by SessionStore to maintain a per-user index of active session IDs.
- * - Native Redis SET semantics: SADD is idempotent, SMEMBERS is one atomic read,
- *   SREM removes a single member without affecting others.
- * - Reason for abstraction: InMemCache must implement the same contract so that
- *   session tests work without a real Redis instance.
  */
+
+export interface CacheSetOptions {
+  ttlSeconds?: number;
+
+  /**
+   * Keep existing TTL when overwriting a key.
+   *
+   * Used by Brick 9 MFA flows: update the session payload (mfaVerified) WITHOUT
+   * extending session lifetime.
+   *
+   * Redis supports this via SET ... KEEPTTL.
+   * InMemCache preserves the existing expiry timestamp.
+   */
+  keepTtl?: boolean;
+}
 
 export interface Cache {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string, opts?: { ttlSeconds?: number }): Promise<void>;
+  set(key: string, value: string, opts?: CacheSetOptions): Promise<void>;
   del(key: string): Promise<void>;
 
   /**

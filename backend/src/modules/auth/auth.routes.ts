@@ -17,4 +17,10 @@ export function registerAuthRoutes(app: FastifyInstance, controller: AuthControl
   app.post('/auth/login', controller.login.bind(controller));
   app.post('/auth/forgot-password', controller.forgotPassword.bind(controller));
   app.post('/auth/reset-password', controller.resetPassword.bind(controller));
+
+  // MFA (Brick 9)
+  app.post('/auth/mfa/setup', controller.mfaSetup.bind(controller));
+  app.post('/auth/mfa/verify-setup', controller.mfaVerifySetup.bind(controller));
+  app.post('/auth/mfa/verify', controller.mfaVerify.bind(controller));
+  app.post('/auth/mfa/recover', controller.mfaRecover.bind(controller));
 }

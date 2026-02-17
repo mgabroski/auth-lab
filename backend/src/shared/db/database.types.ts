@@ -73,6 +73,24 @@ export interface Memberships {
   user_id: string;
 }
 
+export interface MfaRecoveryCodes {
+  code_hash: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  used_at: Timestamp | null;
+  user_id: string;
+}
+
+export interface MfaSecrets {
+  created_at: Generated<Timestamp>;
+  encrypted_secret: string;
+  id: Generated<string>;
+  is_verified: Generated<boolean>;
+  issuer: Generated<string>;
+  user_id: string;
+  verified_at: Timestamp | null;
+}
+
 export interface PasswordResetTokens {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
@@ -107,6 +125,8 @@ export interface DB {
   auth_identities: AuthIdentities;
   invites: Invites;
   memberships: Memberships;
+  mfa_recovery_codes: MfaRecoveryCodes;
+  mfa_secrets: MfaSecrets;
   password_reset_tokens: PasswordResetTokens;
   tenants: Tenants;
   users: Users;

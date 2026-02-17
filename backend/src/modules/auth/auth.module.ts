@@ -4,7 +4,7 @@
  * WHY:
  * - Encapsulates Auth module wiring.
  * - DI creates infra; module composes domain units.
- * - Auth module owns register + login + forgot-password + reset-password routes.
+ * - Auth module owns register + login + forgot-password + reset-password + MFA routes.
  *
  * RULES:
  * - No infra creation here (DI passes deps in).
@@ -23,7 +23,13 @@ import type { Queue } from '../../shared/messaging/queue';
 import type { UserRepo } from '../users/dal/user.repo';
 import type { MembershipRepo } from '../memberships/dal/membership.repo';
 
+// Brick 9 (MFA)
+import type { TotpService } from '../../shared/security/totp';
+import type { EncryptionService } from '../../shared/security/encryption';
+import type { KeyedHasher } from '../../shared/security/keyed-hasher';
+
 import { AuthRepo } from './dal/auth.repo';
+import { MfaRepo } from './dal/mfa.repo';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { registerAuthRoutes } from './auth.routes';
@@ -42,8 +48,15 @@ export function createAuthModule(deps: {
   userRepo: UserRepo;
   membershipRepo: MembershipRepo;
   isProduction: boolean;
+
+  // Brick 9 (MFA)
+  totpService: TotpService;
+  encryptionService: EncryptionService;
+  mfaKeyedHasher: KeyedHasher;
+  mfaRecoveryCodesCount: number;
 }) {
   const authRepo = new AuthRepo(deps.db);
+  const mfaRepo = new MfaRepo(deps.db);
 
   const authService = new AuthService({
     db: deps.db,
@@ -57,6 +70,13 @@ export function createAuthModule(deps: {
     userRepo: deps.userRepo,
     membershipRepo: deps.membershipRepo,
     authRepo,
+
+    // Brick 9 (MFA)
+    mfaRepo,
+    totpService: deps.totpService,
+    encryptionService: deps.encryptionService,
+    mfaKeyedHasher: deps.mfaKeyedHasher,
+    mfaRecoveryCodesCount: deps.mfaRecoveryCodesCount,
   });
 
   const controller = new AuthController(authService, deps.isProduction);

@@ -1,15 +1,8 @@
 /**
  * src/shared/cache/inmem-cache.ts
- *
- * WHY:
- * - Allows tests (and local dev if Redis is down) to run without external infra.
- * - Used primarily for unit/service tests.
- *
- * HOW TO USE:
- * - const cache = new InMemCache()
  */
 
-import type { Cache } from './cache';
+import type { Cache, CacheSetOptions } from './cache';
 
 type StringEntry = { value: string; expiresAtMs: number | null };
 
@@ -45,9 +38,31 @@ export class InMemCache implements Cache {
     return Promise.resolve(entry ? entry.value : null);
   }
 
-  set(key: string, value: string, opts?: { ttlSeconds?: number }): Promise<void> {
-    const expiresAtMs = opts?.ttlSeconds ? this.now() + opts.ttlSeconds * 1000 : null;
-    this.store.set(key, { value, expiresAtMs });
+  set(key: string, value: string, opts?: CacheSetOptions): Promise<void> {
+    const existing = this.getEntry(key);
+
+    // If ttlSeconds explicitly provided, it always wins.
+    if (opts?.ttlSeconds !== undefined) {
+      const expiresAtMs = this.now() + opts.ttlSeconds * 1000;
+      this.store.set(key, { value, expiresAtMs });
+      return Promise.resolve();
+    }
+
+    // keepTtl means: preserve the existing expiry timestamp.
+    if (opts?.keepTtl) {
+      if (!existing) {
+        // If key doesn't exist, behave like a normal set with no TTL.
+        // (SessionStore.updateSession already guards this, so this is just safe.)
+        this.store.set(key, { value, expiresAtMs: null });
+        return Promise.resolve();
+      }
+
+      this.store.set(key, { value, expiresAtMs: existing.expiresAtMs });
+      return Promise.resolve();
+    }
+
+    // Default: overwrite value, but keep previous expiry if it existed (same behavior as before)
+    this.store.set(key, { value, expiresAtMs: existing?.expiresAtMs ?? null });
     return Promise.resolve();
   }
 
@@ -67,12 +82,10 @@ export class InMemCache implements Cache {
       : (entry?.expiresAtMs ?? null);
 
     this.store.set(key, { value: String(next), expiresAtMs });
-
     return Promise.resolve(next);
   }
 
   sadd(key: string, member: string, opts?: { ttlSeconds?: number }): Promise<void> {
-    // Evict if expired
     if (this.isSetExpired(key)) {
       this.sets.delete(key);
       this.setExpiry.delete(key);
@@ -85,7 +98,6 @@ export class InMemCache implements Cache {
     }
     set.add(member);
 
-    // Refresh TTL on every sadd (same as Redis EXPIRE behaviour on SADD)
     if (opts?.ttlSeconds !== undefined) {
       this.setExpiry.set(key, this.now() + opts.ttlSeconds * 1000);
     } else if (!this.setExpiry.has(key)) {

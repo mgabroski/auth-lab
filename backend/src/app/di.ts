@@ -35,6 +35,12 @@ import { SessionStore } from '../shared/session/session.store';
 import { InMemQueue } from '../shared/messaging/inmem-queue';
 import type { Queue } from '../shared/messaging/queue';
 
+// Brick 9 (MFA)
+import { TotpService } from '../shared/security/totp';
+import { EncryptionService } from '../shared/security/encryption';
+import { HmacSha256KeyedHasher } from '../shared/security/keyed-hasher';
+import type { KeyedHasher } from '../shared/security/keyed-hasher';
+
 import { createTenantModule } from '../modules/tenants/tenant.module';
 import type { TenantModule } from '../modules/tenants/tenant.module';
 
@@ -63,6 +69,11 @@ export type AppDeps = {
   // shared repos / stores
   auditRepo: AuditRepo;
   sessionStore: SessionStore;
+
+  // Brick 9 (MFA)
+  totpService: TotpService;
+  encryptionService: EncryptionService;
+  mfaKeyedHasher: KeyedHasher;
 
   // messaging
   queue: Queue;
@@ -100,6 +111,11 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
   const auditRepo = new AuditRepo(db);
   const sessionStore = new SessionStore(redis, config.sessionTtlSeconds);
 
+  // Brick 9 (MFA)
+  const totpService = new TotpService(config.mfa.issuer);
+  const encryptionService = new EncryptionService(config.mfa.encryptionKeyBase64);
+  const mfaKeyedHasher: KeyedHasher = new HmacSha256KeyedHasher(config.mfa.hmacKeyBase64);
+
   // Phase 1: in-memory queue (swap for SQS/SendGrid adapter here in production)
   const queue: Queue = new InMemQueue();
 
@@ -108,6 +124,7 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
   const invites = createInviteModule({ db, tokenHasher, logger, auditRepo });
   const users = createUserModule({ db });
   const memberships = createMembershipModule({ db });
+
   const auth = createAuthModule({
     db,
     tokenHasher,
@@ -120,6 +137,12 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     userRepo: users.userRepo,
     membershipRepo: memberships.membershipRepo,
     isProduction: config.nodeEnv === 'production',
+
+    // Brick 9 (MFA)
+    totpService,
+    encryptionService,
+    mfaKeyedHasher,
+    mfaRecoveryCodesCount: config.mfa.recoveryCodesCount,
   });
 
   return {
@@ -131,6 +154,12 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     passwordHasher,
     auditRepo,
     sessionStore,
+
+    // Brick 9 (MFA)
+    totpService,
+    encryptionService,
+    mfaKeyedHasher,
+
     queue,
     tenants,
     invites,

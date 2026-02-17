@@ -21,18 +21,22 @@ import type { Tenant } from '../../tenants/tenant.types';
 
 /**
  * Determines what MFA action the client must take after authentication.
- * Exported for direct unit testing.
+ *
+ * Brick 9 rules:
+ * - Admins: MFA is mandatory. If configured => MFA_REQUIRED; else => MFA_SETUP_REQUIRED.
+ * - Members: MFA is required if tenant.memberMfaRequired = true (same logic).
+ * - If MFA is not required => NONE.
  */
-export function determineMfaNextAction(role: 'ADMIN' | 'MEMBER', tenant: Tenant): MfaNextAction {
-  if (role === 'ADMIN') {
-    return 'MFA_SETUP_REQUIRED';
-  }
+export function determineMfaNextAction(
+  role: 'ADMIN' | 'MEMBER',
+  tenant: Tenant,
+  hasVerifiedMfaSecret: boolean,
+): MfaNextAction {
+  const mfaRequired = role === 'ADMIN' || tenant.memberMfaRequired;
 
-  if (tenant.memberMfaRequired) {
-    return 'MFA_SETUP_REQUIRED';
-  }
+  if (!mfaRequired) return 'NONE';
 
-  return 'NONE';
+  return hasVerifiedMfaSecret ? 'MFA_REQUIRED' : 'MFA_SETUP_REQUIRED';
 }
 
 // ── Session creation ──────────────────────────────────────────
@@ -45,6 +49,13 @@ export type CreateAuthSessionParams = {
   membershipId: string;
   role: 'ADMIN' | 'MEMBER';
   tenant: Tenant;
+
+  /**
+   * Computed by the service (DB read) before session creation.
+   * We keep DB out of this helper.
+   */
+  hasVerifiedMfaSecret: boolean;
+
   now: Date;
 };
 
@@ -56,9 +67,19 @@ export type CreateAuthSessionResult = {
 export async function createAuthSession(
   params: CreateAuthSessionParams,
 ): Promise<CreateAuthSessionResult> {
-  const { sessionStore, userId, tenantId, tenantKey, membershipId, role, tenant, now } = params;
+  const {
+    sessionStore,
+    userId,
+    tenantId,
+    tenantKey,
+    membershipId,
+    role,
+    tenant,
+    hasVerifiedMfaSecret,
+    now,
+  } = params;
 
-  const nextAction = determineMfaNextAction(role, tenant);
+  const nextAction = determineMfaNextAction(role, tenant, hasVerifiedMfaSecret);
 
   const sessionId = await sessionStore.create({
     userId,
