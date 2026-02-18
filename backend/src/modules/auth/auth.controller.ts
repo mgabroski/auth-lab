@@ -30,6 +30,7 @@ import {
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
 import { setSessionCookie } from '../../shared/session/set-session-cookie';
+import { requireAuthContext } from '../../shared/http/require-auth-context';
 
 const FORGOT_PASSWORD_RESPONSE = {
   message: 'If an account with that email exists, a password reset link has been sent.',
@@ -44,31 +45,6 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly isProduction: boolean,
   ) {}
-
-  private requireSession(req: FastifyRequest): {
-    sessionId: string;
-    userId: string;
-    tenantId: string;
-    membershipId: string;
-    role: 'ADMIN' | 'MEMBER';
-    mfaVerified: boolean;
-  } {
-    const ctx = req.authContext;
-    if (!ctx) throw AppError.unauthorized('Not authenticated');
-
-    if (!ctx.sessionId || !ctx.userId || !ctx.tenantId || !ctx.membershipId || !ctx.role) {
-      throw AppError.unauthorized('Not authenticated');
-    }
-
-    return {
-      sessionId: ctx.sessionId,
-      userId: ctx.userId,
-      tenantId: ctx.tenantId,
-      membershipId: ctx.membershipId,
-      role: ctx.role,
-      mfaVerified: ctx.mfaVerified,
-    };
-  }
 
   async register(req: FastifyRequest, reply: FastifyReply) {
     const parsed = registerSchema.safeParse(req.body);
@@ -158,7 +134,7 @@ export class AuthController {
   // ─────────────────────────────────────────────────────────────────────────────
 
   async mfaSetup(req: FastifyRequest, reply: FastifyReply) {
-    const session = this.requireSession(req);
+    const session = requireAuthContext(req);
 
     const result = await this.authService.setupMfa({
       sessionId: session.sessionId,
@@ -174,7 +150,7 @@ export class AuthController {
   }
 
   async mfaVerifySetup(req: FastifyRequest, reply: FastifyReply) {
-    const session = this.requireSession(req);
+    const session = requireAuthContext(req);
 
     const parsed = mfaCodeSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -186,8 +162,8 @@ export class AuthController {
     const result = await this.authService.verifyMfaSetup({
       sessionId: session.sessionId,
       userId: session.userId,
-      tenantId: session.tenantId, // ✅ needed for audit scope
-      membershipId: session.membershipId, // ✅ needed for audit scope
+      tenantId: session.tenantId,
+      membershipId: session.membershipId,
       code: parsed.data.code,
       requestId: req.requestContext.requestId,
       ip: req.ip,
@@ -198,7 +174,7 @@ export class AuthController {
   }
 
   async mfaVerify(req: FastifyRequest, reply: FastifyReply) {
-    const session = this.requireSession(req);
+    const session = requireAuthContext(req);
 
     const parsed = mfaCodeSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -210,8 +186,8 @@ export class AuthController {
     const result = await this.authService.verifyMfa({
       sessionId: session.sessionId,
       userId: session.userId,
-      tenantId: session.tenantId, // ✅ needed for audit scope
-      membershipId: session.membershipId, // ✅ needed for audit scope
+      tenantId: session.tenantId,
+      membershipId: session.membershipId,
       mfaVerified: session.mfaVerified,
       code: parsed.data.code,
       requestId: req.requestContext.requestId,
@@ -223,7 +199,7 @@ export class AuthController {
   }
 
   async mfaRecover(req: FastifyRequest, reply: FastifyReply) {
-    const session = this.requireSession(req);
+    const session = requireAuthContext(req);
 
     const parsed = mfaRecoverSchema.safeParse(req.body);
     if (!parsed.success) {
