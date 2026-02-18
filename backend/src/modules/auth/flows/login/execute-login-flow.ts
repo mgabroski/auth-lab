@@ -38,7 +38,7 @@ import { buildAuthResult } from '../../helpers/build-auth-result';
 import { getUserByEmail } from '../../../users/queries/user.queries';
 import { getMembershipByTenantAndUser } from '../../../memberships/queries/membership.queries';
 import { getPasswordIdentityWithHash } from '../../queries/auth.queries';
-import { getMfaSecretForUser } from '../../queries/mfa.queries';
+import { hasVerifiedMfaSecret } from '../../helpers/has-verified-mfa-secret';
 
 import { isMfaRequiredForLogin } from '../../policies/mfa-required.policy';
 import { decideLoginNextAction } from '../../policies/login-next-action.policy';
@@ -243,14 +243,14 @@ export async function executeLoginFlow(
     tenantMemberMfaRequired: tenant.memberMfaRequired,
   });
 
-  const hasVerifiedMfaSecret = mfaIsRequired
-    ? Boolean((await getMfaSecretForUser(deps.db, user.id))?.isVerified)
+  const hasVerifiedMfaSecretValue = mfaIsRequired
+    ? await hasVerifiedMfaSecret(deps.db, user.id)
     : false;
 
   const nextAction = decideLoginNextAction({
     role: membership.role,
     memberMfaRequired: tenant.memberMfaRequired,
-    hasVerifiedMfaSecret,
+    hasVerifiedMfaSecret: hasVerifiedMfaSecretValue,
   });
 
   const { sessionId } = await createAuthSession({
@@ -261,7 +261,7 @@ export async function executeLoginFlow(
     membershipId: membership.id,
     role: membership.role,
     tenant,
-    hasVerifiedMfaSecret,
+    hasVerifiedMfaSecret: hasVerifiedMfaSecretValue,
     now: new Date(),
   });
 
