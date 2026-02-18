@@ -20,7 +20,7 @@
 
 import type { PasswordHasher } from '../../../shared/security/password-hasher';
 import type { AuthRepo } from '../dal/auth.repo';
-import { getPasswordIdentityWithHash } from '../auth.queries';
+import { getPasswordIdentityWithHash } from '../queries/auth.queries';
 import { AuthErrors } from '../auth.errors';
 import type { DbExecutor } from '../../../shared/db/db';
 

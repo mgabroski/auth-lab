@@ -3,7 +3,10 @@ import { buildTestApp } from '../helpers/build-test-app';
 import { UserRepo } from '../../src/modules/users/dal/user.repo';
 import { AuthRepo } from '../../src/modules/auth/dal/auth.repo';
 import { selectAuthIdentityByUserAndProviderSql } from '../../src/modules/auth/dal/auth.query-sql';
-import { getPasswordIdentityWithHash, hasAuthIdentity } from '../../src/modules/auth/auth.queries';
+import {
+  getPasswordIdentityWithHash,
+  hasAuthIdentity,
+} from '../../src/modules/auth/queries/auth.queries';
 
 describe('auth identities DAL', () => {
   it('insertPasswordIdentity creates identity and select finds it', async () => {

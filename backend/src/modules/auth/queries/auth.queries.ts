@@ -11,12 +11,12 @@
  * - No AppError.
  */
 
-import type { DbExecutor } from '../../shared/db/db';
+import type { DbExecutor } from '../../../shared/db/db';
 import {
   selectAuthIdentityByUserAndProviderSql,
   selectValidResetTokenSql,
-} from './dal/auth.query-sql';
-import type { AuthIdentity, AuthProvider, PasswordResetToken } from './auth.types';
+} from '../dal/auth.query-sql';
+import type { AuthIdentity, AuthProvider, PasswordResetToken } from '../auth.types';
 
 function parseProvider(value: string): AuthProvider {
   if (value === 'password' || value === 'google' || value === 'microsoft') return value;

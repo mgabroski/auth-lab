@@ -11,8 +11,8 @@
  * - Side-effect free.
  */
 
-import type { DbExecutor } from '../../shared/db/db';
-import { selectMfaSecretByUser } from './dal/mfa.query-sql';
+import type { DbExecutor } from '../../../shared/db/db';
+import { selectMfaSecretByUser } from '../dal/mfa.query-sql';
 
 export type MfaSecret = {
   id: string;

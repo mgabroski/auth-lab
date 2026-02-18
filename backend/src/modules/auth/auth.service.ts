@@ -79,11 +79,13 @@ import { buildAuthResult } from './helpers/build-auth-result';
 
 import { getUserByEmail, getUserById } from '../users/queries/user.queries';
 import { getMembershipByTenantAndUser } from '../memberships/queries/membership.queries';
-import { getPasswordIdentityWithHash, hasAuthIdentity, getValidResetToken } from './auth.queries';
+import {
+  getPasswordIdentityWithHash,
+  hasAuthIdentity,
+  getValidResetToken,
+} from './queries/auth.queries';
 import type { Tenant } from '../tenants/tenant.types';
-
-// Brick 9 (MFA queries)
-import { getMfaSecretForUser } from './mfa.queries';
+import { getMfaSecretForUser } from './queries/mfa.queries';
 
 // ── PII-safe helpers ─────────────────────────────────────────
 // We avoid putting raw emails into infra keys (Redis) or operational logs.
