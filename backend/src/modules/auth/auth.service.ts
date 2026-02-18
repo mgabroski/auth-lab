@@ -87,6 +87,10 @@ import {
 import type { Tenant } from '../tenants/tenant.types';
 import { getMfaSecretForUser } from './queries/mfa.queries';
 import { isMfaRequiredForLogin } from './policies/mfa-required.policy';
+import {
+  assertLoginMembershipAllowed,
+  getLoginMembershipGatingFailure,
+} from './policies/login-membership-gating.policy';
 
 // ── PII-safe helpers ─────────────────────────────────────────
 // We avoid putting raw emails into infra keys (Redis) or operational logs.
@@ -416,40 +420,21 @@ export class AuthService {
           userId: user.id,
         });
 
-        if (!membership) {
+        const gatingFailure = getLoginMembershipGatingFailure(membership);
+        if (gatingFailure) {
           failureCtx = {
             tenantId: tenant.id,
             userId: user.id,
+            membershipId: membership?.id,
             email,
-            reason: 'no_membership',
-            error: AuthErrors.noAccess(),
+            reason: gatingFailure.reason,
+            error: gatingFailure.error,
           };
           throw failureCtx.error;
         }
 
-        if (membership.status === 'SUSPENDED') {
-          failureCtx = {
-            tenantId: tenant.id,
-            userId: user.id,
-            membershipId: membership.id,
-            email,
-            reason: 'suspended',
-            error: AuthErrors.accountSuspended(),
-          };
-          throw failureCtx.error;
-        }
-
-        if (membership.status === 'INVITED') {
-          failureCtx = {
-            tenantId: tenant.id,
-            userId: user.id,
-            membershipId: membership.id,
-            email,
-            reason: 'invite_not_accepted',
-            error: AuthErrors.inviteNotYetAccepted(),
-          };
-          throw failureCtx.error;
-        }
+        // ✅ This is the missing narrowing step:
+        assertLoginMembershipAllowed(membership);
 
         const fullAudit = audit
           .withContext({ tenantId: tenant.id })
