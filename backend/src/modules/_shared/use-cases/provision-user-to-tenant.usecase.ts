@@ -24,7 +24,7 @@
  * - Throws MembershipErrors.membershipSuspended if membership is SUSPENDED.
  */
 
-import { getUserByEmail } from '../../users/user.queries';
+import { getUserByEmail } from '../../users/queries/user.queries';
 import type { UserRepo } from '../../users/dal/user.repo';
 import type { User } from '../../users/user.types';
 

@@ -5,7 +5,7 @@ import {
   selectUserByEmailSql,
   selectUserByIdSql,
 } from '../../src/modules/users/dal/user.query-sql';
-import { getUserByEmail } from '../../src/modules/users/user.queries';
+import { getUserByEmail } from '../../src/modules/users/queries/user.queries';
 
 describe('users DAL', () => {
   it('insertUser creates a user and selectUserByEmail finds it', async () => {

@@ -1,5 +1,5 @@
 /**
- * backend/src/modules/users/user.queries.ts
+ * backend/src/modules/users/queries/user.queries.ts
  *
  * WHY:
  * - Queries are read-only and side-effect free.
@@ -11,10 +11,10 @@
  * - No AppError.
  */
 
-import type { DbExecutor } from '../../shared/db/db';
-import { selectUserByEmailSql, selectUserByIdSql } from './dal/user.query-sql';
-import type { UserRow } from './dal/user.query-sql';
-import type { User } from './user.types';
+import type { DbExecutor } from '../../../shared/db/db';
+import { selectUserByEmailSql, selectUserByIdSql } from '../dal/user.query-sql';
+import type { UserRow } from '../dal/user.query-sql';
+import type { User } from '../user.types';
 
 function toUser(row: UserRow): User {
   return {
