@@ -39,7 +39,6 @@ import type { AuditRepo } from '../../shared/audit/audit.repo';
 import { AuditWriter } from '../../shared/audit/audit.writer';
 import type { SessionStore } from '../../shared/session/session.store';
 import type { Queue } from '../../shared/messaging/queue';
-import { generateSecureToken } from '../../shared/security/token';
 import { AppError } from '../../shared/http/errors';
 
 // Brick 9 (MFA deps)
@@ -57,7 +56,6 @@ import { AuthErrors } from './auth.errors';
 import type { AuthResult } from './auth.types';
 
 import {
-  auditPasswordResetRequested,
   auditPasswordResetCompleted,
   auditMfaSetupStarted,
   auditMfaSetupCompleted,
@@ -66,11 +64,12 @@ import {
   auditMfaRecoveryUsed,
 } from './auth.audit';
 
-import { getUserByEmail, getUserById } from '../users/queries/user.queries';
+import { getUserById } from '../users/queries/user.queries';
 import { hasAuthIdentity, getValidResetToken } from './queries/auth.queries';
 import { getMfaSecretForUser } from './queries/mfa.queries';
 import { executeLoginFlow } from './flows/login/execute-login-flow';
 import { executeRegisterFlow } from './flows/register/execute-register-flow';
+import { requestPasswordResetFlow } from './flows/password-reset/request-password-reset-flow';
 
 export type RegisterParams = {
   tenantKey: string | null;
@@ -109,15 +108,11 @@ export type ResetPasswordParams = {
   requestId: string;
 };
 
-const FORGOT_PASSWORD_LIMIT_PER_EMAIL = { limit: 3, windowSeconds: 3600 }; // silent
 const RESET_PASSWORD_LIMIT_PER_IP = { limit: 5, windowSeconds: 900 }; // hard 429
 
 // Brick 9 (MFA) rate limits (global per-user)
 const MFA_VERIFY_LIMIT_PER_USER = { limit: 5, windowSeconds: 900 }; // hard 429
 const MFA_RECOVERY_LIMIT_PER_USER = { limit: 5, windowSeconds: 900 }; // hard 429
-
-// Password reset token TTL: 1 hour
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 // Brick 9 (MFA) recovery codes
 const RECOVERY_CODE_LENGTH = 16;
@@ -210,76 +205,19 @@ export class AuthService {
     );
   }
 
-  // ── Forgot Password (Brick 8) ────────────────────────────
-
   async requestPasswordReset(params: RequestPasswordResetParams): Promise<void> {
-    const email = params.email.toLowerCase();
-    const emailKey = this.deps.tokenHasher.hash(email);
-
-    // Base audit writer — no tenant/user context yet (we may not find them)
-    const audit = new AuditWriter(this.deps.auditRepo, {
-      requestId: params.requestId,
-      ip: params.ip,
-      userAgent: params.userAgent,
-    });
-
-    // ── 1. Silent rate limit ─────────────────────────────────
-    const withinLimit = await this.deps.rateLimiter.hitOrSkip({
-      key: `forgot:email:${emailKey}`,
-      ...FORGOT_PASSWORD_LIMIT_PER_EMAIL,
-    });
-
-    if (!withinLimit) {
-      await auditPasswordResetRequested(audit, { outcome: 'rate_limited' });
-      return;
-    }
-
-    // ── 2. Find user ─────────────────────────────────────────
-    const user = await getUserByEmail(this.deps.db, email);
-    if (!user) {
-      await auditPasswordResetRequested(audit, { outcome: 'user_not_found' });
-      return;
-    }
-
-    // ── 3. Check for password identity ──────────────────────
-    const hasPassword = await hasAuthIdentity(this.deps.db, {
-      userId: user.id,
-      provider: 'password',
-    });
-    if (!hasPassword) {
-      await auditPasswordResetRequested(audit.withContext({ userId: user.id }), {
-        outcome: 'sso_only',
-      });
-      return;
-    }
-
-    // ── 4. Invalidate any existing active tokens ─────────────
-    await this.deps.authRepo.invalidateActiveResetTokensForUser({ userId: user.id });
-
-    // ── 5. Generate and store new token ─────────────────────
-    const rawToken = generateSecureToken();
-    const tokenHash = this.deps.tokenHasher.hash(rawToken);
-    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
-
-    await this.deps.authRepo.insertPasswordResetToken({
-      userId: user.id,
-      tokenHash,
-      expiresAt,
-    });
-
-    // ── 6. Enqueue reset email ───────────────────────────────
-    await this.deps.queue.enqueue({
-      type: 'auth.reset-password-email',
-      userId: user.id,
-      email,
-      resetToken: rawToken,
-      tenantKey: params.tenantKey ?? '',
-    });
-
-    // ── 7. Audit ─────────────────────────────────────────────
-    await auditPasswordResetRequested(audit.withContext({ userId: user.id }), {
-      outcome: 'sent',
-    });
+    return requestPasswordResetFlow(
+      {
+        db: this.deps.db,
+        tokenHasher: this.deps.tokenHasher,
+        logger: this.deps.logger,
+        rateLimiter: this.deps.rateLimiter,
+        auditRepo: this.deps.auditRepo,
+        queue: this.deps.queue,
+        authRepo: this.deps.authRepo,
+      },
+      params,
+    );
   }
 
   // ── Reset Password (Brick 8) ─────────────────────────────
