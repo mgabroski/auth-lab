@@ -11,9 +11,9 @@
  * - No AppError.
  */
 
-import type { DbExecutor } from '../../shared/db/db';
-import { findInviteByTenantAndTokenHashSql } from './dal/invite.query-sql';
-import type { Invite, InviteRole, InviteStatus } from './invite.types';
+import type { DbExecutor } from '../../../shared/db/db';
+import { findInviteByTenantAndTokenHashSql } from '../dal/invite.query-sql';
+import type { Invite, InviteRole, InviteStatus } from '../invite.types';
 
 function parseInviteStatus(value: string): InviteStatus {
   if (value === 'PENDING' || value === 'ACCEPTED' || value === 'CANCELLED' || value === 'EXPIRED')

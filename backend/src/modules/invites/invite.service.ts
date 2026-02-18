@@ -24,7 +24,7 @@ import {
   assertTenantKeyPresent,
 } from '../tenants/policies/tenant-safety.policy';
 import { getTenantByKey } from '../tenants/queries/tenant.queries';
-import { getInviteByTenantAndTokenHash } from './invite.queries';
+import { getInviteByTenantAndTokenHash } from './queries/invite.queries';
 import {
   assertInviteBelongsToTenant,
   assertInviteExists,

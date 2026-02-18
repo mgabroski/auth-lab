@@ -21,7 +21,7 @@
 import type { DbExecutor } from '../../../shared/db/db';
 import type { TokenHasher } from '../../../shared/security/token-hasher';
 import type { Invite } from '../../invites/invite.types';
-import { getInviteByTenantAndTokenHash } from '../../invites/invite.queries';
+import { getInviteByTenantAndTokenHash } from '../../invites/queries/invite.queries';
 import { AuthErrors } from '../auth.errors';
 
 export type ValidateInviteParams = {
