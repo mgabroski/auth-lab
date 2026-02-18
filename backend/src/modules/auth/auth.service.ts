@@ -78,7 +78,7 @@ import { createAuthSession } from './helpers/create-auth-session';
 import { buildAuthResult } from './helpers/build-auth-result';
 
 import { getUserByEmail, getUserById } from '../users/queries/user.queries';
-import { getMembershipByTenantAndUser } from '../memberships/membership.queries';
+import { getMembershipByTenantAndUser } from '../memberships/queries/membership.queries';
 import { getPasswordIdentityWithHash, hasAuthIdentity, getValidResetToken } from './auth.queries';
 import type { Tenant } from '../tenants/tenant.types';
 

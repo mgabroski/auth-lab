@@ -8,7 +8,7 @@ import { buildTestApp } from '../helpers/build-test-app';
 import { UserRepo } from '../../src/modules/users/dal/user.repo';
 import { MembershipRepo } from '../../src/modules/memberships/dal/membership.repo';
 import { selectMembershipByTenantAndUserSql } from '../../src/modules/memberships/dal/membership.query-sql';
-import { getMembershipByTenantAndUser } from '../../src/modules/memberships/membership.queries';
+import { getMembershipByTenantAndUser } from '../../src/modules/memberships/queries/membership.queries';
 import {
   assertMembershipExists,
   assertMembershipIsActive,

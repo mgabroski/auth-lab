@@ -11,13 +11,13 @@
  * - No AppError.
  */
 
-import type { DbExecutor } from '../../shared/db/db';
+import type { DbExecutor } from '../../../shared/db/db';
 import {
   selectMembershipByTenantAndUserSql,
   selectMembershipByIdSql,
-} from './dal/membership.query-sql';
-import type { MembershipRow } from './dal/membership.query-sql';
-import type { Membership, MembershipRole, MembershipStatus } from './membership.types';
+} from '../dal/membership.query-sql';
+import type { MembershipRow } from '../dal/membership.query-sql';
+import type { Membership, MembershipRole, MembershipStatus } from '../membership.types';
 
 function parseMembershipRole(value: string): MembershipRole {
   if (value === 'ADMIN' || value === 'MEMBER') return value;

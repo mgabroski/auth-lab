@@ -28,7 +28,7 @@ import { getUserByEmail } from '../../users/queries/user.queries';
 import type { UserRepo } from '../../users/dal/user.repo';
 import type { User } from '../../users/user.types';
 
-import { getMembershipByTenantAndUser } from '../../memberships/membership.queries';
+import { getMembershipByTenantAndUser } from '../../memberships/queries/membership.queries';
 import type { MembershipRepo } from '../../memberships/dal/membership.repo';
 import type { Membership, MembershipRole } from '../../memberships/membership.types';
 
