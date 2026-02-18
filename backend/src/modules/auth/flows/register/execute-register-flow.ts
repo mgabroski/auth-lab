@@ -36,6 +36,8 @@ import { writeRegisterAudits } from '../../helpers/write-register-audits';
 import { createAuthSession } from '../../helpers/create-auth-session';
 import { buildAuthResult } from '../../helpers/build-auth-result';
 
+import { decideRegisterNextAction } from '../../policies/register-next-action.policy';
+
 // ── Rate-limit constants (kept identical to AuthService) ─────
 const REGISTER_LIMIT_PER_EMAIL = { limit: 5, windowSeconds: 900 };
 const REGISTER_LIMIT_PER_IP = { limit: 20, windowSeconds: 900 };
@@ -152,7 +154,14 @@ export async function executeRegisterFlow(
   // New user will never have MFA configured yet, but keep it explicit.
   const hasVerifiedMfaSecret = false;
 
-  const { sessionId, nextAction } = await createAuthSession({
+  // Policy decides nextAction (keeps session helper as pure plumbing).
+  const nextAction = decideRegisterNextAction({
+    role: membership.role,
+    memberMfaRequired: tenant.memberMfaRequired,
+  });
+
+  // Session creation returns a sessionId; nextAction is now owned by policy.
+  const { sessionId } = await createAuthSession({
     sessionStore: deps.sessionStore,
     userId: user.id,
     tenantId: tenant.id,
