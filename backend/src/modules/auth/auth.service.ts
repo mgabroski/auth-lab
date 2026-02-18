@@ -52,11 +52,9 @@ import type { MembershipRepo } from '../memberships/dal/membership.repo';
 import type { AuthRepo } from './dal/auth.repo';
 import type { MfaRepo } from './dal/mfa.repo';
 
-import { AuthErrors } from './auth.errors';
 import type { AuthResult } from './auth.types';
 
 import {
-  auditPasswordResetCompleted,
   auditMfaSetupStarted,
   auditMfaSetupCompleted,
   auditMfaVerifySuccess,
@@ -65,11 +63,11 @@ import {
 } from './auth.audit';
 
 import { getUserById } from '../users/queries/user.queries';
-import { hasAuthIdentity, getValidResetToken } from './queries/auth.queries';
 import { getMfaSecretForUser } from './queries/mfa.queries';
 import { executeLoginFlow } from './flows/login/execute-login-flow';
 import { executeRegisterFlow } from './flows/register/execute-register-flow';
 import { requestPasswordResetFlow } from './flows/password-reset/request-password-reset-flow';
+import { resetPasswordFlow } from './flows/password-reset/reset-password-flow';
 
 export type RegisterParams = {
   tenantKey: string | null;
@@ -107,8 +105,6 @@ export type ResetPasswordParams = {
   userAgent: string | null;
   requestId: string;
 };
-
-const RESET_PASSWORD_LIMIT_PER_IP = { limit: 5, windowSeconds: 900 }; // hard 429
 
 // Brick 9 (MFA) rate limits (global per-user)
 const MFA_VERIFY_LIMIT_PER_USER = { limit: 5, windowSeconds: 900 }; // hard 429
@@ -220,65 +216,20 @@ export class AuthService {
     );
   }
 
-  // ── Reset Password (Brick 8) ─────────────────────────────
-
   async resetPassword(params: ResetPasswordParams): Promise<void> {
-    await this.deps.rateLimiter.hitOrThrow({
-      key: `reset:ip:${params.ip}`,
-      ...RESET_PASSWORD_LIMIT_PER_IP,
-    });
-
-    const tokenHash = this.deps.tokenHasher.hash(params.token);
-    const resetToken = await getValidResetToken(this.deps.db, tokenHash);
-
-    if (!resetToken) {
-      throw AuthErrors.resetTokenInvalid();
-    }
-
-    const user = await getUserById(this.deps.db, resetToken.userId);
-    if (!user) {
-      throw AuthErrors.resetTokenInvalid();
-    }
-
-    const hasPassword = await hasAuthIdentity(this.deps.db, {
-      userId: user.id,
-      provider: 'password',
-    });
-    if (!hasPassword) {
-      throw AuthErrors.resetTokenInvalid();
-    }
-
-    const newHash = await this.deps.passwordHasher.hash(params.newPassword);
-
-    await this.deps.db.transaction().execute(async (trx) => {
-      const authRepo = this.deps.authRepo.withDb(trx);
-
-      await authRepo.updatePasswordHash({
-        userId: user.id,
-        newHash,
-      });
-
-      await authRepo.markResetTokenUsed({ tokenHash });
-
-      await authRepo.invalidateActiveResetTokensForUser({ userId: user.id });
-    });
-
-    await this.deps.sessionStore.destroyAllForUser(user.id);
-
-    const audit = new AuditWriter(this.deps.auditRepo, {
-      requestId: params.requestId,
-      ip: params.ip,
-      userAgent: params.userAgent,
-    }).withContext({ userId: user.id });
-
-    await auditPasswordResetCompleted(audit, { userId: user.id });
-
-    this.deps.logger.info({
-      msg: 'auth.password_reset.completed',
-      flow: 'auth.reset-password',
-      requestId: params.requestId,
-      userId: user.id,
-    });
+    return resetPasswordFlow(
+      {
+        db: this.deps.db,
+        tokenHasher: this.deps.tokenHasher,
+        passwordHasher: this.deps.passwordHasher,
+        logger: this.deps.logger,
+        rateLimiter: this.deps.rateLimiter,
+        auditRepo: this.deps.auditRepo,
+        sessionStore: this.deps.sessionStore,
+        authRepo: this.deps.authRepo,
+      },
+      params,
+    );
   }
 
   // ── MFA Setup (Brick 9a) ─────────────────────────────────
