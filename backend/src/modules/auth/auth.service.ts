@@ -86,6 +86,7 @@ import {
 } from './queries/auth.queries';
 import type { Tenant } from '../tenants/tenant.types';
 import { getMfaSecretForUser } from './queries/mfa.queries';
+import { isMfaRequiredForLogin } from './policies/mfa-required.policy';
 
 // ── PII-safe helpers ─────────────────────────────────────────
 // We avoid putting raw emails into infra keys (Redis) or operational logs.
@@ -496,7 +497,10 @@ export class AuthService {
 
     const { user, membership, tenant } = txResult;
 
-    const mfaIsRequired = membership.role === 'ADMIN' || tenant.memberMfaRequired;
+    const mfaIsRequired = isMfaRequiredForLogin({
+      role: membership.role,
+      tenantMemberMfaRequired: tenant.memberMfaRequired,
+    });
 
     const hasVerifiedMfaSecret = mfaIsRequired
       ? Boolean((await getMfaSecretForUser(this.deps.db, user.id))?.isVerified)
