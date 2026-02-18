@@ -1,7 +1,7 @@
 import type { DbExecutor } from '../../shared/db/db';
 import type { RequestContext } from '../../shared/http/request-context';
 import type { Tenant } from './tenant.types';
-import { getTenantByKey } from './tenant.queries';
+import { getTenantByKey } from './queries/tenant.queries';
 import {
   assertTenantExists,
   assertTenantIsActive,

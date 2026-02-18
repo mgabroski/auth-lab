@@ -23,8 +23,7 @@ import {
   assertTenantIsActive,
   assertTenantKeyPresent,
 } from '../tenants/policies/tenant-safety.policy';
-import { getTenantByKey } from '../tenants/tenant.queries';
-
+import { getTenantByKey } from '../tenants/queries/tenant.queries';
 import { getInviteByTenantAndTokenHash } from './invite.queries';
 import {
   assertInviteBelongsToTenant,

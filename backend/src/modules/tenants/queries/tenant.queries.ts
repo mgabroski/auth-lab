@@ -1,5 +1,5 @@
 /**
- * backend/src/modules/tenants/tenant.queries.ts
+ * backend/src/modules/tenants/queries/tenant.queries.ts
  *
  * WHY:
  * - Queries are read-only and side-effect free.
@@ -11,10 +11,10 @@
  * - No AppError.
  */
 
-import type { DbExecutor } from '../../shared/db/db';
-import type { JsonValue } from '../../shared/db/database.types';
-import type { Tenant, TenantAllowedEmailDomains, TenantKey } from './tenant.types';
-import { findTenantByKeySql } from './dal/tenant.query-sql';
+import type { DbExecutor } from '../../../shared/db/db';
+import type { JsonValue } from '../../../shared/db/database.types';
+import type { Tenant, TenantAllowedEmailDomains, TenantKey } from '../tenant.types';
+import { findTenantByKeySql } from '../dal/tenant.query-sql';
 
 function parseAllowedEmailDomains(value: JsonValue): TenantAllowedEmailDomains {
   if (!Array.isArray(value)) return [];

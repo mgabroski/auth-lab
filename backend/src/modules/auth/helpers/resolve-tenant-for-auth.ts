@@ -15,7 +15,7 @@
 
 import type { DbExecutor } from '../../../shared/db/db';
 import type { Tenant } from '../../tenants/tenant.types';
-import { getTenantByKey } from '../../tenants/tenant.queries';
+import { getTenantByKey } from '../../tenants/queries/tenant.queries';
 import {
   assertTenantKeyPresent,
   assertTenantExists,
