@@ -41,6 +41,7 @@ import { getPasswordIdentityWithHash } from '../../queries/auth.queries';
 import { getMfaSecretForUser } from '../../queries/mfa.queries';
 
 import { isMfaRequiredForLogin } from '../../policies/mfa-required.policy';
+import { decideLoginNextAction } from '../../policies/login-next-action.policy';
 import {
   getLoginMembershipGatingFailure,
   assertLoginMembershipAllowed,
@@ -246,7 +247,13 @@ export async function executeLoginFlow(
     ? Boolean((await getMfaSecretForUser(deps.db, user.id))?.isVerified)
     : false;
 
-  const { sessionId, nextAction } = await createAuthSession({
+  const nextAction = decideLoginNextAction({
+    role: membership.role,
+    memberMfaRequired: tenant.memberMfaRequired,
+    hasVerifiedMfaSecret,
+  });
+
+  const { sessionId } = await createAuthSession({
     sessionStore: deps.sessionStore,
     userId: user.id,
     tenantId: tenant.id,
