@@ -66,28 +66,11 @@ import {
   auditMfaRecoveryUsed,
 } from './auth.audit';
 
-import { resolveTenantForAuth } from './helpers/resolve-tenant-for-auth';
-import { validateInviteForRegister } from './helpers/validate-invite-for-register';
-import { ensurePasswordIdentity } from './helpers/ensure-password-identity';
-import { provisionUserToTenant } from '../_shared/use-cases/provision-user-to-tenant.usecase';
-import { writeRegisterAudits } from './helpers/write-register-audits';
-import { createAuthSession } from './helpers/create-auth-session';
-import { buildAuthResult } from './helpers/build-auth-result';
-
 import { getUserByEmail, getUserById } from '../users/queries/user.queries';
 import { hasAuthIdentity, getValidResetToken } from './queries/auth.queries';
 import { getMfaSecretForUser } from './queries/mfa.queries';
 import { executeLoginFlow } from './flows/login/execute-login-flow';
-
-// ── PII-safe helpers ─────────────────────────────────────────
-// We avoid putting raw emails into infra keys (Redis) or operational logs.
-// Audits may still include email where needed for admin/compliance.
-function emailDomain(email: string): string {
-  const at = email.lastIndexOf('@');
-  return at >= 0 ? email.slice(at + 1) : '';
-}
-
-// ── Params ──────────────────────────────────────────────────
+import { executeRegisterFlow } from './flows/register/execute-register-flow';
 
 export type RegisterParams = {
   tenantKey: string | null;
@@ -126,10 +109,6 @@ export type ResetPasswordParams = {
   requestId: string;
 };
 
-// ── Rate-limit constants ────────────────────────────────────
-
-const REGISTER_LIMIT_PER_EMAIL = { limit: 5, windowSeconds: 900 };
-const REGISTER_LIMIT_PER_IP = { limit: 20, windowSeconds: 900 };
 const FORGOT_PASSWORD_LIMIT_PER_EMAIL = { limit: 3, windowSeconds: 3600 }; // silent
 const RESET_PASSWORD_LIMIT_PER_IP = { limit: 5, windowSeconds: 900 }; // hard 429
 
@@ -197,111 +176,23 @@ export class AuthService {
     },
   ) {}
 
-  // ── Register (Brick 7b) ──────────────────────────────────
-
   async register(params: RegisterParams): Promise<{ result: AuthResult; sessionId: string }> {
-    const email = params.email.toLowerCase();
-    const emailKey = this.deps.tokenHasher.hash(email);
-    const now = new Date();
-
-    this.deps.logger.info({
-      msg: 'auth.register.start',
-      flow: 'auth.register',
-      requestId: params.requestId,
-      tenantKey: params.tenantKey,
-      emailDomain: emailDomain(email),
-      emailKey,
-    });
-
-    await this.deps.rateLimiter.hitOrThrow({
-      key: `register:email:${emailKey}`,
-      ...REGISTER_LIMIT_PER_EMAIL,
-    });
-    await this.deps.rateLimiter.hitOrThrow({
-      key: `register:ip:${params.ip}`,
-      ...REGISTER_LIMIT_PER_IP,
-    });
-
-    const { user, membership, tenant } = await this.deps.db.transaction().execute(async (trx) => {
-      const userRepo = this.deps.userRepo.withDb(trx);
-      const membershipRepo = this.deps.membershipRepo.withDb(trx);
-      const authRepo = this.deps.authRepo.withDb(trx);
-
-      const baseAudit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
-        requestId: params.requestId,
-        ip: params.ip,
-        userAgent: params.userAgent,
-      });
-
-      const tenant = await resolveTenantForAuth(trx, params.tenantKey);
-
-      const invite = await validateInviteForRegister({
-        trx,
+    return executeRegisterFlow(
+      {
+        db: this.deps.db,
         tokenHasher: this.deps.tokenHasher,
-        tenantId: tenant.id,
-        inviteToken: params.inviteToken,
-        email,
-      });
-
-      const provisionResult = await provisionUserToTenant({
-        trx,
-        userRepo,
-        membershipRepo,
-        email,
-        name: params.name,
-        tenantId: tenant.id,
-        role: invite.role,
-        now,
-      });
-
-      await ensurePasswordIdentity({
-        trx,
-        authRepo,
         passwordHasher: this.deps.passwordHasher,
-        userId: provisionResult.user.id,
-        rawPassword: params.password,
-      });
-
-      const fullAudit = baseAudit.withContext({
-        tenantId: tenant.id,
-        userId: provisionResult.user.id,
-        membershipId: provisionResult.membership.id,
-      });
-
-      await writeRegisterAudits(fullAudit, provisionResult);
-
-      return { ...provisionResult, tenant };
-    });
-
-    // New user will never have MFA configured yet, but keep it explicit.
-    const hasVerifiedMfaSecret = false;
-
-    const { sessionId, nextAction } = await createAuthSession({
-      sessionStore: this.deps.sessionStore,
-      userId: user.id,
-      tenantId: tenant.id,
-      tenantKey: tenant.key,
-      membershipId: membership.id,
-      role: membership.role,
-      tenant,
-      hasVerifiedMfaSecret,
-      now,
-    });
-
-    this.deps.logger.info({
-      msg: 'auth.register.success',
-      flow: 'auth.register',
-      requestId: params.requestId,
-      tenantId: tenant.id,
-      userId: user.id,
-      membershipId: membership.id,
-      role: membership.role,
-    });
-
-    return {
-      sessionId,
-      result: buildAuthResult({ nextAction, user, membership }),
-    };
+        logger: this.deps.logger,
+        rateLimiter: this.deps.rateLimiter,
+        auditRepo: this.deps.auditRepo,
+        sessionStore: this.deps.sessionStore,
+        queue: this.deps.queue,
+        userRepo: this.deps.userRepo,
+        membershipRepo: this.deps.membershipRepo,
+        authRepo: this.deps.authRepo,
+      },
+      params,
+    );
   }
 
   async login(params: LoginParams): Promise<{ result: AuthResult; sessionId: string }> {
