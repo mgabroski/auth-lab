@@ -91,6 +91,10 @@ import {
   assertLoginMembershipAllowed,
   getLoginMembershipGatingFailure,
 } from './policies/login-membership-gating.policy';
+import {
+  assertLoginPasswordIdentityAllowed,
+  getLoginPasswordIdentityFailure,
+} from './policies/login-password-identity-gating.policy';
 
 // ── PII-safe helpers ─────────────────────────────────────────
 // We avoid putting raw emails into infra keys (Redis) or operational logs.
@@ -389,16 +393,20 @@ export class AuthService {
         }
 
         const passwordResult = await getPasswordIdentityWithHash(trx, user.id);
-        if (!passwordResult) {
+
+        const pwFailure = getLoginPasswordIdentityFailure(passwordResult);
+        if (pwFailure) {
           failureCtx = {
             tenantId: tenant.id,
             userId: user.id,
             email,
-            reason: 'no_password_identity',
-            error: AuthErrors.invalidCredentials(),
+            reason: pwFailure.reason,
+            error: pwFailure.error,
           };
           throw failureCtx.error;
         }
+
+        assertLoginPasswordIdentityAllowed(passwordResult);
 
         const passwordValid = await this.deps.passwordHasher.verify(
           params.password,
