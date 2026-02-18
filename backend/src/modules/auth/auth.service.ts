@@ -36,38 +36,24 @@ import type { PasswordHasher } from '../../shared/security/password-hasher';
 import type { Logger } from '../../shared/logger/logger';
 import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
-import { AuditWriter } from '../../shared/audit/audit.writer';
 import type { SessionStore } from '../../shared/session/session.store';
 import type { Queue } from '../../shared/messaging/queue';
-import { AppError } from '../../shared/http/errors';
-
-// Brick 9 (MFA deps)
 import type { TotpService } from '../../shared/security/totp';
 import type { EncryptionService } from '../../shared/security/encryption';
 import type { KeyedHasher } from '../../shared/security/keyed-hasher';
-
 import type { UserRepo } from '../users/dal/user.repo';
 import type { MembershipRepo } from '../memberships/dal/membership.repo';
-
 import type { AuthRepo } from './dal/auth.repo';
 import type { MfaRepo } from './dal/mfa.repo';
-
 import type { AuthResult } from './auth.types';
-
-import {
-  auditMfaSetupStarted,
-  auditMfaSetupCompleted,
-  auditMfaVerifySuccess,
-  auditMfaVerifyFailed,
-  auditMfaRecoveryUsed,
-} from './auth.audit';
-
-import { getUserById } from '../users/queries/user.queries';
-import { getMfaSecretForUser } from './queries/mfa.queries';
 import { executeLoginFlow } from './flows/login/execute-login-flow';
 import { executeRegisterFlow } from './flows/register/execute-register-flow';
 import { requestPasswordResetFlow } from './flows/password-reset/request-password-reset-flow';
 import { resetPasswordFlow } from './flows/password-reset/reset-password-flow';
+import { setupMfaFlow } from './flows/mfa/setup-mfa-flow';
+import { verifyMfaSetupFlow } from './flows/mfa/verify-mfa-setup-flow';
+import { verifyMfaFlow } from './flows/mfa/verify-mfa-flow';
+import { recoverMfaFlow } from './flows/mfa/recover-mfa-flow';
 
 export type RegisterParams = {
   tenantKey: string | null;
@@ -105,44 +91,6 @@ export type ResetPasswordParams = {
   userAgent: string | null;
   requestId: string;
 };
-
-// Brick 9 (MFA) rate limits (global per-user)
-const MFA_VERIFY_LIMIT_PER_USER = { limit: 5, windowSeconds: 900 }; // hard 429
-const MFA_RECOVERY_LIMIT_PER_USER = { limit: 5, windowSeconds: 900 }; // hard 429
-
-// Brick 9 (MFA) recovery codes
-const RECOVERY_CODE_LENGTH = 16;
-const RECOVERY_CODE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-const MfaErrors = {
-  alreadyConfigured(): Error {
-    // 409
-    return AppError.conflict('MFA is already configured.');
-  },
-  noSetupInProgress(): Error {
-    // 409
-    return AppError.conflict('No MFA setup in progress.');
-  },
-  invalidCode(): Error {
-    // 401 (authenticated but invalid MFA code)
-    return AppError.unauthorized('Invalid code. Please try again.');
-  },
-  invalidRecoveryCode(): Error {
-    // 401
-    return AppError.unauthorized('Invalid recovery code.');
-  },
-  mfaNotConfigured(): Error {
-    // 409 (they tried to verify/recover without a verified secret)
-    return AppError.conflict('MFA is not configured.');
-  },
-  alreadyVerified(): Error {
-    // 403 (authenticated but prohibited in this state)
-    return AppError.forbidden('MFA is already verified for this session.');
-  },
-};
-
-// ── Service ─────────────────────────────────────────────────
-
 export class AuthService {
   constructor(
     private readonly deps: {
@@ -157,8 +105,6 @@ export class AuthService {
       userRepo: UserRepo;
       membershipRepo: MembershipRepo;
       authRepo: AuthRepo;
-
-      // Brick 9 (MFA)
       mfaRepo: MfaRepo;
       totpService: TotpService;
       encryptionService: EncryptionService;
@@ -232,8 +178,6 @@ export class AuthService {
     );
   }
 
-  // ── MFA Setup (Brick 9a) ─────────────────────────────────
-
   async setupMfa(params: {
     sessionId: string;
     userId: string;
@@ -243,60 +187,18 @@ export class AuthService {
     ip: string;
     userAgent: string | null;
   }): Promise<{ secret: string; qrCodeUri: string; recoveryCodes: string[] }> {
-    const audit = new AuditWriter(this.deps.auditRepo, {
-      requestId: params.requestId,
-      ip: params.ip,
-      userAgent: params.userAgent,
-    }).withContext({
-      tenantId: params.tenantId,
-      userId: params.userId,
-      membershipId: params.membershipId,
+    return setupMfaFlow({
+      deps: {
+        db: this.deps.db,
+        auditRepo: this.deps.auditRepo,
+        mfaRepo: this.deps.mfaRepo,
+        totpService: this.deps.totpService,
+        encryptionService: this.deps.encryptionService,
+        mfaKeyedHasher: this.deps.mfaKeyedHasher,
+        mfaRecoveryCodesCount: this.deps.mfaRecoveryCodesCount,
+      },
+      input: params,
     });
-
-    const existing = await getMfaSecretForUser(this.deps.db, params.userId);
-    if (existing?.isVerified) {
-      throw MfaErrors.alreadyConfigured();
-    }
-
-    if (existing && !existing.isVerified) {
-      await this.deps.mfaRepo.deleteUnverifiedMfaSecret({ userId: params.userId });
-    }
-
-    const plaintextSecret = this.deps.totpService.generateSecret();
-    const secretEncrypted = this.deps.encryptionService.encrypt(plaintextSecret);
-
-    await this.deps.mfaRepo.insertMfaSecret({
-      userId: params.userId,
-      secretEncrypted,
-    });
-
-    const { randomBytes } = await import('node:crypto');
-
-    const recoveryCodes: string[] = [];
-    for (let i = 0; i < this.deps.mfaRecoveryCodesCount; i++) {
-      const bytes = randomBytes(RECOVERY_CODE_LENGTH);
-      let code = '';
-      for (let j = 0; j < RECOVERY_CODE_LENGTH; j++) {
-        code += RECOVERY_CODE_CHARSET[bytes[j] % RECOVERY_CODE_CHARSET.length];
-      }
-      recoveryCodes.push(code);
-    }
-
-    const codeHashes = recoveryCodes.map((code) => this.deps.mfaKeyedHasher.hash(code));
-
-    await this.deps.mfaRepo.insertRecoveryCodes({
-      userId: params.userId,
-      codeHashes,
-    });
-
-    const user = await getUserById(this.deps.db, params.userId);
-    const label = user?.email ?? 'user';
-
-    const qrCodeUri = this.deps.totpService.buildUri(plaintextSecret, label);
-
-    await auditMfaSetupStarted(audit, { userId: params.userId });
-
-    return { secret: plaintextSecret, qrCodeUri, recoveryCodes };
   }
 
   async verifyMfaSetup(params: {
@@ -309,34 +211,17 @@ export class AuthService {
     ip: string;
     userAgent: string | null;
   }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
-    const audit = new AuditWriter(this.deps.auditRepo, {
-      requestId: params.requestId,
-      ip: params.ip,
-      userAgent: params.userAgent,
-    }).withContext({
-      tenantId: params.tenantId,
-      userId: params.userId,
-      membershipId: params.membershipId,
+    return verifyMfaSetupFlow({
+      deps: {
+        db: this.deps.db,
+        auditRepo: this.deps.auditRepo,
+        sessionStore: this.deps.sessionStore,
+        mfaRepo: this.deps.mfaRepo,
+        totpService: this.deps.totpService,
+        encryptionService: this.deps.encryptionService,
+      },
+      input: params,
     });
-
-    const secretRow = await getMfaSecretForUser(this.deps.db, params.userId);
-    if (!secretRow || secretRow.isVerified) {
-      throw MfaErrors.noSetupInProgress();
-    }
-
-    const plaintextSecret = this.deps.encryptionService.decrypt(secretRow.secretEncrypted);
-    const ok = this.deps.totpService.verify(plaintextSecret, params.code);
-    if (!ok) {
-      await auditMfaVerifyFailed(audit, { userId: params.userId });
-      throw MfaErrors.invalidCode();
-    }
-
-    await this.deps.mfaRepo.verifyMfaSecret({ userId: params.userId });
-    await this.deps.sessionStore.updateSession(params.sessionId, { mfaVerified: true });
-
-    await auditMfaSetupCompleted(audit, { userId: params.userId });
-
-    return { status: 'AUTHENTICATED', nextAction: 'NONE' };
   }
 
   async verifyMfa(params: {
@@ -350,42 +235,17 @@ export class AuthService {
     ip: string;
     userAgent: string | null;
   }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
-    if (params.mfaVerified) {
-      throw MfaErrors.alreadyVerified();
-    }
-
-    await this.deps.rateLimiter.hitOrThrow({
-      key: `mfa:verify:user:${params.userId}`,
-      ...MFA_VERIFY_LIMIT_PER_USER,
+    return verifyMfaFlow({
+      deps: {
+        db: this.deps.db,
+        auditRepo: this.deps.auditRepo,
+        sessionStore: this.deps.sessionStore,
+        rateLimiter: this.deps.rateLimiter,
+        totpService: this.deps.totpService,
+        encryptionService: this.deps.encryptionService,
+      },
+      input: params,
     });
-
-    const audit = new AuditWriter(this.deps.auditRepo, {
-      requestId: params.requestId,
-      ip: params.ip,
-      userAgent: params.userAgent,
-    }).withContext({
-      tenantId: params.tenantId,
-      userId: params.userId,
-      membershipId: params.membershipId,
-    });
-
-    const secretRow = await getMfaSecretForUser(this.deps.db, params.userId);
-    if (!secretRow || !secretRow.isVerified) {
-      throw MfaErrors.mfaNotConfigured();
-    }
-
-    const plaintextSecret = this.deps.encryptionService.decrypt(secretRow.secretEncrypted);
-    const ok = this.deps.totpService.verify(plaintextSecret, params.code);
-
-    if (!ok) {
-      await auditMfaVerifyFailed(audit, { userId: params.userId });
-      throw MfaErrors.invalidCode();
-    }
-
-    await this.deps.sessionStore.updateSession(params.sessionId, { mfaVerified: true });
-    await auditMfaVerifySuccess(audit, { userId: params.userId });
-
-    return { status: 'AUTHENTICATED', nextAction: 'NONE' };
   }
 
   async recoverMfa(params: {
@@ -399,40 +259,16 @@ export class AuthService {
     ip: string;
     userAgent: string | null;
   }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
-    if (params.mfaVerified) {
-      throw MfaErrors.alreadyVerified();
-    }
-
-    await this.deps.rateLimiter.hitOrThrow({
-      key: `mfa:recover:user:${params.userId}`,
-      ...MFA_RECOVERY_LIMIT_PER_USER,
+    return recoverMfaFlow({
+      deps: {
+        auditRepo: this.deps.auditRepo,
+        sessionStore: this.deps.sessionStore,
+        rateLimiter: this.deps.rateLimiter,
+        mfaRepo: this.deps.mfaRepo,
+        mfaKeyedHasher: this.deps.mfaKeyedHasher,
+      },
+      input: params,
     });
-
-    const audit = new AuditWriter(this.deps.auditRepo, {
-      requestId: params.requestId,
-      ip: params.ip,
-      userAgent: params.userAgent,
-    }).withContext({
-      tenantId: params.tenantId,
-      userId: params.userId,
-      membershipId: params.membershipId,
-    });
-
-    const codeHash = this.deps.mfaKeyedHasher.hash(params.recoveryCode);
-
-    const used = await this.deps.mfaRepo.useRecoveryCodeAtomic({
-      userId: params.userId,
-      codeHash,
-    });
-
-    if (!used) {
-      throw MfaErrors.invalidRecoveryCode();
-    }
-
-    await this.deps.sessionStore.updateSession(params.sessionId, { mfaVerified: true });
-    await auditMfaRecoveryUsed(audit, { userId: params.userId });
-
-    return { status: 'AUTHENTICATED', nextAction: 'NONE' };
   }
 
   // ── Test helpers (never called in production paths) ──────────────────────
