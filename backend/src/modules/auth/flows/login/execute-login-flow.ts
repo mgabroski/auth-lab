@@ -52,11 +52,7 @@ import {
 } from '../../policies/login-password-identity-gating.policy';
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
-
-function emailDomain(email: string): string {
-  const at = email.lastIndexOf('@');
-  return at >= 0 ? email.slice(at + 1) : '';
-}
+import { emailDomain } from '../../helpers/email-domain';
 
 // ── Types (copied from AuthService for now; later we can centralize) ───────
 export type LoginParams = {

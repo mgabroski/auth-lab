@@ -39,12 +39,7 @@ import { buildAuthResult } from '../../helpers/build-auth-result';
 import { decideRegisterNextAction } from '../../policies/register-next-action.policy';
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
-
-// ── PII-safe helpers ─────────────────────────────────────────
-function emailDomain(email: string): string {
-  const at = email.lastIndexOf('@');
-  return at >= 0 ? email.slice(at + 1) : '';
-}
+import { emailDomain } from '../../helpers/email-domain';
 
 // Keep params local to the flow to avoid cross-file type churn.
 // This matches the AuthService.RegisterParams shape.
