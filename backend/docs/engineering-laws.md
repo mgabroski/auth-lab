@@ -5,7 +5,7 @@ These are repo-level guardrails to keep the codebase production-grade as the sys
 ## 1) Clean Architecture boundaries (non-negotiable)
 
 - **Domain / policies** do not import HTTP/DB/Redis/frameworks.
-- **Use-cases / services** orchestrate flows and are the only place allowed to open transactions.
+- **Use-cases / services / flows** orchestrate work and are the only place allowed to open transactions.
 - **DAL / repositories / external clients** are implementation details and must depend on policies/use-cases, not the other way around.
 
 ## 2) File responsibility + size
@@ -22,12 +22,15 @@ These are repo-level guardrails to keep the codebase production-grade as the sys
 - Avoid raw PII in operational logs and infra keys (e.g., Redis keys). Prefer hashed identifiers.
 - Error meta must be treated as untrusted input and redacted before logging.
 
-## 4) Module boundaries
+## 4) Module boundaries (public surfaces only)
 
-- Avoid cross-module DAL imports.
+- **No cross-module deep imports of implementation internals** (DAL, queries, helpers, policies, flows, etc.).
+- Cross-module access must go through a module’s **public surface** (`backend/src/modules/<module>/index.ts`).
+- `backend/src/shared/**` and `backend/src/_shared/**` are **shared layers** and may be imported by modules.
 - Cross-module coordination should happen via:
-  - a dedicated use-case in `modules/_shared/use-cases`, or
+  - a dedicated use-case in `backend/src/_shared/use-cases`, or
   - a narrow contract/port (interface) owned by the caller.
+- If tooling enforcement is temporarily missing, this law is still mandatory in code review.
 
 ## 5) Safe change discipline
 
