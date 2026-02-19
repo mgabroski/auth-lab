@@ -30,7 +30,7 @@ import {
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
 import { setSessionCookie } from '../../shared/session/set-session-cookie';
-import { requireAuthContext } from '../../shared/http/require-auth-context';
+import { requireSession } from '../../shared/http/require-auth-context';
 
 const FORGOT_PASSWORD_RESPONSE = {
   message: 'If an account with that email exists, a password reset link has been sent.',
@@ -134,7 +134,7 @@ export class AuthController {
   // ─────────────────────────────────────────────────────────────────────────────
 
   async mfaSetup(req: FastifyRequest, reply: FastifyReply) {
-    const session = requireAuthContext(req);
+    const session = requireSession(req);
 
     const result = await this.authService.setupMfa({
       sessionId: session.sessionId,
@@ -150,7 +150,7 @@ export class AuthController {
   }
 
   async mfaVerifySetup(req: FastifyRequest, reply: FastifyReply) {
-    const session = requireAuthContext(req);
+    const session = requireSession(req);
 
     const parsed = mfaCodeSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -174,7 +174,7 @@ export class AuthController {
   }
 
   async mfaVerify(req: FastifyRequest, reply: FastifyReply) {
-    const session = requireAuthContext(req);
+    const session = requireSession(req);
 
     const parsed = mfaCodeSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -199,7 +199,7 @@ export class AuthController {
   }
 
   async mfaRecover(req: FastifyRequest, reply: FastifyReply) {
-    const session = requireAuthContext(req);
+    const session = requireSession(req);
 
     const parsed = mfaRecoverSchema.safeParse(req.body);
     if (!parsed.success) {

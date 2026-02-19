@@ -24,12 +24,36 @@ export type RequiredAuthContext = Readonly<{
   mfaVerified: boolean;
 }>;
 
-export function requireAuthContext(req: FastifyRequest): RequiredAuthContext {
+export type RequireSessionOptions = Readonly<{
+  role?: MembershipRole;
+  requireMfa?: boolean;
+}>;
+
+/**
+ * Controller guard: requires a session, and optionally enforces role + MFA.
+ *
+ * Guard sequence (LOCKED):
+ * 1) no session -> 401 "Authentication required"
+ * 2) wrong role -> 403 "Insufficient role."
+ * 3) mfaVerified false (when requireMfa) -> 403 "MFA verification required."
+ */
+export function requireSession(
+  req: FastifyRequest,
+  opts: RequireSessionOptions = {},
+): RequiredAuthContext {
   const ctx = req.authContext;
-  if (!ctx) throw AppError.unauthorized('Not authenticated');
+  if (!ctx) throw AppError.unauthorized('Authentication required');
 
   if (!ctx.sessionId || !ctx.userId || !ctx.tenantId || !ctx.membershipId || !ctx.role) {
-    throw AppError.unauthorized('Not authenticated');
+    throw AppError.unauthorized('Authentication required');
+  }
+
+  if (opts.role && ctx.role !== opts.role) {
+    throw AppError.forbidden('Insufficient role.');
+  }
+
+  if (opts.requireMfa && ctx.mfaVerified !== true) {
+    throw AppError.forbidden('MFA verification required.');
   }
 
   return {
@@ -40,4 +64,9 @@ export function requireAuthContext(req: FastifyRequest): RequiredAuthContext {
     role: ctx.role,
     mfaVerified: ctx.mfaVerified,
   };
+}
+
+// Backward-compatible alias (legacy name used by older controllers)
+export function requireAuthContext(req: FastifyRequest): RequiredAuthContext {
+  return requireSession(req);
 }
