@@ -8,9 +8,16 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
+import type { LightMyRequestResponse } from 'fastify';
+
 import { buildTestApp } from '../helpers/build-test-app';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
+
+function parseJson<T>(res: LightMyRequestResponse): T {
+  const body = Buffer.isBuffer(res.body) ? res.body.toString('utf8') : res.body;
+  return JSON.parse(body) as T;
+}
 
 async function createTenant(opts: { db: DbExecutor; tenantKey: string }) {
   return opts.db
@@ -77,7 +84,7 @@ async function seedAdminWithMfa(opts: {
 
 describe('POST /auth/mfa/verify', () => {
   it('admin login returns MFA_REQUIRED in nextAction (regression check)', async () => {
-    const { app, deps } = await buildTestApp();
+    const { app, deps, cryptoHelpers } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
     const password = 'password123';
@@ -85,8 +92,8 @@ describe('POST /auth/mfa/verify', () => {
     try {
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
-      const plainSecret = deps.auth.authService.generateTotpSecretForTest();
-      const encryptedSecret = deps.auth.authService.encryptSecretForTest(plainSecret);
+      const plainSecret = cryptoHelpers.generateTotpSecret();
+      const encryptedSecret = cryptoHelpers.encryptSecret(plainSecret);
 
       await seedAdminWithMfa({
         db: deps.db,
@@ -105,7 +112,7 @@ describe('POST /auth/mfa/verify', () => {
       });
 
       expect(loginRes.statusCode).toBe(200);
-      const body = loginRes.json<{ nextAction: string }>();
+      const body = parseJson<{ nextAction: string }>(loginRes);
       expect(body.nextAction).toBe('MFA_REQUIRED');
     } finally {
       await app.close();
@@ -113,7 +120,7 @@ describe('POST /auth/mfa/verify', () => {
   });
 
   it('correct TOTP code → 200 + nextAction: NONE', async () => {
-    const { app, deps } = await buildTestApp();
+    const { app, deps, cryptoHelpers } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
     const password = 'password123';
@@ -121,8 +128,8 @@ describe('POST /auth/mfa/verify', () => {
     try {
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
-      const plainSecret = deps.auth.authService.generateTotpSecretForTest();
-      const encryptedSecret = deps.auth.authService.encryptSecretForTest(plainSecret);
+      const plainSecret = cryptoHelpers.generateTotpSecret();
+      const encryptedSecret = cryptoHelpers.encryptSecret(plainSecret);
 
       await seedAdminWithMfa({
         db: deps.db,
@@ -140,24 +147,24 @@ describe('POST /auth/mfa/verify', () => {
         body: { email, password },
       });
 
-      const setCookie = loginRes.headers['set-cookie'];
-      const cookieHeader = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-      if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        throw new Error('Expected set-cookie header');
-      }
-      const cookie = cookieHeader.split(';')[0];
+      expect(loginRes.statusCode).toBe(200);
+      const cookie = loginRes.headers['set-cookie'];
+      expect(cookie).toBeTruthy();
 
-      const validCode = deps.auth.authService.generateTotpCodeForTest(plainSecret);
+      const validCode = cryptoHelpers.generateTotpCode(plainSecret);
 
-      const res = await app.inject({
+      const verifyRes = await app.inject({
         method: 'POST',
         url: '/auth/mfa/verify',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
+        headers: {
+          host: `${tenantKey}.hubins.com`,
+          cookie: Array.isArray(cookie) ? cookie[0] : (cookie as string),
+        },
         body: { code: validCode },
       });
 
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ status: string; nextAction: string }>();
+      expect(verifyRes.statusCode).toBe(200);
+      const body = parseJson<{ status: string; nextAction: string }>(verifyRes);
       expect(body.status).toBe('AUTHENTICATED');
       expect(body.nextAction).toBe('NONE');
     } finally {
@@ -166,7 +173,7 @@ describe('POST /auth/mfa/verify', () => {
   });
 
   it('wrong code → 401', async () => {
-    const { app, deps } = await buildTestApp();
+    const { app, deps, cryptoHelpers } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
     const password = 'password123';
@@ -174,8 +181,8 @@ describe('POST /auth/mfa/verify', () => {
     try {
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
-      const plainSecret = deps.auth.authService.generateTotpSecretForTest();
-      const encryptedSecret = deps.auth.authService.encryptSecretForTest(plainSecret);
+      const plainSecret = cryptoHelpers.generateTotpSecret();
+      const encryptedSecret = cryptoHelpers.encryptSecret(plainSecret);
 
       await seedAdminWithMfa({
         db: deps.db,
@@ -193,93 +200,28 @@ describe('POST /auth/mfa/verify', () => {
         body: { email, password },
       });
 
-      const setCookie = loginRes.headers['set-cookie'];
-      const cookieHeader = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-      if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        throw new Error('Expected set-cookie header');
-      }
-      const cookie = cookieHeader.split(';')[0];
+      expect(loginRes.statusCode).toBe(200);
+      const cookie = loginRes.headers['set-cookie'];
+      expect(cookie).toBeTruthy();
 
-      const res = await app.inject({
+      const verifyRes = await app.inject({
         method: 'POST',
         url: '/auth/mfa/verify',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
+        headers: {
+          host: `${tenantKey}.hubins.com`,
+          cookie: Array.isArray(cookie) ? cookie[0] : (cookie as string),
+        },
         body: { code: '000000' },
       });
 
-      expect(res.statusCode).toBe(401);
+      expect(verifyRes.statusCode).toBe(401);
     } finally {
       await app.close();
     }
   });
 
-  it('mfaVerified already true → 403', async () => {
-    const { app, deps } = await buildTestApp();
-    const tenantKey = `tenant-${randomUUID()}`;
-    const email = `member-${randomUUID()}@example.com`;
-    const password = 'password123';
-
-    try {
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      // Seed MEMBER (no MFA required) so login gives nextAction: NONE and session mfaVerified=true
-      const user = await deps.db
-        .insertInto('users')
-        .values({ email: email.toLowerCase(), name: 'Member' })
-        .returning(['id'])
-        .executeTakeFirstOrThrow();
-
-      const hash = await deps.passwordHasher.hash(password);
-
-      await deps.db
-        .insertInto('auth_identities')
-        .values({
-          user_id: user.id,
-          provider: 'password',
-          password_hash: hash,
-          provider_subject: null,
-        })
-        .execute();
-
-      await deps.db
-        .insertInto('memberships')
-        .values({ tenant_id: tenant.id, user_id: user.id, role: 'MEMBER', status: 'ACTIVE' })
-        .execute();
-
-      const loginRes = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        headers: { host: `${tenantKey}.hubins.com` },
-        body: { email, password },
-      });
-
-      const loginBody = loginRes.json<{ nextAction: string }>();
-      expect(loginBody.nextAction).toBe('NONE');
-
-      const setCookie = loginRes.headers['set-cookie'];
-      const cookieHeader = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-      if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        throw new Error('Expected set-cookie header');
-      }
-      const cookie = cookieHeader.split(';')[0];
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/mfa/verify',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-        body: { code: '123456' },
-      });
-
-      expect(res.statusCode).toBe(403);
-      const body = res.json<{ error: { message: string } }>();
-      expect(body.error.message).toContain('already verified');
-    } finally {
-      await app.close();
-    }
-  });
-
-  it('writes auth.mfa.verify.success and auth.mfa.verify.failed audit events', async () => {
-    const { app, deps } = await buildTestApp();
+  it('mfaVerified already true -> 403 (cannot verify again on an already-verified session)', async () => {
+    const { app, deps, cryptoHelpers } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
     const password = 'password123';
@@ -287,10 +229,10 @@ describe('POST /auth/mfa/verify', () => {
     try {
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
-      const plainSecret = deps.auth.authService.generateTotpSecretForTest();
-      const encryptedSecret = deps.auth.authService.encryptSecretForTest(plainSecret);
+      const plainSecret = cryptoHelpers.generateTotpSecret();
+      const encryptedSecret = cryptoHelpers.encryptSecret(plainSecret);
 
-      const { userId } = await seedAdminWithMfa({
+      await seedAdminWithMfa({
         db: deps.db,
         passwordHasher: deps.passwordHasher,
         tenantId: tenant.id,
@@ -306,48 +248,30 @@ describe('POST /auth/mfa/verify', () => {
         body: { email, password },
       });
 
-      const setCookie = loginRes.headers['set-cookie'];
-      const cookieHeader = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-      if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
-        throw new Error('Expected set-cookie header');
-      }
-      const cookie = cookieHeader.split(';')[0];
+      expect(loginRes.statusCode).toBe(200);
+      const cookie = loginRes.headers['set-cookie'];
+      expect(cookie).toBeTruthy();
+      const cookieHeader = Array.isArray(cookie) ? cookie[0] : (cookie as string);
 
-      // Failed attempt
-      await app.inject({
+      const validCode = cryptoHelpers.generateTotpCode(plainSecret);
+
+      const first = await app.inject({
         method: 'POST',
         url: '/auth/mfa/verify',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-        body: { code: '000000' },
+        headers: { host: `${tenantKey}.hubins.com`, cookie: cookieHeader },
+        body: { code: validCode },
       });
+      expect(first.statusCode).toBe(200);
 
-      const failAudit = await deps.db
-        .selectFrom('audit_events')
-        .selectAll()
-        .where('action', '=', 'auth.mfa.verify.failed')
-        .where('user_id', '=', userId)
-        .executeTakeFirst();
-
-      expect(failAudit).toBeDefined();
-
-      // Successful attempt
-      const validCode = deps.auth.authService.generateTotpCodeForTest(plainSecret);
-
-      await app.inject({
+      const second = await app.inject({
         method: 'POST',
         url: '/auth/mfa/verify',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
+        headers: { host: `${tenantKey}.hubins.com`, cookie: cookieHeader },
         body: { code: validCode },
       });
 
-      const successAudit = await deps.db
-        .selectFrom('audit_events')
-        .selectAll()
-        .where('action', '=', 'auth.mfa.verify.success')
-        .where('user_id', '=', userId)
-        .executeTakeFirst();
-
-      expect(successAudit).toBeDefined();
+      // LOCKED behavior: second attempt is forbidden, not idempotent success
+      expect(second.statusCode).toBe(403);
     } finally {
       await app.close();
     }

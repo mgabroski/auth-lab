@@ -91,6 +91,7 @@ export type ResetPasswordParams = {
   userAgent: string | null;
   requestId: string;
 };
+
 export class AuthService {
   constructor(
     private readonly deps: {
@@ -269,27 +270,5 @@ export class AuthService {
       },
       input: params,
     });
-  }
-
-  // ── Test helpers (never called in production paths) ──────────────────────
-
-  /** @testOnly */
-  generateTotpSecretForTest(): string {
-    return this.deps.totpService.generateSecret();
-  }
-
-  /** @testOnly */
-  encryptSecretForTest(secret: string): string {
-    return this.deps.encryptionService.encrypt(secret);
-  }
-
-  /** @testOnly */
-  generateTotpCodeForTest(plaintextSecret: string): string {
-    return this.deps.totpService.generateCodeForTest(plaintextSecret);
-  }
-
-  /** @testOnly */
-  hashRecoveryCodeForTest(code: string): string {
-    return this.deps.mfaKeyedHasher.hash(code);
   }
 }

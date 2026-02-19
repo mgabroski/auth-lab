@@ -1,5 +1,6 @@
 import { buildApp } from '../../src/app/build-app';
 import type { AppConfig } from '../../src/app/config';
+import { createAuthCryptoHelpers } from './auth-crypto-helpers';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -62,12 +63,14 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
   };
 
   const built = await buildApp(config);
+  const cryptoHelpers = createAuthCryptoHelpers(built.deps);
 
   // IMPORTANT:
   // Tests expect { app: FastifyInstance, deps } (not the wrapper object).
   return {
     app: built.app,
     deps: built.deps,
+    cryptoHelpers,
     close: built.close,
   };
 }
