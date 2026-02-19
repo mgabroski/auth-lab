@@ -38,9 +38,7 @@ import { buildAuthResult } from '../../helpers/build-auth-result';
 
 import { decideRegisterNextAction } from '../../policies/register-next-action.policy';
 
-// ── Rate-limit constants (kept identical to AuthService) ─────
-const REGISTER_LIMIT_PER_EMAIL = { limit: 5, windowSeconds: 900 };
-const REGISTER_LIMIT_PER_IP = { limit: 20, windowSeconds: 900 };
+import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 // ── PII-safe helpers ─────────────────────────────────────────
 function emailDomain(email: string): string {
@@ -92,12 +90,12 @@ export async function executeRegisterFlow(
 
   await deps.rateLimiter.hitOrThrow({
     key: `register:email:${emailKey}`,
-    ...REGISTER_LIMIT_PER_EMAIL,
+    ...AUTH_RATE_LIMITS.register.perEmail,
   });
 
   await deps.rateLimiter.hitOrThrow({
     key: `register:ip:${params.ip}`,
-    ...REGISTER_LIMIT_PER_IP,
+    ...AUTH_RATE_LIMITS.register.perIp,
   });
 
   const { user, membership, tenant } = await deps.db.transaction().execute(async (trx) => {

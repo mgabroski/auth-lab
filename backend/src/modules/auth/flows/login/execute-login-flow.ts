@@ -51,9 +51,7 @@ import {
   assertLoginPasswordIdentityAllowed,
 } from '../../policies/login-password-identity-gating.policy';
 
-// ── Rate-limit constants (kept identical to AuthService) ─────
-const LOGIN_LIMIT_PER_EMAIL = { limit: 5, windowSeconds: 900 };
-const LOGIN_LIMIT_PER_IP = { limit: 20, windowSeconds: 900 };
+import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 // ── PII-safe helpers ─────────────────────────────────────────
 function emailDomain(email: string): string {
@@ -112,11 +110,11 @@ export async function executeLoginFlow(
 
   await deps.rateLimiter.hitOrThrow({
     key: `login:email:${emailKey}`,
-    ...LOGIN_LIMIT_PER_EMAIL,
+    ...AUTH_RATE_LIMITS.login.perEmail,
   });
   await deps.rateLimiter.hitOrThrow({
     key: `login:ip:${params.ip}`,
-    ...LOGIN_LIMIT_PER_IP,
+    ...AUTH_RATE_LIMITS.login.perIp,
   });
 
   let failureCtx: LoginFailureContext | null = null;

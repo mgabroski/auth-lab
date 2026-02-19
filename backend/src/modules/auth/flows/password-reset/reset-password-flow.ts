@@ -28,8 +28,7 @@ import type { AuthRepo } from '../../dal/auth.repo';
 import { getValidResetToken, hasAuthIdentity } from '../../queries/auth.queries';
 import { getUserById } from '../../../users';
 
-// ── Rate limit constant (kept identical) ────────────────────
-const RESET_PASSWORD_LIMIT_PER_IP = { limit: 5, windowSeconds: 900 }; // hard 429
+import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 export type ResetPasswordParams = {
   tenantKey: string | null;
@@ -55,7 +54,7 @@ export async function resetPasswordFlow(
 ): Promise<void> {
   await deps.rateLimiter.hitOrThrow({
     key: `reset:ip:${params.ip}`,
-    ...RESET_PASSWORD_LIMIT_PER_IP,
+    ...AUTH_RATE_LIMITS.resetPassword.perIp,
   });
 
   const tokenHash = deps.tokenHasher.hash(params.token);

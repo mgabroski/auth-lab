@@ -19,8 +19,7 @@ import { getMfaSecretForUser } from '../../queries/mfa.queries';
 import { auditMfaVerifyFailed, auditMfaVerifySuccess } from '../../auth.audit';
 import { MfaErrors } from './mfa-errors';
 
-// Brick 9 (MFA) rate limits (global per-user)
-const MFA_VERIFY_LIMIT_PER_USER = { limit: 5, windowSeconds: 900 }; // hard 429
+import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 export async function verifyMfaFlow(params: {
   deps: {
@@ -51,7 +50,7 @@ export async function verifyMfaFlow(params: {
 
   await deps.rateLimiter.hitOrThrow({
     key: `mfa:verify:user:${input.userId}`,
-    ...MFA_VERIFY_LIMIT_PER_USER,
+    ...AUTH_RATE_LIMITS.mfaVerify.perUser,
   });
 
   const audit = new AuditWriter(deps.auditRepo, {

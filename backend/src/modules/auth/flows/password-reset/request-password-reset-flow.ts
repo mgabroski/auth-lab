@@ -28,8 +28,7 @@ import { getUserByEmail } from '../../../users';
 import { hasAuthIdentity } from '../../queries/auth.queries';
 import type { AuthRepo } from '../../dal/auth.repo';
 
-// ── Rate limit constant (kept identical) ────────────────────
-const FORGOT_PASSWORD_LIMIT_PER_EMAIL = { limit: 3, windowSeconds: 3600 }; // silent
+import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 // Password reset token TTL: 1 hour (kept identical)
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -65,7 +64,7 @@ export async function requestPasswordResetFlow(
 
   const withinLimit = await deps.rateLimiter.hitOrSkip({
     key: `forgot:email:${emailKey}`,
-    ...FORGOT_PASSWORD_LIMIT_PER_EMAIL,
+    ...AUTH_RATE_LIMITS.forgotPassword.perEmail,
   });
 
   if (!withinLimit) {
