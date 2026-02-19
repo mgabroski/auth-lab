@@ -53,7 +53,6 @@ import {
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
-// ── PII-safe helpers ─────────────────────────────────────────
 function emailDomain(email: string): string {
   const at = email.lastIndexOf('@');
   return at >= 0 ? email.slice(at + 1) : '';
@@ -73,7 +72,7 @@ type LoginFailureContext = {
   tenantId: string;
   userId?: string;
   membershipId?: string;
-  email: string;
+  emailKey: string;
   reason: string;
   error: Error;
 };
@@ -134,7 +133,7 @@ export async function executeLoginFlow(
       if (!user) {
         failureCtx = {
           tenantId: tenant.id,
-          email,
+          emailKey,
           reason: 'user_not_found',
           error: AuthErrors.invalidCredentials(),
         };
@@ -148,7 +147,7 @@ export async function executeLoginFlow(
         failureCtx = {
           tenantId: tenant.id,
           userId: user.id,
-          email,
+          emailKey,
           reason: pwFailure.reason,
           error: pwFailure.error,
         };
@@ -164,7 +163,7 @@ export async function executeLoginFlow(
         failureCtx = {
           tenantId: tenant.id,
           userId: user.id,
-          email,
+          emailKey,
           reason: 'wrong_password',
           error: AuthErrors.invalidCredentials(),
         };
@@ -182,7 +181,7 @@ export async function executeLoginFlow(
           tenantId: tenant.id,
           userId: user.id,
           membershipId: membership?.id,
-          email,
+          emailKey,
           reason: gatingFailure.reason,
           error: gatingFailure.error,
         };
@@ -196,7 +195,6 @@ export async function executeLoginFlow(
 
       await auditLoginSuccess(fullAudit, {
         userId: user.id,
-        email: user.email,
         membershipId: membership.id,
         role: membership.role,
       });
@@ -222,7 +220,7 @@ export async function executeLoginFlow(
       });
 
       await auditLoginFailed(failAudit, {
-        email: ctx.email,
+        emailKey: ctx.emailKey,
         reason: ctx.reason,
       });
     }

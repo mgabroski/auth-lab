@@ -132,11 +132,15 @@ describe('POST /auth/login', () => {
       // Audit: login success
       const audits = await db
         .selectFrom('audit_events')
-        .select(['action'])
+        .selectAll()
         .where('tenant_id', '=', tenant.id)
         .where('action', '=', 'auth.login.success')
         .execute();
       expect(audits).toHaveLength(1);
+
+      // PII hardening: success audits must not include raw email
+      const meta = audits[0].metadata as Record<string, unknown>;
+      expect(meta.email).toBeUndefined();
     } finally {
       await close();
     }
@@ -179,7 +183,7 @@ describe('POST /auth/login', () => {
 
   it('rejects wrong password with generic error', async () => {
     const { app, deps, close } = await buildTestApp();
-    const { db, passwordHasher } = deps;
+    const { db, passwordHasher, tokenHasher } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
     const host = `${tenantKey}.localhost:3000`;
@@ -211,11 +215,16 @@ describe('POST /auth/login', () => {
       // Audit: login failed
       const audits = await db
         .selectFrom('audit_events')
-        .select(['action'])
+        .selectAll()
         .where('tenant_id', '=', tenant.id)
         .where('action', '=', 'auth.login.failed')
         .execute();
       expect(audits).toHaveLength(1);
+
+      // PII hardening: failures use emailKey (no raw email)
+      const meta = audits[0].metadata as Record<string, unknown>;
+      expect(meta.email).toBeUndefined();
+      expect(meta.emailKey).toBe(tokenHasher.hash(email.toLowerCase()));
     } finally {
       await close();
     }

@@ -30,7 +30,7 @@ export async function writeRegisterAudits(
   const { user, membership } = result;
 
   if (result.userCreated) {
-    await auditUserCreated(audit, { userId: user.id, email: user.email });
+    await auditUserCreated(audit, { userId: user.id });
   }
 
   if (result.membershipActivated) {
@@ -51,7 +51,6 @@ export async function writeRegisterAudits(
 
   await auditRegisterSuccess(audit, {
     userId: user.id,
-    email: user.email,
     membershipId: membership.id,
     role: membership.role,
   });

@@ -34,23 +34,18 @@ import type { AuditWriter } from '../../shared/audit/audit.writer';
 
 export function auditRegisterSuccess(
   writer: AuditWriter,
-  data: { userId: string; email: string; membershipId: string; role: string },
+  data: { userId: string; membershipId: string; role: string },
 ): Promise<void> {
   return writer.append('auth.register.success', {
     userId: data.userId,
-    email: data.email,
     membershipId: data.membershipId,
     role: data.role,
   });
 }
 
-export function auditUserCreated(
-  writer: AuditWriter,
-  data: { userId: string; email: string },
-): Promise<void> {
+export function auditUserCreated(writer: AuditWriter, data: { userId: string }): Promise<void> {
   return writer.append('user.created', {
     userId: data.userId,
-    email: data.email,
   });
 }
 
@@ -78,11 +73,10 @@ export function auditMembershipCreated(
 
 export function auditLoginSuccess(
   writer: AuditWriter,
-  data: { userId: string; email: string; membershipId: string; role: string },
+  data: { userId: string; membershipId: string; role: string },
 ): Promise<void> {
   return writer.append('auth.login.success', {
     userId: data.userId,
-    email: data.email,
     membershipId: data.membershipId,
     role: data.role,
   });
@@ -90,10 +84,10 @@ export function auditLoginSuccess(
 
 export function auditLoginFailed(
   writer: AuditWriter,
-  data: { email: string; reason: string },
+  data: { emailKey: string; reason: string },
 ): Promise<void> {
   return writer.append('auth.login.failed', {
-    email: data.email,
+    emailKey: data.emailKey,
     reason: data.reason,
   });
 }
@@ -115,10 +109,6 @@ export function auditPasswordResetCompleted(
     userId: data.userId,
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MFA (Brick 9)
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function auditMfaSetupStarted(writer: AuditWriter, data: { userId: string }): Promise<void> {
   return writer.append('auth.mfa.setup.started', {

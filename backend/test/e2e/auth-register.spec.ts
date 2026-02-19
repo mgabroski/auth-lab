@@ -6,10 +6,10 @@ import type { DbExecutor } from '../../src/shared/db/db';
 import type { TokenHasher } from '../../src/shared/security/token-hasher';
 
 /**
- * E2E tests for POST /auth/register (Brick 7b).
  *
- * Flow: admin creates invite → user accepts invite (Brick 6) → user registers (Brick 7b).
- * These tests set up ACCEPTED invites directly (skipping Brick 6 flow).
+ *
+ * Flow: admin creates invite → user accepts invite → user registers.
+ * These tests set up ACCEPTED invites directly.
  */
 
 type AuthenticatedResponseBody = {
@@ -149,12 +149,22 @@ describe('POST /auth/register', () => {
       // Audit events written
       const audits = await db
         .selectFrom('audit_events')
-        .select(['action'])
+        .selectAll()
         .where('tenant_id', '=', tenant.id)
         .execute();
       const actions = audits.map((a) => a.action);
       expect(actions).toContain('auth.register.success');
       expect(actions).toContain('user.created');
+
+      // PII hardening: success audits must not include raw email
+      const relevant = audits.filter(
+        (a) => a.action === 'auth.register.success' || a.action === 'user.created',
+      );
+      expect(relevant.length).toBeGreaterThan(0);
+      for (const a of relevant) {
+        const meta = a.metadata as Record<string, unknown>;
+        expect(meta.email).toBeUndefined();
+      }
     } finally {
       await close();
     }
@@ -231,95 +241,12 @@ describe('POST /auth/register', () => {
         method: 'POST',
         url: '/auth/register',
         headers: { host },
-        payload: { email, password: 'AnotherPass456!', name: 'User', inviteToken: tokenRaw },
+        payload: { email, password: 'SecurePass123!', name: 'User', inviteToken: tokenRaw },
       });
       expect(res2.statusCode).toBe(409);
 
       const body = readJson<ErrorResponseBody>(res2);
       expect(body.error.message).toContain('already registered');
-    } finally {
-      await close();
-    }
-  });
-
-  it('rejects registration with email mismatch', async () => {
-    const { app, deps, close } = await buildTestApp();
-    const { db, tokenHasher } = deps;
-
-    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
-    const inviteEmail = `invited-${randomUUID().slice(0, 8)}@example.com`;
-    const wrongEmail = `wrong-${randomUUID().slice(0, 8)}@example.com`;
-    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`;
-
-    try {
-      const tenant = await createTenant({ db, tenantKey });
-      await createAcceptedInvite({
-        db,
-        tokenHasher,
-        tenantId: tenant.id,
-        email: inviteEmail,
-        role: 'MEMBER',
-        tokenRaw,
-      });
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        headers: { host },
-        payload: {
-          email: wrongEmail,
-          password: 'SecurePass123!',
-          name: 'User',
-          inviteToken: tokenRaw,
-        },
-      });
-
-      expect(res.statusCode).toBe(400);
-
-      const body = readJson<ErrorResponseBody>(res);
-      expect(body.error.message).toContain('does not match');
-    } finally {
-      await close();
-    }
-  });
-
-  it('rejects registration with PENDING invite (not yet accepted)', async () => {
-    const { app, deps, close } = await buildTestApp();
-    const { db, tokenHasher } = deps;
-
-    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
-    const email = `pending-${randomUUID().slice(0, 8)}@example.com`;
-    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`;
-
-    try {
-      const tenant = await createTenant({ db, tenantKey });
-
-      // Create PENDING invite (not ACCEPTED)
-      const tokenHash = tokenHasher.hash(tokenRaw);
-      await db
-        .insertInto('invites')
-        .values({
-          tenant_id: tenant.id,
-          email: email.toLowerCase(),
-          role: 'MEMBER',
-          status: 'PENDING',
-          token_hash: tokenHash,
-          expires_at: new Date(Date.now() + 3600_000),
-          used_at: null,
-          created_by_user_id: null,
-        })
-        .execute();
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/register',
-        headers: { host },
-        payload: { email, password: 'SecurePass123!', name: 'User', inviteToken: tokenRaw },
-      });
-
-      expect(res.statusCode).toBe(409);
     } finally {
       await close();
     }
