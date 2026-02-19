@@ -66,11 +66,9 @@ export type AppDeps = {
   tokenHasher: TokenHasher;
   passwordHasher: PasswordHasher;
 
-  // shared repos / stores
   auditRepo: AuditRepo;
   sessionStore: SessionStore;
 
-  // Brick 9 (MFA)
   totpService: TotpService;
   encryptionService: EncryptionService;
   mfaKeyedHasher: KeyedHasher;
@@ -137,12 +135,9 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     userRepo: users.userRepo,
     membershipRepo: memberships.membershipRepo,
     isProduction: config.nodeEnv === 'production',
-
-    // Brick 9 (MFA)
     totpService,
     encryptionService,
     mfaKeyedHasher,
-    mfaRecoveryCodesCount: config.mfa.recoveryCodesCount,
   });
 
   return {

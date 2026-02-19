@@ -32,3 +32,9 @@ export const AUTH_RATE_LIMITS = {
     perUser: { limit: 5, windowSeconds: 900 }, // hard 429
   },
 } as const;
+
+/**
+ * MFA recovery codes count is a product + security invariant.
+ * Locked at 8.
+ */
+export const MFA_RECOVERY_CODES_COUNT = 8 as const;

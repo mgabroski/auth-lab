@@ -36,7 +36,6 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
       issuer: process.env.MFA_ISSUER ?? 'Hubins',
       encryptionKeyBase64: requireEnv('MFA_ENCRYPTION_KEY_BASE64'),
       hmacKeyBase64: requireEnv('MFA_HMAC_KEY_BASE64'),
-      recoveryCodesCount: Number(process.env.MFA_RECOVERY_CODES_COUNT ?? 10),
     },
 
     seed: {
@@ -65,8 +64,6 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
   const built = await buildApp(config);
   const cryptoHelpers = createAuthCryptoHelpers(built.deps);
 
-  // IMPORTANT:
-  // Tests expect { app: FastifyInstance, deps } (not the wrapper object).
   return {
     app: built.app,
     deps: built.deps,

@@ -4,7 +4,6 @@
  * WHY:
  * - Encapsulates Auth module wiring.
  * - DI creates infra; module composes domain units.
- * - Auth module owns register + login + forgot-password + reset-password + MFA routes.
  *
  * RULES:
  * - No infra creation here (DI passes deps in).
@@ -53,7 +52,6 @@ export function createAuthModule(deps: {
   totpService: TotpService;
   encryptionService: EncryptionService;
   mfaKeyedHasher: KeyedHasher;
-  mfaRecoveryCodesCount: number;
 }) {
   const authRepo = new AuthRepo(deps.db);
   const mfaRepo = new MfaRepo(deps.db);
@@ -76,7 +74,6 @@ export function createAuthModule(deps: {
     totpService: deps.totpService,
     encryptionService: deps.encryptionService,
     mfaKeyedHasher: deps.mfaKeyedHasher,
-    mfaRecoveryCodesCount: deps.mfaRecoveryCodesCount,
   });
 
   const controller = new AuthController(authService, deps.isProduction);

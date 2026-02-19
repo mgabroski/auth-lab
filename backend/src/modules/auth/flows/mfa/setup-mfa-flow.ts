@@ -25,6 +25,7 @@ import { getMfaSecretForUser } from '../../queries/mfa.queries';
 
 import { auditMfaSetupStarted } from '../../auth.audit';
 import { MfaErrors } from './mfa-errors';
+import { MFA_RECOVERY_CODES_COUNT } from '../../auth.constants';
 
 const RECOVERY_CODE_LENGTH = 16;
 const RECOVERY_CODE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -37,7 +38,6 @@ export async function setupMfaFlow(params: {
     totpService: TotpService;
     encryptionService: EncryptionService;
     mfaKeyedHasher: KeyedHasher;
-    mfaRecoveryCodesCount: number;
   };
   input: {
     sessionId: string;
@@ -79,7 +79,7 @@ export async function setupMfaFlow(params: {
   const { randomBytes } = await import('node:crypto');
 
   const recoveryCodes: string[] = [];
-  for (let i = 0; i < deps.mfaRecoveryCodesCount; i++) {
+  for (let i = 0; i < MFA_RECOVERY_CODES_COUNT; i++) {
     const bytes = randomBytes(RECOVERY_CODE_LENGTH);
     let code = '';
     for (let j = 0; j < RECOVERY_CODE_LENGTH; j++) {
@@ -95,6 +95,7 @@ export async function setupMfaFlow(params: {
     codeHashes,
   });
 
+  // R-07: QR label is userId (no cross-module user lookup)
   const qrCodeUri = deps.totpService.buildUri(plaintextSecret, input.userId);
 
   await auditMfaSetupStarted(audit, { userId: input.userId });

@@ -41,8 +41,6 @@ const ConfigSchema = z.object({
   // Must be >= 16 bytes (validated in KeyedHasher ctor).
   MFA_HMAC_KEY_BASE64: Base64Schema,
 
-  MFA_RECOVERY_CODES_COUNT: z.coerce.number().int().min(5).max(20).default(8),
-
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),
   SEED_TENANT_KEY: z.string().default('goodwill-ca'),
@@ -75,7 +73,6 @@ export type AppConfig = {
     issuer: string;
     encryptionKeyBase64: string;
     hmacKeyBase64: string;
-    recoveryCodesCount: number;
   };
 
   seed: {
@@ -107,7 +104,6 @@ export function buildConfig(): AppConfig {
       issuer: parsed.MFA_ISSUER,
       encryptionKeyBase64: parsed.MFA_ENCRYPTION_KEY_BASE64,
       hmacKeyBase64: parsed.MFA_HMAC_KEY_BASE64,
-      recoveryCodesCount: parsed.MFA_RECOVERY_CODES_COUNT,
     },
 
     seed: {
