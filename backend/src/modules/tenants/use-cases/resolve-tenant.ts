@@ -1,11 +1,11 @@
 /**
- * src/modules/auth/helpers/resolve-tenant-for-auth.ts
+ * backend/src/modules/tenants/use-cases/resolve-tenant.ts
  *
  * WHY:
- * - The 4-step sequence (assertKeyPresent → getTenantByKey → assertExists → assertActive)
- *   is identical in register() and login(), and will repeat in SSO (Brick 10) and
- *   public signup (Brick 11).
- * - A single helper ensures the order of assertions never drifts between flows.
+ * - Centralize the canonical tenant resolution sequence in the tenants module.
+ * - Prevent auth (and future modules) from deep-importing tenant queries/policies.
+ * - Keeps the 4-step order from the legacy helper:
+ *   assertKeyPresent → getTenantByKey → assertExists → assertActive
  *
  * RULES:
  * - Pure orchestration of existing policies + queries. No new logic.
@@ -14,13 +14,13 @@
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
-import type { Tenant } from '../../tenants/tenant.types';
-import { getTenantByKey } from '../../tenants/queries/tenant.queries';
+import type { Tenant } from '../tenant.types';
+import { getTenantByKey } from '../queries/tenant.queries';
 import {
   assertTenantKeyPresent,
   assertTenantExists,
   assertTenantIsActive,
-} from '../../tenants/policies/tenant-safety.policy';
+} from '../policies/tenant-safety.policy';
 
 export async function resolveTenantForAuth(
   trx: DbExecutor,

@@ -27,11 +27,11 @@ import type { SessionStore } from '../../../../shared/session/session.store';
 
 import { AuthErrors } from '../../auth.errors';
 import type { AuthResult } from '../../auth.types';
-import type { Tenant } from '../../../tenants/tenant.types';
+import type { Tenant } from '../../../tenants';
 
 import { auditLoginSuccess, auditLoginFailed } from '../../auth.audit';
 
-import { resolveTenantForAuth } from '../../helpers/resolve-tenant-for-auth';
+import { resolveTenantForAuth } from '../../../tenants';
 import { createAuthSession } from '../../helpers/create-auth-session';
 import { buildAuthResult } from '../../helpers/build-auth-result';
 

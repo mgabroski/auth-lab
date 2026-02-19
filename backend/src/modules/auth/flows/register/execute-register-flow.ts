@@ -28,7 +28,7 @@ import type { AuthRepo } from '../../dal/auth.repo';
 
 import type { AuthResult } from '../../auth.types';
 
-import { resolveTenantForAuth } from '../../helpers/resolve-tenant-for-auth';
+import { resolveTenantForAuth } from '../../../tenants';
 import { validateInviteForRegister } from '../../helpers/validate-invite-for-register';
 import { ensurePasswordIdentity } from '../../helpers/ensure-password-identity';
 import { provisionUserToTenant } from '../../../_shared/use-cases/provision-user-to-tenant.usecase';
