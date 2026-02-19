@@ -22,7 +22,6 @@ import type { KeyedHasher } from '../../../../shared/security/keyed-hasher';
 
 import type { MfaRepo } from '../../dal/mfa.repo';
 import { getMfaSecretForUser } from '../../queries/mfa.queries';
-import { getUserById } from '../../../users';
 
 import { auditMfaSetupStarted } from '../../auth.audit';
 import { MfaErrors } from './mfa-errors';
@@ -96,10 +95,7 @@ export async function setupMfaFlow(params: {
     codeHashes,
   });
 
-  const user = await getUserById(deps.db, input.userId);
-  const label = user?.email ?? 'user';
-
-  const qrCodeUri = deps.totpService.buildUri(plaintextSecret, label);
+  const qrCodeUri = deps.totpService.buildUri(plaintextSecret, input.userId);
 
   await auditMfaSetupStarted(audit, { userId: input.userId });
 
