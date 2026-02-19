@@ -2,10 +2,9 @@
  * src/modules/auth/helpers/create-auth-session.ts
  *
  * WHY:
- * - The sequence (determineMfaNextAction → sessionStore.create → return result)
+ * - The sequence (decideLoginNextAction → sessionStore.create → return result)
  *   is identical in register() and login(), and will repeat in SSO (Brick 10).
- * - determineMfaNextAction is exported separately so it can be unit-tested
- *   without a real SessionStore.
+ * - MFA nextAction is a pure policy decision; session creation is infra orchestration.
  *
  * RULES:
  * - No DB access (sessions live in Redis via SessionStore).
@@ -16,30 +15,7 @@
 import type { SessionStore } from '../../../shared/session/session.store';
 import type { MfaNextAction } from '../auth.types';
 import type { Tenant } from '../../tenants/tenant.types';
-
-// ── MFA determination ─────────────────────────────────────────
-
-/**
- * Determines what MFA action the client must take after authentication.
- *
- * Brick 9 rules:
- * - Admins: MFA is mandatory. If configured => MFA_REQUIRED; else => MFA_SETUP_REQUIRED.
- * - Members: MFA is required if tenant.memberMfaRequired = true (same logic).
- * - If MFA is not required => NONE.
- */
-export function determineMfaNextAction(
-  role: 'ADMIN' | 'MEMBER',
-  tenant: Tenant,
-  hasVerifiedMfaSecret: boolean,
-): MfaNextAction {
-  const mfaRequired = role === 'ADMIN' || tenant.memberMfaRequired;
-
-  if (!mfaRequired) return 'NONE';
-
-  return hasVerifiedMfaSecret ? 'MFA_REQUIRED' : 'MFA_SETUP_REQUIRED';
-}
-
-// ── Session creation ──────────────────────────────────────────
+import { decideLoginNextAction } from '../policies/login-next-action.policy';
 
 export type CreateAuthSessionParams = {
   sessionStore: SessionStore;
@@ -79,7 +55,12 @@ export async function createAuthSession(
     now,
   } = params;
 
-  const nextAction = determineMfaNextAction(role, tenant, hasVerifiedMfaSecret);
+  // Shared policy: MFA decision is identical for login/register.
+  const nextAction: MfaNextAction = decideLoginNextAction({
+    role,
+    memberMfaRequired: tenant.memberMfaRequired,
+    hasVerifiedMfaSecret,
+  });
 
   const sessionId = await sessionStore.create({
     userId,
