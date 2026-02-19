@@ -26,7 +26,7 @@ import { AuthErrors } from '../../auth.errors';
 
 import type { AuthRepo } from '../../dal/auth.repo';
 import { getValidResetToken, hasAuthIdentity } from '../../queries/auth.queries';
-import { getUserById } from '../../../users/queries/user.queries';
+import { getUserById } from '../../../users';
 
 // ── Rate limit constant (kept identical) ────────────────────
 const RESET_PASSWORD_LIMIT_PER_IP = { limit: 5, windowSeconds: 900 }; // hard 429
@@ -61,23 +61,17 @@ export async function resetPasswordFlow(
   const tokenHash = deps.tokenHasher.hash(params.token);
   const resetToken = await getValidResetToken(deps.db, tokenHash);
 
-  if (!resetToken) {
-    throw AuthErrors.resetTokenInvalid();
-  }
+  if (!resetToken) throw AuthErrors.resetTokenInvalid();
 
   const user = await getUserById(deps.db, resetToken.userId);
-  if (!user) {
-    throw AuthErrors.resetTokenInvalid();
-  }
+  if (!user) throw AuthErrors.resetTokenInvalid();
 
   const hasPassword = await hasAuthIdentity(deps.db, {
     userId: user.id,
     provider: 'password',
   });
 
-  if (!hasPassword) {
-    throw AuthErrors.resetTokenInvalid();
-  }
+  if (!hasPassword) throw AuthErrors.resetTokenInvalid();
 
   const newHash = await deps.passwordHasher.hash(params.newPassword);
 
@@ -90,7 +84,6 @@ export async function resetPasswordFlow(
     });
 
     await authRepo.markResetTokenUsed({ tokenHash });
-
     await authRepo.invalidateActiveResetTokensForUser({ userId: user.id });
   });
 

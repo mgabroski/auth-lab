@@ -35,8 +35,8 @@ import { resolveTenantForAuth } from '../../helpers/resolve-tenant-for-auth';
 import { createAuthSession } from '../../helpers/create-auth-session';
 import { buildAuthResult } from '../../helpers/build-auth-result';
 
-import { getUserByEmail } from '../../../users/queries/user.queries';
-import { getMembershipByTenantAndUser } from '../../../memberships/queries/membership.queries';
+import { getUserByEmail } from '../../../users';
+import { getMembershipByTenantAndUser } from '../../../memberships';
 import { getPasswordIdentityWithHash } from '../../queries/auth.queries';
 import { hasVerifiedMfaSecret } from '../../helpers/has-verified-mfa-secret';
 

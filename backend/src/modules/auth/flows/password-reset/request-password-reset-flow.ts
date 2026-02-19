@@ -24,7 +24,7 @@ import { generateSecureToken } from '../../../../shared/security/token';
 
 import { auditPasswordResetRequested } from '../../auth.audit';
 
-import { getUserByEmail } from '../../../users/queries/user.queries';
+import { getUserByEmail } from '../../../users';
 import { hasAuthIdentity } from '../../queries/auth.queries';
 import type { AuthRepo } from '../../dal/auth.repo';
 
@@ -57,14 +57,12 @@ export async function requestPasswordResetFlow(
   const email = params.email.toLowerCase();
   const emailKey = deps.tokenHasher.hash(email);
 
-  // Base audit writer — no tenant/user context yet (we may not find them)
   const audit = new AuditWriter(deps.auditRepo, {
     requestId: params.requestId,
     ip: params.ip,
     userAgent: params.userAgent,
   });
 
-  // ── 1. Silent rate limit ─────────────────────────────────
   const withinLimit = await deps.rateLimiter.hitOrSkip({
     key: `forgot:email:${emailKey}`,
     ...FORGOT_PASSWORD_LIMIT_PER_EMAIL,
@@ -75,14 +73,12 @@ export async function requestPasswordResetFlow(
     return;
   }
 
-  // ── 2. Find user ─────────────────────────────────────────
   const user = await getUserByEmail(deps.db, email);
   if (!user) {
     await auditPasswordResetRequested(audit, { outcome: 'user_not_found' });
     return;
   }
 
-  // ── 3. Check for password identity ──────────────────────
   const hasPassword = await hasAuthIdentity(deps.db, {
     userId: user.id,
     provider: 'password',
@@ -95,10 +91,8 @@ export async function requestPasswordResetFlow(
     return;
   }
 
-  // ── 4. Invalidate any existing active tokens ─────────────
   await deps.authRepo.invalidateActiveResetTokensForUser({ userId: user.id });
 
-  // ── 5. Generate and store new token ─────────────────────
   const rawToken = generateSecureToken();
   const tokenHash = deps.tokenHasher.hash(rawToken);
   const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
@@ -109,7 +103,6 @@ export async function requestPasswordResetFlow(
     expiresAt,
   });
 
-  // ── 6. Enqueue reset email ───────────────────────────────
   await deps.queue.enqueue({
     type: 'auth.reset-password-email',
     userId: user.id,
@@ -118,7 +111,6 @@ export async function requestPasswordResetFlow(
     tenantKey: params.tenantKey ?? '',
   });
 
-  // ── 7. Audit ─────────────────────────────────────────────
   await auditPasswordResetRequested(audit.withContext({ userId: user.id }), {
     outcome: 'sent',
   });

@@ -22,12 +22,11 @@ import type { KeyedHasher } from '../../../../shared/security/keyed-hasher';
 
 import type { MfaRepo } from '../../dal/mfa.repo';
 import { getMfaSecretForUser } from '../../queries/mfa.queries';
-import { getUserById } from '../../../users/queries/user.queries';
+import { getUserById } from '../../../users';
 
 import { auditMfaSetupStarted } from '../../auth.audit';
 import { MfaErrors } from './mfa-errors';
 
-// Brick 9 (MFA) recovery codes
 const RECOVERY_CODE_LENGTH = 16;
 const RECOVERY_CODE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
@@ -64,9 +63,7 @@ export async function setupMfaFlow(params: {
   });
 
   const existing = await getMfaSecretForUser(deps.db, input.userId);
-  if (existing?.isVerified) {
-    throw MfaErrors.alreadyConfigured();
-  }
+  if (existing?.isVerified) throw MfaErrors.alreadyConfigured();
 
   if (existing && !existing.isVerified) {
     await deps.mfaRepo.deleteUnverifiedMfaSecret({ userId: input.userId });
