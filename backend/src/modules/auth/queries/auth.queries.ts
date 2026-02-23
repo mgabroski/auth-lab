@@ -16,7 +16,8 @@ import {
   selectAuthIdentityByUserAndProviderSql,
   selectValidResetTokenSql,
 } from '../dal/auth.query-sql';
-import type { AuthIdentity, AuthProvider, PasswordResetToken } from '../auth.types';
+import type { AuthIdentity, AuthProvider, PasswordResetToken, SsoIdentity } from '../auth.types';
+import { selectSsoIdentityByUserAndProviderSql } from '../dal/auth.query-sql';
 
 function parseProvider(value: string): AuthProvider {
   if (value === 'password' || value === 'google' || value === 'microsoft') return value;
@@ -79,6 +80,24 @@ export async function getValidResetToken(
     userId: row.user_id,
     tokenHash: row.token_hash,
     expiresAt: row.expires_at,
+    createdAt: row.created_at,
+  };
+}
+
+export async function findSsoIdentityByUserAndProvider(
+  db: DbExecutor,
+  input: { userId: string; provider: 'google' | 'microsoft' },
+): Promise<SsoIdentity | undefined> {
+  const row = await selectSsoIdentityByUserAndProviderSql(db, input);
+  if (!row) return undefined;
+
+  if (row.provider_subject == null) return undefined;
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    provider: row.provider === 'google' ? 'google' : 'microsoft',
+    providerSubject: row.provider_subject,
     createdAt: row.created_at,
   };
 }

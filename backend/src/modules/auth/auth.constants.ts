@@ -31,6 +31,14 @@ export const AUTH_RATE_LIMITS = {
   mfaRecover: {
     perUser: { limit: 5, windowSeconds: 900 }, // hard 429
   },
+
+  // Brick 10 (SSO)
+  ssoStart: {
+    perIp: { limit: 20, windowSeconds: 900 },
+  },
+  ssoCallback: {
+    perIp: { limit: 20, windowSeconds: 900 },
+  },
 } as const;
 
 /**

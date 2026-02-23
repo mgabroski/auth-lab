@@ -49,6 +49,9 @@ import { recoverMfaFlow } from './flows/mfa/recover-mfa-flow';
 
 import type { SsoProvider } from './helpers/sso-state';
 import { buildSsoAuthorizationUrl } from './helpers/sso-authorize-url';
+import { AUTH_RATE_LIMITS } from './auth.constants';
+
+import { executeSsoCallbackFlow } from './flows/sso/execute-sso-callback-flow';
 
 export class AuthService {
   constructor(
@@ -82,15 +85,21 @@ export class AuthService {
   ) {}
 
   /**
-   * Brick 10 (PR1): Build the provider authorization redirect URL.
-   * Callback handling is implemented in PR2/PR3.
+   * Brick 10: Build provider authorization redirect URL.
+   * Rate limited early (per IP).
    */
-  startSso(input: {
+  async startSso(input: {
     tenantKey: string;
     provider: SsoProvider;
     requestId: string;
     returnTo?: string;
-  }): { redirectTo: string } {
+    ip: string;
+  }): Promise<{ redirectTo: string }> {
+    await this.deps.rateLimiter.hitOrThrow({
+      key: `sso-start:ip:${input.ip}`,
+      ...AUTH_RATE_LIMITS.ssoStart.perIp,
+    });
+
     const redirectTo = buildSsoAuthorizationUrl({
       provider: input.provider,
       tenantKey: input.tenantKey,
@@ -103,6 +112,50 @@ export class AuthService {
     });
 
     return { redirectTo };
+  }
+
+  async handleSsoCallback(input: {
+    tenantKey: string | null;
+    provider: SsoProvider;
+    code: string;
+    state: string;
+    ip: string;
+    userAgent: string | null;
+    requestId: string;
+  }): Promise<{ sessionId: string; redirectTo: string }> {
+    if (input.provider !== 'google') {
+      // Microsoft in PR3
+      throw new Error('SSO provider not implemented');
+    }
+
+    return executeSsoCallbackFlow(
+      {
+        db: this.deps.db,
+        tokenHasher: this.deps.tokenHasher,
+        logger: this.deps.logger,
+        rateLimiter: this.deps.rateLimiter,
+        auditRepo: this.deps.auditRepo,
+        sessionStore: this.deps.sessionStore,
+        userRepo: this.deps.userRepo,
+        membershipRepo: this.deps.membershipRepo,
+        authRepo: this.deps.authRepo,
+        sso: {
+          stateEncryptionService: this.deps.sso.stateEncryptionService,
+          redirectBaseUrl: this.deps.sso.redirectBaseUrl,
+          googleClientId: this.deps.sso.googleClientId,
+          googleClientSecret: this.deps.sso.googleClientSecret,
+        },
+      },
+      {
+        tenantKey: input.tenantKey,
+        provider: 'google',
+        code: input.code,
+        state: input.state,
+        ip: input.ip,
+        userAgent: input.userAgent,
+        requestId: input.requestId,
+      },
+    );
   }
 
   async register(params: RegisterParams): Promise<{ result: AuthResult; sessionId: string }> {

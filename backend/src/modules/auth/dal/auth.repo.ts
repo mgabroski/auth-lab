@@ -86,6 +86,25 @@ export class AuthRepo {
     return { id: row.id };
   }
 
+  async insertSsoIdentity(input: {
+    userId: string;
+    provider: 'google' | 'microsoft';
+    providerSubject: string;
+  }): Promise<{ id: string }> {
+    const row = await this.db
+      .insertInto('auth_identities')
+      .values({
+        user_id: input.userId,
+        provider: input.provider,
+        provider_subject: input.providerSubject,
+        password_hash: null,
+      })
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
+
+    return { id: row.id };
+  }
+
   /**
    * Marks ALL active (used_at IS NULL) reset tokens for a user as used.
    *

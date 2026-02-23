@@ -150,3 +150,26 @@ export function auditMfaRecoveryUsed(writer: AuditWriter, data: { userId: string
     userId: data.userId,
   });
 }
+
+export function auditSsoLoginSuccess(
+  writer: AuditWriter,
+  data: { userId: string; membershipId: string; role: string; provider: 'google' | 'microsoft' },
+): Promise<void> {
+  return writer.append('auth.sso.login.success', {
+    userId: data.userId,
+    membershipId: data.membershipId,
+    role: data.role,
+    provider: data.provider,
+  });
+}
+
+export function auditSsoLoginFailed(
+  writer: AuditWriter,
+  data: { provider: 'google' | 'microsoft'; reason: string; emailKey?: string },
+): Promise<void> {
+  return writer.append('auth.sso.login.failed', {
+    provider: data.provider,
+    reason: data.reason,
+    ...(data.emailKey ? { emailKey: data.emailKey } : {}),
+  });
+}

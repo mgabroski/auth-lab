@@ -52,3 +52,15 @@ export async function selectValidResetTokenSql(
     .where('expires_at', '>', new Date())
     .executeTakeFirst();
 }
+
+export async function selectSsoIdentityByUserAndProviderSql(
+  db: DbExecutor,
+  params: { userId: string; provider: 'google' | 'microsoft' },
+): Promise<AuthIdentityRow | undefined> {
+  return db
+    .selectFrom('auth_identities')
+    .selectAll()
+    .where('user_id', '=', params.userId)
+    .where('provider', '=', params.provider)
+    .executeTakeFirst();
+}
