@@ -52,6 +52,7 @@ import { buildSsoAuthorizationUrl } from './helpers/sso-authorize-url';
 import { AUTH_RATE_LIMITS } from './auth.constants';
 
 import { executeSsoCallbackFlow } from './flows/sso/execute-sso-callback-flow';
+import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
 export class AuthService {
   constructor(
@@ -76,10 +77,7 @@ export class AuthService {
       sso: {
         stateEncryptionService: EncryptionService;
         redirectBaseUrl: string;
-        googleClientId: string;
-        googleClientSecret: string;
-        microsoftClientId: string;
-        microsoftClientSecret: string;
+        providerRegistry: SsoProviderRegistry;
       };
     },
   ) {}
@@ -107,8 +105,7 @@ export class AuthService {
       returnTo: input.returnTo,
       encryptionService: this.deps.sso.stateEncryptionService,
       redirectBaseUrl: this.deps.sso.redirectBaseUrl,
-      googleClientId: this.deps.sso.googleClientId,
-      microsoftClientId: this.deps.sso.microsoftClientId,
+      providerRegistry: this.deps.sso.providerRegistry,
     });
 
     return { redirectTo };
@@ -138,10 +135,7 @@ export class AuthService {
         sso: {
           stateEncryptionService: this.deps.sso.stateEncryptionService,
           redirectBaseUrl: this.deps.sso.redirectBaseUrl,
-          googleClientId: this.deps.sso.googleClientId,
-          googleClientSecret: this.deps.sso.googleClientSecret,
-          microsoftClientId: this.deps.sso.microsoftClientId,
-          microsoftClientSecret: this.deps.sso.microsoftClientSecret,
+          providerRegistry: this.deps.sso.providerRegistry,
         },
       },
       {

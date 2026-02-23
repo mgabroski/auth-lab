@@ -26,6 +26,7 @@ import type { MembershipRepo } from '../memberships/dal/membership.repo';
 import type { TotpService } from '../../shared/security/totp';
 import type { EncryptionService } from '../../shared/security/encryption';
 import type { KeyedHasher } from '../../shared/security/keyed-hasher';
+import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
 import { AuthRepo } from './dal/auth.repo';
 import { MfaRepo } from './dal/mfa.repo';
@@ -57,10 +58,7 @@ export function createAuthModule(deps: {
   sso: {
     stateEncryptionService: EncryptionService;
     redirectBaseUrl: string;
-    googleClientId: string;
-    googleClientSecret: string;
-    microsoftClientId: string;
-    microsoftClientSecret: string;
+    providerRegistry: SsoProviderRegistry;
   };
 }) {
   const authRepo = new AuthRepo(deps.db);

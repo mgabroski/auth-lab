@@ -1,6 +1,10 @@
 import { buildApp } from '../../src/app/build-app';
 import type { AppConfig } from '../../src/app/config';
 import { createAuthCryptoHelpers } from './auth-crypto-helpers';
+import { SsoProviderRegistry } from '../../src/modules/auth/sso/sso-provider-registry';
+import { GoogleSsoAdapter } from '../../src/modules/auth/sso/google/google-sso.adapter';
+import { MicrosoftSsoAdapter } from '../../src/modules/auth/sso/microsoft/microsoft-sso.adapter';
+import { FakeSsoAdapter } from './fake-sso-adapter';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -77,6 +81,19 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     },
   };
 
+  // Test doubles for provider exchange. Validation remains real.
+  // Build AFTER config merge so adapter clientIds match token validation expectations.
+  const googleAdapter = new FakeSsoAdapter(
+    new GoogleSsoAdapter(config.sso.googleClientId, config.sso.googleClientSecret),
+  );
+  const microsoftAdapter = new FakeSsoAdapter(
+    new MicrosoftSsoAdapter(config.sso.microsoftClientId, config.sso.microsoftClientSecret),
+  );
+
+  config.sso.providerRegistryOverride = new SsoProviderRegistry()
+    .register(googleAdapter)
+    .register(microsoftAdapter);
+
   const built = await buildApp(config);
   const cryptoHelpers = createAuthCryptoHelpers(built.deps);
 
@@ -84,6 +101,10 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     app: built.app,
     deps: built.deps,
     cryptoHelpers,
+    sso: {
+      googleAdapter,
+      microsoftAdapter,
+    },
     close: built.close,
   };
 }

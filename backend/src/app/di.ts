@@ -56,6 +56,10 @@ import type { MembershipModule } from '../modules/memberships/membership.module'
 import { createAuthModule } from '../modules/auth/auth.module';
 import type { AuthModule } from '../modules/auth/auth.module';
 
+import { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
+import { GoogleSsoAdapter } from '../modules/auth/sso/google/google-sso.adapter';
+import { MicrosoftSsoAdapter } from '../modules/auth/sso/microsoft/microsoft-sso.adapter';
+
 export type AppDeps = {
   db: ReturnType<typeof createDb>;
   cache: Cache;
@@ -119,6 +123,14 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
   // Brick 10 (SSO)
   const ssoStateEncryptionService = new EncryptionService(config.sso.stateEncryptionKeyBase64);
 
+  const ssoProviderRegistry: SsoProviderRegistry =
+    config.sso.providerRegistryOverride ??
+    new SsoProviderRegistry()
+      .register(new GoogleSsoAdapter(config.sso.googleClientId, config.sso.googleClientSecret))
+      .register(
+        new MicrosoftSsoAdapter(config.sso.microsoftClientId, config.sso.microsoftClientSecret),
+      );
+
   // Phase 1: in-memory queue (swap for SQS/SendGrid adapter here in production)
   const queue: Queue = new InMemQueue();
 
@@ -148,10 +160,7 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     sso: {
       stateEncryptionService: ssoStateEncryptionService,
       redirectBaseUrl: config.sso.redirectBaseUrl,
-      googleClientId: config.sso.googleClientId,
-      googleClientSecret: config.sso.googleClientSecret,
-      microsoftClientId: config.sso.microsoftClientId,
-      microsoftClientSecret: config.sso.microsoftClientSecret,
+      providerRegistry: ssoProviderRegistry,
     },
   });
 

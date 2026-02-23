@@ -1,61 +1,384 @@
 import { describe, it, expect } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { sql } from 'kysely';
 import { buildTestApp } from '../helpers/build-test-app';
-import type { DbExecutor } from '../../src/shared/db/db';
+import {
+  buildFakeIdToken,
+  createSsoTenant,
+  createUserWithMembership,
+  getSsoStateFromStart,
+} from '../helpers/sso-test-fixtures';
 
-async function createTenant(opts: { db: DbExecutor; tenantKey: string }) {
-  return opts.db
-    .insertInto('tenants')
-    .values({
-      key: opts.tenantKey,
-      name: `Tenant ${opts.tenantKey}`,
-      is_active: true,
-      public_signup_enabled: false,
-      member_mfa_required: false,
-      allowed_email_domains: sql`'[]'::jsonb`,
-      allowed_sso: ['google', 'microsoft'],
-    })
-    .returning(['id', 'key'])
-    .executeTakeFirstOrThrow();
-}
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? 'test-google-client-id';
 
-describe('GET /auth/sso/:provider', () => {
-  it('returns 302 and includes state + nonce query parameters', async () => {
+describe('GET /auth/sso/google/callback', () => {
+  it('success: ACTIVE member → 302 done?nextAction=NONE + sets session cookie', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+
+      const email = `u-${randomUUID().slice(0, 8)}@example.com`;
+      await createUserWithMembership({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        status: 'ACTIVE',
+      });
+
+      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
+      expect(res.headers['set-cookie']).toBeTruthy();
+    } finally {
+      await close();
+    }
+  });
+
+  it('success: ADMIN without MFA → 302 done?nextAction=MFA_SETUP_REQUIRED', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+
+      const email = `admin-${randomUUID().slice(0, 8)}@example.com`;
+      await createUserWithMembership({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      });
+
+      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain(
+        '/auth/sso/done?nextAction=MFA_SETUP_REQUIRED',
+      );
+      expect(res.headers['set-cookie']).toBeTruthy();
+    } finally {
+      await close();
+    }
+  });
+
+  it('success: INVITED member → activates to ACTIVE → 302 success', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+
+      const email = `inv-${randomUUID().slice(0, 8)}@example.com`;
+      const created = await createUserWithMembership({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        status: 'INVITED',
+      });
+
+      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
+
+      const membership = await deps.db
+        .selectFrom('memberships')
+        .select(['status'])
+        .where('id', '=', created.membership.id)
+        .executeTakeFirstOrThrow();
+
+      expect(membership.status).toBe('ACTIVE');
+    } finally {
+      await close();
+    }
+  });
+
+  it('403 when provider not in tenant.allowedSso', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
     const host = `${tenantKey}.localhost:3000`;
 
     try {
-      await createTenant({ db: deps.db, tenantKey });
+      await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['microsoft'] });
+      const { state } = await getSsoStateFromStart({ app, host, provider: 'google' });
 
       const res = await app.inject({
         method: 'GET',
-        url: '/auth/sso/google',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
         headers: { host },
       });
 
-      expect(res.statusCode).toBe(302);
-
-      const loc = String(res.headers.location);
-      expect(loc).toContain('state=');
-      expect(loc).toContain('nonce=');
+      expect(res.statusCode).toBe(403);
     } finally {
       await close();
     }
   });
-});
 
-describe('GET /auth/sso/:provider/callback', () => {
-  it('returns 400 when required query params are missing (PR2)', async () => {
-    const { app, close } = await buildTestApp();
+  it('403 when email domain not allowed', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
     const host = `${tenantKey}.localhost:3000`;
 
     try {
+      await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['google'],
+        allowedEmailDomains: ['acme.com'],
+      });
+
+      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          email: `u-${randomUUID().slice(0, 8)}@gmail.com`,
+          email_verified: true,
+        }),
+      });
+
       const res = await app.inject({
         method: 'GET',
-        url: '/auth/sso/google/callback',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host },
+      });
+
+      expect(res.statusCode).toBe(403);
+    } finally {
+      await close();
+    }
+  });
+
+  it('403 when no membership for tenant', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          email: `u-${randomUUID().slice(0, 8)}@example.com`,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host },
+      });
+
+      expect(res.statusCode).toBe(403);
+    } finally {
+      await close();
+    }
+  });
+
+  it('403 when membership is SUSPENDED', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+      const email = `u-${randomUUID().slice(0, 8)}@example.com`;
+
+      await createUserWithMembership({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        status: 'SUSPENDED',
+      });
+
+      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host },
+      });
+      expect(res.statusCode).toBe(403);
+    } finally {
+      await close();
+    }
+  });
+
+  it('403 when subject drift (different sub for same user/provider)', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+      const email = `u-${randomUUID().slice(0, 8)}@example.com`;
+
+      const { user } = await createUserWithMembership({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        status: 'ACTIVE',
+      });
+
+      // Existing SSO identity with a different provider_subject.
+      // (provider, provider_subject) is UNIQUE in DB, so ensure it's unique per test.
+      const existingSub = `g-existing-${randomUUID()}`;
+      const tokenSub = `g-token-${randomUUID()}`;
+
+      await deps.db
+        .insertInto('auth_identities')
+        .values({
+          user_id: user.id,
+          provider: 'google',
+          provider_subject: existingSub,
+          password_hash: null,
+        })
+        .execute();
+
+      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: tokenSub, // drift vs existingSub
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host },
+      });
+
+      expect(res.statusCode).toBe(403);
+    } finally {
+      await close();
+    }
+  });
+
+  it('400 when invalid/expired state', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=not-a-real-state`,
+        headers: { host },
+      });
+
+      expect(res.statusCode).toBe(400);
+    } finally {
+      await close();
+    }
+  });
+
+  it('400 when missing code parameter', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?state=anything`,
         headers: { host },
       });
 

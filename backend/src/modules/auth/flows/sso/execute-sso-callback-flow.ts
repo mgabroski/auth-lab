@@ -19,6 +19,7 @@ import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { SessionStore } from '../../../../shared/session/session.store';
 import type { EncryptionService } from '../../../../shared/security/encryption';
+import type { SsoProviderRegistry } from '../../sso/sso-provider-registry';
 
 import { resolveTenantForAuth, Tenant } from '../../../tenants';
 
@@ -37,16 +38,6 @@ import { AppError } from '../../../../shared/http/errors';
 import { decryptAndValidateSsoState } from '../../helpers/sso-state-validate';
 import type { SsoProvider } from '../../helpers/sso-state';
 import { emailDomain } from '../../helpers/email-domain';
-
-import {
-  exchangeGoogleAuthorizationCode,
-  validateAndExtractGoogleIdentity,
-} from '../../sso/google/google-sso.provider';
-
-import {
-  exchangeMicrosoftAuthorizationCode,
-  validateAndExtractMicrosoftIdentity,
-} from '../../sso/microsoft/microsoft-sso.provider';
 
 import { findSsoIdentityByUserAndProvider } from '../../queries/auth.queries';
 import { auditSsoLoginFailed, auditSsoLoginSuccess } from '../../auth.audit';
@@ -135,10 +126,7 @@ export async function executeSsoCallbackFlow(
     sso: {
       stateEncryptionService: EncryptionService;
       redirectBaseUrl: string;
-      googleClientId: string;
-      googleClientSecret: string;
-      microsoftClientId: string;
-      microsoftClientSecret: string;
+      providerRegistry: SsoProviderRegistry;
     };
   },
   params: SsoCallbackParams,
@@ -197,37 +185,19 @@ export async function executeSsoCallbackFlow(
       // D) Exchange code -> tokens
       const redirectUri = `${deps.sso.redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/${params.provider}/callback`;
 
-      const tokens =
-        params.provider === 'google'
-          ? await exchangeGoogleAuthorizationCode({
-              code: params.code,
-              redirectUri,
-              clientId: deps.sso.googleClientId,
-              clientSecret: deps.sso.googleClientSecret,
-            })
-          : await exchangeMicrosoftAuthorizationCode({
-              code: params.code,
-              redirectUri,
-              clientId: deps.sso.microsoftClientId,
-              clientSecret: deps.sso.microsoftClientSecret,
-            });
+      const adapter = deps.sso.providerRegistry.getOrThrow(params.provider);
+
+      const tokens = await adapter.exchangeAuthorizationCode({
+        code: params.code,
+        redirectUri,
+      });
 
       // E+F) Validate ID token claims + extract identity
-      const identity =
-        params.provider === 'google'
-          ? validateAndExtractGoogleIdentity({
-              idToken: tokens.idToken,
-              expectedIssuer: 'https://accounts.google.com',
-              expectedAudience: deps.sso.googleClientId,
-              expectedNonce: statePayload.nonce,
-              now: new Date(),
-            })
-          : validateAndExtractMicrosoftIdentity({
-              idToken: tokens.idToken,
-              expectedAudience: deps.sso.microsoftClientId,
-              expectedNonce: statePayload.nonce,
-              now: new Date(),
-            });
+      const identity = adapter.validateAndExtractIdentity({
+        idToken: tokens.idToken,
+        expectedNonce: statePayload.nonce,
+        now: new Date(),
+      });
 
       // Domain allow-list (after email known)
       if (!isEmailDomainAllowed(tenant.allowedEmailDomains, identity.email)) {

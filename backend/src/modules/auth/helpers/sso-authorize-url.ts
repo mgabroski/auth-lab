@@ -12,6 +12,7 @@
 
 import type { EncryptionService } from '../../../shared/security/encryption';
 import { buildEncryptedSsoState, type SsoProvider } from './sso-state';
+import type { SsoProviderRegistry } from '../sso/sso-provider-registry';
 
 function callbackUrl(redirectBaseUrl: string, provider: SsoProvider): string {
   return `${redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/${provider}/callback`;
@@ -26,8 +27,7 @@ export function buildSsoAuthorizationUrl(input: {
   encryptionService: EncryptionService;
   redirectBaseUrl: string;
 
-  googleClientId: string;
-  microsoftClientId: string;
+  providerRegistry: SsoProviderRegistry;
 }): string {
   const { state, nonce } = buildEncryptedSsoState({
     encryptionService: input.encryptionService,
@@ -39,25 +39,6 @@ export function buildSsoAuthorizationUrl(input: {
 
   const redirectUri = callbackUrl(input.redirectBaseUrl, input.provider);
 
-  if (input.provider === 'google') {
-    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.searchParams.set('client_id', input.googleClientId);
-    url.searchParams.set('redirect_uri', redirectUri);
-    url.searchParams.set('response_type', 'code');
-    url.searchParams.set('scope', 'openid email profile');
-    url.searchParams.set('state', state);
-    url.searchParams.set('nonce', nonce);
-    url.searchParams.set('prompt', 'select_account');
-    return url.toString();
-  }
-
-  const url = new URL('https://login.microsoftonline.com/common/oauth2/v2.0/authorize');
-  url.searchParams.set('client_id', input.microsoftClientId);
-  url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('response_type', 'code');
-  url.searchParams.set('response_mode', 'query');
-  url.searchParams.set('scope', 'openid email profile');
-  url.searchParams.set('state', state);
-  url.searchParams.set('nonce', nonce);
-  return url.toString();
+  const adapter = input.providerRegistry.getOrThrow(input.provider);
+  return adapter.buildAuthorizationUrl({ redirectUri, state, nonce });
 }

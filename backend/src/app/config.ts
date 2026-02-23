@@ -8,6 +8,7 @@
 
 import 'dotenv/config';
 import { z } from 'zod';
+import type { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
 
 const NodeEnvSchema = z.enum(['development', 'test', 'production']).default('development');
 
@@ -92,6 +93,12 @@ export type AppConfig = {
     googleClientSecret: string;
     microsoftClientId: string;
     microsoftClientSecret: string;
+
+    /**
+     * Test-only escape hatch so E2E specs can inject provider doubles without vi.mock.
+     * Not populated by env parsing (buildConfig()).
+     */
+    providerRegistryOverride?: SsoProviderRegistry;
   };
 
   seed: {

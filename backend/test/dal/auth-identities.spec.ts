@@ -6,6 +6,7 @@ import { selectAuthIdentityByUserAndProviderSql } from '../../src/modules/auth/d
 import {
   getPasswordIdentityWithHash,
   hasAuthIdentity,
+  findSsoIdentityByUserAndProvider,
 } from '../../src/modules/auth/queries/auth.queries';
 
 describe('auth identities DAL', () => {
@@ -93,6 +94,109 @@ describe('auth identities DAL', () => {
         '00000000-0000-0000-0000-000000000000',
       );
       expect(result).toBeUndefined();
+    } finally {
+      await close();
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // SSO identity DAL
+  // ───────────────────────────────────────────────────────────────────────────
+
+  it('insertSsoIdentity creates row and findSsoIdentityByUserAndProvider retrieves it', async () => {
+    const { deps, close } = await buildTestApp();
+    try {
+      const userRepo = new UserRepo(deps.db);
+      const user = await userRepo.insertUser({ email: 'sso-user@example.com', name: 'SSO' });
+
+      const authRepo = new AuthRepo(deps.db);
+      const inserted = await authRepo.insertSsoIdentity({
+        userId: user.id,
+        provider: 'google',
+        providerSubject: 'sub-1',
+      });
+
+      expect(inserted.id).toBeDefined();
+
+      const found = await findSsoIdentityByUserAndProvider(deps.db, {
+        userId: user.id,
+        provider: 'google',
+      });
+
+      expect(found).toBeDefined();
+      expect(found!.userId).toBe(user.id);
+      expect(found!.provider).toBe('google');
+      expect(found!.providerSubject).toBe('sub-1');
+
+      await deps.db.deleteFrom('auth_identities').where('user_id', '=', user.id).execute();
+      await deps.db.deleteFrom('users').where('id', '=', user.id).execute();
+    } finally {
+      await close();
+    }
+  });
+
+  it('findSsoIdentityByUserAndProvider returns undefined for nonexistent user/provider', async () => {
+    const { deps, close } = await buildTestApp();
+    try {
+      const result = await findSsoIdentityByUserAndProvider(deps.db, {
+        userId: '00000000-0000-0000-0000-000000000000',
+        provider: 'google',
+      });
+      expect(result).toBeUndefined();
+    } finally {
+      await close();
+    }
+  });
+
+  it('findSsoIdentityByUserAndProvider is provider-scoped (google row not found for microsoft)', async () => {
+    const { deps, close } = await buildTestApp();
+    try {
+      const userRepo = new UserRepo(deps.db);
+      const user = await userRepo.insertUser({ email: 'scope@example.com', name: 'Scope' });
+
+      const authRepo = new AuthRepo(deps.db);
+      await authRepo.insertSsoIdentity({
+        userId: user.id,
+        provider: 'google',
+        providerSubject: 'sub-1',
+      });
+
+      const microsoft = await findSsoIdentityByUserAndProvider(deps.db, {
+        userId: user.id,
+        provider: 'microsoft',
+      });
+      expect(microsoft).toBeUndefined();
+
+      await deps.db.deleteFrom('auth_identities').where('user_id', '=', user.id).execute();
+      await deps.db.deleteFrom('users').where('id', '=', user.id).execute();
+    } finally {
+      await close();
+    }
+  });
+
+  it('insertSsoIdentity respects UNIQUE(user_id, provider) — duplicate insert throws', async () => {
+    const { deps, close } = await buildTestApp();
+    try {
+      const userRepo = new UserRepo(deps.db);
+      const user = await userRepo.insertUser({ email: 'unique@example.com', name: 'Unique' });
+
+      const authRepo = new AuthRepo(deps.db);
+      await authRepo.insertSsoIdentity({
+        userId: user.id,
+        provider: 'google',
+        providerSubject: 'sub-1',
+      });
+
+      await expect(
+        authRepo.insertSsoIdentity({
+          userId: user.id,
+          provider: 'google',
+          providerSubject: 'sub-2',
+        }),
+      ).rejects.toBeDefined();
+
+      await deps.db.deleteFrom('auth_identities').where('user_id', '=', user.id).execute();
+      await deps.db.deleteFrom('users').where('id', '=', user.id).execute();
     } finally {
       await close();
     }
