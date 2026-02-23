@@ -73,6 +73,8 @@ export type AppDeps = {
   encryptionService: EncryptionService;
   mfaKeyedHasher: KeyedHasher;
 
+  ssoStateEncryptionService: EncryptionService;
+
   // messaging
   queue: Queue;
 
@@ -114,6 +116,9 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
   const encryptionService = new EncryptionService(config.mfa.encryptionKeyBase64);
   const mfaKeyedHasher: KeyedHasher = new HmacSha256KeyedHasher(config.mfa.hmacKeyBase64);
 
+  // Brick 10 (SSO)
+  const ssoStateEncryptionService = new EncryptionService(config.sso.stateEncryptionKeyBase64);
+
   // Phase 1: in-memory queue (swap for SQS/SendGrid adapter here in production)
   const queue: Queue = new InMemQueue();
 
@@ -138,6 +143,16 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     totpService,
     encryptionService,
     mfaKeyedHasher,
+
+    // Brick 10 (SSO)
+    sso: {
+      stateEncryptionService: ssoStateEncryptionService,
+      redirectBaseUrl: config.sso.redirectBaseUrl,
+      googleClientId: config.sso.googleClientId,
+      googleClientSecret: config.sso.googleClientSecret,
+      microsoftClientId: config.sso.microsoftClientId,
+      microsoftClientSecret: config.sso.microsoftClientSecret,
+    },
   });
 
   return {
@@ -154,6 +169,9 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
     totpService,
     encryptionService,
     mfaKeyedHasher,
+
+    // Brick 10 (SSO)
+    ssoStateEncryptionService,
 
     queue,
     tenants,

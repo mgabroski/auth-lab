@@ -22,23 +22,20 @@ export type KnownAuditAction =
   | 'invite.created'
   | 'invite.cancelled'
   | 'invite.resent'
-  // Auth (Brick 7)
   | 'auth.register.success'
   | 'auth.login.success'
   | 'auth.login.failed'
-  // Auth — Password Reset (Brick 8)
   | 'auth.password_reset.requested'
   | 'auth.password_reset.completed'
-  // Auth — MFA (Brick 9) (dots-only naming)
   | 'auth.mfa.setup.started'
   | 'auth.mfa.setup.completed'
   | 'auth.mfa.verify.succeeded'
   | 'auth.mfa.verify.failed'
   | 'auth.mfa.recovery.used'
   | 'auth.mfa.recovery.failed'
-  // Users (Brick 7)
+  | 'auth.sso.login.success'
+  | 'auth.sso.login.failed'
   | 'user.created'
-  // Memberships (Brick 7)
   | 'membership.activated'
   | 'membership.created';
 

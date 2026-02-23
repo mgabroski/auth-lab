@@ -52,6 +52,16 @@ export function createAuthModule(deps: {
   totpService: TotpService;
   encryptionService: EncryptionService;
   mfaKeyedHasher: KeyedHasher;
+
+  // Brick 10 (SSO)
+  sso: {
+    stateEncryptionService: EncryptionService;
+    redirectBaseUrl: string;
+    googleClientId: string;
+    googleClientSecret: string;
+    microsoftClientId: string;
+    microsoftClientSecret: string;
+  };
 }) {
   const authRepo = new AuthRepo(deps.db);
   const mfaRepo = new MfaRepo(deps.db);
@@ -74,6 +84,9 @@ export function createAuthModule(deps: {
     totpService: deps.totpService,
     encryptionService: deps.encryptionService,
     mfaKeyedHasher: deps.mfaKeyedHasher,
+
+    // Brick 10 (SSO)
+    sso: deps.sso,
   });
 
   const controller = new AuthController(authService, deps.isProduction);

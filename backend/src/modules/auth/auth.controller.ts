@@ -26,6 +26,7 @@ import {
   resetPasswordSchema,
   mfaCodeSchema,
   mfaRecoverSchema,
+  ssoProviderSchema,
 } from './auth.schemas';
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
@@ -39,6 +40,22 @@ const FORGOT_PASSWORD_RESPONSE = {
 const RESET_PASSWORD_RESPONSE = {
   message: 'Password updated successfully. Please sign in with your new password.',
 } as const;
+
+/**
+ * WHY:
+ * - Some routes are tenant-scoped by design and require tenantKey to exist.
+ * - requestContext.tenantKey is typed as nullable because not every route is tenant-scoped.
+ *
+ * RULES:
+ * - Boundary guard only (no DB / no business rules).
+ * - ValidationError → 400.
+ */
+function requireTenantKey(tenantKey: string | null | undefined): string {
+  if (!tenantKey) {
+    throw AppError.validationError('Missing tenant context');
+  }
+  return tenantKey;
+}
 
 export class AuthController {
   constructor(
@@ -129,18 +146,14 @@ export class AuthController {
     return reply.status(200).send(RESET_PASSWORD_RESPONSE);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // MFA (Brick 9)
-  // ─────────────────────────────────────────────────────────────────────────────
-
   async mfaSetup(req: FastifyRequest, reply: FastifyReply) {
     const session = requireSession(req);
 
     const result = await this.authService.setupMfa({
       sessionId: session.sessionId,
       userId: session.userId,
-      tenantId: session.tenantId, // ✅ needed for audit scope
-      membershipId: session.membershipId, // ✅ needed for audit scope
+      tenantId: session.tenantId,
+      membershipId: session.membershipId,
       requestId: req.requestContext.requestId,
       ip: req.ip,
       userAgent: req.headers['user-agent'] ?? null,
@@ -221,5 +234,31 @@ export class AuthController {
     });
 
     return reply.status(200).send(result);
+  }
+
+  async ssoStart(req: FastifyRequest, reply: FastifyReply) {
+    const providerRaw = (req.params as { provider?: unknown } | undefined)?.provider;
+
+    const paramsParsed = ssoProviderSchema.safeParse(providerRaw);
+    if (!paramsParsed.success) {
+      throw AppError.validationError('Invalid SSO provider', { provider: providerRaw });
+    }
+
+    const query = req.query as { returnTo?: unknown };
+    const returnTo =
+      typeof query.returnTo === 'string' && query.returnTo.length ? query.returnTo : undefined;
+
+    const { redirectTo } = this.authService.startSso({
+      tenantKey: requireTenantKey(req.requestContext.tenantKey),
+      provider: paramsParsed.data,
+      requestId: req.requestContext.requestId,
+      returnTo,
+    });
+
+    return reply.status(302).redirect(redirectTo);
+  }
+
+  async ssoCallback(_req: FastifyRequest, reply: FastifyReply) {
+    return reply.status(501).send({ message: 'Not implemented' });
   }
 }

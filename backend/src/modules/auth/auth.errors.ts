@@ -68,4 +68,28 @@ export const AuthErrors = {
       meta,
     );
   },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SSO (Brick 10)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  ssoSubjectDrift(meta?: AppErrorMeta) {
+    return AppError.forbidden('SSO identity mismatch. Contact your admin.', meta);
+  },
+
+  ssoEmailNotVerified(meta?: AppErrorMeta) {
+    return AppError.forbidden('Your Google account email is not verified.', meta);
+  },
+
+  ssoProviderNotAllowed(meta?: AppErrorMeta) {
+    return AppError.forbidden('This sign-in method is not enabled for this workspace.', meta);
+  },
+
+  ssoStateInvalid(meta?: AppErrorMeta) {
+    return AppError.validationError('Invalid or expired SSO request. Please try again.', meta);
+  },
+
+  ssoTokenValidationFailed(meta?: AppErrorMeta) {
+    return AppError.unauthorized('SSO token validation failed.', meta);
+  },
 } as const;

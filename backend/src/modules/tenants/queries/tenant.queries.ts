@@ -13,10 +13,28 @@
 
 import type { DbExecutor } from '../../../shared/db/db';
 import type { JsonValue } from '../../../shared/db/database.types';
-import type { Tenant, TenantAllowedEmailDomains, TenantKey } from '../tenant.types';
+import type {
+  Tenant,
+  TenantAllowedEmailDomains,
+  TenantAllowedSso,
+  TenantKey,
+} from '../tenant.types';
 import { findTenantByKeySql } from '../dal/tenant.query-sql';
 
 function parseAllowedEmailDomains(value: JsonValue): TenantAllowedEmailDomains {
+  if (!Array.isArray(value)) return [];
+
+  const out: string[] = [];
+  for (const v of value) {
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase();
+      if (s.length) out.push(s);
+    }
+  }
+  return out;
+}
+
+function parseAllowedSso(value: unknown): TenantAllowedSso {
   if (!Array.isArray(value)) return [];
 
   const out: string[] = [];
@@ -45,6 +63,7 @@ export async function getTenantByKey(
     publicSignupEnabled: row.public_signup_enabled,
     memberMfaRequired: row.member_mfa_required,
     allowedEmailDomains: parseAllowedEmailDomains(row.allowed_email_domains),
+    allowedSso: parseAllowedSso(row.allowed_sso),
 
     createdAt: row.created_at,
     updatedAt: row.updated_at,

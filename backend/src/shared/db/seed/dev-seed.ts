@@ -64,6 +64,9 @@ export async function runDevSeed(opts: {
         public_signup_enabled: false,
         member_mfa_required: false,
 
+        // Brick 10: enable both providers in dev/test tenants used by our suite
+        allowed_sso: ['google', 'microsoft'],
+
         // allowed_email_domains has a DB default ('[]'::jsonb) — don't override
       })
       .returning(['id'])

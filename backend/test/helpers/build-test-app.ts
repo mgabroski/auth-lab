@@ -38,6 +38,18 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
       hmacKeyBase64: requireEnv('MFA_HMAC_KEY_BASE64'),
     },
 
+    sso: {
+      stateEncryptionKeyBase64:
+        process.env.SSO_STATE_ENCRYPTION_KEY ?? 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      redirectBaseUrl: process.env.SSO_REDIRECT_BASE_URL ?? 'http://localhost:3000',
+
+      googleClientId: process.env.GOOGLE_CLIENT_ID ?? 'test-google-client-id',
+      googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? 'test-google-client-secret',
+
+      microsoftClientId: process.env.MICROSOFT_CLIENT_ID ?? 'test-microsoft-client-id',
+      microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? 'test-microsoft-client-secret',
+    },
+
     seed: {
       enabled: false, // IMPORTANT: OFF in tests by default
       tenantKey: 'goodwill-ca',
@@ -54,6 +66,10 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     mfa: {
       ...baseConfig.mfa,
       ...(overrides.mfa ?? {}),
+    },
+    sso: {
+      ...baseConfig.sso,
+      ...(overrides.sso ?? {}),
     },
     seed: {
       ...baseConfig.seed,

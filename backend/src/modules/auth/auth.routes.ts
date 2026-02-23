@@ -23,4 +23,8 @@ export function registerAuthRoutes(app: FastifyInstance, controller: AuthControl
   app.post('/auth/mfa/verify-setup', controller.mfaVerifySetup.bind(controller));
   app.post('/auth/mfa/verify', controller.mfaVerify.bind(controller));
   app.post('/auth/mfa/recover', controller.mfaRecover.bind(controller));
+
+  // SSO (Brick 10)
+  app.get('/auth/sso/:provider', controller.ssoStart.bind(controller));
+  app.get('/auth/sso/:provider/callback', controller.ssoCallback.bind(controller));
 }

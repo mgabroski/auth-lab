@@ -57,3 +57,11 @@ export type AuthResult = {
     role: 'ADMIN' | 'MEMBER';
   };
 };
+
+export type SsoIdentity = {
+  id: string;
+  userId: string;
+  provider: 'google' | 'microsoft';
+  providerSubject: string;
+  createdAt: Date;
+};

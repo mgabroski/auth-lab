@@ -102,6 +102,7 @@ export interface PasswordResetTokens {
 
 export interface Tenants {
   allowed_email_domains: Generated<Json>;
+  allowed_sso: Generated<string[]>;
   created_at: Generated<Timestamp>;
   id: Generated<string>;
   is_active: Generated<boolean>;

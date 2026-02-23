@@ -47,6 +47,9 @@ import { verifyMfaSetupFlow } from './flows/mfa/verify-mfa-setup-flow';
 import { verifyMfaFlow } from './flows/mfa/verify-mfa-flow';
 import { recoverMfaFlow } from './flows/mfa/recover-mfa-flow';
 
+import type { SsoProvider } from './helpers/sso-state';
+import { buildSsoAuthorizationUrl } from './helpers/sso-authorize-url';
+
 export class AuthService {
   constructor(
     private readonly deps: {
@@ -65,8 +68,42 @@ export class AuthService {
       totpService: TotpService;
       encryptionService: EncryptionService;
       mfaKeyedHasher: KeyedHasher;
+
+      // Brick 10 (SSO)
+      sso: {
+        stateEncryptionService: EncryptionService;
+        redirectBaseUrl: string;
+        googleClientId: string;
+        googleClientSecret: string;
+        microsoftClientId: string;
+        microsoftClientSecret: string;
+      };
     },
   ) {}
+
+  /**
+   * Brick 10 (PR1): Build the provider authorization redirect URL.
+   * Callback handling is implemented in PR2/PR3.
+   */
+  startSso(input: {
+    tenantKey: string;
+    provider: SsoProvider;
+    requestId: string;
+    returnTo?: string;
+  }): { redirectTo: string } {
+    const redirectTo = buildSsoAuthorizationUrl({
+      provider: input.provider,
+      tenantKey: input.tenantKey,
+      requestId: input.requestId,
+      returnTo: input.returnTo,
+      encryptionService: this.deps.sso.stateEncryptionService,
+      redirectBaseUrl: this.deps.sso.redirectBaseUrl,
+      googleClientId: this.deps.sso.googleClientId,
+      microsoftClientId: this.deps.sso.microsoftClientId,
+    });
+
+    return { redirectTo };
+  }
 
   async register(params: RegisterParams): Promise<{ result: AuthResult; sessionId: string }> {
     return executeRegisterFlow(

@@ -41,6 +41,16 @@ const ConfigSchema = z.object({
   // Must be >= 16 bytes (validated in KeyedHasher ctor).
   MFA_HMAC_KEY_BASE64: Base64Schema,
 
+  // SSO (Brick 10)
+  // Must decode to 32 bytes (validated in EncryptionService ctor).
+  SSO_STATE_ENCRYPTION_KEY: Base64Schema,
+  // Base URL used for callback redirect URIs and post-login redirect.
+  SSO_REDIRECT_BASE_URL: z.string().url(),
+  GOOGLE_CLIENT_ID: z.string().min(1),
+  GOOGLE_CLIENT_SECRET: z.string().min(1),
+  MICROSOFT_CLIENT_ID: z.string().min(1),
+  MICROSOFT_CLIENT_SECRET: z.string().min(1),
+
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),
   SEED_TENANT_KEY: z.string().default('goodwill-ca'),
@@ -75,6 +85,15 @@ export type AppConfig = {
     hmacKeyBase64: string;
   };
 
+  sso: {
+    stateEncryptionKeyBase64: string;
+    redirectBaseUrl: string;
+    googleClientId: string;
+    googleClientSecret: string;
+    microsoftClientId: string;
+    microsoftClientSecret: string;
+  };
+
   seed: {
     enabled: boolean;
     tenantKey: string;
@@ -104,6 +123,15 @@ export function buildConfig(): AppConfig {
       issuer: parsed.MFA_ISSUER,
       encryptionKeyBase64: parsed.MFA_ENCRYPTION_KEY_BASE64,
       hmacKeyBase64: parsed.MFA_HMAC_KEY_BASE64,
+    },
+
+    sso: {
+      stateEncryptionKeyBase64: parsed.SSO_STATE_ENCRYPTION_KEY,
+      redirectBaseUrl: parsed.SSO_REDIRECT_BASE_URL,
+      googleClientId: parsed.GOOGLE_CLIENT_ID,
+      googleClientSecret: parsed.GOOGLE_CLIENT_SECRET,
+      microsoftClientId: parsed.MICROSOFT_CLIENT_ID,
+      microsoftClientSecret: parsed.MICROSOFT_CLIENT_SECRET,
     },
 
     seed: {
