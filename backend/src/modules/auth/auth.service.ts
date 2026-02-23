@@ -123,11 +123,7 @@ export class AuthService {
     userAgent: string | null;
     requestId: string;
   }): Promise<{ sessionId: string; redirectTo: string }> {
-    if (input.provider !== 'google') {
-      // Microsoft in PR3
-      throw new Error('SSO provider not implemented');
-    }
-
+    // ✅ PR3: support microsoft too (google already implemented in PR2)
     return executeSsoCallbackFlow(
       {
         db: this.deps.db,
@@ -144,11 +140,13 @@ export class AuthService {
           redirectBaseUrl: this.deps.sso.redirectBaseUrl,
           googleClientId: this.deps.sso.googleClientId,
           googleClientSecret: this.deps.sso.googleClientSecret,
+          microsoftClientId: this.deps.sso.microsoftClientId,
+          microsoftClientSecret: this.deps.sso.microsoftClientSecret,
         },
       },
       {
         tenantKey: input.tenantKey,
-        provider: 'google',
+        provider: input.provider,
         code: input.code,
         state: input.state,
         ip: input.ip,

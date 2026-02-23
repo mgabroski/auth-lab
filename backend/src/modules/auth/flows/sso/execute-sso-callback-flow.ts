@@ -2,8 +2,7 @@
  * backend/src/modules/auth/flows/sso/execute-sso-callback-flow.ts
  *
  * WHY:
- * - Brick 10: SSO login callback orchestration (Google in PR2).
- * - Follows locked order A–M (tenant → gates → state → exchange → validate → tx provisioning → MFA → session → redirect).
+ * - Brick 10: SSO login callback orchestration (Google in PR2; Microsoft in PR3).
  *
  * RULES:
  * - No HTTP concerns here.
@@ -33,6 +32,8 @@ import type { AuthRepo } from '../../dal/auth.repo';
 import { AuthErrors } from '../../auth.errors';
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
+import { AppError } from '../../../../shared/http/errors';
+
 import { decryptAndValidateSsoState } from '../../helpers/sso-state-validate';
 import type { SsoProvider } from '../../helpers/sso-state';
 import { emailDomain } from '../../helpers/email-domain';
@@ -41,6 +42,11 @@ import {
   exchangeGoogleAuthorizationCode,
   validateAndExtractGoogleIdentity,
 } from '../../sso/google/google-sso.provider';
+
+import {
+  exchangeMicrosoftAuthorizationCode,
+  validateAndExtractMicrosoftIdentity,
+} from '../../sso/microsoft/microsoft-sso.provider';
 
 import { findSsoIdentityByUserAndProvider } from '../../queries/auth.queries';
 import { auditSsoLoginFailed, auditSsoLoginSuccess } from '../../auth.audit';
@@ -60,10 +66,9 @@ function isEmailDomainAllowed(allowedDomains: string[], email: string): boolean 
 
 export type SsoCallbackParams = {
   tenantKey: string | null;
-  provider: SsoProvider; // google for PR2
+  provider: SsoProvider;
   code: string;
   state: string;
-
   ip: string;
   userAgent: string | null;
   requestId: string;
@@ -132,17 +137,30 @@ export async function executeSsoCallbackFlow(
       redirectBaseUrl: string;
       googleClientId: string;
       googleClientSecret: string;
+      microsoftClientId: string;
+      microsoftClientSecret: string;
     };
   },
   params: SsoCallbackParams,
 ): Promise<{ sessionId: string; redirectTo: string }> {
-  // Rate limit EARLY (before any DB work)
   await deps.rateLimiter.hitOrThrow({
     key: `sso-callback:ip:${params.ip}`,
     ...AUTH_RATE_LIMITS.ssoCallback.perIp,
   });
 
   let txResult: TxResult;
+
+  // Best-effort context for failure audits (written OUTSIDE the tx).
+  // This is progressively enriched inside the tx as we learn tenant/user/membership.
+  const failureAuditCtx: {
+    tenantId: string | null;
+    userId: string | null;
+    membershipId: string | null;
+  } = {
+    tenantId: null,
+    userId: null,
+    membershipId: null,
+  };
 
   try {
     txResult = await deps.db.transaction().execute(async (trx): Promise<TxResult> => {
@@ -154,6 +172,7 @@ export async function executeSsoCallbackFlow(
 
       // A) Resolve tenant
       const tenant = await resolveTenantForAuth(trx, params.tenantKey);
+      failureAuditCtx.tenantId = tenant.id;
 
       // B) Provider allow-list
       if (!tenant.allowedSso.includes(params.provider)) {
@@ -175,42 +194,48 @@ export async function executeSsoCallbackFlow(
         now: new Date(),
       });
 
-      // D) Exchange code -> tokens (Google only in PR2)
-      if (params.provider !== 'google') {
-        throw new SsoDeniedError({
-          appError: AuthErrors.ssoStateInvalid({ reason: 'provider_not_implemented' }),
-          audit: {
-            ctx: toFailureAuditContext({ tenantId: tenant.id }),
-            payload: { provider: params.provider, reason: 'provider_not_implemented' },
-          },
-        });
-      }
+      // D) Exchange code -> tokens
+      const redirectUri = `${deps.sso.redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/${params.provider}/callback`;
 
-      const redirectUri = `${deps.sso.redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/google/callback`;
-
-      const tokens = await exchangeGoogleAuthorizationCode({
-        code: params.code,
-        redirectUri,
-        clientId: deps.sso.googleClientId,
-        clientSecret: deps.sso.googleClientSecret,
-      });
+      const tokens =
+        params.provider === 'google'
+          ? await exchangeGoogleAuthorizationCode({
+              code: params.code,
+              redirectUri,
+              clientId: deps.sso.googleClientId,
+              clientSecret: deps.sso.googleClientSecret,
+            })
+          : await exchangeMicrosoftAuthorizationCode({
+              code: params.code,
+              redirectUri,
+              clientId: deps.sso.microsoftClientId,
+              clientSecret: deps.sso.microsoftClientSecret,
+            });
 
       // E+F) Validate ID token claims + extract identity
-      const identity = validateAndExtractGoogleIdentity({
-        idToken: tokens.idToken,
-        expectedIssuer: 'https://accounts.google.com',
-        expectedAudience: deps.sso.googleClientId,
-        expectedNonce: statePayload.nonce,
-        now: new Date(),
-      });
+      const identity =
+        params.provider === 'google'
+          ? validateAndExtractGoogleIdentity({
+              idToken: tokens.idToken,
+              expectedIssuer: 'https://accounts.google.com',
+              expectedAudience: deps.sso.googleClientId,
+              expectedNonce: statePayload.nonce,
+              now: new Date(),
+            })
+          : validateAndExtractMicrosoftIdentity({
+              idToken: tokens.idToken,
+              expectedAudience: deps.sso.microsoftClientId,
+              expectedNonce: statePayload.nonce,
+              now: new Date(),
+            });
 
-      // Email domain allow-list (after email known)
+      // Domain allow-list (after email known)
       if (!isEmailDomainAllowed(tenant.allowedEmailDomains, identity.email)) {
         throw new SsoDeniedError({
           appError: AuthErrors.noAccess(),
           audit: {
             ctx: toFailureAuditContext({ tenantId: tenant.id }),
-            payload: { provider: 'google', reason: 'email_domain_not_allowed' },
+            payload: { provider: params.provider, reason: 'email_domain_not_allowed' },
           },
         });
       }
@@ -227,10 +252,10 @@ export async function executeSsoCallbackFlow(
         });
 
         user = await getUserByEmail(trx, identity.email);
-        if (!user) {
-          throw new Error('auth.sso.callback: user insert succeeded but user not found');
-        }
+        if (!user) throw new Error('auth.sso.callback: user insert succeeded but user not found');
       }
+
+      failureAuditCtx.userId = user.id;
 
       // H) Membership enforcement (NO CREATE)
       const membership = await getMembershipByTenantAndUser(trx, {
@@ -243,10 +268,12 @@ export async function executeSsoCallbackFlow(
           appError: AuthErrors.noAccess(),
           audit: {
             ctx: toFailureAuditContext({ tenantId: tenant.id, userId: user.id }),
-            payload: { provider: 'google', reason: 'no_membership', emailKey },
+            payload: { provider: params.provider, reason: 'no_membership', emailKey },
           },
         });
       }
+
+      failureAuditCtx.membershipId = membership.id;
 
       if (membership.status === 'SUSPENDED') {
         throw new SsoDeniedError({
@@ -257,7 +284,7 @@ export async function executeSsoCallbackFlow(
               userId: user.id,
               membershipId: membership.id,
             }),
-            payload: { provider: 'google', reason: 'suspended', emailKey },
+            payload: { provider: params.provider, reason: 'suspended', emailKey },
           },
         });
       }
@@ -272,7 +299,7 @@ export async function executeSsoCallbackFlow(
       // I) Identity upsert + subject drift protection
       const existing = await findSsoIdentityByUserAndProvider(trx, {
         userId: user.id,
-        provider: 'google',
+        provider: params.provider,
       });
 
       if (existing && existing.providerSubject !== identity.sub) {
@@ -284,7 +311,7 @@ export async function executeSsoCallbackFlow(
               userId: user.id,
               membershipId: membership.id,
             }),
-            payload: { provider: 'google', reason: 'subject_drift', emailKey },
+            payload: { provider: params.provider, reason: 'subject_drift', emailKey },
           },
         });
       }
@@ -292,7 +319,7 @@ export async function executeSsoCallbackFlow(
       if (!existing) {
         await deps.authRepo.withDb(trx).insertSsoIdentity({
           userId: user.id,
-          provider: 'google',
+          provider: params.provider,
           providerSubject: identity.sub,
         });
       }
@@ -306,7 +333,7 @@ export async function executeSsoCallbackFlow(
         userId: user.id,
         membershipId: membership.id,
         role: membership.role,
-        provider: 'google',
+        provider: params.provider,
       });
 
       return {
@@ -316,7 +343,6 @@ export async function executeSsoCallbackFlow(
       };
     });
   } catch (err) {
-    // Failure audit OUTSIDE tx (survive rollback)
     if (err instanceof SsoDeniedError) {
       const writer = new AuditWriter(deps.auditRepo, {
         requestId: params.requestId,
@@ -328,10 +354,29 @@ export async function executeSsoCallbackFlow(
       throw err.appError;
     }
 
+    // Token/state validation failures (and other AppErrors) must also be audited.
+    // These errors can occur before membership/user is known, so we audit with best-effort context.
+    if (err instanceof AppError) {
+      const writer = new AuditWriter(deps.auditRepo, {
+        requestId: params.requestId,
+        ip: params.ip,
+        userAgent: params.userAgent,
+      }).withContext(failureAuditCtx);
+
+      const reasonFromMeta = typeof err.meta?.reason === 'string' ? err.meta.reason : undefined;
+
+      await auditSsoLoginFailed(writer, {
+        provider: params.provider,
+        reason: reasonFromMeta ?? `app_error:${err.code}`,
+      });
+
+      throw err;
+    }
+
     throw err;
   }
 
-  // J) MFA rule enforcement (outside tx)
+  // J) MFA enforcement (outside tx) — unchanged
   const mfaIsRequired = isMfaRequiredForLogin({
     role: txResult.membership.role,
     tenantMemberMfaRequired: txResult.tenant.memberMfaRequired,
@@ -347,7 +392,7 @@ export async function executeSsoCallbackFlow(
     hasVerifiedMfaSecret: hasVerifiedMfaSecretValue,
   });
 
-  // K) Session creation (outside tx)
+  // K) Session creation (outside tx) — unchanged
   const { sessionId } = await createAuthSession({
     sessionStore: deps.sessionStore,
     userId: txResult.user.id,
@@ -360,10 +405,8 @@ export async function executeSsoCallbackFlow(
     now: new Date(),
   });
 
-  // L) Success redirect
-  const redirectTo = `${deps.sso.redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/done?nextAction=${encodeURIComponent(
-    nextAction,
-  )}`;
+  // L) Success redirect — unchanged
+  const redirectTo = `${deps.sso.redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/done?nextAction=${encodeURIComponent(nextAction)}`;
 
   deps.logger.info({
     msg: 'auth.sso.login.success',
