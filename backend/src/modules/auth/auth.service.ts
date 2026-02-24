@@ -29,6 +29,7 @@ import type { AuthResult } from './auth.types';
 
 import type { AuthRepo } from './dal/auth.repo';
 import type { MfaRepo } from './dal/mfa.repo';
+import type { EmailVerificationRepo } from './dal/email-verification.repo';
 
 import type { RegisterParams } from './flows/register/execute-register-flow';
 import { executeRegisterFlow } from './flows/register/execute-register-flow';
@@ -54,6 +55,15 @@ import { AUTH_RATE_LIMITS } from './auth.constants';
 import { executeSsoCallbackFlow } from './flows/sso/execute-sso-callback-flow';
 import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
+import type { SignupParams } from './flows/signup/execute-signup-flow';
+import { executeSignupFlow } from './flows/signup/execute-signup-flow';
+
+import type { VerifyEmailParams } from './flows/signup/execute-verify-email-flow';
+import { executeVerifyEmailFlow } from './flows/signup/execute-verify-email-flow';
+
+import type { ResendVerificationParams } from './flows/signup/execute-resend-verification-flow';
+import { executeResendVerificationFlow } from './flows/signup/execute-resend-verification-flow';
+
 export class AuthService {
   constructor(
     private readonly deps: {
@@ -69,11 +79,12 @@ export class AuthService {
       membershipRepo: MembershipRepo;
       authRepo: AuthRepo;
       mfaRepo: MfaRepo;
+      emailVerificationRepo: EmailVerificationRepo;
       totpService: TotpService;
       encryptionService: EncryptionService;
       mfaKeyedHasher: KeyedHasher;
 
-      // Brick 10 (SSO)
+      // SSO
       sso: {
         stateEncryptionService: EncryptionService;
         redirectBaseUrl: string;
@@ -83,7 +94,7 @@ export class AuthService {
   ) {}
 
   /**
-   * Brick 10: Build provider authorization redirect URL.
+   * SSO: Build provider authorization redirect URL.
    * Rate limited early (per IP).
    */
   async startSso(input: {
@@ -304,5 +315,56 @@ export class AuthService {
       },
       input: params,
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Public Signup + Email Verification
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  async signup(params: SignupParams): Promise<{ result: AuthResult; sessionId: string }> {
+    return executeSignupFlow(
+      {
+        db: this.deps.db,
+        tokenHasher: this.deps.tokenHasher,
+        passwordHasher: this.deps.passwordHasher,
+        logger: this.deps.logger,
+        rateLimiter: this.deps.rateLimiter,
+        auditRepo: this.deps.auditRepo,
+        sessionStore: this.deps.sessionStore,
+        queue: this.deps.queue,
+        userRepo: this.deps.userRepo,
+        membershipRepo: this.deps.membershipRepo,
+        authRepo: this.deps.authRepo,
+        emailVerificationRepo: this.deps.emailVerificationRepo,
+      },
+      params,
+    );
+  }
+
+  async verifyEmail(params: VerifyEmailParams): Promise<{ status: 'VERIFIED' }> {
+    return executeVerifyEmailFlow(
+      {
+        db: this.deps.db,
+        tokenHasher: this.deps.tokenHasher,
+        logger: this.deps.logger,
+        auditRepo: this.deps.auditRepo,
+        emailVerificationRepo: this.deps.emailVerificationRepo,
+      },
+      params,
+    );
+  }
+
+  async resendVerification(params: ResendVerificationParams): Promise<void> {
+    return executeResendVerificationFlow(
+      {
+        db: this.deps.db,
+        tokenHasher: this.deps.tokenHasher,
+        logger: this.deps.logger,
+        rateLimiter: this.deps.rateLimiter,
+        queue: this.deps.queue,
+        emailVerificationRepo: this.deps.emailVerificationRepo,
+      },
+      params,
+    );
   }
 }

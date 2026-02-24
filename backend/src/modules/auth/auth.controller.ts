@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Maps HTTP → service call for all auth endpoints.
- * - Sets session cookie on success (register, login).
+ * - Sets session cookie on success (register, login, signup).
  * - Returns structured response.
  *
  * RULES:
@@ -11,11 +11,16 @@
  * - No business rules here.
  * - Cookie logic lives in shared/session/set-session-cookie (DRY).
  *
- * MFA (Brick 9):
+ * MFA:
  * - /auth/mfa/setup: requires an authenticated session (from login/register)
  * - /auth/mfa/verify-setup: verifies the provisional secret and flips session.mfaVerified
  * - /auth/mfa/verify: verifies MFA for a partially authenticated session (mfaVerified=false)
  * - /auth/mfa/recover: uses a recovery code, flips session.mfaVerified
+ *
+ * Public Signup + Email Verification:
+ * - /auth/signup: session required = false (unauthenticated endpoint)
+ * - /auth/verify-email: session required (user authenticated after signup)
+ * - /auth/resend-verification: session required (user authenticated after signup)
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -27,6 +32,8 @@ import {
   mfaCodeSchema,
   mfaRecoverSchema,
   ssoProviderSchema,
+  signupSchema,
+  verifyEmailSchema,
 } from './auth.schemas';
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
@@ -39,6 +46,10 @@ const FORGOT_PASSWORD_RESPONSE = {
 
 const RESET_PASSWORD_RESPONSE = {
   message: 'Password updated successfully. Please sign in with your new password.',
+} as const;
+
+const RESEND_VERIFICATION_RESPONSE = {
+  message: 'If your email is unverified, a new verification link has been sent.',
 } as const;
 
 function requireTenantKey(tenantKey: string | null | undefined): string {
@@ -246,7 +257,7 @@ export class AuthController {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // SSO (Brick 10)
+  // SSO
   // ─────────────────────────────────────────────────────────────────────────────
 
   async ssoStart(req: FastifyRequest, reply: FastifyReply) {
@@ -304,5 +315,89 @@ export class AuthController {
 
     setSessionCookie(reply, sessionId, this.isProduction);
     return reply.status(302).redirect(redirectTo);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Public Signup + Email Verification
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /auth/signup
+   *
+   * Unauthenticated — no requireSession call.
+   * Creates a session on success (same as register/login).
+   * Returns 201 with AuthResult + sets session cookie.
+   */
+  async signup(req: FastifyRequest, reply: FastifyReply) {
+    const parsed = signupSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const { result, sessionId } = await this.authService.signup({
+      tenantKey: req.requestContext.tenantKey,
+      email: parsed.data.email,
+      password: parsed.data.password,
+      name: parsed.data.name,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+      requestId: req.requestContext.requestId,
+    });
+
+    setSessionCookie(reply, sessionId, this.isProduction);
+    return reply.status(201).send(result);
+  }
+
+  /**
+   * POST /auth/verify-email
+   *
+   * Requires an authenticated session (user signed up and has a session cookie).
+   * Does NOT modify the session — only flips email_verified in DB.
+   * Returns 200 { status: 'VERIFIED' } on success.
+   */
+  async verifyEmail(req: FastifyRequest, reply: FastifyReply) {
+    const session = requireSession(req);
+
+    const parsed = verifyEmailSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const result = await this.authService.verifyEmail({
+      sessionUserId: session.userId,
+      tenantId: session.tenantId,
+      membershipId: session.membershipId,
+      token: parsed.data.token,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+      requestId: req.requestContext.requestId,
+    });
+
+    return reply.status(200).send(result);
+  }
+
+  /**
+   * POST /auth/resend-verification
+   *
+   * Requires an authenticated session.
+   * Always returns 200 — never reveals rate-limit status or email_verified state.
+   * No request body required.
+   */
+  async resendVerification(req: FastifyRequest, reply: FastifyReply) {
+    const session = requireSession(req);
+
+    await this.authService.resendVerification({
+      sessionUserId: session.userId,
+      tenantKey: requireTenantKey(req.requestContext.tenantKey),
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+      requestId: req.requestContext.requestId,
+    });
+
+    return reply.status(200).send(RESEND_VERIFICATION_RESPONSE);
   }
 }

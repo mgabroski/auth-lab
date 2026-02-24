@@ -54,7 +54,7 @@ export const resetPasswordSchema = z.object({
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MFA (Brick 9)
+// MFA
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const mfaCodeSchema = z.object({
@@ -70,3 +70,38 @@ export const mfaRecoverSchema = z.object({
 });
 
 export type MfaRecoverInput = z.infer<typeof mfaRecoverSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Public Signup + Email Verification
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /auth/signup — self-service registration.
+ * No inviteToken — the tenant's public_signup_enabled flag controls access.
+ */
+export const signupSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  name: z.string().min(1, 'Name is required').max(200),
+});
+
+export type SignupInput = z.infer<typeof signupSchema>;
+
+/**
+ * POST /auth/verify-email — consume a verification token.
+ * min(20) mirrors the invite/reset token guard — not cryptographic validation.
+ */
+export const verifyEmailSchema = z.object({
+  token: z.string().min(20, 'Invalid verification token'),
+});
+
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+
+/**
+ * POST /auth/resend-verification — request a new verification email.
+ * No body required — userId comes from the authenticated session.
+ * Empty object schema keeps the Zod parse pattern consistent.
+ */
+export const resendVerificationSchema = z.object({}).strict();
+
+export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;

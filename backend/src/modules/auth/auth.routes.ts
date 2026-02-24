@@ -18,13 +18,18 @@ export function registerAuthRoutes(app: FastifyInstance, controller: AuthControl
   app.post('/auth/forgot-password', controller.forgotPassword.bind(controller));
   app.post('/auth/reset-password', controller.resetPassword.bind(controller));
 
-  // MFA (Brick 9)
+  // MFA
   app.post('/auth/mfa/setup', controller.mfaSetup.bind(controller));
   app.post('/auth/mfa/verify-setup', controller.mfaVerifySetup.bind(controller));
   app.post('/auth/mfa/verify', controller.mfaVerify.bind(controller));
   app.post('/auth/mfa/recover', controller.mfaRecover.bind(controller));
 
-  // SSO (Brick 10)
+  // SSO
   app.get('/auth/sso/:provider', controller.ssoStart.bind(controller));
   app.get('/auth/sso/:provider/callback', controller.ssoCallback.bind(controller));
+
+  // Public Signup + Email Verification
+  app.post('/auth/signup', controller.signup.bind(controller));
+  app.post('/auth/verify-email', controller.verifyEmail.bind(controller));
+  app.post('/auth/resend-verification', controller.resendVerification.bind(controller));
 }

@@ -22,7 +22,7 @@ import type { Queue } from '../../shared/messaging/queue';
 import type { UserRepo } from '../users/dal/user.repo';
 import type { MembershipRepo } from '../memberships/dal/membership.repo';
 
-// Brick 9 (MFA)
+// MFA
 import type { TotpService } from '../../shared/security/totp';
 import type { EncryptionService } from '../../shared/security/encryption';
 import type { KeyedHasher } from '../../shared/security/keyed-hasher';
@@ -30,6 +30,7 @@ import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
 import { AuthRepo } from './dal/auth.repo';
 import { MfaRepo } from './dal/mfa.repo';
+import { EmailVerificationRepo } from './dal/email-verification.repo';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { registerAuthRoutes } from './auth.routes';
@@ -49,12 +50,12 @@ export function createAuthModule(deps: {
   membershipRepo: MembershipRepo;
   isProduction: boolean;
 
-  // Brick 9 (MFA)
+  // MFA
   totpService: TotpService;
   encryptionService: EncryptionService;
   mfaKeyedHasher: KeyedHasher;
 
-  // Brick 10 (SSO)
+  // SSO
   sso: {
     stateEncryptionService: EncryptionService;
     redirectBaseUrl: string;
@@ -63,6 +64,7 @@ export function createAuthModule(deps: {
 }) {
   const authRepo = new AuthRepo(deps.db);
   const mfaRepo = new MfaRepo(deps.db);
+  const emailVerificationRepo = new EmailVerificationRepo(deps.db);
 
   const authService = new AuthService({
     db: deps.db,
@@ -76,14 +78,11 @@ export function createAuthModule(deps: {
     userRepo: deps.userRepo,
     membershipRepo: deps.membershipRepo,
     authRepo,
-
-    // Brick 9 (MFA)
     mfaRepo,
+    emailVerificationRepo,
     totpService: deps.totpService,
     encryptionService: deps.encryptionService,
     mfaKeyedHasher: deps.mfaKeyedHasher,
-
-    // Brick 10 (SSO)
     sso: deps.sso,
   });
 
