@@ -90,11 +90,9 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     new MicrosoftSsoAdapter(config.sso.microsoftClientId, config.sso.microsoftClientSecret),
   );
 
-  config.sso.providerRegistryOverride = new SsoProviderRegistry()
-    .register(googleAdapter)
-    .register(microsoftAdapter);
+  const testRegistry = new SsoProviderRegistry().register(googleAdapter).register(microsoftAdapter);
 
-  const built = await buildApp(config);
+  const built = await buildApp(config, { ssoProviderRegistry: testRegistry });
   const cryptoHelpers = createAuthCryptoHelpers(built.deps);
 
   return {

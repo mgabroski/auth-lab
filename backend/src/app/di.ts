@@ -93,7 +93,18 @@ export type AppDeps = {
   close: () => Promise<void>;
 };
 
-export async function buildDeps(config: AppConfig): Promise<AppDeps> {
+export type BuildDepsOverrides = {
+  /**
+   * Test-only DI override: allows E2E tests to inject provider doubles without vi.mock().
+   * Not part of AppConfig because config must remain pure env/data.
+   */
+  ssoProviderRegistry?: SsoProviderRegistry;
+};
+
+export async function buildDeps(
+  config: AppConfig,
+  overrides: BuildDepsOverrides = {},
+): Promise<AppDeps> {
   const db = createDb(config.databaseUrl);
 
   // Redis is mandatory (dev + prod)
@@ -123,8 +134,8 @@ export async function buildDeps(config: AppConfig): Promise<AppDeps> {
   // Brick 10 (SSO)
   const ssoStateEncryptionService = new EncryptionService(config.sso.stateEncryptionKeyBase64);
 
-  const ssoProviderRegistry: SsoProviderRegistry =
-    config.sso.providerRegistryOverride ??
+  const ssoProviderRegistry =
+    overrides.ssoProviderRegistry ??
     new SsoProviderRegistry()
       .register(new GoogleSsoAdapter(config.sso.googleClientId, config.sso.googleClientSecret))
       .register(

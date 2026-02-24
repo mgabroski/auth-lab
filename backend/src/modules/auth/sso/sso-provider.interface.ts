@@ -2,8 +2,8 @@
  * backend/src/modules/auth/sso/sso-provider.interface.ts
  *
  * WHY:
- * - OCP: adding a new provider must not require editing flow or URL builder.
- * - DIP: flows depend on this abstraction, not on provider-specific functions.
+ * - OCP: adding a new provider (LinkedIn, Apple) must not touch existing code.
+ * - DIP: flows depend on this abstraction, not on concrete provider functions.
  *
  * RULES:
  * - No HTTP framework imports here.
@@ -24,7 +24,11 @@ export type SsoTokenExchangeResult = {
 };
 
 export interface SsoProviderAdapter {
-  readonly providerKey: 'google' | 'microsoft';
+  /**
+   * String key used in routes and registry lookup.
+   * Keep as string for true OCP (no interface edits when adding providers).
+   */
+  readonly providerKey: string;
 
   buildAuthorizationUrl(input: { redirectUri: string; state: string; nonce: string }): string;
 

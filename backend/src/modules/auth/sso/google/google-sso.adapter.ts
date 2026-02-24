@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Implements SsoProviderAdapter for Google OAuth/OIDC.
- * - Keeps Google-specific constants out of shared flow code.
+ * - Keeps Google-specific constants (issuer, endpoints) out of shared flow code.
  *
  * RULES:
  * - Never log raw tokens.
@@ -17,13 +17,14 @@ import type {
 } from '../sso-provider.interface';
 import { parseJwt } from '../jwt';
 import { AuthErrors } from '../../auth.errors';
+import { getString, isRecord } from '../sso-adapter-utils';
 
 const GOOGLE_ISSUER = 'https://accounts.google.com';
 const GOOGLE_AUTH_BASE = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
 export class GoogleSsoAdapter implements SsoProviderAdapter {
-  readonly providerKey = 'google' as const;
+  readonly providerKey = 'google';
 
   constructor(
     private readonly clientId: string,
@@ -54,7 +55,6 @@ export class GoogleSsoAdapter implements SsoProviderAdapter {
       grant_type: 'authorization_code',
     });
 
-    // NOTE: In E2E tests we inject a test adapter that overrides this method.
     const res = await fetch(GOOGLE_TOKEN_ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -126,15 +126,4 @@ export class GoogleSsoAdapter implements SsoProviderAdapter {
       ...(name ? { name } : {}),
     };
   }
-}
-
-// ── internal helpers ────────────────────────────────────────────────────────
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object';
-}
-
-function getString(obj: Record<string, unknown>, key: string): string | undefined {
-  const v = obj[key];
-  return typeof v === 'string' && v.length ? v : undefined;
 }

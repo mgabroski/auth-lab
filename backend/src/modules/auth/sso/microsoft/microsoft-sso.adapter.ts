@@ -17,6 +17,7 @@ import type {
 } from '../sso-provider.interface';
 import { parseJwt } from '../jwt';
 import { AuthErrors } from '../../auth.errors';
+import { getString, isRecord } from '../sso-adapter-utils';
 
 const MICROSOFT_AUTH_BASE = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
 const MICROSOFT_TOKEN_ENDPOINT = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
@@ -26,7 +27,7 @@ function microsoftIssuer(tid: string): string {
 }
 
 export class MicrosoftSsoAdapter implements SsoProviderAdapter {
-  readonly providerKey = 'microsoft' as const;
+  readonly providerKey = 'microsoft';
 
   constructor(
     private readonly clientId: string,
@@ -57,7 +58,6 @@ export class MicrosoftSsoAdapter implements SsoProviderAdapter {
       grant_type: 'authorization_code',
     });
 
-    // NOTE: In E2E tests we inject a test adapter that overrides this method.
     const res = await fetch(MICROSOFT_TOKEN_ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -97,7 +97,6 @@ export class MicrosoftSsoAdapter implements SsoProviderAdapter {
     if (!tid) {
       throw AuthErrors.ssoTokenValidationFailed({ reason: 'tid_missing' });
     }
-
     if (payload.iss !== microsoftIssuer(tid)) {
       throw AuthErrors.ssoTokenValidationFailed({ reason: 'issuer_mismatch' });
     }
@@ -133,15 +132,4 @@ export class MicrosoftSsoAdapter implements SsoProviderAdapter {
       ...(name ? { name } : {}),
     };
   }
-}
-
-// ── internal helpers ────────────────────────────────────────────────────────
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object';
-}
-
-function getString(obj: Record<string, unknown>, key: string): string | undefined {
-  const v = obj[key];
-  return typeof v === 'string' && v.length ? v : undefined;
 }

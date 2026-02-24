@@ -13,14 +13,14 @@
  */
 
 import type { AppConfig } from './config';
-import { buildDeps } from './di';
+import { buildDeps, type BuildDepsOverrides } from './di';
 import { buildServer } from './server';
 import { registerRoutes } from './routes';
 import { runDevSeed } from '../shared/db/seed/dev-seed';
 import { logger } from '../shared/logger/logger';
 
-export async function buildApp(config: AppConfig) {
-  const deps = await buildDeps(config);
+export async function buildApp(config: AppConfig, overrides: BuildDepsOverrides = {}) {
+  const deps = await buildDeps(config, overrides);
   const app = await buildServer({ config, deps });
 
   registerRoutes(app, { config, deps });
