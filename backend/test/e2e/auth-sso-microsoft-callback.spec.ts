@@ -15,7 +15,7 @@ function msIssuer(tid: string): string {
 }
 
 describe('GET /auth/sso/microsoft/callback', () => {
-  it('success: ACTIVE member → 302 done?nextAction=NONE + sets session cookie', async () => {
+  it('success: ACTIVE member → 302 done?nextAction=NONE + sets session cookie + audit written', async () => {
     const { app, deps, sso, close } = await buildTestApp();
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
     const host = `${tenantKey}.localhost:3000`;
@@ -57,6 +57,20 @@ describe('GET /auth/sso/microsoft/callback', () => {
       expect(res.statusCode).toBe(302);
       expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
       expect(res.headers['set-cookie']).toBeTruthy();
+
+      // Audit: success event written, scoped to tenant
+      const audits = await deps.db
+        .selectFrom('audit_events')
+        .selectAll()
+        .where('tenant_id', '=', tenant.id)
+        .where('action', '=', 'auth.sso.login.success')
+        .execute();
+      expect(audits).toHaveLength(1);
+
+      // PII hardening: success audit must not include raw email
+      const meta = audits[0].metadata as Record<string, unknown>;
+      expect(meta.email).toBeUndefined();
+      expect(meta.provider).toBe('microsoft');
     } finally {
       await close();
     }
@@ -163,13 +177,13 @@ describe('GET /auth/sso/microsoft/callback', () => {
     }
   });
 
-  it('403 when provider not in tenant.allowedSso', async () => {
+  it('403 when provider not in tenant.allowedSso + failure audit written', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
     const host = `${tenantKey}.localhost:3000`;
 
     try {
-      await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
       const { state } = await getSsoStateFromStart({ app, host, provider: 'microsoft' });
 
       const res = await app.inject({
@@ -179,6 +193,19 @@ describe('GET /auth/sso/microsoft/callback', () => {
       });
 
       expect(res.statusCode).toBe(403);
+
+      // Audit: failure event written even when denied before user resolution
+      const audits = await deps.db
+        .selectFrom('audit_events')
+        .selectAll()
+        .where('tenant_id', '=', tenant.id)
+        .where('action', '=', 'auth.sso.login.failed')
+        .execute();
+      expect(audits).toHaveLength(1);
+
+      const meta = audits[0].metadata as Record<string, unknown>;
+      expect(meta.provider).toBe('microsoft');
+      expect(meta.reason).toBe('provider_not_allowed');
     } finally {
       await close();
     }
