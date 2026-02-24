@@ -16,6 +16,9 @@ import type { SignupVerificationEmailMessage } from '../../src/shared/messaging/
  * - Idempotent: a valid token for an already-verified user is consumed without error.
  * - Single error message for all invalid token states (expired / used / wrong) — no oracle.
  * - Does NOT modify the session — caller keeps their existing cookie.
+ * - Rate limited: 10/IP/15min — prevents brute-forcing verification tokens.
+ * - Decision 3 regression: login for an unverified user returns
+ *   EMAIL_VERIFICATION_REQUIRED, never MFA_SETUP_REQUIRED first.
  *
  * SETUP PATTERN:
  * - Most tests sign up first to get a real session cookie + raw token from the queue.
@@ -428,6 +431,135 @@ describe('POST /auth/verify-email', () => {
       });
 
       expect(res.statusCode).toBe(400);
+    } finally {
+      await close();
+    }
+  });
+
+  it('rate limit: 11th verify attempt from same IP → 429', async () => {
+    // Rate limiter is disabled in nodeEnv:'test'. Override to 'development'.
+    // A single user signs up once; all 11 verify attempts reuse the same session
+    // and submit a fresh fake token each time (intentional 400s — we only care
+    // that the IP counter reaches the limit and the 11th returns 429).
+    const { app, deps, close } = await buildTestApp({ nodeEnv: 'development' });
+    const { db, queue } = deps;
+    const tenantKey = `t-${randomUUID().slice(0, 8)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `rl-verify-${randomUUID()}@example.com`; // full UUID
+
+    try {
+      await createSignupTenant({ db, tenantKey });
+
+      const { cookie } = await signupAndGetToken({
+        app,
+        queue: queue as InMemQueue,
+        tenantKey,
+        email,
+      });
+
+      // Attempts 1–10: each returns 400 (fake token) but increments the IP counter
+      for (let i = 0; i < 10; i++) {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/auth/verify-email',
+          headers: { host, cookie },
+          payload: { token: `fake_${randomUUID()}_${randomUUID()}` },
+        });
+        // Each attempt is rejected as invalid token (400), not rate-limited yet
+        expect(res.statusCode).toBe(400);
+      }
+
+      // 11th attempt: IP counter exceeded → 429
+      const res11 = await app.inject({
+        method: 'POST',
+        url: '/auth/verify-email',
+        headers: { host, cookie },
+        payload: { token: `fake_${randomUUID()}_${randomUUID()}` },
+      });
+
+      expect(res11.statusCode).toBe(429);
+    } finally {
+      await close();
+    }
+  });
+
+  it('Decision 3 regression: login for unverified user returns EMAIL_VERIFICATION_REQUIRED (not MFA_SETUP_REQUIRED)', async () => {
+    // This is a regression guard for the patch applied to execute-login-flow.ts.
+    // Without the Decision 3 patch, an unverified admin would see MFA_SETUP_REQUIRED.
+    // With the patch, EMAIL_VERIFICATION_REQUIRED must always win.
+    //
+    // Setup: seed an unverified ADMIN user with password identity + ACTIVE membership.
+    // Then call POST /auth/login and assert the nextAction is EMAIL_VERIFICATION_REQUIRED.
+    const { app, deps, close } = await buildTestApp();
+    const { db } = deps;
+    const tenantKey = `t-${randomUUID().slice(0, 8)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `d3-regression-${randomUUID().slice(0, 8)}@example.com`;
+    const password = 'SecurePass123!';
+
+    try {
+      const tenant = await db
+        .insertInto('tenants')
+        .values({
+          key: tenantKey,
+          name: `Tenant ${tenantKey}`,
+          is_active: true,
+          public_signup_enabled: false,
+          member_mfa_required: false,
+          allowed_email_domains: sql`'[]'::jsonb`,
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
+
+      // Unverified ADMIN user
+      const user = await db
+        .insertInto('users')
+        .values({
+          email: email.toLowerCase(),
+          name: 'Unverified Admin',
+          email_verified: false,
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
+
+      const hash = await deps.passwordHasher.hash(password);
+      await db
+        .insertInto('auth_identities')
+        .values({
+          user_id: user.id,
+          provider: 'password',
+          password_hash: hash,
+          provider_subject: null,
+        })
+        .execute();
+
+      await db
+        .insertInto('memberships')
+        .values({
+          tenant_id: tenant.id,
+          user_id: user.id,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        })
+        .execute();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { host },
+        payload: { email, password },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = readJson<{ nextAction: string }>(res);
+
+      // Decision 3 must win: email check before MFA check
+      expect(body.nextAction).toBe('EMAIL_VERIFICATION_REQUIRED');
+
+      // Explicitly guard against the pre-patch behavior
+      expect(body.nextAction).not.toBe('MFA_SETUP_REQUIRED');
+      expect(body.nextAction).not.toBe('MFA_REQUIRED');
+      expect(body.nextAction).not.toBe('NONE');
     } finally {
       await close();
     }

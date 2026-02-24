@@ -14,7 +14,9 @@
  * - Uses provisionUserToTenant with emailVerifiedForNewUser=false for new users.
  * - For existing users joining a new tenant: user.emailVerified is already true
  *   (they registered elsewhere), no verification needed.
- * - Creates password identity (ensurePasswordIdentity replay-guards this).
+ * - Creates password identity ONLY when the user does not already have one.
+ *   An existing user joining a new tenant already has a password identity from
+ *   their original registration — ensurePasswordIdentity is skipped for them.
  * - Enqueues verification email only for newly created, unverified users.
  * - Writes audit inside tx, creates session outside tx.
  *
@@ -22,11 +24,20 @@
  * - Opens its own transaction (flow layer).
  * - No HTTP concerns.
  * - No raw SQL.
- * - Failure audits outside tx (survive rollback) — but signup has no dedicated
- *   failure audit (the membership conflict / domain check errors are enough);
- *   this may be added in Brick 13 Audit Hardening.
+ * - Failure audits outside tx (survive rollback) — signup has no dedicated
+ *   failure audit; this may be added in Brick 13 Audit Hardening.
  *
- * MEMBERSHIP CHECK APPROACH (Decision 5):
+ * EXISTING-USER PATH (Decision 4):
+ * - A user who already registered on another tenant has email_verified=true and
+ *   a password identity. When they sign up for a new tenant:
+ *   1. We find their existing user row (email lookup).
+ *   2. We confirm they have no membership here (check by user_id join).
+ *   3. provisionUserToTenant creates the new membership only (userCreated=false).
+ *   4. ensurePasswordIdentity is SKIPPED because hasAuthIdentity returns true.
+ *   5. No verification token is issued because user.emailVerified is already true.
+ *   6. nextAction resolves via MFA rules (NONE for a member with no MFA).
+ *
+ * MEMBERSHIP CHECK APPROACH (Decision 5 / Decision 4):
  * - Membership is queried by user_id join after user lookup, never by email.
  * - This matches the locked arch rule from the brief.
  */
@@ -55,6 +66,7 @@ import { provisionUserToTenant } from '../../../_shared/use-cases/provision-user
 import { ensurePasswordIdentity } from '../../helpers/ensure-password-identity';
 import { createAuthSession } from '../../helpers/create-auth-session';
 import { buildAuthResult } from '../../helpers/build-auth-result';
+import { hasAuthIdentity } from '../../queries/auth.queries';
 
 import { AuthErrors } from '../../auth.errors';
 
@@ -152,7 +164,7 @@ export async function executeSignupFlow(
     assertEmailDomainAllowed(tenant, email);
 
     // ── C. Check existing user + membership state ────────────────────────────
-    // Per Decision 5: check by user_id join, never by email alone.
+    // Per Decision 4: check by user_id join, never by email alone.
     const existingUser = await getUserByEmail(trx, email);
 
     if (existingUser) {
@@ -194,15 +206,26 @@ export async function executeSignupFlow(
 
     const { user, membership } = provisionResult;
 
-    // ── E. Create password identity ───────────────────────────────────────────
-    // ensurePasswordIdentity guards against replay (throws if identity exists).
-    await ensurePasswordIdentity({
-      trx,
-      authRepo,
-      passwordHasher: deps.passwordHasher,
+    // ── E. Create password identity (only when needed) ────────────────────────
+    // An existing user joining a new tenant already has a password identity from
+    // their original registration. We check first to avoid the alreadyRegistered
+    // replay-guard throwing — skipping is correct and intentional here.
+    const alreadyHasPasswordIdentity = await hasAuthIdentity(trx, {
       userId: user.id,
-      rawPassword: params.password,
+      provider: 'password',
     });
+
+    if (!alreadyHasPasswordIdentity) {
+      await ensurePasswordIdentity({
+        trx,
+        authRepo,
+        passwordHasher: deps.passwordHasher,
+        userId: user.id,
+        rawPassword: params.password,
+      });
+    }
+    // When the user already has a password identity (existing user, new tenant),
+    // their stored password is unchanged. They continue using it to log in.
 
     // ── F. Email verification token (only for new unverified users) ───────────
     let verificationToken: string | null = null;
@@ -309,9 +332,6 @@ export async function executeSignupFlow(
   return {
     sessionId,
     result: buildAuthResult({
-      // buildAuthResult uses decideRegisterNextAction-compatible nextAction;
-      // here we compute it via createAuthSession's policy call internally.
-      // We need the nextAction to match what createAuthSession computed.
       nextAction: txResult.user.emailVerified ? 'NONE' : 'EMAIL_VERIFICATION_REQUIRED',
       user: txResult.user,
       membership: txResult.membership,

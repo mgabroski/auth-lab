@@ -347,6 +347,7 @@ export class AuthService {
         db: this.deps.db,
         tokenHasher: this.deps.tokenHasher,
         logger: this.deps.logger,
+        rateLimiter: this.deps.rateLimiter,
         auditRepo: this.deps.auditRepo,
         emailVerificationRepo: this.deps.emailVerificationRepo,
       },

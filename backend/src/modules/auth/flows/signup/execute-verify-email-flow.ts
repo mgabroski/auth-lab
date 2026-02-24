@@ -8,23 +8,26 @@
  * RULES (from locked decisions):
  * - POST /auth/verify-email does NOT create a new session and does NOT modify
  *   the existing session. It only flips email_verified and consumes the token.
- *   The user continues with their current session. (Correction #1)
+ *   The user continues with their current session.
  * - Idempotency: if the token is valid AND belongs to the session user AND the
  *   user is already verified, return success without error. This prevents a
- *   token oracle (Correction #2).
+ *   token oracle.
  * - Token and email_verified update are committed in a single transaction
  *   (locked Decision: atomic consumption).
  * - Audit inside tx.
+ * - Rate limit: 10/IP/15min (Decision 5) — prevents brute-forcing tokens.
  *
  * SECURITY:
  * - We verify the token belongs to the session's userId BEFORE checking
  *   email_verified. This prevents the token from being used as an oracle to
  *   determine whether ANY email exists in the system.
+ * - Rate limit fires BEFORE any DB work (same rule as every other flow).
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';
 import type { TokenHasher } from '../../../../shared/security/token-hasher';
 import type { Logger } from '../../../../shared/logger/logger';
+import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 
@@ -34,6 +37,7 @@ import { getUserById } from '../../../users';
 
 import { AuthErrors } from '../../auth.errors';
 import { auditEmailVerified } from '../../auth.audit';
+import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 export type VerifyEmailParams = {
   /** From session (controller calls requireSession first). */
@@ -52,11 +56,18 @@ export async function executeVerifyEmailFlow(
     db: DbExecutor;
     tokenHasher: TokenHasher;
     logger: Logger;
+    rateLimiter: RateLimiter;
     auditRepo: AuditRepo;
     emailVerificationRepo: EmailVerificationRepo;
   },
   params: VerifyEmailParams,
 ): Promise<{ status: 'VERIFIED' }> {
+  // ── Rate limit (before any DB work — Decision 5) ────────────────────────
+  await deps.rateLimiter.hitOrThrow({
+    key: `verify-email:ip:${params.ip}`,
+    ...AUTH_RATE_LIMITS.verifyEmail.perIp,
+  });
+
   const tokenHash = deps.tokenHasher.hash(params.token);
 
   deps.logger.info({
@@ -97,7 +108,7 @@ export async function executeVerifyEmailFlow(
       throw AuthErrors.verificationTokenInvalid();
     }
 
-    // ── 4. Idempotency guard (Correction #2) ──────────────────────────────
+    // ── 4. Idempotency guard ───────────────────────────────────────────────
     // If user is already verified and the token is valid + belongs to them,
     // treat it as success — consume the token to prevent re-use but don't error.
     if (user.emailVerified) {

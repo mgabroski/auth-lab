@@ -11,6 +11,7 @@
  * BRICK 11 UPDATE:
  * - Added signup rate limits (perEmail hard, perIp hard).
  * - Added resendVerification rate limit (perEmail silent — same pattern as forgotPassword).
+ * - Added verifyEmail rate limit (perIp hard — Decision 5: 10/IP/15min).
  */
 
 export const AUTH_RATE_LIMITS = {
@@ -47,6 +48,9 @@ export const AUTH_RATE_LIMITS = {
   signup: {
     perEmail: { limit: 5, windowSeconds: 900 }, // hard 429
     perIp: { limit: 20, windowSeconds: 900 }, // hard 429
+  },
+  verifyEmail: {
+    perIp: { limit: 10, windowSeconds: 900 }, // hard 429 — Decision 5
   },
   resendVerification: {
     perEmail: { limit: 3, windowSeconds: 3600 }, // silent — same pattern as forgotPassword

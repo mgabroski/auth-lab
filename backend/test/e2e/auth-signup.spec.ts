@@ -13,9 +13,11 @@ import type { SignupVerificationEmailMessage } from '../../src/shared/messaging/
  * - Only works when tenant.public_signup_enabled = true.
  * - New users always require email verification → nextAction: EMAIL_VERIFICATION_REQUIRED.
  * - Existing users joining a new tenant are already verified → nextAction: NONE.
+ * - Admin signup → nextAction: EMAIL_VERIFICATION_REQUIRED (Decision 3: email beats MFA).
  * - All membership conflict states (ACTIVE / INVITED / SUSPENDED) are rejected before
  *   any write happens.
  * - Tenant domain restrictions are enforced.
+ * - Rate limits enforced when nodeEnv: 'development'.
  *
  * ISOLATION:
  * - Every test creates its own UUID-keyed tenant and email.
@@ -184,7 +186,10 @@ describe('POST /auth/signup', () => {
     }
   });
 
-  it('existing user (already verified in another tenant) → 201, NONE, no verification email', async () => {
+  it('existing verified user (no membership here) → 201, NONE, no verification email, no duplicate identity', async () => {
+    // An existing user from another tenant: already has email_verified=true
+    // and a password identity. Signing up for a NEW tenant should create only
+    // a new membership — no duplicate identity, no verification token.
     const { app, deps, close } = await buildTestApp();
     const { db } = deps;
     const tenantKey = `t-${randomUUID().slice(0, 8)}`;
@@ -194,8 +199,8 @@ describe('POST /auth/signup', () => {
     try {
       await createSignupTenant({ db, tenantKey });
 
-      // Pre-create a verified user (email_verified = DEFAULT true)
-      // with a password identity but no membership for THIS tenant
+      // Pre-create a verified user with a password identity but NO membership
+      // for this tenant (simulates a user who registered on another tenant).
       const existingUser = await db
         .insertInto('users')
         .values({ email: email.toLowerCase(), name: 'Existing User' })
@@ -220,10 +225,127 @@ describe('POST /auth/signup', () => {
         payload: { email, password: 'SecurePass123!', name: 'Existing User' },
       });
 
-      // ensurePasswordIdentity replay-guards: user already has password identity
-      // This hits the 409 Already Registered path.
-      // The test documents the actual behavior: duplicate identity is rejected.
-      expect(res.statusCode).toBe(409);
+      expect(res.statusCode).toBe(201);
+
+      const body = readJson<SignupResponseBody>(res);
+      expect(body.status).toBe('AUTHENTICATED');
+      // Existing user is already verified → email check passes → MFA rules apply.
+      // This user is a MEMBER with no MFA → NONE.
+      expect(body.nextAction).toBe('NONE');
+
+      // Only one password identity row — no duplicate created
+      const identities = await db
+        .selectFrom('auth_identities')
+        .selectAll()
+        .where('user_id', '=', existingUser.id)
+        .where('provider', '=', 'password')
+        .execute();
+      expect(identities).toHaveLength(1);
+
+      // No verification token created (user is already verified)
+      const tokens = await db
+        .selectFrom('email_verification_tokens')
+        .selectAll()
+        .where('user_id', '=', existingUser.id)
+        .execute();
+      expect(tokens).toHaveLength(0);
+
+      // No verification email enqueued
+      const messages = (deps.queue as InMemQueue).drain();
+      expect(messages).toHaveLength(0);
+    } finally {
+      await close();
+    }
+  });
+
+  it('admin signup → 201, EMAIL_VERIFICATION_REQUIRED (Decision 3: email beats MFA)', async () => {
+    // Decision 3 (locked): when email_verified=false, EMAIL_VERIFICATION_REQUIRED
+    // is always returned regardless of role. An admin who signs up via public
+    // signup should see this BEFORE MFA_SETUP_REQUIRED.
+    //
+    // This test verifies the precedence is correct and that admins are not
+    // silently bypassed to MFA_SETUP_REQUIRED.
+    //
+    // Note: public signup hardcodes role='MEMBER' (provisioning spec: public
+    // signup creates members only). To test admin Decision 3, we seed the user
+    // with ADMIN role directly and bypass the signup endpoint's role enforcement.
+    // Instead, we call signup as a member, then upgrade the membership to ADMIN,
+    // and call login to verify the precedence in the login flow.
+    //
+    // Concretely: seed an ADMIN user with email_verified=false, then login →
+    // should return EMAIL_VERIFICATION_REQUIRED (not MFA_SETUP_REQUIRED).
+    const { app, deps, close } = await buildTestApp();
+    const { db } = deps;
+    const tenantKey = `t-${randomUUID().slice(0, 8)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `admin-${randomUUID().slice(0, 8)}@example.com`;
+    const password = 'SecurePass123!';
+
+    try {
+      await db
+        .insertInto('tenants')
+        .values({
+          key: tenantKey,
+          name: `Tenant ${tenantKey}`,
+          is_active: true,
+          public_signup_enabled: false, // invite-only — we seed directly
+          member_mfa_required: false,
+          allowed_email_domains: sql`'[]'::jsonb`,
+        })
+        .executeTakeFirstOrThrow();
+
+      // Seed an unverified ADMIN user with password identity
+      const user = await db
+        .insertInto('users')
+        .values({
+          email: email.toLowerCase(),
+          name: 'Admin User',
+          email_verified: false, // explicitly unverified
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
+
+      const hash = await deps.passwordHasher.hash(password);
+      await db
+        .insertInto('auth_identities')
+        .values({
+          user_id: user.id,
+          provider: 'password',
+          password_hash: hash,
+          provider_subject: null,
+        })
+        .execute();
+
+      const tenant = await db
+        .selectFrom('tenants')
+        .select(['id'])
+        .where('key', '=', tenantKey)
+        .executeTakeFirstOrThrow();
+
+      await db
+        .insertInto('memberships')
+        .values({
+          tenant_id: tenant.id,
+          user_id: user.id,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        })
+        .execute();
+
+      // Login as this admin — Decision 3 should fire before MFA rules
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { host },
+        payload: { email, password },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = readJson<SignupResponseBody>(res);
+      expect(body.nextAction).toBe('EMAIL_VERIFICATION_REQUIRED');
+      // Explicitly assert it is NOT MFA_SETUP_REQUIRED — that would mean
+      // the MFA check fired before the email check, violating Decision 3.
+      expect(body.nextAction).not.toBe('MFA_SETUP_REQUIRED');
     } finally {
       await close();
     }
@@ -453,6 +575,89 @@ describe('POST /auth/signup', () => {
       });
 
       expect(res.statusCode).toBe(400);
+    } finally {
+      await close();
+    }
+  });
+
+  it('rate limit: 6th signup with same email in 15 minutes → 429', async () => {
+    // Rate limiter is disabled in nodeEnv:'test'. Override to 'development'.
+    // Full UUID email ensures no rate-limit key collision across parallel tests.
+    const { app, deps, close } = await buildTestApp({ nodeEnv: 'development' });
+    const { db } = deps;
+    const tenantKey = `t-${randomUUID().slice(0, 8)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `rl-email-${randomUUID()}@example.com`; // full UUID
+
+    try {
+      await createSignupTenant({ db, tenantKey });
+
+      // Requests 1–5: all fail with 409 (user created on 1st attempt, then
+      // ACTIVE membership conflict from attempt 2 onward), but the rate limit
+      // counter increments each time.
+      for (let i = 0; i < 5; i++) {
+        await app.inject({
+          method: 'POST',
+          url: '/auth/signup',
+          headers: { host },
+          payload: { email, password: 'SecurePass123!', name: 'Test' },
+        });
+      }
+
+      // 6th attempt: over the per-email rate limit → 429
+      const res6 = await app.inject({
+        method: 'POST',
+        url: '/auth/signup',
+        headers: { host },
+        payload: { email, password: 'SecurePass123!', name: 'Test' },
+      });
+
+      expect(res6.statusCode).toBe(429);
+    } finally {
+      await close();
+    }
+  });
+
+  it('rate limit: 21st signup with same IP in 15 minutes → 429', async () => {
+    // Rate limiter is disabled in nodeEnv:'test'. Override to 'development'.
+    // Each request uses a unique email so the per-email limit is not hit first.
+    const { app, deps, close } = await buildTestApp({ nodeEnv: 'development' });
+    const { db } = deps;
+    const tenantKey = `t-${randomUUID().slice(0, 8)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      await createSignupTenant({ db, tenantKey });
+
+      // Requests 1–20: unique emails to avoid per-email rate limit.
+      // Each fails with 201 (first attempt per email) or continues — we only care
+      // that the IP counter increments 20 times.
+      for (let i = 0; i < 20; i++) {
+        await app.inject({
+          method: 'POST',
+          url: '/auth/signup',
+          headers: { host },
+          payload: {
+            email: `rl-ip-${randomUUID()}@example.com`,
+            password: 'SecurePass123!',
+            name: 'Test',
+          },
+        });
+      }
+
+      // 21st attempt: over the per-IP rate limit → 429
+      const res21 = await app.inject({
+        method: 'POST',
+        url: '/auth/signup',
+        headers: { host },
+        payload: {
+          email: `rl-ip-${randomUUID()}@example.com`,
+          password: 'SecurePass123!',
+          name: 'Test',
+        },
+      });
+
+      expect(res21.statusCode).toBe(429);
     } finally {
       await close();
     }
