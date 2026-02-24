@@ -9,6 +9,9 @@
  * RULES:
  * - Read-only.
  * - No AppError.
+ *
+ * BRICK 11 UPDATE:
+ * - toUser now maps email_verified → emailVerified.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -21,6 +24,7 @@ function toUser(row: UserRow): User {
     id: row.id,
     email: row.email,
     name: row.name ?? null,
+    emailVerified: row.email_verified,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

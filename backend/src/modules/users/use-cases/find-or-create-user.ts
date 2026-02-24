@@ -16,6 +16,13 @@
  * - Email MUST already be normalized to lowercase before calling.
  * - Does NOT write audit events — caller owns the audit context.
  * - No AppError thrown here; failures surface as raw DB errors (e.g. unique violation).
+ *
+ * BRICK 11 UPDATE:
+ * - Added optional emailVerifiedForNewUser param.
+ * - Only applied when a new user row is inserted (userCreated: true).
+ * - When the user already exists (userCreated: false), emailVerifiedForNewUser
+ *   is ignored — the existing user's email_verified status is unchanged.
+ * - All existing callers omit this param; DB default (true) applies to them.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -35,20 +42,37 @@ export async function findOrCreateUser(params: {
   email: string;
   name: string | null;
   now: Date;
+  /**
+   * email_verified value for newly inserted users.
+   *
+   * Omit (or pass undefined) for all existing flows — DB default (true) applies.
+   * Pass false only when the caller needs the new user to go through email
+   * verification (i.e. public password signup in Brick 11).
+   *
+   * Ignored when the user already exists (userCreated: false).
+   */
+  emailVerifiedForNewUser?: boolean;
 }): Promise<FindOrCreateUserResult> {
-  const { trx, userRepo, email, name, now } = params;
+  const { trx, userRepo, email, name, now, emailVerifiedForNewUser } = params;
 
   const existing = await getUserByEmail(trx, email);
   if (existing) {
     return { user: existing, userCreated: false };
   }
 
-  const inserted = await userRepo.insertUser({ email, name });
+  const inserted = await userRepo.insertUser({
+    email,
+    name,
+    // Only forward when explicitly false — omit otherwise so DB default applies.
+    ...(emailVerifiedForNewUser === false ? { emailVerified: false } : {}),
+  });
 
   const user: User = {
     id: inserted.id,
     email: inserted.email,
     name,
+    // Reflect what was actually stored.
+    emailVerified: emailVerifiedForNewUser === false ? false : true,
     createdAt: now,
     updatedAt: now,
   };

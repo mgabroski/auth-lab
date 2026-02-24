@@ -47,6 +47,15 @@ export interface AuthIdentities {
   user_id: string;
 }
 
+export interface EmailVerificationTokens {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  token_hash: string;
+  used_at: Timestamp | null;
+  user_id: string;
+}
+
 export interface Invites {
   created_at: Generated<Timestamp>;
   created_by_user_id: string | null;
@@ -116,6 +125,7 @@ export interface Tenants {
 export interface Users {
   created_at: Generated<Timestamp>;
   email: string;
+  email_verified: Generated<boolean>;
   id: Generated<string>;
   name: string | null;
   updated_at: Generated<Timestamp>;
@@ -124,6 +134,7 @@ export interface Users {
 export interface DB {
   audit_events: AuditEvents;
   auth_identities: AuthIdentities;
+  email_verification_tokens: EmailVerificationTokens;
   invites: Invites;
   memberships: Memberships;
   mfa_recovery_codes: MfaRecoveryCodes;

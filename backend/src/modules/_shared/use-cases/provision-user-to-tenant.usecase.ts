@@ -22,6 +22,15 @@
  * - Does NOT write audit events (caller owns audit context).
  * - Does NOT create auth identities (that is a separate responsibility).
  * - Throws MembershipErrors.membershipSuspended if membership is SUSPENDED.
+ *
+ * BRICK 11 UPDATE:
+ * - Added optional emailVerifiedForNewUser param (Decision 1).
+ * - Forwarded to findOrCreateUser → insertUser only when creating a new user.
+ * - All existing callers (register flow, SSO flow) omit this param and get
+ *   DB default (true) — zero behavior change for them.
+ *
+ * THIS IS A LOCKED CROSS-MODULE CONTRACT.
+ * Breaking changes require an ADR.
  */
 
 import { findOrCreateUser } from '../../users/use-cases/find-or-create-user';
@@ -57,6 +66,15 @@ export type ProvisionUserToTenantParams = {
   role: MembershipRole;
   /** Used for acceptedAt / invitedAt timestamps. */
   now: Date;
+  /**
+   * email_verified value for newly inserted users.
+   *
+   * Omit for all existing flows (invite registration, SSO) — DB default (true) applies.
+   * Pass false only for public password signup (Brick 11) to require email verification.
+   *
+   * Ignored when the user already exists (userCreated: false in the result).
+   */
+  emailVerifiedForNewUser?: boolean;
 };
 
 // ── Output ───────────────────────────────────────────────────
@@ -77,7 +95,17 @@ export type ProvisionResult = {
 export async function provisionUserToTenant(
   params: ProvisionUserToTenantParams,
 ): Promise<ProvisionResult> {
-  const { trx, userRepo, membershipRepo, email, name, tenantId, role, now } = params;
+  const {
+    trx,
+    userRepo,
+    membershipRepo,
+    email,
+    name,
+    tenantId,
+    role,
+    now,
+    emailVerifiedForNewUser,
+  } = params;
 
   // ── 1. Find or create user ────────────────────────────────
 
@@ -87,6 +115,7 @@ export async function provisionUserToTenant(
     email,
     name,
     now,
+    emailVerifiedForNewUser,
   });
 
   // ── 2. Find or create/activate membership ─────────────────
