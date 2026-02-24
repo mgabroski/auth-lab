@@ -12,20 +12,7 @@
 import type { EncryptionService } from '../../../shared/security/encryption';
 import { AuthErrors } from '../auth.errors';
 import type { SsoProvider, SsoStatePayload } from './sso-state';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object';
-}
-
-function getString(obj: Record<string, unknown>, key: string): string | undefined {
-  const v = obj[key];
-  return typeof v === 'string' && v.length ? v : undefined;
-}
-
-function getNumber(obj: Record<string, unknown>, key: string): number | undefined {
-  const v = obj[key];
-  return typeof v === 'number' ? v : undefined;
-}
+import { isRecord, getString, getNumber } from '../sso/sso-adapter-utils';
 
 export function decryptAndValidateSsoState(params: {
   encryptionService: EncryptionService;
