@@ -24,7 +24,7 @@
  * - Throws MembershipErrors.membershipSuspended if membership is SUSPENDED.
  */
 
-import { getUserByEmail } from '../../users/queries/user.queries';
+import { findOrCreateUser } from '../../users/use-cases/find-or-create-user';
 import type { UserRepo } from '../../users/dal/user.repo';
 import type { User } from '../../users/user.types';
 
@@ -81,24 +81,13 @@ export async function provisionUserToTenant(
 
   // ── 1. Find or create user ────────────────────────────────
 
-  const existingUser = await getUserByEmail(trx, email);
-  let userCreated = false;
-
-  let user: User;
-
-  if (existingUser) {
-    user = existingUser;
-  } else {
-    const created = await userRepo.insertUser({ email, name });
-    user = {
-      id: created.id,
-      email: created.email,
-      name,
-      createdAt: now,
-      updatedAt: now,
-    };
-    userCreated = true;
-  }
+  const { user, userCreated } = await findOrCreateUser({
+    trx,
+    userRepo,
+    email,
+    name,
+    now,
+  });
 
   // ── 2. Find or create/activate membership ─────────────────
 

@@ -23,7 +23,7 @@ import type { SsoProviderRegistry } from '../../sso/sso-provider-registry';
 
 import { resolveTenantForAuth, Tenant } from '../../../tenants';
 
-import { getUserByEmail } from '../../../users';
+import { findOrCreateUser } from '../../../users';
 import { getMembershipByTenantAndUser } from '../../../memberships';
 
 import type { MembershipRepo } from '../../../memberships/dal/membership.repo';
@@ -212,18 +212,14 @@ export async function executeSsoCallbackFlow(
 
       const emailKey = deps.tokenHasher.hash(identity.email);
 
-      // G) User (find or create)
-      let user = await getUserByEmail(trx, identity.email);
-
-      if (!user) {
-        await deps.userRepo.withDb(trx).insertUser({
-          email: identity.email,
-          name: identity.name ?? null,
-        });
-
-        user = await getUserByEmail(trx, identity.email);
-        if (!user) throw new Error('auth.sso.callback: user insert succeeded but user not found');
-      }
+      // G) User (find or create) — shared logic via users module use case
+      const { user } = await findOrCreateUser({
+        trx,
+        userRepo: deps.userRepo.withDb(trx),
+        email: identity.email,
+        name: identity.name ?? null,
+        now: new Date(),
+      });
 
       failureAuditCtx.userId = user.id;
 
