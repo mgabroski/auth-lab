@@ -65,8 +65,3 @@ export function requireSession(
     mfaVerified: ctx.mfaVerified,
   };
 }
-
-// Backward-compatible alias (legacy name used by older controllers)
-export function requireAuthContext(req: FastifyRequest): RequiredAuthContext {
-  return requireSession(req);
-}
