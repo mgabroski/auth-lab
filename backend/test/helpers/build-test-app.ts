@@ -32,7 +32,7 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     logLevel: process.env.LOG_LEVEL ?? 'info',
     serviceName: process.env.SERVICE_NAME ?? 'auth-lab-backend',
 
-    bcryptCost: Number(process.env.BCRYPT_COST ?? 12),
+    bcryptCost: 4, // always use minimum cost in tests — bcrypt cost 12 adds ~250ms per hash
 
     sessionTtlSeconds: 3600, // 1 hour for tests
 
