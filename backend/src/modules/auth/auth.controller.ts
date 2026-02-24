@@ -48,6 +48,24 @@ function requireTenantKey(tenantKey: string | null | undefined): string {
   return tenantKey;
 }
 
+/**
+ * Guards against open-redirect attacks on the post-SSO returnTo parameter.
+ *
+ * Accepts only relative paths (start with '/') that are NOT protocol-relative
+ * URLs (start with '//'). This ensures the browser is always redirected within
+ * the same origin and can never be sent to an attacker-controlled domain.
+ *
+ * Examples:
+ *   '/dashboard'          → safe   (relative path)
+ *   '/settings/profile'   → safe   (relative path)
+ *   '//evil.com'          → unsafe (protocol-relative — treated as absolute)
+ *   'https://evil.com'    → unsafe (absolute URL)
+ *   'javascript:alert(1)' → unsafe (non-path string)
+ */
+function isSafeReturnTo(value: string): boolean {
+  return value.startsWith('/') && !value.startsWith('//');
+}
+
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -240,8 +258,13 @@ export class AuthController {
     }
 
     const query = req.query as { returnTo?: unknown };
-    const returnTo =
+    const rawReturnTo =
       typeof query.returnTo === 'string' && query.returnTo.length ? query.returnTo : undefined;
+
+    // Silently drop unsafe values rather than rejecting the SSO flow entirely.
+    // An invalid returnTo hint is not a reason to block login.
+    const returnTo =
+      rawReturnTo !== undefined && isSafeReturnTo(rawReturnTo) ? rawReturnTo : undefined;
 
     const { redirectTo } = await this.authService.startSso({
       tenantKey: requireTenantKey(req.requestContext.tenantKey),

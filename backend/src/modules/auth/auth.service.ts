@@ -120,7 +120,6 @@ export class AuthService {
     userAgent: string | null;
     requestId: string;
   }): Promise<{ sessionId: string; redirectTo: string }> {
-    // ✅ PR3: support microsoft too (google already implemented in PR2)
     return executeSsoCallbackFlow(
       {
         db: this.deps.db,
