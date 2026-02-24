@@ -5,6 +5,7 @@ import { buildTestApp } from '../helpers/build-test-app';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
 import type { InMemQueue } from '../../src/shared/messaging/inmem-queue';
+import type { ResetPasswordEmailMessage } from '../../src/shared/messaging/queue';
 
 /**
  * E2E tests for POST /auth/forgot-password (Brick 8).
@@ -17,8 +18,8 @@ import type { InMemQueue } from '../../src/shared/messaging/inmem-queue';
  * ISOLATION NOTE:
  * Tests share a real Postgres + Redis instance and do NOT run inside rolled-back
  * transactions. Every assertion that checks counts or absences must be scoped to
- * the specific user_id / tenant_id created in that test, or use a before/after
- * snapshot. Never query a full table without a scoping filter.
+ * the specific user_id / tenant_id created in that test, or use a timestamp scope.
+ * Never query a full table without a scoping filter.
  *
  * RATE LIMIT NOTE:
  * The rate limiter is disabled when nodeEnv === 'test' (see di.ts).
@@ -158,7 +159,8 @@ describe('POST /auth/forgot-password', () => {
       // Email enqueued with tenantKey so the renderer can build the correct URL
       const messages = (deps.queue as InMemQueue).drain();
       expect(messages).toHaveLength(1);
-      const msg = messages[0];
+      // Narrow from QueueMessage union — we just asserted type above
+      const msg = messages[0] as ResetPasswordEmailMessage;
       expect(msg.type).toBe('auth.reset-password-email');
       expect(msg.email).toBe(email.toLowerCase());
       expect(msg.userId).toBe(user.id);
@@ -189,12 +191,11 @@ describe('POST /auth/forgot-password', () => {
     try {
       await createTenant({ db, tenantKey });
 
-      // Snapshot BEFORE — we cannot filter by user_id (no user exists), so we
-      // compare total counts. The unique email guarantees no user will be found.
-      const countBefore = await db
-        .selectFrom('password_reset_tokens')
-        .select((eb) => eb.fn.countAll<number>().as('n'))
-        .executeTakeFirstOrThrow();
+      // Record the time just before the request fires. Any token created by
+      // this request would have created_at >= requestStart. Using a timestamp
+      // scope instead of a global before/after count makes the assertion immune
+      // to parallel tests inserting rows into the same table concurrently.
+      const requestStart = new Date();
 
       const res = await app.inject({
         method: 'POST',
@@ -205,12 +206,13 @@ describe('POST /auth/forgot-password', () => {
 
       expect(res.statusCode).toBe(200);
 
-      // No new token created
-      const countAfter = await db
+      // No new token created at or after requestStart
+      const newTokens = await db
         .selectFrom('password_reset_tokens')
-        .select((eb) => eb.fn.countAll<number>().as('n'))
-        .executeTakeFirstOrThrow();
-      expect(Number(countAfter.n)).toBe(Number(countBefore.n));
+        .selectAll()
+        .where('created_at', '>=', requestStart)
+        .execute();
+      expect(newTokens).toHaveLength(0);
 
       // No email enqueued
       const messages = (deps.queue as InMemQueue).drain();
@@ -306,7 +308,8 @@ describe('POST /auth/forgot-password', () => {
         payload: { email },
       });
       const msgs1 = (deps.queue as InMemQueue).drain();
-      const token1 = msgs1[0].resetToken;
+      // Narrow from QueueMessage union — type is known from context
+      const token1 = (msgs1[0] as ResetPasswordEmailMessage).resetToken;
 
       // Second request — invalidates first
       await app.inject({
@@ -316,7 +319,7 @@ describe('POST /auth/forgot-password', () => {
         payload: { email },
       });
       const msgs2 = (deps.queue as InMemQueue).drain();
-      const token2 = msgs2[0].resetToken;
+      const token2 = (msgs2[0] as ResetPasswordEmailMessage).resetToken;
 
       expect(token1).not.toBe(token2);
 

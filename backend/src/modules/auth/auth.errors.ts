@@ -8,6 +8,10 @@
  * RULES:
  * - Use AppError as the transport primitive.
  * - Never include passwords, tokens, or hashes in meta.
+ *
+ * BRICK 11 UPDATE:
+ * - Added public signup errors: signupDisabled, emailAlreadyMember,
+ *   emailInvitePending, verificationTokenInvalid.
  */
 
 import { AppError, type AppErrorMeta } from '../../shared/http/errors';
@@ -57,10 +61,6 @@ export const AuthErrors = {
    * Password reset token is invalid, expired, or already used.
    *
    * SECURITY: A single error covers all three conditions intentionally.
-   * Separate errors (token_not_found vs token_expired vs token_used) would
-   * let an attacker determine whether a token exists in the system, whether
-   * it was recently consumed, or whether it was ever issued — providing an
-   * oracle that could aid targeted attacks.
    */
   resetTokenInvalid(meta?: AppErrorMeta) {
     return AppError.validationError(
@@ -91,5 +91,43 @@ export const AuthErrors = {
 
   ssoTokenValidationFailed(meta?: AppErrorMeta) {
     return AppError.unauthorized('SSO token validation failed.', meta);
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Public Signup (Brick 11)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Tenant has public_signup_enabled = false. */
+  signupDisabled(meta?: AppErrorMeta) {
+    return AppError.forbidden('Sign up is disabled. You need an invitation to join.', meta);
+  },
+
+  /**
+   * User already has an ACTIVE membership in this tenant.
+   * Tells them to sign in rather than revealing membership details.
+   */
+  emailAlreadyMember(meta?: AppErrorMeta) {
+    return AppError.conflict('Already a member. Please sign in.', meta);
+  },
+
+  /**
+   * User has a PENDING/INVITED membership in this tenant.
+   * Direct them to the invite email.
+   */
+  emailInvitePending(meta?: AppErrorMeta) {
+    return AppError.conflict('You have a pending invitation. Please check your email.', meta);
+  },
+
+  /**
+   * Email verification token is invalid, expired, or already used.
+   *
+   * SECURITY: A single error covers all three conditions — same rationale as
+   * resetTokenInvalid. Separate errors would create an oracle.
+   */
+  verificationTokenInvalid(meta?: AppErrorMeta) {
+    return AppError.validationError(
+      'This verification link is invalid or has expired. Request a new one.',
+      meta,
+    );
   },
 } as const;

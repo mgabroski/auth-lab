@@ -13,7 +13,13 @@
  * - No raw SQL here (use queries/repos).
  * - Transactions are opened here (service delegates orchestration to the flow).
  *   This is still within "service/use-case orchestration layer" boundary.
- * - Keep behavior identical to the original AuthService.login().
+ *
+ * BRICK 11 UPDATE (Decision 3):
+ * - user.emailVerified is now included in the tx result.
+ * - emailVerified is forwarded to decideLoginNextAction so that
+ *   EMAIL_VERIFICATION_REQUIRED takes precedence over MFA decisions.
+ * - emailVerified is forwarded to createAuthSession so mfaVerified in the
+ *   session is set correctly (false when email not verified).
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';
@@ -54,7 +60,7 @@ import {
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 import { emailDomain } from '../../helpers/email-domain';
 
-// ── Types (copied from AuthService for now; later we can centralize) ───────
+// ── Types ──────────────────────────────────────────────────────────────────
 export type LoginParams = {
   tenantKey: string | null;
   email: string;
@@ -74,7 +80,7 @@ type LoginFailureContext = {
 };
 
 type LoginTxResult = {
-  user: { id: string; email: string; name: string | null };
+  user: { id: string; email: string; name: string | null; emailVerified: boolean };
   membership: { id: string; role: 'ADMIN' | 'MEMBER'; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
   tenant: Tenant;
 };
@@ -196,7 +202,14 @@ export async function executeLoginFlow(
       });
 
       return {
-        user: { id: user.id, email: user.email, name: user.name ?? null },
+        // Decision 3 (Brick 11): include emailVerified so login respects
+        // EMAIL_VERIFICATION_REQUIRED precedence.
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name ?? null,
+          emailVerified: user.emailVerified,
+        },
         membership: { id: membership.id, role: membership.role, status: membership.status },
         tenant,
       };
@@ -239,10 +252,13 @@ export async function executeLoginFlow(
     ? await hasVerifiedMfaSecret(deps.db, user.id)
     : false;
 
+  // Decision 3 (Brick 11): pass emailVerified so EMAIL_VERIFICATION_REQUIRED
+  // takes precedence over MFA decisions when email is not verified.
   const nextAction = decideLoginNextAction({
     role: membership.role,
     memberMfaRequired: tenant.memberMfaRequired,
     hasVerifiedMfaSecret: hasVerifiedMfaSecretValue,
+    emailVerified: user.emailVerified,
   });
 
   const { sessionId } = await createAuthSession({
@@ -254,6 +270,7 @@ export async function executeLoginFlow(
     role: membership.role,
     tenant,
     hasVerifiedMfaSecret: hasVerifiedMfaSecretValue,
+    emailVerified: user.emailVerified,
     now: new Date(),
   });
 

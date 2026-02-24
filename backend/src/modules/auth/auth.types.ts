@@ -10,6 +10,13 @@
  * RULES:
  * - Keep aligned with DB schema.
  * - Never include raw passwords, hashes, or tokens in response types.
+ *
+ * BRICK 11 UPDATE:
+ * - MfaNextAction renamed to AuthNextAction (broader: covers email + MFA).
+ * - Added 'EMAIL_VERIFICATION_REQUIRED' to AuthNextAction (Decision 3).
+ * - MfaNextAction kept as a type alias for backward compatibility during the
+ *   transition — remove once all callers have migrated.
+ * - Added EmailVerificationToken domain type.
  */
 
 export type AuthProvider = 'password' | 'google' | 'microsoft';
@@ -37,16 +44,41 @@ export type PasswordResetToken = {
 };
 
 /**
- * MFA next-action tells the client what to do after register/login.
- * - NONE: fully authenticated, no MFA needed
- * - MFA_SETUP_REQUIRED: admin who hasn't set up MFA yet
- * - MFA_REQUIRED: admin (or member if tenant requires) must verify MFA
+ * Represents a valid (not-yet-used, not-expired) email verification token.
+ * The raw token is never stored — only the hash lives in DB.
  */
-export type MfaNextAction = 'NONE' | 'MFA_SETUP_REQUIRED' | 'MFA_REQUIRED';
+export type EmailVerificationToken = {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  createdAt: Date;
+};
+
+/**
+ * What the client should do after authenticate/register/signup.
+ *
+ * Precedence (Decision 3, Brick 11 — locked):
+ *   EMAIL_VERIFICATION_REQUIRED  — always wins when email is unverified
+ *   MFA_SETUP_REQUIRED           — admin who hasn't set up MFA yet
+ *   MFA_REQUIRED                 — admin/member must verify MFA
+ *   NONE                         — fully authenticated
+ */
+export type AuthNextAction =
+  | 'NONE'
+  | 'MFA_SETUP_REQUIRED'
+  | 'MFA_REQUIRED'
+  | 'EMAIL_VERIFICATION_REQUIRED';
+
+/**
+ * @deprecated Use AuthNextAction. Kept as alias for callers that have not yet
+ * migrated. Will be removed in a follow-up cleanup.
+ */
+export type MfaNextAction = AuthNextAction;
 
 export type AuthResult = {
   status: 'AUTHENTICATED';
-  nextAction: MfaNextAction;
+  nextAction: AuthNextAction;
   user: {
     id: string;
     email: string;

@@ -2,8 +2,8 @@
  * src/modules/auth/helpers/build-auth-result.ts
  *
  * WHY:
- * - The AuthResult response shape is constructed identically in register()
- *   and login(). Without this helper it will also be duplicated by SSO (Brick 10).
+ * - The AuthResult response shape is constructed identically in register(),
+ *   login(), SSO, and signup. Without this helper it would be duplicated.
  * - Fixes a type coercion bug in the original service: `name: user.name ?? ''`
  *   silently coerces null to empty string, contradicting AuthResult's declared
  *   type of `name: string | null`.
@@ -11,14 +11,17 @@
  * RULES:
  * - Pure function. No I/O.
  * - Passes null through for name — never coerces to empty string.
+ *
+ * BRICK 11 UPDATE:
+ * - Updated nextAction type from MfaNextAction to AuthNextAction (superset).
  */
 
-import type { AuthResult, MfaNextAction } from '../auth.types';
+import type { AuthResult, AuthNextAction } from '../auth.types';
 import type { User } from '../../users/user.types';
 import type { Membership } from '../../memberships/membership.types';
 
 export type BuildAuthResultParams = {
-  nextAction: MfaNextAction;
+  nextAction: AuthNextAction;
   user: Pick<User, 'id' | 'email' | 'name'>;
   membership: Pick<Membership, 'id' | 'role'>;
 };

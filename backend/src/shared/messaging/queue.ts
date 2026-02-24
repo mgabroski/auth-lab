@@ -10,9 +10,13 @@
  * - Queue interface depends on nothing else in this codebase (shared → nothing).
  * - Message types are discriminated unions on the `type` field.
  * - Messages must be JSON-serializable.
- * - Raw reset token is allowed here — it travels to the email renderer so the
- *   tenant-scoped link can be built. It is never stored anywhere.
+ * - Raw tokens are allowed here — they travel to the email renderer so the
+ *   tenant-scoped link can be built. They are never stored anywhere.
  * - Never put password hashes, session tokens, or bcrypt output in messages.
+ *
+ * BRICK 11 UPDATE:
+ * - Added SignupVerificationEmailMessage for public signup email verification.
+ * - Added to QueueMessage union.
  */
 
 // ── Message types ─────────────────────────────────────────────
@@ -33,8 +37,30 @@ export type ResetPasswordEmailMessage = {
   tenantKey: string;
 };
 
-// Union — add new message types as bricks grow (invites, email verification, MFA...)
-export type QueueMessage = ResetPasswordEmailMessage;
+/**
+ * Brick 11 — Public Signup: email verification link sent to new users.
+ *
+ * The link format is:
+ *   https://{tenantKey}.hubins.com/verify-email?token={verificationToken}
+ *
+ * Raw token travels here only — never stored, sent to email renderer only.
+ */
+export type SignupVerificationEmailMessage = {
+  type: 'auth.signup-verification-email';
+  userId: string;
+  email: string;
+  /**
+   * Raw (un-hashed) verification token — goes into the email link only.
+   */
+  verificationToken: string;
+  /**
+   * Needed to build the correct tenant-scoped verification URL.
+   */
+  tenantKey: string;
+};
+
+// Union — add new message types as bricks grow
+export type QueueMessage = ResetPasswordEmailMessage | SignupVerificationEmailMessage;
 
 // ── Queue interface ───────────────────────────────────────────
 

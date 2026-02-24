@@ -10,6 +10,13 @@
  * - No raw SQL here (use queries/repos/helpers).
  * - Transactions are opened here (still within service/use-case orchestration layer).
  * - Keep behavior identical to the original AuthService.register().
+ *
+ * BRICK 11 UPDATE (Decision 3):
+ * - provisionResult.user.emailVerified is forwarded to decideRegisterNextAction
+ *   and createAuthSession so EMAIL_VERIFICATION_REQUIRED is returned when the
+ *   user was created with emailVerified=false (public signup path).
+ * - For invite-based registration (this flow's normal path), emailVerified is
+ *   always true (DB default) — zero behavior change.
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';
@@ -41,8 +48,6 @@ import { decideRegisterNextAction } from '../../policies/register-next-action.po
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 import { emailDomain } from '../../helpers/email-domain';
 
-// Keep params local to the flow to avoid cross-file type churn.
-// This matches the AuthService.RegisterParams shape.
 export type RegisterParams = {
   tenantKey: string | null;
   email: string;
@@ -123,6 +128,8 @@ export async function executeRegisterFlow(
       tenantId: tenant.id,
       role: invite.role,
       now,
+      // Invite-based registration: emailVerifiedForNewUser omitted.
+      // DB default (true) applies — no email verification needed for invite flow.
     });
 
     await ensurePasswordIdentity({
@@ -144,16 +151,18 @@ export async function executeRegisterFlow(
     return { ...provisionResult, tenant };
   });
 
-  // New user will never have MFA configured yet, but keep it explicit.
+  // Newly registered via invite never has MFA configured yet.
   const hasVerifiedMfaSecret = false;
 
-  // Policy decides nextAction (keeps session helper as pure plumbing).
+  // Decision 3 (Brick 11): for invite-based registration, user.emailVerified
+  // is always true (DB default). Passing it explicitly keeps the flow
+  // consistent with the signup flow which may pass false.
   const nextAction = decideRegisterNextAction({
     role: membership.role,
     memberMfaRequired: tenant.memberMfaRequired,
+    emailVerified: user.emailVerified,
   });
 
-  // Session creation returns a sessionId; nextAction is now owned by policy.
   const { sessionId } = await createAuthSession({
     sessionStore: deps.sessionStore,
     userId: user.id,
@@ -163,6 +172,7 @@ export async function executeRegisterFlow(
     role: membership.role,
     tenant,
     hasVerifiedMfaSecret,
+    emailVerified: user.emailVerified,
     now,
   });
 

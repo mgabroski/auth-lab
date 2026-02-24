@@ -7,7 +7,10 @@
  *
  * RULES:
  * - Must not import from DB/HTTP/framework code.
- * - Keep values identical to pre-refactor inline constants.
+ *
+ * BRICK 11 UPDATE:
+ * - Added signup rate limits (perEmail hard, perIp hard).
+ * - Added resendVerification rate limit (perEmail silent — same pattern as forgotPassword).
  */
 
 export const AUTH_RATE_LIMITS = {
@@ -39,6 +42,15 @@ export const AUTH_RATE_LIMITS = {
   ssoCallback: {
     perIp: { limit: 20, windowSeconds: 900 },
   },
+
+  // Brick 11 (Public Signup + Email Verification)
+  signup: {
+    perEmail: { limit: 5, windowSeconds: 900 }, // hard 429
+    perIp: { limit: 20, windowSeconds: 900 }, // hard 429
+  },
+  resendVerification: {
+    perEmail: { limit: 3, windowSeconds: 3600 }, // silent — same pattern as forgotPassword
+  },
 } as const;
 
 /**
@@ -46,3 +58,9 @@ export const AUTH_RATE_LIMITS = {
  * Locked at 8.
  */
 export const MFA_RECOVERY_CODES_COUNT = 8 as const;
+
+/**
+ * Email verification token TTL.
+ * User has 24 hours to click the link.
+ */
+export const EMAIL_VERIFICATION_TTL_SECONDS = 60 * 60 * 24; // 24 hours

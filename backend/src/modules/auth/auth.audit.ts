@@ -11,23 +11,9 @@
  * - No business rules.
  * - Never include passwords, hashes, or tokens in metadata.
  *
- * PASSWORD RESET AUDIT PATTERN:
- * - auth.password_reset.requested is written on EVERY forgot-password request,
- *   including "user not found", "SSO only", and "rate limited" silent paths.
- *   This gives admins full visibility without leaking information to end users.
- * - The `outcome` field distinguishes cases: 'sent' | 'user_not_found' |
- *   'sso_only' | 'rate_limited'.
- * - auth.password_reset.completed is written only on successful reset.
- *
- * MFA (Brick 9) AUDIT NOTE:
- * - We standardize action naming to dots only.
- * - We align exact names with E2E tests:
- *   - auth.mfa.setup.started
- *   - auth.mfa.setup.completed
- *   - auth.mfa.verify.success
- *   - auth.mfa.verify.failed
- *   - auth.mfa.recovery.used
- *   - auth.mfa.recovery.failed
+ * BRICK 11 UPDATE:
+ * - Added auditSignupSuccess — written inside tx on successful public signup.
+ * - Added auditEmailVerified — written inside tx when verify-email token consumed.
  */
 
 import type { AuditWriter } from '../../shared/audit/audit.writer';
@@ -171,5 +157,31 @@ export function auditSsoLoginFailed(
     provider: data.provider,
     reason: data.reason,
     ...(data.emailKey ? { emailKey: data.emailKey } : {}),
+  });
+}
+
+/**
+ * Brick 11 — Public Signup.
+ * Written inside the signup transaction.
+ */
+export function auditSignupSuccess(
+  writer: AuditWriter,
+  data: { userId: string; membershipId: string; role: string },
+): Promise<void> {
+  return writer.append('auth.signup.success', {
+    userId: data.userId,
+    membershipId: data.membershipId,
+    role: data.role,
+  });
+}
+
+/**
+ * Brick 11 — Email Verification.
+ * Written inside the verify-email transaction when the token is consumed
+ * and users.email_verified is flipped to true.
+ */
+export function auditEmailVerified(writer: AuditWriter, data: { userId: string }): Promise<void> {
+  return writer.append('auth.email.verified', {
+    userId: data.userId,
   });
 }
