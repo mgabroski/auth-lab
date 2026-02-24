@@ -11,4 +11,5 @@
  */
 
 export { resolveTenantForAuth } from './use-cases/resolve-tenant';
+export { isEmailDomainAllowed, assertEmailDomainAllowed } from './policies/tenant-access.policy';
 export type { Tenant } from './tenant.types';

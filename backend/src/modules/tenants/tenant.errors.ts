@@ -24,4 +24,8 @@ export const TenantErrors = {
   tenantInactive(meta?: AppErrorMeta) {
     return AppError.forbidden('Tenant is inactive', meta);
   },
+
+  emailDomainNotAllowed(meta?: AppErrorMeta) {
+    return AppError.forbidden('Your email domain is not permitted. Contact your admin.', meta);
+  },
 } as const;

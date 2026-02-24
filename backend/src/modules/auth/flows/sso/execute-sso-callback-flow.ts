@@ -22,6 +22,7 @@ import type { EncryptionService } from '../../../../shared/security/encryption';
 import type { SsoProviderRegistry } from '../../sso/sso-provider-registry';
 
 import { resolveTenantForAuth, Tenant } from '../../../tenants';
+import { isEmailDomainAllowed } from '../../../tenants';
 
 import { findOrCreateUser } from '../../../users';
 import { getMembershipByTenantAndUser } from '../../../memberships';
@@ -37,8 +38,6 @@ import { AppError } from '../../../../shared/http/errors';
 
 import { decryptAndValidateSsoState } from '../../helpers/sso-state-validate';
 import type { SsoProvider } from '../../helpers/sso-state';
-import { emailDomain } from '../../helpers/email-domain';
-
 import { findSsoIdentityByUserAndProvider } from '../../queries/auth.queries';
 import { auditSsoLoginFailed, auditSsoLoginSuccess } from '../../auth.audit';
 
@@ -47,13 +46,6 @@ import { isMfaRequiredForLogin } from '../../policies/mfa-required.policy';
 import { decideLoginNextAction } from '../../policies/login-next-action.policy';
 
 import { createAuthSession } from '../../helpers/create-auth-session';
-
-function isEmailDomainAllowed(allowedDomains: string[], email: string): boolean {
-  if (!allowedDomains.length) return true;
-  const d = emailDomain(email);
-  if (!d) return false;
-  return allowedDomains.includes(d);
-}
 
 export type SsoCallbackParams = {
   tenantKey: string | null;
@@ -200,7 +192,7 @@ export async function executeSsoCallbackFlow(
       });
 
       // Domain allow-list (after email known)
-      if (!isEmailDomainAllowed(tenant.allowedEmailDomains, identity.email)) {
+      if (!isEmailDomainAllowed(tenant, identity.email)) {
         throw new SsoDeniedError({
           appError: AuthErrors.noAccess(),
           audit: {
