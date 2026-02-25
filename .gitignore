@@ -64,3 +64,7 @@ redis-data/
 .tmp/
 .temp/
 .cache/
+
+# local archives
+*.zip
+auth-lab.zip
