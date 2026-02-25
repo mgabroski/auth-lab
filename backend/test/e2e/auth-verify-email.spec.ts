@@ -27,6 +27,13 @@ import type { SignupVerificationEmailMessage } from '../../src/shared/messaging/
  * ISOLATION:
  * - Every test creates its own UUID-keyed tenant and email.
  * - DB assertions are always scoped to user_id.
+ *
+ * RATE-LIMIT TEST IP ISOLATION:
+ * - buildTestApp({ nodeEnv: 'development' }) enables ALL rate limiters, including
+ *   signup's perIp (20/15min). Since Redis is shared across runs, the 127.0.0.1
+ *   counter accumulates. The rate-limit test therefore generates a unique fake IP
+ *   per run and passes it as `remoteAddress` to every app.inject() call so both
+ *   the signup counter and the verify-email counter always start from zero.
  */
 
 type VerifyEmailResponse = { status: 'VERIFIED' };
@@ -58,8 +65,27 @@ async function createSignupTenant(opts: { db: DbExecutor; tenantKey: string }) {
 }
 
 /**
+ * Build a unique fake IP address from a UUID.
+ * Used only in nodeEnv:'development' tests so each run starts with a fresh
+ * Redis counter and never inherits counts from prior runs or parallel workers.
+ *
+ * Format: 10.x.y.z  (always in RFC-1918 space, never a real routable address)
+ */
+function uniqueTestIp(): string {
+  const hex = randomUUID().replace(/-/g, '');
+  const o1 = parseInt(hex.slice(0, 2), 16);
+  const o2 = parseInt(hex.slice(2, 4), 16);
+  const o3 = parseInt(hex.slice(4, 6), 16);
+  return `10.${o1}.${o2}.${o3}`;
+}
+
+/**
  * Signs up a new user and returns the session cookie + raw verification token.
  * The token is obtained from the in-memory queue immediately after signup.
+ *
+ * @param remoteAddress - Optional IP override. Pass a unique value in
+ *   nodeEnv:'development' tests to avoid exhausting the signup perIp counter
+ *   on the shared Redis instance across repeated test runs.
  */
 async function signupAndGetToken(opts: {
   app: Awaited<ReturnType<typeof buildTestApp>>['app'];
@@ -68,11 +94,13 @@ async function signupAndGetToken(opts: {
   email: string;
   password?: string;
   name?: string;
+  remoteAddress?: string;
 }): Promise<{ cookie: string; verificationToken: string; userId: string }> {
   const res = await opts.app.inject({
     method: 'POST',
     url: '/auth/signup',
     headers: { host: `${opts.tenantKey}.localhost:3000` },
+    remoteAddress: opts.remoteAddress,
     payload: {
       email: opts.email,
       password: opts.password ?? 'SecurePass123!',
@@ -441,11 +469,18 @@ describe('POST /auth/verify-email', () => {
     // A single user signs up once; all 11 verify attempts reuse the same session
     // and submit a fresh fake token each time (intentional 400s — we only care
     // that the IP counter reaches the limit and the 11th returns 429).
+    //
+    // IP ISOLATION: nodeEnv:'development' also enables signup's perIp rate limit
+    // (20/15min). Redis is shared across runs, so 127.0.0.1 accumulates. We
+    // generate a unique IP per run and pass it as remoteAddress to every inject
+    // call so both the signup counter and the verify-email counter always start
+    // from zero.
     const { app, deps, close } = await buildTestApp({ nodeEnv: 'development' });
     const { db, queue } = deps;
     const tenantKey = `t-${randomUUID().slice(0, 8)}`;
     const host = `${tenantKey}.localhost:3000`;
     const email = `rl-verify-${randomUUID()}@example.com`; // full UUID
+    const testIp = uniqueTestIp(); // unique per run — never exhausts shared Redis counter
 
     try {
       await createSignupTenant({ db, tenantKey });
@@ -455,6 +490,7 @@ describe('POST /auth/verify-email', () => {
         queue: queue as InMemQueue,
         tenantKey,
         email,
+        remoteAddress: testIp,
       });
 
       // Attempts 1–10: each returns 400 (fake token) but increments the IP counter
@@ -463,6 +499,7 @@ describe('POST /auth/verify-email', () => {
           method: 'POST',
           url: '/auth/verify-email',
           headers: { host, cookie },
+          remoteAddress: testIp,
           payload: { token: `fake_${randomUUID()}_${randomUUID()}` },
         });
         // Each attempt is rejected as invalid token (400), not rate-limited yet
@@ -474,6 +511,7 @@ describe('POST /auth/verify-email', () => {
         method: 'POST',
         url: '/auth/verify-email',
         headers: { host, cookie },
+        remoteAddress: testIp,
         payload: { token: `fake_${randomUUID()}_${randomUUID()}` },
       });
 

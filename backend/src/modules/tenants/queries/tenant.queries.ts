@@ -9,6 +9,10 @@
  * - Read-only.
  * - Tenant-scoped when applicable.
  * - No AppError.
+ *
+ * BRICK 12 UPDATE:
+ * - Added getTenantById for admin flows that have tenantId from session
+ *   and need to load tenant details (allowedEmailDomains, isActive, etc.).
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -19,7 +23,7 @@ import type {
   TenantAllowedSso,
   TenantKey,
 } from '../tenant.types';
-import { findTenantByKeySql } from '../dal/tenant.query-sql';
+import { findTenantByKeySql, findTenantByIdSql } from '../dal/tenant.query-sql';
 
 function parseAllowedEmailDomains(value: JsonValue): TenantAllowedEmailDomains {
   if (!Array.isArray(value)) return [];
@@ -47,11 +51,7 @@ function parseAllowedSso(value: unknown): TenantAllowedSso {
   return out;
 }
 
-export async function getTenantByKey(
-  db: DbExecutor,
-  tenantKey: TenantKey,
-): Promise<Tenant | undefined> {
-  const row = await findTenantByKeySql(db, tenantKey);
+function rowToTenant(row: Awaited<ReturnType<typeof findTenantByKeySql>>): Tenant | undefined {
   if (!row) return undefined;
 
   return {
@@ -68,4 +68,17 @@ export async function getTenantByKey(
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+export async function getTenantByKey(
+  db: DbExecutor,
+  tenantKey: TenantKey,
+): Promise<Tenant | undefined> {
+  const row = await findTenantByKeySql(db, tenantKey);
+  return rowToTenant(row);
+}
+
+export async function getTenantById(db: DbExecutor, tenantId: string): Promise<Tenant | undefined> {
+  const row = await findTenantByIdSql(db, tenantId);
+  return rowToTenant(row);
 }

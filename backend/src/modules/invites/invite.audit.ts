@@ -11,6 +11,10 @@
  * - No DB access (delegates to AuditWriter).
  * - No business rules (call these AFTER the action succeeds).
  * - Never include raw tokens in metadata.
+ * - File is exactly invite.audit.ts — never invites.audit.ts, never under /admin/.
+ *
+ * BRICK 12 UPDATE:
+ * - Activated auditInviteCreated, auditInviteCancelled, auditInviteResent.
  */
 
 import type { AuditWriter } from '../../shared/audit/audit.writer';
@@ -24,19 +28,37 @@ export function auditInviteAccepted(writer: AuditWriter, invite: Invite): Promis
   });
 }
 
-// Future helpers (add as use cases grow):
-//
-// export function auditInviteCreated(writer: AuditWriter, invite: Invite): Promise<void> {
-//   return writer.append('invite.created', {
-//     inviteId: invite.id,
-//     email: invite.email,
-//     role: invite.role,
-//   });
-// }
-//
-// export function auditInviteCancelled(writer: AuditWriter, invite: Invite): Promise<void> {
-//   return writer.append('invite.cancelled', {
-//     inviteId: invite.id,
-//     email: invite.email,
-//   });
-// }
+export function auditInviteCreated(
+  writer: AuditWriter,
+  invite: { id: string; email: string; role: string; createdByUserId: string },
+): Promise<void> {
+  return writer.append('invite.created', {
+    inviteId: invite.id,
+    email: invite.email,
+    role: invite.role,
+    createdByUserId: invite.createdByUserId,
+  });
+}
+
+export function auditInviteCancelled(
+  writer: AuditWriter,
+  invite: { id: string; email: string; role: string },
+): Promise<void> {
+  return writer.append('invite.cancelled', {
+    inviteId: invite.id,
+    email: invite.email,
+    role: invite.role,
+  });
+}
+
+export function auditInviteResent(
+  writer: AuditWriter,
+  data: { oldInviteId: string; newInviteId: string; email: string; role: string },
+): Promise<void> {
+  return writer.append('invite.resent', {
+    oldInviteId: data.oldInviteId,
+    newInviteId: data.newInviteId,
+    email: data.email,
+    role: data.role,
+  });
+}

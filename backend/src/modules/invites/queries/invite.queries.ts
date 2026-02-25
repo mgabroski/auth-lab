@@ -9,11 +9,19 @@
  * - Read-only.
  * - Tenant-scoped when applicable.
  * - No AppError.
+ *
+ * BRICK 12 UPDATE:
+ * - Added getPendingInviteByTenantAndEmail (duplicate guard for createInvite).
+ * - Added rowToInviteSummary helper (shared by getPendingInviteByTenantAndEmail
+ *   and future list/get queries in PR2).
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
-import { findInviteByTenantAndTokenHashSql } from '../dal/invite.query-sql';
-import type { Invite, InviteRole, InviteStatus } from '../invite.types';
+import {
+  findInviteByTenantAndTokenHashSql,
+  findPendingInviteByTenantAndEmailSql,
+} from '../dal/invite.query-sql';
+import type { Invite, InviteRole, InviteStatus, InviteSummary } from '../invite.types';
 
 function parseInviteStatus(value: string): InviteStatus {
   if (value === 'PENDING' || value === 'ACCEPTED' || value === 'CANCELLED' || value === 'EXPIRED')
@@ -24,6 +32,34 @@ function parseInviteStatus(value: string): InviteStatus {
 function parseInviteRole(value: string): InviteRole {
   if (value === 'ADMIN' || value === 'MEMBER') return value;
   return 'MEMBER';
+}
+
+/**
+ * Maps a DB row to InviteSummary (tokenHash excluded — safe for API responses).
+ * Used by all admin query functions.
+ */
+export function rowToInviteSummary(row: {
+  id: string;
+  tenant_id: string;
+  email: string;
+  role: string;
+  status: string;
+  expires_at: Date;
+  used_at: Date | null;
+  created_at: Date;
+  created_by_user_id: string | null;
+}): InviteSummary {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    email: row.email,
+    role: parseInviteRole(row.role),
+    status: parseInviteStatus(row.status),
+    expiresAt: row.expires_at,
+    usedAt: row.used_at ?? null,
+    createdAt: row.created_at,
+    createdByUserId: row.created_by_user_id ?? null,
+  };
 }
 
 export async function getInviteByTenantAndTokenHash(
@@ -49,4 +85,19 @@ export async function getInviteByTenantAndTokenHash(
     createdAt: row.created_at,
     createdByUserId: row.created_by_user_id ?? null,
   };
+}
+
+/**
+ * Returns the most-recently-created PENDING invite for (tenantId, email),
+ * or undefined if none exists.
+ *
+ * Used by createInvite to detect duplicates before inserting a new row.
+ */
+export async function getPendingInviteByTenantAndEmail(
+  db: DbExecutor,
+  params: { tenantId: string; email: string },
+): Promise<InviteSummary | undefined> {
+  const row = await findPendingInviteByTenantAndEmailSql(db, params);
+  if (!row) return undefined;
+  return rowToInviteSummary(row);
 }

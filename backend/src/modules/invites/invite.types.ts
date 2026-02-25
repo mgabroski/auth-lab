@@ -8,6 +8,7 @@
  * RULES:
  * - Keep aligned with DB schema (invites.used_at is the acceptance timestamp).
  * - Avoid leaking DB naming (snake_case) outside DAL/queries.
+ * - InviteSummary is the safe API-facing DTO — tokenHash is always excluded.
  */
 
 export type InviteStatus = 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
@@ -25,6 +26,28 @@ export type Invite = {
   status: InviteStatus;
 
   tokenHash: string;
+
+  expiresAt: Date;
+  usedAt: Date | null;
+
+  createdAt: Date;
+  createdByUserId: string | null;
+};
+
+/**
+ * InviteSummary — safe DTO for all API responses.
+ *
+ * RULES:
+ * - tokenHash is intentionally excluded — must never appear in any API response.
+ * - Used by all admin invite endpoints: create, list, resend, cancel.
+ */
+export type InviteSummary = {
+  id: InviteId;
+  tenantId: string;
+
+  email: string;
+  role: InviteRole;
+  status: InviteStatus;
 
   expiresAt: Date;
   usedAt: Date | null;

@@ -17,6 +17,10 @@
  * BRICK 11 UPDATE:
  * - Added SignupVerificationEmailMessage for public signup email verification.
  * - Added to QueueMessage union.
+ *
+ * BRICK 12 UPDATE:
+ * - Added AdminInviteEmailMessage for admin-created invite emails.
+ * - Added to QueueMessage union.
  */
 
 // ── Message types ─────────────────────────────────────────────
@@ -59,8 +63,34 @@ export type SignupVerificationEmailMessage = {
   tenantKey: string;
 };
 
+/**
+ * Brick 12 — Admin Invite Creation: invite link sent to the invited user.
+ *
+ * The link format is:
+ *   https://{tenantKey}.hubins.com/accept-invite?token={inviteToken}
+ *
+ * Raw token travels here only — never stored, sent to email renderer only.
+ */
+export type AdminInviteEmailMessage = {
+  type: 'admin.invite-email';
+  inviteId: string;
+  email: string;
+  role: string;
+  /**
+   * Raw (un-hashed) invite token — goes into the email link only, never stored.
+   */
+  inviteToken: string;
+  /**
+   * Needed to build the correct tenant-scoped invite URL.
+   */
+  tenantKey: string;
+};
+
 // Union — add new message types as bricks grow
-export type QueueMessage = ResetPasswordEmailMessage | SignupVerificationEmailMessage;
+export type QueueMessage =
+  | ResetPasswordEmailMessage
+  | SignupVerificationEmailMessage
+  | AdminInviteEmailMessage;
 
 // ── Queue interface ───────────────────────────────────────────
 

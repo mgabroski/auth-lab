@@ -20,6 +20,13 @@ import type { SignupVerificationEmailMessage } from '../../src/shared/messaging/
  * - nodeEnv:'development' tests use full-UUID emails (maximally unique keys).
  * - All token/audit assertions are scoped to user_id.
  * - Timestamp-scoped queries used wherever global table counts would be fragile.
+ *
+ * RATE-LIMIT TEST IP ISOLATION:
+ * - buildTestApp({ nodeEnv: 'development' }) enables ALL rate limiters, including
+ *   signup's perIp (20/15min). Since Redis is shared across runs, the 127.0.0.1
+ *   counter accumulates. The rate-limit test therefore generates a unique fake IP
+ *   per run and passes it as `remoteAddress` to every app.inject() call so the
+ *   counter always starts from zero.
  */
 
 type ResendResponse = { message: string };
@@ -50,8 +57,27 @@ async function createSignupTenant(opts: { db: DbExecutor; tenantKey: string }) {
 }
 
 /**
+ * Build a unique fake IP address from a UUID.
+ * Used only in nodeEnv:'development' tests so each run starts with a fresh
+ * Redis counter and never inherits counts from prior runs or parallel workers.
+ *
+ * Format: 10.x.y.z  (always in RFC-1918 space, never a real routable address)
+ */
+function uniqueTestIp(): string {
+  const hex = randomUUID().replace(/-/g, '');
+  const o1 = parseInt(hex.slice(0, 2), 16);
+  const o2 = parseInt(hex.slice(2, 4), 16);
+  const o3 = parseInt(hex.slice(4, 6), 16);
+  return `10.${o1}.${o2}.${o3}`;
+}
+
+/**
  * Signs up a new user and returns session cookie + userId.
  * Drains the queue after signup so it's empty for subsequent assertions.
+ *
+ * @param remoteAddress - Optional IP override. Pass a unique value in
+ *   nodeEnv:'development' tests to avoid exhausting the signup perIp counter
+ *   on the shared Redis instance across repeated test runs.
  */
 async function signupAndDrain(opts: {
   app: Awaited<ReturnType<typeof buildTestApp>>['app'];
@@ -59,11 +85,13 @@ async function signupAndDrain(opts: {
   tenantKey: string;
   email: string;
   password?: string;
+  remoteAddress?: string;
 }): Promise<{ cookie: string; userId: string }> {
   const res = await opts.app.inject({
     method: 'POST',
     url: '/auth/signup',
     headers: { host: `${opts.tenantKey}.localhost:3000` },
+    remoteAddress: opts.remoteAddress,
     payload: {
       email: opts.email,
       password: opts.password ?? 'SecurePass123!',
@@ -278,11 +306,17 @@ describe('POST /auth/resend-verification', () => {
   it('silent rate limit: 4th resend returns 200 but no new token and no email', async () => {
     // Rate limiter is disabled in nodeEnv:'test'. Override to 'development' to activate it.
     // Full UUID email ensures no rate-limit key collision across parallel tests.
+    //
+    // IP ISOLATION: nodeEnv:'development' also enables signup's perIp rate limit
+    // (20/15min). Redis is shared across runs, so 127.0.0.1 accumulates. We
+    // generate a unique IP per run and pass it as remoteAddress to every inject
+    // call so the signup counter always starts from zero.
     const { app, deps, close } = await buildTestApp({ nodeEnv: 'development' });
     const { db, queue } = deps;
     const tenantKey = `t-${randomUUID().slice(0, 8)}`;
     const host = `${tenantKey}.localhost:3000`;
     const email = `rl-${randomUUID()}@example.com`; // full UUID — maximally unique
+    const testIp = uniqueTestIp(); // unique per run — never exhausts shared Redis counter
 
     try {
       await createSignupTenant({ db, tenantKey });
@@ -292,6 +326,7 @@ describe('POST /auth/resend-verification', () => {
         queue: queue as InMemQueue,
         tenantKey,
         email,
+        remoteAddress: testIp,
       });
 
       // Requests 1–3: within the 3/hour limit — each enqueues an email
@@ -300,6 +335,7 @@ describe('POST /auth/resend-verification', () => {
           method: 'POST',
           url: '/auth/resend-verification',
           headers: { host, cookie },
+          remoteAddress: testIp,
         });
         expect(res.statusCode).toBe(200);
         (queue as InMemQueue).drain(); // clear after each to prevent accumulation
@@ -311,6 +347,7 @@ describe('POST /auth/resend-verification', () => {
         method: 'POST',
         url: '/auth/resend-verification',
         headers: { host, cookie },
+        remoteAddress: testIp,
       });
       expect(res4.statusCode).toBe(200);
 

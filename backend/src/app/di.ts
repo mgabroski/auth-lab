@@ -147,7 +147,7 @@ export async function buildDeps(
 
   // modules (no HTTP / no business logic here)
   const tenants = createTenantModule({ db });
-  const invites = createInviteModule({ db, tokenHasher, logger, auditRepo });
+  const invites = createInviteModule({ db, tokenHasher, logger, auditRepo, rateLimiter, queue });
   const users = createUserModule({ db });
   const memberships = createMembershipModule({ db });
 

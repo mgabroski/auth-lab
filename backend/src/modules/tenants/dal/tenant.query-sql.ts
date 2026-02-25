@@ -16,3 +16,10 @@ export async function findTenantByKeySql(
 ): Promise<TenantRow | undefined> {
   return db.selectFrom('tenants').selectAll().where('key', '=', tenantKey).executeTakeFirst();
 }
+
+export async function findTenantByIdSql(
+  db: DbExecutor,
+  tenantId: string,
+): Promise<TenantRow | undefined> {
+  return db.selectFrom('tenants').selectAll().where('id', '=', tenantId).executeTakeFirst();
+}
