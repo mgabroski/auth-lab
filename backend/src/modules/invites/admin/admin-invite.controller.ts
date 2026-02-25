@@ -96,7 +96,7 @@ export class AdminInviteController {
       userAgent: req.headers['user-agent'] ?? null,
     });
 
-    return reply.status(201).send({ invite });
+    return reply.status(200).send({ invite });
   }
 
   async cancelInvite(req: FastifyRequest, reply: FastifyReply) {
@@ -116,6 +116,6 @@ export class AdminInviteController {
       userAgent: req.headers['user-agent'] ?? null,
     });
 
-    return reply.status(200).send({ message: 'Invite cancelled.' });
+    return reply.status(200).send({ status: 'CANCELLED' });
   }
 }

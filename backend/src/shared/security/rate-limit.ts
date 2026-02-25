@@ -1,11 +1,12 @@
 /**
- * src/shared/security/rate-limit.ts
+ * backend/src/shared/security/rate-limit.ts
  *
  * WHY:
  * - Enforces security policies:
  *   - login attempts: 5 / 15min
  *   - forgot password: 3 / hour (silent)
  *   - MFA attempts: 5 / 15min
+ *   - admin invite create/resend: locked per Brick 12
  * - Uses Redis in prod, but depends only on Cache (DIP).
  *
  * HOW TO USE:
@@ -14,11 +15,11 @@
  * - const allowed = await limiter.hitOrSkip({ key: "forgot:email:...", limit: 3, windowSeconds: 3600 })
  *
  * TWO MODES:
- * - hitOrThrow: increments counter → throws RateLimitError if over limit.
- *   Used for login, register, reset-password — flows where 429 is the right response.
+ * - hitOrThrow: increments counter → throws AppError.rateLimited() if over limit.
+ *   Used for login, register, reset-password, admin-invite — flows where 429 is the right response.
  * - hitOrSkip: increments counter → returns false if over limit (no throw).
  *   Used for forgot-password — the response must always be 200 to prevent email enumeration.
- *   The service checks the return value and silently skips sending the email.
+ *   The service checks the return value and silently skips sending the email when false is returned.
  *
  * ATOMICITY:
  * - Both methods use INCR-then-check, not check-then-INCR.
@@ -32,16 +33,7 @@
  */
 
 import type { Cache } from '../cache/cache';
-
-export class RateLimitError extends Error {
-  constructor(
-    public readonly key: string,
-    public readonly limit: number,
-    public readonly windowSeconds: number,
-  ) {
-    super('Rate limit exceeded');
-  }
-}
+import { AppError } from '../http/errors';
 
 export class RateLimiter {
   constructor(
@@ -55,9 +47,11 @@ export class RateLimiter {
 
   /**
    * Increments the counter for `key`.
-   * Throws RateLimitError if the counter exceeds `limit`.
+   * Throws AppError.rateLimited() if the counter exceeds `limit`.
    *
-   * Use for: login, register, reset-password — flows where 429 is the right response.
+   * Use for: login, register, reset-password, admin-invite — flows where 429 is
+   * the correct HTTP response. The error-handler maps AppError → HTTP response
+   * using the standard AppError path (no special-casing needed).
    */
   async hitOrThrow(input: { key: string; limit: number; windowSeconds: number }): Promise<void> {
     if (this.opts?.disabled) return;
@@ -66,7 +60,7 @@ export class RateLimiter {
     const current = await this.cache.incr(fullKey, { ttlSeconds: input.windowSeconds });
 
     if (current > input.limit) {
-      throw new RateLimitError(fullKey, input.limit, input.windowSeconds);
+      throw AppError.rateLimited({ key: fullKey, limit: input.limit });
     }
   }
 

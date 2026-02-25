@@ -11,9 +11,6 @@
  * - All DB assertions scoped to tenant_id or user_id — never full-table counts.
  * - No debug endpoints or mocking for correctness-critical flows.
  * - Rate limits are bypassed via nodeEnv: 'test' (disabled in di.ts).
- *
- * PR1: POST /admin/invites tests only.
- * PR2: GET /admin/invites, POST .../resend, DELETE ... tests added below.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -51,6 +48,10 @@ const ListInvitesResponseSchema = z.object({
   total: z.number().int().min(0),
   limit: z.number().int().min(1),
   offset: z.number().int().min(0),
+});
+
+const CancelInviteResponseSchema = z.object({
+  status: z.literal('CANCELLED'),
 });
 
 const ErrorBodySchema = z.object({
@@ -896,13 +897,13 @@ describe('Admin invites - list / resend / cancel', () => {
       const inv = await createInviteViaApi({ app, tenantKey: tk, cookie, email: emailA });
       queue.drain();
 
-      // Cancel via API
       const cancelRes = await app.inject({
         method: 'DELETE',
         url: `/admin/invites/${inv.id}`,
         headers: { host: `${tk}.hubins.com`, cookie },
       });
       expect(cancelRes.statusCode).toBe(200);
+      CancelInviteResponseSchema.parse(cancelRes.json());
 
       const res = await app.inject({
         method: 'GET',
@@ -1076,7 +1077,7 @@ describe('Admin invites - list / resend / cancel', () => {
   // ── POST /admin/invites/:inviteId/resend ──────────────────────────────────
 
   describe('POST /admin/invites/:inviteId/resend', () => {
-    it('resend pending invite → new invite created, old cancelled, new email queued, audit written', async () => {
+    it('resend pending invite → 200, new invite created, old cancelled, new email queued, audit written', async () => {
       const tk = tenantKey();
       const tenant = await createTenant({ db: deps.db, tenantKey: tk });
       const { cookie } = await createAdminSession({
@@ -1104,7 +1105,7 @@ describe('Admin invites - list / resend / cancel', () => {
         headers: { host: `${tk}.hubins.com`, cookie },
       });
 
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(200);
       const { invite: newInvite } = CreateInviteResponseSchema.parse(res.json());
 
       // New invite has a different ID
@@ -1162,6 +1163,165 @@ describe('Admin invites - list / resend / cancel', () => {
       expect(meta.oldInviteId).toBe(original.id);
       expect(meta.newInviteId).toBe(newInvite.id);
       expect(meta.email).toBe(invitedEmail);
+    });
+
+    it('resend bulk-cancels ALL pending invites for the same email in the tenant', async () => {
+      // (tenantId, email), not just the targeted inviteId.
+      //
+      // Setup: we manually insert a second PENDING invite row for the same email
+      // (bypassing the duplicate-check that the API enforces), simulating drift
+      // that can occur in edge cases. Then call resend on one of them.
+      // After the resend, BOTH original invites must be CANCELLED with used_at set,
+      // and exactly ONE new PENDING invite must exist for that email.
+
+      const tk = tenantKey();
+      const tenant = await createTenant({ db: deps.db, tenantKey: tk });
+      const { cookie, userId } = await createAdminSession({
+        app,
+        deps,
+        tenantId: tenant.id,
+        tenantKey: tk,
+        email: uniqueEmail('admin'),
+        password: 'Password123!',
+      });
+      queue.drain();
+
+      const invitedEmail = uniqueEmail('bulk-cancel-target');
+
+      // Invite #1: created via API
+      const invite1 = await createInviteViaApi({
+        app,
+        tenantKey: tk,
+        cookie,
+        email: invitedEmail,
+      });
+      queue.drain();
+
+      // Invite #2: inserted directly into DB to simulate drift (bypasses API duplicate check)
+      const invite2Row = await deps.db
+        .insertInto('invites')
+        .values({
+          tenant_id: tenant.id,
+          email: invitedEmail,
+          role: 'MEMBER',
+          token_hash: `drift-hash-${randomUUID()}`,
+          status: 'PENDING',
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          created_by_user_id: userId,
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
+
+      // Both invites are now PENDING
+      const pendingBefore = await deps.db
+        .selectFrom('invites')
+        .select(['id', 'status'])
+        .where('tenant_id', '=', tenant.id)
+        .where('email', '=', invitedEmail)
+        .where('status', '=', 'PENDING')
+        .execute();
+      expect(pendingBefore).toHaveLength(2);
+
+      // Resend on invite #1
+      const resendRes = await app.inject({
+        method: 'POST',
+        url: `/admin/invites/${invite1.id}/resend`,
+        headers: { host: `${tk}.hubins.com`, cookie },
+      });
+      expect(resendRes.statusCode).toBe(200);
+      const { invite: newInvite } = CreateInviteResponseSchema.parse(resendRes.json());
+
+      // invite #1 is now CANCELLED with used_at set
+      const row1 = await deps.db
+        .selectFrom('invites')
+        .selectAll()
+        .where('id', '=', invite1.id)
+        .executeTakeFirstOrThrow();
+      expect(row1.status).toBe('CANCELLED');
+      expect(row1.used_at).not.toBeNull();
+
+      // invite #2 (drift invite) is also now CANCELLED with used_at set
+      const row2 = await deps.db
+        .selectFrom('invites')
+        .selectAll()
+        .where('id', '=', invite2Row.id)
+        .executeTakeFirstOrThrow();
+      expect(row2.status).toBe('CANCELLED');
+      expect(row2.used_at).not.toBeNull();
+
+      // Exactly ONE PENDING invite remains for this email — the newly created one
+      const pendingAfter = await deps.db
+        .selectFrom('invites')
+        .select(['id', 'status'])
+        .where('tenant_id', '=', tenant.id)
+        .where('email', '=', invitedEmail)
+        .where('status', '=', 'PENDING')
+        .execute();
+      expect(pendingAfter).toHaveLength(1);
+      expect(pendingAfter[0].id).toBe(newInvite.id);
+
+      // Audit event confirms the resend
+      const auditRow = await deps.db
+        .selectFrom('audit_events')
+        .selectAll()
+        .where('action', '=', 'invite.resent')
+        .where('tenant_id', '=', tenant.id)
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .executeTakeFirst();
+      expect(auditRow).toBeDefined();
+      const meta = auditRow!.metadata as Record<string, unknown>;
+      expect(meta.newInviteId).toBe(newInvite.id);
+    });
+
+    it('resend preserves role from old invite row (ADMIN role)', async () => {
+      // This test covers the role-preservation contract: the new invite must carry
+      // the same role as the cancelled invite, not a default or request-body value.
+
+      const tk = tenantKey();
+      const tenant = await createTenant({ db: deps.db, tenantKey: tk });
+      const { cookie } = await createAdminSession({
+        app,
+        deps,
+        tenantId: tenant.id,
+        tenantKey: tk,
+        email: uniqueEmail('admin'),
+        password: 'Password123!',
+      });
+      queue.drain();
+
+      const invitedEmail = uniqueEmail('role-preserve');
+
+      // Create the original invite with role=ADMIN
+      const original = await createInviteViaApi({
+        app,
+        tenantKey: tk,
+        cookie,
+        email: invitedEmail,
+        role: 'ADMIN',
+      });
+      expect(original.role).toBe('ADMIN');
+      queue.drain();
+
+      // Resend it
+      const resendRes = await app.inject({
+        method: 'POST',
+        url: `/admin/invites/${original.id}/resend`,
+        headers: { host: `${tk}.hubins.com`, cookie },
+      });
+      expect(resendRes.statusCode).toBe(200);
+      const { invite: newInvite } = CreateInviteResponseSchema.parse(resendRes.json());
+
+      // New invite must preserve role=ADMIN from the old row
+      expect(newInvite.role).toBe('ADMIN');
+
+      // Confirm in DB as well
+      const dbRow = await deps.db
+        .selectFrom('invites')
+        .select(['role'])
+        .where('id', '=', newInvite.id)
+        .executeTakeFirstOrThrow();
+      expect(dbRow.role).toBe('ADMIN');
     });
 
     it('resend a non-pending (cancelled) invite → 409', async () => {
@@ -1283,7 +1443,7 @@ describe('Admin invites - list / resend / cancel', () => {
   // ── DELETE /admin/invites/:inviteId ───────────────────────────────────────
 
   describe('DELETE /admin/invites/:inviteId', () => {
-    it('cancel pending invite → 200, DB status=CANCELLED, audit written', async () => {
+    it('cancel pending invite → 200 { status: CANCELLED }, DB status=CANCELLED, audit written', async () => {
       const tk = tenantKey();
       const tenant = await createTenant({ db: deps.db, tenantKey: tk });
       const { cookie } = await createAdminSession({
@@ -1307,8 +1467,8 @@ describe('Admin invites - list / resend / cancel', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body: { message: string } = res.json();
-      expect(typeof body.message).toBe('string');
+      const body = CancelInviteResponseSchema.parse(res.json());
+      expect(body.status).toBe('CANCELLED');
 
       // DB row is CANCELLED
       const dbRow = await deps.db
@@ -1363,6 +1523,7 @@ describe('Admin invites - list / resend / cancel', () => {
         headers: { host: `${tk}.hubins.com`, cookie },
       });
       expect(first.statusCode).toBe(200);
+      CancelInviteResponseSchema.parse(first.json());
 
       // Second cancel — already cancelled
       const second = await app.inject({

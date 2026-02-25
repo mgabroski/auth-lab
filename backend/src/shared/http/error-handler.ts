@@ -8,7 +8,6 @@
  *
  * RESPONSIBILITIES:
  * - AppError → map .status and .code to structured HTTP response.
- * - RateLimitError → 429 response.
  * - Zod validation errors → 400 (safety net if controller misses).
  * - Unexpected errors → 500 with generic message.
  * - Log all errors with request context for debugging.
@@ -19,14 +18,12 @@
  * - Log full error details (including REDACTED meta) for observability.
  * - Always use withRequestContext(req) so requestId, tenantKey, userId,
  *   and role are automatically included in every log line.
- *
  * TODO:
  * - Sentry capture for unexpected errors (observability/sentry.ts).
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AppError } from './errors';
-import { RateLimitError } from '../security/rate-limit';
 import { withRequestContext } from '../logger/with-context';
 
 type ErrorResponseBody = {
@@ -70,7 +67,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((err: Error, req: FastifyRequest, reply: FastifyReply) => {
     const log = withRequestContext(req);
 
-    // 1) Known application errors
+    // 1) Known application errors (includes rate limit — AppError.rateLimited())
     if (err instanceof AppError) {
       log.warn('app_error', {
         flow: 'http.error',
@@ -83,21 +80,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return reply.status(err.status).send(buildResponse(err.code, err.message));
     }
 
-    // 2) Rate limit errors
-    if (err instanceof RateLimitError) {
-      log.warn('rate_limit', {
-        flow: 'http.error',
-        key: err.key,
-        limit: err.limit,
-        windowSeconds: err.windowSeconds,
-      });
-
-      return reply
-        .status(429)
-        .send(buildResponse('RATE_LIMITED', 'Too many requests. Try again later.'));
-    }
-
-    // 3) Unexpected errors — never leak internals
+    // 2) Unexpected errors — never leak internals
     // TODO: Sentry.captureException(err)
     log.error('unhandled_error', {
       flow: 'http.error',
