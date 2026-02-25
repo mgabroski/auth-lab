@@ -10,7 +10,7 @@
  * - All four admin endpoints require ADMIN role + MFA — enforced in controller,
  *   not in route definitions, keeping guards visible at the controller layer.
  *
- * PR1: POST /admin/invites only.
+ * PR1: POST /admin/invites.
  * PR2: GET /admin/invites, POST /admin/invites/:inviteId/resend, DELETE /admin/invites/:inviteId.
  */
 
@@ -22,4 +22,7 @@ export function registerAdminInviteRoutes(
   controller: AdminInviteController,
 ): void {
   app.post('/admin/invites', controller.createInvite.bind(controller));
+  app.get('/admin/invites', controller.listInvites.bind(controller));
+  app.post('/admin/invites/:inviteId/resend', controller.resendInvite.bind(controller));
+  app.delete('/admin/invites/:inviteId', controller.cancelInvite.bind(controller));
 }

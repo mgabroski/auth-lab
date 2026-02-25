@@ -11,9 +11,9 @@
  * - Supports withDb() for transaction binding (same pattern as AuditRepo).
  *
  * BRICK 12 UPDATE:
- * - Added insertInvite() for admin invite creation.
- * - Added cancelPendingInvitesByEmail() for bulk-cancel on resend.
- * - Added cancelInviteById() stub (implemented in PR2).
+ * - Added insertInvite() for admin invite creation — PR1.
+ * - Added cancelPendingInvitesByEmail() for bulk-cancel on resend — PR1.
+ * - Added cancelInviteById() for targeted cancel/resend — PR2.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -101,5 +101,32 @@ export class InviteRepo {
       .executeTakeFirst();
 
     return Number(res?.numUpdatedRows ?? 0);
+  }
+
+  /**
+   * Cancels a single PENDING invite by its ID, scoped to tenantId.
+   * Returns true if the row was updated, false if the invite was already
+   * in a terminal state (CANCELLED / ACCEPTED / EXPIRED) — handles the
+   * TOCTOU race where two concurrent requests race to cancel the same invite.
+   *
+   * Used by resendInvite (cancel old before inserting new) and cancelInvite.
+   */
+  async cancelInviteById(params: {
+    inviteId: string;
+    tenantId: string;
+    cancelledAt: Date;
+  }): Promise<boolean> {
+    const res = await this.db
+      .updateTable('invites')
+      .set({
+        status: 'CANCELLED',
+        used_at: params.cancelledAt,
+      })
+      .where('id', '=', params.inviteId)
+      .where('tenant_id', '=', params.tenantId)
+      .where('status', '=', 'PENDING')
+      .executeTakeFirst();
+
+    return Number(res?.numUpdatedRows ?? 0) > 0;
   }
 }

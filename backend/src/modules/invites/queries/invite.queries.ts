@@ -1,5 +1,5 @@
 /**
- * backend/src/modules/invites/invite.queries.ts
+ * backend/src/modules/invites/queries/invite.queries.ts
  *
  * WHY:
  * - Queries are read-only and side-effect free.
@@ -11,15 +11,19 @@
  * - No AppError.
  *
  * BRICK 12 UPDATE:
- * - Added getPendingInviteByTenantAndEmail (duplicate guard for createInvite).
- * - Added rowToInviteSummary helper (shared by getPendingInviteByTenantAndEmail
- *   and future list/get queries in PR2).
+ * - Added getPendingInviteByTenantAndEmail (duplicate guard for createInvite) — PR1.
+ * - Added rowToInviteSummary helper (shared by all query functions) — PR1.
+ * - Added getInviteByIdAndTenant (resend/cancel lookup) — PR2.
+ * - Added listInvitesByTenant (paginated list endpoint) — PR2.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
 import {
   findInviteByTenantAndTokenHashSql,
   findPendingInviteByTenantAndEmailSql,
+  findInviteByIdAndTenantSql,
+  findInvitesByTenantSql,
+  countInvitesByTenantSql,
 } from '../dal/invite.query-sql';
 import type { Invite, InviteRole, InviteStatus, InviteSummary } from '../invite.types';
 
@@ -100,4 +104,54 @@ export async function getPendingInviteByTenantAndEmail(
   const row = await findPendingInviteByTenantAndEmailSql(db, params);
   if (!row) return undefined;
   return rowToInviteSummary(row);
+}
+
+/**
+ * Loads a single invite by its ID, scoped to the given tenantId.
+ * Returns undefined when not found OR when the invite belongs to a different tenant
+ * (cross-tenant read returns the same undefined — no existence oracle).
+ *
+ * Used by resendInvite and cancelInvite inside their transaction boundaries.
+ */
+export async function getInviteByIdAndTenant(
+  db: DbExecutor,
+  params: { inviteId: string; tenantId: string },
+): Promise<InviteSummary | undefined> {
+  const row = await findInviteByIdAndTenantSql(db, params);
+  if (!row) return undefined;
+  return rowToInviteSummary(row);
+}
+
+/**
+ * Returns a paginated slice of invites for a tenant plus the total count.
+ * Optional status filter narrows results to a single status value.
+ *
+ * Used by the GET /admin/invites list endpoint.
+ */
+export async function listInvitesByTenant(
+  db: DbExecutor,
+  params: {
+    tenantId: string;
+    status?: InviteStatus;
+    limit: number;
+    offset: number;
+  },
+): Promise<{ invites: InviteSummary[]; total: number }> {
+  const [rows, total] = await Promise.all([
+    findInvitesByTenantSql(db, {
+      tenantId: params.tenantId,
+      status: params.status,
+      limit: params.limit,
+      offset: params.offset,
+    }),
+    countInvitesByTenantSql(db, {
+      tenantId: params.tenantId,
+      status: params.status,
+    }),
+  ]);
+
+  return {
+    invites: rows.map(rowToInviteSummary),
+    total,
+  };
 }

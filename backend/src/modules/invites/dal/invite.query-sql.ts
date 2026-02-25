@@ -11,7 +11,9 @@
  * - Tenant-scoped reads where applicable.
  *
  * BRICK 12 UPDATE:
- * - Added findPendingInviteByTenantAndEmailSql for duplicate-invite guard.
+ * - Added findPendingInviteByTenantAndEmailSql for duplicate-invite guard (PR1).
+ * - Added findInviteByIdAndTenantSql for resend/cancel lookup (PR2).
+ * - Added findInvitesByTenantSql + countInvitesByTenantSql for paginated list (PR2).
  */
 
 import type { Selectable } from 'kysely';
@@ -49,4 +51,67 @@ export async function findPendingInviteByTenantAndEmailSql(
     .orderBy('created_at', 'desc')
     .limit(1)
     .executeTakeFirst();
+}
+
+/**
+ * Returns a single invite scoped to (inviteId, tenantId).
+ * Used by resend and cancel to load the target invite before mutation.
+ * Tenant scoping is the security boundary — cross-tenant reads return undefined.
+ */
+export async function findInviteByIdAndTenantSql(
+  db: DbExecutor,
+  params: { inviteId: string; tenantId: string },
+): Promise<InviteRow | undefined> {
+  return db
+    .selectFrom('invites')
+    .selectAll()
+    .where('id', '=', params.inviteId)
+    .where('tenant_id', '=', params.tenantId)
+    .executeTakeFirst();
+}
+
+/**
+ * Returns a page of invite rows for a tenant, newest first.
+ * Optional status filter narrows to a single status value.
+ */
+export async function findInvitesByTenantSql(
+  db: DbExecutor,
+  params: {
+    tenantId: string;
+    status?: string;
+    limit: number;
+    offset: number;
+  },
+): Promise<InviteRow[]> {
+  return db
+    .selectFrom('invites')
+    .selectAll()
+    .where('tenant_id', '=', params.tenantId)
+    .$if(params.status !== undefined, (qb) => qb.where('status', '=', params.status!))
+    .orderBy('created_at', 'desc')
+    .limit(params.limit)
+    .offset(params.offset)
+    .execute();
+}
+
+/**
+ * Returns the total count of invites for a tenant.
+ * Matches the same optional status filter as findInvitesByTenantSql so that
+ * the list endpoint can return accurate totals for filtered queries.
+ */
+export async function countInvitesByTenantSql(
+  db: DbExecutor,
+  params: {
+    tenantId: string;
+    status?: string;
+  },
+): Promise<number> {
+  const result = await db
+    .selectFrom('invites')
+    .select((eb) => eb.fn.count('id').as('total'))
+    .where('tenant_id', '=', params.tenantId)
+    .$if(params.status !== undefined, (qb) => qb.where('status', '=', params.status!))
+    .executeTakeFirstOrThrow();
+
+  return Number(result.total);
 }
