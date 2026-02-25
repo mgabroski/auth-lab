@@ -64,6 +64,9 @@ import { executeVerifyEmailFlow } from './flows/signup/execute-verify-email-flow
 import type { ResendVerificationParams } from './flows/signup/execute-resend-verification-flow';
 import { executeResendVerificationFlow } from './flows/signup/execute-resend-verification-flow';
 
+import { AuditWriter } from '../../shared/audit/audit.writer';
+import { auditLogout } from './auth.audit';
+
 export class AuthService {
   constructor(
     private readonly deps: {
@@ -317,10 +320,6 @@ export class AuthService {
     });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Public Signup + Email Verification
-  // ─────────────────────────────────────────────────────────────────────────────
-
   async signup(params: SignupParams): Promise<{ result: AuthResult; sessionId: string }> {
     return executeSignupFlow(
       {
@@ -367,5 +366,44 @@ export class AuthService {
       },
       params,
     );
+  }
+
+  /**
+   * Destroys the Redis session and writes a best-effort audit event.
+   * Audit failure MUST NOT surface as 500 — caller always gets a clean return.
+   */
+  async logout(params: {
+    sessionId: string;
+    userId: string;
+    tenantId: string;
+    membershipId: string;
+    ip: string;
+    userAgent: string | null;
+    requestId: string;
+  }): Promise<void> {
+    await this.deps.sessionStore.destroy(params.sessionId);
+
+    // Audit is best-effort: failure must not surface as a 500.
+    const audit = new AuditWriter(this.deps.auditRepo, {
+      requestId: params.requestId,
+      ip: params.ip,
+      userAgent: params.userAgent,
+    }).withContext({
+      userId: params.userId,
+      tenantId: params.tenantId,
+      membershipId: params.membershipId,
+    });
+
+    try {
+      await auditLogout(audit, { sessionId: params.sessionId });
+    } catch (err) {
+      this.deps.logger.error({
+        msg: 'auth.logout.audit_failed',
+        requestId: params.requestId,
+        userId: params.userId,
+        tenantId: params.tenantId,
+        err,
+      });
+    }
   }
 }

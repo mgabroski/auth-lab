@@ -32,4 +32,7 @@ export function registerAuthRoutes(app: FastifyInstance, controller: AuthControl
   app.post('/auth/signup', controller.signup.bind(controller));
   app.post('/auth/verify-email', controller.verifyEmail.bind(controller));
   app.post('/auth/resend-verification', controller.resendVerification.bind(controller));
+
+  // Logout
+  app.post('/auth/logout', controller.logout.bind(controller));
 }

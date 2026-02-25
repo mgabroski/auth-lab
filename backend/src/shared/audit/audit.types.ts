@@ -13,40 +13,30 @@
  * - Metadata is a plain object (repo serializes to JSON for DB).
  * - Add known actions to the union as modules grow.
  * - Never import module types here (shared must stay module-agnostic).
- *
- * BRICK 11 UPDATE:
- * - Added 'auth.signup.success' — written inside tx when public signup completes.
- * - Added 'auth.email.verified' — written inside tx when email token is consumed.
  */
 
 // Known audit actions (add as modules grow)
 export type KnownAuditAction =
-  // Invites (Brick 6)
   | 'invite.accepted'
   | 'invite.created'
   | 'invite.cancelled'
   | 'invite.resent'
-  // Auth (Brick 7)
   | 'auth.register.success'
   | 'auth.login.success'
   | 'auth.login.failed'
-  // Auth (Brick 8)
   | 'auth.password_reset.requested'
   | 'auth.password_reset.completed'
-  // Auth (Brick 9 — MFA)
   | 'auth.mfa.setup.started'
   | 'auth.mfa.setup.completed'
   | 'auth.mfa.verify.succeeded'
   | 'auth.mfa.verify.failed'
   | 'auth.mfa.recovery.used'
   | 'auth.mfa.recovery.failed'
-  // Auth (Brick 10 — SSO)
   | 'auth.sso.login.success'
   | 'auth.sso.login.failed'
-  // Auth (Brick 11 — Public Signup)
   | 'auth.signup.success'
   | 'auth.email.verified'
-  // Users / Memberships (Brick 7)
+  | 'auth.logout'
   | 'user.created'
   | 'membership.activated'
   | 'membership.created';

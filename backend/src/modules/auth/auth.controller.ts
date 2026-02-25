@@ -37,7 +37,7 @@ import {
 } from './auth.schemas';
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
-import { setSessionCookie } from '../../shared/session/set-session-cookie';
+import { setSessionCookie, clearSessionCookie } from '../../shared/session/set-session-cookie';
 import { requireSession } from '../../shared/http/require-auth-context';
 
 const FORGOT_PASSWORD_RESPONSE = {
@@ -256,10 +256,6 @@ export class AuthController {
     return reply.status(200).send(result);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // SSO
-  // ─────────────────────────────────────────────────────────────────────────────
-
   async ssoStart(req: FastifyRequest, reply: FastifyReply) {
     const providerRaw = (req.params as { provider?: unknown } | undefined)?.provider;
 
@@ -316,10 +312,6 @@ export class AuthController {
     setSessionCookie(reply, sessionId, this.isProduction);
     return reply.status(302).redirect(redirectTo);
   }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // Public Signup + Email Verification
-  // ─────────────────────────────────────────────────────────────────────────────
 
   /**
    * POST /auth/signup
@@ -399,5 +391,35 @@ export class AuthController {
     });
 
     return reply.status(200).send(RESEND_VERIFICATION_RESPONSE);
+  }
+
+  /**
+   * POST /auth/logout
+   *
+   * Guard: requireSession only — no role, no MFA requirement.
+   * A user who has not yet completed MFA must still be able to log out;
+   * an MFA gate would trap partial-auth sessions permanently.
+   *
+   * Flow:
+   *   1. requireSession → 401 if no session
+   *   2. authService.logout() — destroys Redis session + writes best-effort audit
+   *   3. clearSessionCookie — Max-Age=0 instructs browser to delete immediately
+   *   4. 200 { message: 'Logged out.' }
+   */
+  async logout(req: FastifyRequest, reply: FastifyReply) {
+    const auth = requireSession(req);
+
+    await this.authService.logout({
+      sessionId: auth.sessionId,
+      userId: auth.userId,
+      tenantId: auth.tenantId,
+      membershipId: auth.membershipId,
+      ip: req.ip,
+      userAgent: req.headers['user-agent'] ?? null,
+      requestId: req.requestContext.requestId,
+    });
+
+    clearSessionCookie(reply, this.isProduction);
+    return reply.status(200).send({ message: 'Logged out.' });
   }
 }

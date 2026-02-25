@@ -10,10 +10,6 @@
  * - No DB access (delegates to AuditWriter).
  * - No business rules.
  * - Never include passwords, hashes, or tokens in metadata.
- *
- * BRICK 11 UPDATE:
- * - Added auditSignupSuccess — written inside tx on successful public signup.
- * - Added auditEmailVerified — written inside tx when verify-email token consumed.
  */
 
 import type { AuditWriter } from '../../shared/audit/audit.writer';
@@ -161,7 +157,6 @@ export function auditSsoLoginFailed(
 }
 
 /**
- * Brick 11 — Public Signup.
  * Written inside the signup transaction.
  */
 export function auditSignupSuccess(
@@ -176,12 +171,22 @@ export function auditSignupSuccess(
 }
 
 /**
- * Brick 11 — Email Verification.
  * Written inside the verify-email transaction when the token is consumed
  * and users.email_verified is flipped to true.
  */
 export function auditEmailVerified(writer: AuditWriter, data: { userId: string }): Promise<void> {
   return writer.append('auth.email.verified', {
     userId: data.userId,
+  });
+}
+
+/**
+ * Written best-effort after session destroy. Failure must not surface as 500.
+ * sessionId is safe to log post-destruction (forensic correlation only).
+ * No email field — actor is identified by userId/membershipId in AuditContext.
+ */
+export function auditLogout(writer: AuditWriter, data: { sessionId: string }): Promise<void> {
+  return writer.append('auth.logout', {
+    sessionId: data.sessionId,
   });
 }
