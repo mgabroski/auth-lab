@@ -56,6 +56,9 @@ import type { MembershipModule } from '../modules/memberships/membership.module'
 import { createAuthModule } from '../modules/auth/auth.module';
 import type { AuthModule } from '../modules/auth/auth.module';
 
+import { createAuditModule } from '../modules/audit/audit.module';
+import type { AuditModule } from '../modules/audit/audit.module';
+
 import { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
 import { GoogleSsoAdapter } from '../modules/auth/sso/google/google-sso.adapter';
 import { MicrosoftSsoAdapter } from '../modules/auth/sso/microsoft/microsoft-sso.adapter';
@@ -88,6 +91,7 @@ export type AppDeps = {
   users: UserModule;
   memberships: MembershipModule;
   auth: AuthModule;
+  audit: AuditModule;
 
   // lifecycle
   close: () => Promise<void>;
@@ -150,6 +154,7 @@ export async function buildDeps(
   const invites = createInviteModule({ db, tokenHasher, logger, auditRepo, rateLimiter, queue });
   const users = createUserModule({ db });
   const memberships = createMembershipModule({ db });
+  const audit = createAuditModule({ db });
 
   const auth = createAuthModule({
     db,
@@ -199,6 +204,7 @@ export async function buildDeps(
     users,
     memberships,
     auth,
+    audit,
     close: async () => {
       await redis.close();
       await db.destroy();
