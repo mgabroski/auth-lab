@@ -1,3 +1,10 @@
+/**
+ * backend/test/dal/users.spec.ts
+ *
+ * - Sequential insert same email → existing user returned, no error thrown.
+ * - Concurrent insert same email → exactly one row, all requests succeed.
+ */
+
 import { describe, it, expect } from 'vitest';
 import { buildTestApp } from '../helpers/build-test-app';
 import { UserRepo } from '../../src/modules/users/dal/user.repo';
@@ -86,6 +93,79 @@ describe('users DAL', () => {
     try {
       const row = await selectUserByEmailSql(deps.db, 'nobody@nowhere.com');
       expect(row).toBeUndefined();
+    } finally {
+      await close();
+    }
+  });
+
+  // ── PR1: Concurrency-safe insert tests ────────────────────────────────────
+
+  it('sequential insert with same email returns the existing user without throwing', async () => {
+    // Verifies ON CONFLICT DO NOTHING path: second insert returns first user.
+    const { deps, close } = await buildTestApp();
+    try {
+      const repo = new UserRepo(deps.db);
+      const email = 'conflict-sequential@example.com';
+
+      const first = await repo.insertUser({ email, name: 'First' });
+      expect(first.id).toBeDefined();
+
+      // Second insert for the same email — must not throw, must return first user.
+      const second = await repo.insertUser({ email, name: 'Second' });
+
+      // Same user returned — id matches, no duplicate row created.
+      expect(second.id).toBe(first.id);
+      expect(second.email).toBe(first.email);
+
+      // DB has exactly one row for this email.
+      const rows = await deps.db
+        .selectFrom('users')
+        .selectAll()
+        .where('email', '=', email)
+        .execute();
+      expect(rows).toHaveLength(1);
+
+      await deps.db.deleteFrom('users').where('id', '=', first.id).execute();
+    } finally {
+      await close();
+    }
+  });
+
+  it('concurrent inserts with same email produce exactly one row and no errors', async () => {
+    // Simulates N simultaneous requests racing on the same email.
+    // All must succeed (no 500), exactly one DB row must exist.
+    const { deps, close } = await buildTestApp();
+    try {
+      const repo = new UserRepo(deps.db);
+      const email = 'conflict-concurrent@example.com';
+      const concurrency = 5;
+
+      const results = await Promise.all(
+        Array.from({ length: concurrency }, (_, i) =>
+          repo.insertUser({ email, name: `Racer ${i}` }),
+        ),
+      );
+
+      // All results must resolve (no rejections).
+      expect(results).toHaveLength(concurrency);
+      for (const result of results) {
+        expect(result.id).toBeDefined();
+        expect(result.email).toBe(email);
+      }
+
+      // All returned ids must be the same user.
+      const uniqueIds = new Set(results.map((r) => r.id));
+      expect(uniqueIds.size).toBe(1);
+
+      // Exactly one row in the DB.
+      const rows = await deps.db
+        .selectFrom('users')
+        .selectAll()
+        .where('email', '=', email)
+        .execute();
+      expect(rows).toHaveLength(1);
+
+      await deps.db.deleteFrom('users').where('email', '=', email).execute();
     } finally {
       await close();
     }

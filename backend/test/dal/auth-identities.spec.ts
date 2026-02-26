@@ -1,3 +1,12 @@
+/**
+ * backend/test/dal/auth-identities.spec.ts
+ *
+ * PR1 HARDENING ADDITIONS:
+ * - insertSsoIdentity with ON CONFLICT DO NOTHING: sequential duplicate returns
+ *   existing identity (no throw).
+ * - insertSsoIdentity concurrent race: exactly one row, all requests succeed.
+ */
+
 import { describe, it, expect } from 'vitest';
 import { buildTestApp } from '../helpers/build-test-app';
 import { UserRepo } from '../../src/modules/users/dal/user.repo';
@@ -174,26 +183,145 @@ describe('auth identities DAL', () => {
     }
   });
 
-  it('insertSsoIdentity respects UNIQUE(user_id, provider) — duplicate insert throws', async () => {
+  // ── PR1: Concurrency-safe SSO identity insert tests ───────────────────────
+
+  it('sequential insertSsoIdentity for same user+provider returns existing identity without throwing', async () => {
+    // Verifies ON CONFLICT DO NOTHING path on auth_identities(user_id, provider).
+    // The second insert must return the first identity, not throw.
     const { deps, close } = await buildTestApp();
     try {
       const userRepo = new UserRepo(deps.db);
-      const user = await userRepo.insertUser({ email: 'unique@example.com', name: 'Unique' });
-
-      const authRepo = new AuthRepo(deps.db);
-      await authRepo.insertSsoIdentity({
-        userId: user.id,
-        provider: 'google',
-        providerSubject: 'sub-1',
+      const user = await userRepo.insertUser({
+        email: 'sso-conflict-seq@example.com',
+        name: 'SSO Sequential',
       });
 
-      await expect(
-        authRepo.insertSsoIdentity({
-          userId: user.id,
-          provider: 'google',
-          providerSubject: 'sub-2',
-        }),
-      ).rejects.toBeDefined();
+      const authRepo = new AuthRepo(deps.db);
+
+      const first = await authRepo.insertSsoIdentity({
+        userId: user.id,
+        provider: 'google',
+        providerSubject: 'sub-original',
+      });
+      expect(first.id).toBeDefined();
+
+      // Second insert same user+provider — must not throw, must return existing.
+      const second = await authRepo.insertSsoIdentity({
+        userId: user.id,
+        provider: 'google',
+        providerSubject: 'sub-duplicate', // different subject, same conflict key
+      });
+
+      // Same identity returned.
+      expect(second.id).toBe(first.id);
+
+      // Exactly one row in the DB for this user+provider.
+      const rows = await deps.db
+        .selectFrom('auth_identities')
+        .selectAll()
+        .where('user_id', '=', user.id)
+        .where('provider', '=', 'google')
+        .execute();
+
+      expect(rows).toHaveLength(1);
+
+      // Destructure the first element to avoid unnecessary type assertions.
+      const [identity] = rows;
+
+      // Original subject preserved — second insert was a no-op.
+      expect(identity.provider_subject).toBe('sub-original');
+
+      await deps.db.deleteFrom('auth_identities').where('user_id', '=', user.id).execute();
+      await deps.db.deleteFrom('users').where('id', '=', user.id).execute();
+    } finally {
+      await close();
+    }
+  });
+
+  it('concurrent insertSsoIdentity for same user+provider produces exactly one row and no errors', async () => {
+    // Simulates concurrent OAuth callbacks racing for the same user+provider.
+    // All must succeed (no 500), exactly one identity row must exist.
+    const { deps, close } = await buildTestApp();
+    try {
+      const userRepo = new UserRepo(deps.db);
+      const user = await userRepo.insertUser({
+        email: 'sso-conflict-concurrent@example.com',
+        name: 'SSO Concurrent',
+      });
+
+      const authRepo = new AuthRepo(deps.db);
+      const concurrency = 5;
+
+      const results = await Promise.all(
+        Array.from({ length: concurrency }, (_, i) =>
+          authRepo.insertSsoIdentity({
+            userId: user.id,
+            provider: 'google',
+            providerSubject: `sub-racer-${i}`,
+          }),
+        ),
+      );
+
+      // All results must resolve (no rejections).
+      expect(results).toHaveLength(concurrency);
+      for (const result of results) {
+        expect(result.id).toBeDefined();
+      }
+
+      // All returned ids must be the same identity.
+      const uniqueIds = new Set(results.map((r) => r.id));
+      expect(uniqueIds.size).toBe(1);
+
+      // Exactly one row in the DB.
+      const rows = await deps.db
+        .selectFrom('auth_identities')
+        .selectAll()
+        .where('user_id', '=', user.id)
+        .where('provider', '=', 'google')
+        .execute();
+      expect(rows).toHaveLength(1);
+
+      await deps.db.deleteFrom('auth_identities').where('user_id', '=', user.id).execute();
+      await deps.db.deleteFrom('users').where('id', '=', user.id).execute();
+    } finally {
+      await close();
+    }
+  });
+
+  it('insertSsoIdentity is provider-scoped — same user can have google AND microsoft identities', async () => {
+    // Verifies the UNIQUE(user_id, provider) constraint doesn't block
+    // legitimate multi-provider scenarios.
+    const { deps, close } = await buildTestApp();
+    try {
+      const userRepo = new UserRepo(deps.db);
+      const user = await userRepo.insertUser({
+        email: 'multi-provider@example.com',
+        name: 'Multi',
+      });
+
+      const authRepo = new AuthRepo(deps.db);
+
+      const google = await authRepo.insertSsoIdentity({
+        userId: user.id,
+        provider: 'google',
+        providerSubject: 'google-sub',
+      });
+
+      const microsoft = await authRepo.insertSsoIdentity({
+        userId: user.id,
+        provider: 'microsoft',
+        providerSubject: 'ms-sub',
+      });
+
+      // Different ids — these are distinct identities.
+      expect(google.id).not.toBe(microsoft.id);
+
+      const rows = await deps.db
+        .selectFrom('auth_identities')
+        .selectAll()
+        .where('user_id', '=', user.id)
+        .execute();
+      expect(rows).toHaveLength(2);
 
       await deps.db.deleteFrom('auth_identities').where('user_id', '=', user.id).execute();
       await deps.db.deleteFrom('users').where('id', '=', user.id).execute();

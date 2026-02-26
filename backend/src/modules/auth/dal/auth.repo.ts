@@ -22,8 +22,6 @@ export class AuthRepo {
     return new AuthRepo(db);
   }
 
-  // ── auth_identities ──────────────────────────────────────────
-
   /**
    * Creates a password auth identity for a user.
    * DB constraint: unique (user_id, provider).
@@ -86,12 +84,22 @@ export class AuthRepo {
     return { id: row.id };
   }
 
+  /**
+   * Creates an SSO auth identity for a user. If one already exists for the same
+   * (user_id, provider) pair — which can happen with concurrent OAuth callbacks —
+   * the existing identity is returned and no error is thrown.
+   *
+   * Pattern: INSERT … ON CONFLICT (user_id, provider) DO NOTHING RETURNING.
+   * If RETURNING is empty (conflict), the existing row is re-read in the same
+   * db/tx scope. (DDIA: correctness under concurrency is non-negotiable.)
+   */
   async insertSsoIdentity(input: {
     userId: string;
     provider: 'google' | 'microsoft';
     providerSubject: string;
   }): Promise<{ id: string }> {
-    const row = await this.db
+    // ── INSERT … ON CONFLICT DO NOTHING (concurrency-safe) ───────────────
+    const inserted = await this.db
       .insertInto('auth_identities')
       .values({
         user_id: input.userId,
@@ -99,10 +107,25 @@ export class AuthRepo {
         provider_subject: input.providerSubject,
         password_hash: null,
       })
+      .onConflict((oc) => oc.columns(['user_id', 'provider']).doNothing())
       .returning(['id'])
+      .executeTakeFirst();
+
+    if (inserted) {
+      return { id: inserted.id };
+    }
+
+    // ── Conflict: concurrent callback created this identity first ─────────
+    // Re-read within the same db/tx scope. The row MUST exist (it caused the
+    // conflict), so executeTakeFirstOrThrow is correct here.
+    const existing = await this.db
+      .selectFrom('auth_identities')
+      .select(['id'])
+      .where('user_id', '=', input.userId)
+      .where('provider', '=', input.provider)
       .executeTakeFirstOrThrow();
 
-    return { id: row.id };
+    return { id: existing.id };
   }
 
   /**

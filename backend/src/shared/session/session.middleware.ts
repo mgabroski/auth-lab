@@ -5,9 +5,22 @@
  * - Reads session cookie on every request.
  * - If valid session exists, populates req.authContext (userId, membershipId, role).
  * - Does NOT throw if no session — endpoints decide if auth is required.
- * - Enforces tenant safety: session.tenantKey must match request tenantKey.
- *   If mismatched, the session is silently ignored (authContext stays null).
- *   This prevents a cookie obtained on tenant-A from being used on tenant-B.
+ * - Enforces tenant safety: session.tenantKey must EXACTLY match request tenantKey.
+ *   If mismatched (including null vs. any value), the session is silently ignored
+ *   (authContext stays null). This prevents a cookie from tenant-A being used
+ *   on tenant-B or on a host with no tenant (e.g. localhost).
+ *
+ * TENANT SAFETY — ENFORCEMENT POINT (LOCKED):
+ * This is the ONLY place where session ↔ tenant binding is enforced.
+ * Do NOT add a second enforcement point elsewhere — that violates SRP
+ * and creates two sources of truth that can drift.
+ *
+ * Enforcement rule:
+ *   session.tenantKey MUST equal req.requestContext.tenantKey (exact string match).
+ *   Any mismatch — including a set tenantKey against a null-tenantKey request —
+ *   is silently treated as unauthenticated. No error is exposed to the caller.
+ *
+ * Tests: test/e2e/tenant-isolation.spec.ts
  *
  * RULES:
  * - Runs AFTER requestContext and authContext hooks (needs both to exist).
@@ -47,14 +60,26 @@ export function registerSessionMiddleware(app: FastifyInstance, sessionStore: Se
     const session = await sessionStore.get(sessionId);
     if (!session) return;
 
-    // ── Tenant safety ────────────────────────────────────
-    // The session was created for a specific tenant (identified by tenantKey).
-    // The current request targets a tenant identified by req.requestContext.tenantKey.
-    // If they don't match, the cookie belongs to a different workspace —
-    // silently ignore it (don't populate authContext, don't throw).
+    // ── Tenant safety (LOCKED — enforced here and only here) ─────────────
+    // A session is issued for exactly one tenant (session.tenantKey).
+    // The request targets a tenant identified by req.requestContext.tenantKey.
+    //
+    // Rejection cases (all treated identically — silent, no error exposed):
+    //   1. session.tenantKey = 'goodwill-ca', request tenantKey = 'goodwill-chi'
+    //      → cross-tenant cookie reuse attempt
+    //   2. session.tenantKey = 'goodwill-ca', request tenantKey = null
+    //      → tenant cookie used on a non-tenant host (e.g. bare localhost)
+    //
+    // Allow case:
+    //   session.tenantKey === requestTenantKey (exact match, both non-null)
+    //
+    // Note: session.tenantKey is always set (required by SessionData type).
+    // Using strict equality covers all mismatch permutations without
+    // conditional guards that could accidentally create bypass paths.
     const requestTenantKey = req.requestContext?.tenantKey ?? null;
-    if (requestTenantKey && session.tenantKey && session.tenantKey !== requestTenantKey) {
-      // Session belongs to a different tenant — treat as unauthenticated
+    if (session.tenantKey !== requestTenantKey) {
+      // Session belongs to a different tenant (or request has no tenant).
+      // Treat as unauthenticated — do not populate authContext, do not throw.
       return;
     }
 
