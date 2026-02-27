@@ -2,14 +2,12 @@
  * backend/src/app/build-app.ts
  *
  * WHY:
- * - Single place that assembles the runnable Fastify app:
- *   config -> deps -> server -> routes
- * - Makes E2E tests simple (build once, app.inject, close).
- * - Clean place to run dev-only seed/bootstrap later.
+ * - Starts OutboxWorker in non-test environments.
+ * - Ensures clean shutdown (stop worker before closing deps).
  *
  * RULES:
- * - No business logic here (only composition).
- * - No request handlers here (those belong in routes/modules).
+ * - Worker must not run in nodeEnv=test.
+ * - Worker start is a lifecycle concern (belongs here), not in DI.
  */
 
 import type { AppConfig } from './config';
@@ -18,6 +16,8 @@ import { buildServer } from './server';
 import { registerRoutes } from './routes';
 import { runDevSeed } from '../shared/db/seed/dev-seed';
 import { logger } from '../shared/logger/logger';
+
+import { OutboxWorker } from '../shared/outbox/outbox.worker';
 
 export async function buildApp(config: AppConfig, overrides: BuildDepsOverrides = {}) {
   const deps = await buildDeps(config, overrides);
@@ -57,7 +57,30 @@ export async function buildApp(config: AppConfig, overrides: BuildDepsOverrides 
     }
   }
 
+  // Outbox worker (non-test only)
+  const worker =
+    config.nodeEnv === 'test'
+      ? null
+      : new OutboxWorker(
+          {
+            db: deps.db,
+            outboxRepo: deps.outboxRepo,
+            outboxEncryption: deps.outboxEncryption,
+            emailAdapter: deps.emailAdapter,
+            logger: deps.logger,
+            tokenHasher: deps.tokenHasher,
+          },
+          {
+            pollIntervalMs: config.outbox.pollIntervalMs,
+            batchSize: config.outbox.batchSize,
+            maxAttemptsDefault: config.outbox.maxAttempts,
+          },
+        );
+
+  if (worker) worker.start();
+
   const close = async () => {
+    if (worker) worker.stop();
     await app.close();
     await deps.close();
   };

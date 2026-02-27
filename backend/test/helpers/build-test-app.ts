@@ -20,6 +20,7 @@ function requireEnv(name: string): string {
  * RULES:
  * - Seed is OFF by default.
  * - Uses DATABASE_URL + REDIS_URL from your dev/test infra containers.
+ * - Provides safe defaults for Outbox config so tests don't require OUTBOX_* env vars.
  */
 export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
   const baseConfig: AppConfig = {
@@ -54,6 +55,18 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
       microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? 'test-microsoft-client-secret',
     },
 
+    // ✅ Outbox (Step 2) — give tests safe defaults so DI never sees undefined config.outbox
+    outbox: {
+      pollIntervalMs: 5_000,
+      batchSize: 10,
+      maxAttempts: 5,
+      encDefaultVersion: 'v1',
+      encKeysByVersion: {
+        // 32-byte key, base64-encoded (zeros) — safe for tests only
+        v1: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      },
+    },
+
     seed: {
       enabled: false, // IMPORTANT: OFF in tests by default
       tenantKey: 'goodwill-ca',
@@ -66,6 +79,7 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
   const config: AppConfig = {
     ...baseConfig,
     ...overrides,
+
     // ensure nested objects merge correctly
     mfa: {
       ...baseConfig.mfa,
@@ -74,6 +88,14 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     sso: {
       ...baseConfig.sso,
       ...(overrides.sso ?? {}),
+    },
+    outbox: {
+      ...baseConfig.outbox,
+      ...(overrides.outbox ?? {}),
+      encKeysByVersion: {
+        ...baseConfig.outbox.encKeysByVersion,
+        ...(overrides.outbox?.encKeysByVersion ?? {}),
+      },
     },
     seed: {
       ...baseConfig.seed,

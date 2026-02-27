@@ -1,16 +1,15 @@
 /**
- * src/app/di.ts
+ * backend/src/app/di.ts
  *
  * WHY:
- * - Single dependency graph for the whole app.
- * - Creates infra clients ONCE (db, redis) and shares them safely.
- * - Keeps modules testable (later we can inject fakes).
+ * - Central dependency wiring for the application.
+ * - Adds Outbox wiring (repo, encryption, email adapter).
+ * - Keeps modules clean: flows depend on OutboxRepo + OutboxEncryption, not env.
  *
  * RULES:
- * - No business logic here.
- * - No HTTP logic here.
- * - Environment-dependent decisions (e.g. disable rate limits in test) belong HERE,
- *   not inside the classes themselves (DIP).
+ * - Worker start/stop is done in build-app (lifecycle), not in DI.
+ * - EmailAdapter must be idempotent; NoopEmailAdapter is used in dev/test now.
+ * - Avoid `any` and unsafe casts; validate + narrow config at boundaries.
  */
 
 import type { AppConfig } from './config';
@@ -40,6 +39,16 @@ import { TotpService } from '../shared/security/totp';
 import { EncryptionService } from '../shared/security/encryption';
 import { HmacSha256KeyedHasher } from '../shared/security/keyed-hasher';
 import type { KeyedHasher } from '../shared/security/keyed-hasher';
+
+// Outbox (PR2)
+import { OutboxRepo } from '../shared/outbox/outbox.repo';
+import {
+  OutboxEncryption,
+  type OutboxEncVersion,
+  type OutboxEncryptionConfig,
+} from '../shared/outbox/outbox-encryption';
+import type { EmailAdapter } from '../shared/outbox/email.adapter';
+import { NoopEmailAdapter } from '../shared/outbox/noop-email.adapter';
 
 import { createTenantModule } from '../modules/tenants/tenant.module';
 import type { TenantModule } from '../modules/tenants/tenant.module';
@@ -82,8 +91,13 @@ export type AppDeps = {
 
   ssoStateEncryptionService: EncryptionService;
 
-  // messaging
+  // messaging (legacy)
   queue: Queue;
+
+  // outbox
+  outboxRepo: OutboxRepo;
+  outboxEncryption: OutboxEncryption;
+  emailAdapter: EmailAdapter;
 
   // modules
   tenants: TenantModule;
@@ -98,12 +112,39 @@ export type AppDeps = {
 };
 
 export type BuildDepsOverrides = {
-  /**
-   * Test-only DI override: allows E2E tests to inject provider doubles without vi.mock().
-   * Not part of AppConfig because config must remain pure env/data.
-   */
   ssoProviderRegistry?: SsoProviderRegistry;
 };
+
+function isOutboxEncVersion(v: string): v is OutboxEncVersion {
+  return /^v[0-9]+$/.test(v);
+}
+
+function buildOutboxEncryptionConfig(config: AppConfig): OutboxEncryptionConfig {
+  const defaultVersionRaw = config.outbox.encDefaultVersion;
+  if (!isOutboxEncVersion(defaultVersionRaw)) {
+    throw new Error(
+      `Config: OUTBOX_ENC_DEFAULT_VERSION must be like v1, v2; got "${defaultVersionRaw}"`,
+    );
+  }
+
+  const keysByVersion: Record<OutboxEncVersion, string> = {} as Record<OutboxEncVersion, string>;
+
+  for (const [k, val] of Object.entries(config.outbox.encKeysByVersion)) {
+    if (!isOutboxEncVersion(k)) continue;
+    keysByVersion[k] = val;
+  }
+
+  if (!keysByVersion[defaultVersionRaw]) {
+    throw new Error(
+      `Config: OUTBOX_ENC_DEFAULT_VERSION=${defaultVersionRaw} has no configured key in OUTBOX_ENC_KEY_*`,
+    );
+  }
+
+  return {
+    defaultVersion: defaultVersionRaw,
+    keysByVersion,
+  };
+}
 
 export async function buildDeps(
   config: AppConfig,
@@ -119,8 +160,6 @@ export async function buildDeps(
     cost: config.bcryptCost,
   });
 
-  // Composition root decides when rate limiting is disabled.
-  // The RateLimiter class itself has no knowledge of environments.
   const rateLimiter = new RateLimiter(redis, {
     prefix: 'rl',
     disabled: config.nodeEnv === 'test',
@@ -146,12 +185,28 @@ export async function buildDeps(
         new MicrosoftSsoAdapter(config.sso.microsoftClientId, config.sso.microsoftClientSecret),
       );
 
-  // Phase 1: in-memory queue (swap for SQS/SendGrid adapter here in production)
+  // Legacy queue (kept for now; no longer used by auth/invite flows after Step 2)
   const queue: Queue = new InMemQueue();
 
-  // modules (no HTTP / no business logic here)
+  // Outbox
+  const outboxRepo = new OutboxRepo(db);
+  const outboxEncryption = new OutboxEncryption(buildOutboxEncryptionConfig(config));
+
+  // Dev/test adapter by default (provider adapter swaps later via DI only)
+  const emailAdapter: EmailAdapter = new NoopEmailAdapter({ logger, tokenHasher });
+
+  // modules
   const tenants = createTenantModule({ db });
-  const invites = createInviteModule({ db, tokenHasher, logger, auditRepo, rateLimiter, queue });
+  const invites = createInviteModule({
+    db,
+    tokenHasher,
+    logger,
+    auditRepo,
+    rateLimiter,
+    queue,
+    outboxRepo,
+    outboxEncryption,
+  });
   const users = createUserModule({ db });
   const memberships = createMembershipModule({ db });
   const audit = createAuditModule({ db });
@@ -165,14 +220,14 @@ export async function buildDeps(
     auditRepo,
     sessionStore,
     queue,
+    outboxRepo,
+    outboxEncryption,
     userRepo: users.userRepo,
     membershipRepo: memberships.membershipRepo,
     isProduction: config.nodeEnv === 'production',
     totpService,
     encryptionService,
     mfaKeyedHasher,
-
-    // Brick 10 (SSO)
     sso: {
       stateEncryptionService: ssoStateEncryptionService,
       redirectBaseUrl: config.sso.redirectBaseUrl,
@@ -190,15 +245,18 @@ export async function buildDeps(
     auditRepo,
     sessionStore,
 
-    // Brick 9 (MFA)
     totpService,
     encryptionService,
     mfaKeyedHasher,
 
-    // Brick 10 (SSO)
     ssoStateEncryptionService,
 
     queue,
+
+    outboxRepo,
+    outboxEncryption,
+    emailAdapter,
+
     tenants,
     invites,
     users,

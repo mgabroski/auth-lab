@@ -100,6 +100,21 @@ export interface MfaSecrets {
   verified_at: Timestamp | null;
 }
 
+export interface OutboxMessages {
+  attempts: Generated<number>;
+  available_at: Generated<Timestamp>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  idempotency_key: string;
+  last_error: string | null;
+  locked_at: Timestamp | null;
+  locked_by: string | null;
+  max_attempts: Generated<number>;
+  payload: Json;
+  status: Generated<string>;
+  type: string;
+}
+
 export interface PasswordResetTokens {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
@@ -139,6 +154,7 @@ export interface DB {
   memberships: Memberships;
   mfa_recovery_codes: MfaRecoveryCodes;
   mfa_secrets: MfaSecrets;
+  outbox_messages: OutboxMessages;
   password_reset_tokens: PasswordResetTokens;
   tenants: Tenants;
   users: Users;

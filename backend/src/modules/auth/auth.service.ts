@@ -18,6 +18,10 @@ import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { SessionStore } from '../../shared/session/session.store';
 import type { Queue } from '../../shared/messaging/queue';
 
+// Outbox (PR2)
+import type { OutboxRepo } from '../../shared/outbox/outbox.repo';
+import type { OutboxEncryption } from '../../shared/outbox/outbox-encryption';
+
 import type { UserRepo } from '../users/dal/user.repo';
 import type { MembershipRepo } from '../memberships/dal/membership.repo';
 
@@ -77,7 +81,17 @@ export class AuthService {
       rateLimiter: RateLimiter;
       auditRepo: AuditRepo;
       sessionStore: SessionStore;
+
+      /**
+       * Legacy queue: kept wired to avoid unrelated churn.
+       * PR2 migrates auth/invite EMAIL side-effects to DB Outbox.
+       */
       queue: Queue;
+
+      // Outbox (PR2)
+      outboxRepo: OutboxRepo;
+      outboxEncryption: OutboxEncryption;
+
       userRepo: UserRepo;
       membershipRepo: MembershipRepo;
       authRepo: AuthRepo;
@@ -205,8 +219,9 @@ export class AuthService {
         logger: this.deps.logger,
         rateLimiter: this.deps.rateLimiter,
         auditRepo: this.deps.auditRepo,
-        queue: this.deps.queue,
         authRepo: this.deps.authRepo,
+        outboxRepo: this.deps.outboxRepo,
+        outboxEncryption: this.deps.outboxEncryption,
       },
       params,
     );
@@ -330,11 +345,12 @@ export class AuthService {
         rateLimiter: this.deps.rateLimiter,
         auditRepo: this.deps.auditRepo,
         sessionStore: this.deps.sessionStore,
-        queue: this.deps.queue,
         userRepo: this.deps.userRepo,
         membershipRepo: this.deps.membershipRepo,
         authRepo: this.deps.authRepo,
         emailVerificationRepo: this.deps.emailVerificationRepo,
+        outboxRepo: this.deps.outboxRepo,
+        outboxEncryption: this.deps.outboxEncryption,
       },
       params,
     );
@@ -361,8 +377,9 @@ export class AuthService {
         tokenHasher: this.deps.tokenHasher,
         logger: this.deps.logger,
         rateLimiter: this.deps.rateLimiter,
-        queue: this.deps.queue,
         emailVerificationRepo: this.deps.emailVerificationRepo,
+        outboxRepo: this.deps.outboxRepo,
+        outboxEncryption: this.deps.outboxEncryption,
       },
       params,
     );

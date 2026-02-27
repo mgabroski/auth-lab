@@ -13,32 +13,34 @@
 
 import { AppError, type AppErrorMeta } from '../../../shared/http/errors';
 
-export const AdminInviteErrors = {
-  emailAlreadyMember(meta?: AppErrorMeta) {
+type ErrorFactory = (meta?: AppErrorMeta) => AppError;
+
+export const AdminInviteErrors: Record<string, ErrorFactory> = {
+  emailAlreadyMember(meta?: AppErrorMeta): AppError {
     return AppError.conflict('This email already has an active membership.', meta);
   },
 
-  emailSuspended(meta?: AppErrorMeta) {
+  emailSuspended(meta?: AppErrorMeta): AppError {
     return AppError.forbidden('This user account has been suspended.', meta);
   },
 
-  inviteAlreadyExists(meta?: AppErrorMeta) {
+  inviteAlreadyExists(meta?: AppErrorMeta): AppError {
     return AppError.conflict('An active invite already exists for this email.', meta);
   },
 
-  emailDomainNotPermitted(meta?: AppErrorMeta) {
-    return AppError.forbidden('This email domain is not permitted for this workspace.', meta);
+  emailDomainNotPermitted(meta?: AppErrorMeta): AppError {
+    return AppError.validationError('This email domain is not permitted for this workspace.', meta);
   },
 
-  inviteNotFound(meta?: AppErrorMeta) {
+  inviteNotFound(meta?: AppErrorMeta): AppError {
     return AppError.notFound('Invite not found.', meta);
   },
 
-  inviteNotResendable(meta?: AppErrorMeta) {
-    return AppError.conflict('Only pending invites can be resent.', meta);
+  inviteNotCancellable(meta?: AppErrorMeta): AppError {
+    return AppError.conflict('This invite can no longer be cancelled.', meta);
   },
 
-  inviteNotCancellable(meta?: AppErrorMeta) {
-    return AppError.conflict('Only pending invites can be cancelled.', meta);
+  inviteNotResendable(meta?: AppErrorMeta): AppError {
+    return AppError.conflict('This invite can no longer be resent.', meta);
   },
-} as const;
+};

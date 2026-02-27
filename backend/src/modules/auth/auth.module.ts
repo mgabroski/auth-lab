@@ -28,6 +28,10 @@ import type { EncryptionService } from '../../shared/security/encryption';
 import type { KeyedHasher } from '../../shared/security/keyed-hasher';
 import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
+// Outbox (PR2)
+import type { OutboxRepo } from '../../shared/outbox/outbox.repo';
+import type { OutboxEncryption } from '../../shared/outbox/outbox-encryption';
+
 import { AuthRepo } from './dal/auth.repo';
 import { MfaRepo } from './dal/mfa.repo';
 import { EmailVerificationRepo } from './dal/email-verification.repo';
@@ -48,6 +52,11 @@ export function createAuthModule(deps: {
   queue: Queue;
   userRepo: UserRepo;
   membershipRepo: MembershipRepo;
+
+  // Outbox (PR2)
+  outboxRepo: OutboxRepo;
+  outboxEncryption: OutboxEncryption;
+
   isProduction: boolean;
 
   // MFA
@@ -83,6 +92,8 @@ export function createAuthModule(deps: {
     totpService: deps.totpService,
     encryptionService: deps.encryptionService,
     mfaKeyedHasher: deps.mfaKeyedHasher,
+    outboxRepo: deps.outboxRepo,
+    outboxEncryption: deps.outboxEncryption,
     sso: deps.sso,
   });
 

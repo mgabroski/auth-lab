@@ -4,12 +4,15 @@
  * WHY:
  * - Deep module for the password-reset request use-case (Brick 8).
  * - Keeps AuthService thin; preserves anti-enumeration behavior.
+ * - PR2: swaps fire-and-forget queue email to durable DB outbox row.
  *
  * RULES:
  * - Always returns void (controller returns 200 regardless).
  * - Silent rate-limit path is audited.
  * - User-not-found and SSO-only paths are silent but audited.
  * - No raw SQL here; use queries/repos.
+ * - Outbox row is written in the SAME DB transaction as token changes.
+ * - Outbox payload must never store raw email/token (tokenEnc + toEmailEnc only).
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';
@@ -18,7 +21,6 @@ import type { Logger } from '../../../../shared/logger/logger';
 import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
-import type { Queue } from '../../../../shared/messaging/queue';
 
 import { generateSecureToken } from '../../../../shared/security/token';
 
@@ -29,6 +31,10 @@ import { hasAuthIdentity } from '../../queries/auth.queries';
 import type { AuthRepo } from '../../dal/auth.repo';
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
+
+// Outbox (PR2)
+import type { OutboxRepo } from '../../../../shared/outbox/outbox.repo';
+import type { OutboxEncryption } from '../../../../shared/outbox/outbox-encryption';
 
 // Password reset token TTL: 1 hour (kept identical)
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -48,8 +54,9 @@ export async function requestPasswordResetFlow(
     logger: Logger;
     rateLimiter: RateLimiter;
     auditRepo: AuditRepo;
-    queue: Queue;
     authRepo: AuthRepo;
+    outboxRepo: OutboxRepo;
+    outboxEncryption: OutboxEncryption;
   },
   params: RequestPasswordResetParams,
 ): Promise<void> {
@@ -90,24 +97,34 @@ export async function requestPasswordResetFlow(
     return;
   }
 
-  await deps.authRepo.invalidateActiveResetTokensForUser({ userId: user.id });
-
   const rawToken = generateSecureToken();
   const tokenHash = deps.tokenHasher.hash(rawToken);
   const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
-  await deps.authRepo.insertPasswordResetToken({
-    userId: user.id,
-    tokenHash,
-    expiresAt,
-  });
+  await deps.db.transaction().execute(async (trx) => {
+    const authRepo = deps.authRepo.withDb(trx);
 
-  await deps.queue.enqueue({
-    type: 'auth.reset-password-email',
-    userId: user.id,
-    email,
-    resetToken: rawToken,
-    tenantKey: params.tenantKey ?? '',
+    // One-active-at-a-time rule
+    await authRepo.invalidateActiveResetTokensForUser({ userId: user.id });
+
+    await authRepo.insertPasswordResetToken({
+      userId: user.id,
+      tokenHash,
+      expiresAt,
+    });
+
+    const payload = deps.outboxEncryption.encryptPayload({
+      token: rawToken,
+      toEmail: email,
+      tenantKey: params.tenantKey ?? '',
+      userId: user.id,
+    });
+
+    await deps.outboxRepo.enqueueWithinTx(trx, {
+      type: 'password.reset',
+      payload,
+      idempotencyKey: `password-reset:${user.id}:${tokenHash}`,
+    });
   });
 
   await auditPasswordResetRequested(audit.withContext({ userId: user.id }), {

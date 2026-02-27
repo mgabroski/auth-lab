@@ -5,6 +5,7 @@
  * - Brick 11: public self-service signup when tenant.public_signup_enabled = true.
  * - Distinct from invite-based registration (Brick 7): no inviteToken, requires
  *   email verification for new users, enforces tenant signup settings.
+ * - PR2: swaps fire-and-forget queue email to durable DB outbox row.
  *
  * WHAT IT DOES:
  * - Rate limits early (perEmail hard, perIp hard).
@@ -15,8 +16,6 @@
  * - For existing users joining a new tenant: user.emailVerified is already true
  *   (they registered elsewhere), no verification needed.
  * - Creates password identity ONLY when the user does not already have one.
- *   An existing user joining a new tenant already has a password identity from
- *   their original registration — ensurePasswordIdentity is skipped for them.
  * - Enqueues verification email only for newly created, unverified users.
  * - Writes audit inside tx, creates session outside tx.
  *
@@ -24,22 +23,8 @@
  * - Opens its own transaction (flow layer).
  * - No HTTP concerns.
  * - No raw SQL.
- * - Failure audits outside tx (survive rollback) — signup has no dedicated
- *   failure audit; this may be added in Brick 13 Audit Hardening.
- *
- * EXISTING-USER PATH (Decision 4):
- * - A user who already registered on another tenant has email_verified=true and
- *   a password identity. When they sign up for a new tenant:
- *   1. We find their existing user row (email lookup).
- *   2. We confirm they have no membership here (check by user_id join).
- *   3. provisionUserToTenant creates the new membership only (userCreated=false).
- *   4. ensurePasswordIdentity is SKIPPED because hasAuthIdentity returns true.
- *   5. No verification token is issued because user.emailVerified is already true.
- *   6. nextAction resolves via MFA rules (NONE for a member with no MFA).
- *
- * MEMBERSHIP CHECK APPROACH (Decision 5 / Decision 4):
- * - Membership is queried by user_id join after user lookup, never by email.
- * - This matches the locked arch rule from the brief.
+ * - Outbox row is written in the SAME DB transaction as token insert.
+ * - Outbox payload must never store raw email/token (tokenEnc + toEmailEnc only).
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';
@@ -50,7 +35,6 @@ import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { SessionStore } from '../../../../shared/session/session.store';
-import type { Queue } from '../../../../shared/messaging/queue';
 
 import type { UserRepo } from '../../../users/dal/user.repo';
 import type { MembershipRepo } from '../../../memberships/dal/membership.repo';
@@ -81,6 +65,10 @@ import { generateSecureToken } from '../../../../shared/security/token';
 import { AUTH_RATE_LIMITS, EMAIL_VERIFICATION_TTL_SECONDS } from '../../auth.constants';
 import { emailDomain } from '../../helpers/email-domain';
 
+// Outbox (PR2)
+import type { OutboxRepo } from '../../../../shared/outbox/outbox.repo';
+import type { OutboxEncryption } from '../../../../shared/outbox/outbox-encryption';
+
 export type SignupParams = {
   tenantKey: string | null;
   email: string;
@@ -95,8 +83,7 @@ type SignupTxResult = {
   user: { id: string; email: string; name: string | null; emailVerified: boolean };
   membership: { id: string; role: 'ADMIN' | 'MEMBER'; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
   tenant: import('../../../tenants').Tenant;
-  /** Raw token — only present when a verification email needs to be sent. */
-  verificationToken: string | null;
+  verificationEnqueued: boolean;
 };
 
 export async function executeSignupFlow(
@@ -108,11 +95,14 @@ export async function executeSignupFlow(
     rateLimiter: RateLimiter;
     auditRepo: AuditRepo;
     sessionStore: SessionStore;
-    queue: Queue;
     userRepo: UserRepo;
     membershipRepo: MembershipRepo;
     authRepo: AuthRepo;
     emailVerificationRepo: EmailVerificationRepo;
+
+    // Outbox (PR2)
+    outboxRepo: OutboxRepo;
+    outboxEncryption: OutboxEncryption;
   },
   params: SignupParams,
 ): Promise<{ result: AuthResult; sessionId: string }> {
@@ -159,12 +149,9 @@ export async function executeSignupFlow(
     if (!tenant.publicSignupEnabled) {
       throw AuthErrors.signupDisabled();
     }
-
-    // Email domain check (if tenant has a restriction configured).
     assertEmailDomainAllowed(tenant, email);
 
     // ── C. Check existing user + membership state ────────────────────────────
-    // Per Decision 4: check by user_id join, never by email alone.
     const existingUser = await getUserByEmail(trx, email);
 
     if (existingUser) {
@@ -174,24 +161,13 @@ export async function executeSignupFlow(
       });
 
       if (existingMembership) {
-        if (existingMembership.status === 'SUSPENDED') {
-          throw AuthErrors.accountSuspended();
-        }
-        if (existingMembership.status === 'INVITED') {
-          throw AuthErrors.emailInvitePending();
-        }
-        if (existingMembership.status === 'ACTIVE') {
-          throw AuthErrors.emailAlreadyMember();
-        }
+        if (existingMembership.status === 'SUSPENDED') throw AuthErrors.accountSuspended();
+        if (existingMembership.status === 'INVITED') throw AuthErrors.emailInvitePending();
+        if (existingMembership.status === 'ACTIVE') throw AuthErrors.emailAlreadyMember();
       }
-      // User exists with no membership for this tenant → fall through to
-      // provisionUserToTenant which will create the membership as ACTIVE.
     }
 
     // ── D. Provision user + membership ───────────────────────────────────────
-    // emailVerifiedForNewUser=false: new users created via public signup must
-    // verify their email. Existing users (userCreated=false) already have
-    // emailVerified=true from their original registration — unchanged.
     const provisionResult = await provisionUserToTenant({
       trx,
       userRepo,
@@ -199,7 +175,7 @@ export async function executeSignupFlow(
       email,
       name: params.name,
       tenantId: tenant.id,
-      role: 'MEMBER', // Public signup always creates members, not admins.
+      role: 'MEMBER',
       now,
       emailVerifiedForNewUser: false,
     });
@@ -207,9 +183,6 @@ export async function executeSignupFlow(
     const { user, membership } = provisionResult;
 
     // ── E. Create password identity (only when needed) ────────────────────────
-    // An existing user joining a new tenant already has a password identity from
-    // their original registration. We check first to avoid the alreadyRegistered
-    // replay-guard throwing — skipping is correct and intentional here.
     const alreadyHasPasswordIdentity = await hasAuthIdentity(trx, {
       userId: user.id,
       provider: 'password',
@@ -224,14 +197,11 @@ export async function executeSignupFlow(
         rawPassword: params.password,
       });
     }
-    // When the user already has a password identity (existing user, new tenant),
-    // their stored password is unchanged. They continue using it to log in.
 
-    // ── F. Email verification token (only for new unverified users) ───────────
-    let verificationToken: string | null = null;
+    // ── F. Email verification token + Outbox enqueue (only for unverified) ───
+    let verificationEnqueued = false;
 
     if (!user.emailVerified) {
-      // Invalidate any prior active tokens (one-active-at-a-time rule).
       await emailVerificationRepo.invalidateActiveVerificationTokensForUser({ userId: user.id });
 
       const rawToken = generateSecureToken();
@@ -244,7 +214,20 @@ export async function executeSignupFlow(
         expiresAt,
       });
 
-      verificationToken = rawToken;
+      const payload = deps.outboxEncryption.encryptPayload({
+        token: rawToken,
+        toEmail: user.email,
+        tenantKey: tenant.key,
+        userId: user.id,
+      });
+
+      await deps.outboxRepo.enqueueWithinTx(trx, {
+        type: 'email.verify',
+        payload,
+        idempotencyKey: `email-verify:${user.id}:${tokenHash}`,
+      });
+
+      verificationEnqueued = true;
     }
 
     // ── G. Audit (inside tx) ──────────────────────────────────────────────────
@@ -285,26 +268,11 @@ export async function executeSignupFlow(
       },
       membership: { id: membership.id, role: membership.role, status: membership.status },
       tenant,
-      verificationToken,
+      verificationEnqueued,
     };
   });
 
-  // ── H. Enqueue verification email (outside tx — fire-and-forget) ──────────
-  // Only for new users who need to verify. Existing users joining a new tenant
-  // are already verified.
-  if (txResult.verificationToken) {
-    await deps.queue.enqueue({
-      type: 'auth.signup-verification-email',
-      userId: txResult.user.id,
-      email: txResult.user.email,
-      verificationToken: txResult.verificationToken,
-      tenantKey: txResult.tenant.key,
-    });
-  }
-
-  // ── I. Session + nextAction ───────────────────────────────────────────────
-  // Decision 3: emailVerified=false → nextAction = EMAIL_VERIFICATION_REQUIRED.
-  // mfaVerified=false in session. Existing verified users get normal MFA logic.
+  // ── Session + nextAction ───────────────────────────────────────────────
   const { sessionId } = await createAuthSession({
     sessionStore: deps.sessionStore,
     userId: txResult.user.id,
@@ -313,7 +281,6 @@ export async function executeSignupFlow(
     membershipId: txResult.membership.id,
     role: txResult.membership.role,
     tenant: txResult.tenant,
-    // New users via signup never have MFA yet.
     hasVerifiedMfaSecret: false,
     emailVerified: txResult.user.emailVerified,
     now,
@@ -327,6 +294,7 @@ export async function executeSignupFlow(
     userId: txResult.user.id,
     membershipId: txResult.membership.id,
     emailVerified: txResult.user.emailVerified,
+    verificationEnqueued: txResult.verificationEnqueued,
   });
 
   return {

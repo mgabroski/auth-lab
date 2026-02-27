@@ -4,15 +4,17 @@
  * WHY:
  * - Orchestrates all admin invite mutations: create, list, resend, cancel.
  * - Follows the same transaction-in-service pattern as InviteService (no flows/ subfolder).
+ * - PR2: email delivery is durable via DB Outbox.
  *
  * RULES:
  * - Only place allowed to open transactions for admin invite operations.
  * - No raw DB access — uses queries/ and dal/ only.
  * - Rate limit before transaction (before any DB work).
  * - Audit inside transaction (success audits commit atomically with data).
- * - Enqueue outside transaction (fire-and-forget; survives rollback independently).
+ * - Outbox enqueue is inside the same transaction as invite row insert.
  * - tokenHash never returned in InviteSummary responses.
  * - No membership pre-creation (Decision C — locked).
+ * - Outbox payload must never store raw email/token (tokenEnc + toEmailEnc only).
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -23,6 +25,9 @@ import type { AuditRepo } from '../../../shared/audit/audit.repo';
 import type { Queue } from '../../../shared/messaging/queue';
 import { AuditWriter } from '../../../shared/audit/audit.writer';
 import { AppError } from '../../../shared/http/errors';
+
+import type { OutboxRepo } from '../../../shared/outbox/outbox.repo';
+import type { OutboxEncryption } from '../../../shared/outbox/outbox-encryption';
 
 import type { InviteRepo } from '../dal/invite.repo';
 import type { InviteRole, InviteStatus, InviteSummary } from '../invite.types';
@@ -92,6 +97,10 @@ export class AdminInviteService {
       inviteRepo: InviteRepo;
       auditRepo: AuditRepo;
       queue: Queue;
+
+      // Outbox (PR2)
+      outboxRepo: OutboxRepo;
+      outboxEncryption: OutboxEncryption;
     },
   ) {}
 
@@ -105,8 +114,8 @@ export class AdminInviteService {
     // ── Step 2: Normalize email ───────────────────────────────────────────────
     const email = params.email.toLowerCase();
 
-    // ── Steps 3–10: inside transaction ───────────────────────────────────────
-    const { summary, rawToken } = await this.deps.db.transaction().execute(async (trx) => {
+    // ── Steps 3–11: inside transaction ───────────────────────────────────────
+    const { summary } = await this.deps.db.transaction().execute(async (trx) => {
       const inviteRepo = this.deps.inviteRepo.withDb(trx);
 
       const audit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
@@ -144,12 +153,8 @@ export class AdminInviteService {
           userId: existingUser.id,
         });
         if (membership) {
-          if (membership.status === 'ACTIVE') {
-            throw AdminInviteErrors.emailAlreadyMember();
-          }
-          if (membership.status === 'SUSPENDED') {
-            throw AdminInviteErrors.emailSuspended();
-          }
+          if (membership.status === 'ACTIVE') throw AdminInviteErrors.emailAlreadyMember();
+          if (membership.status === 'SUSPENDED') throw AdminInviteErrors.emailSuspended();
         }
       }
 
@@ -178,6 +183,21 @@ export class AdminInviteService {
         createdByUserId: params.userId,
       });
 
+      // Step 11: Outbox enqueue INSIDE transaction (durable)
+      const payload = this.deps.outboxEncryption.encryptPayload({
+        token: rawToken,
+        toEmail: email,
+        tenantKey: params.tenantKey,
+        inviteId: inserted.id,
+        role: params.role,
+      });
+
+      await this.deps.outboxRepo.enqueueWithinTx(trx, {
+        type: 'invite.created',
+        payload,
+        idempotencyKey: `invite-created:${inserted.id}:${tokenHash}`,
+      });
+
       const summary: InviteSummary = {
         id: inserted.id,
         tenantId: params.tenantId,
@@ -190,7 +210,7 @@ export class AdminInviteService {
         createdByUserId: params.userId,
       };
 
-      return { summary, rawToken };
+      return { summary };
     });
 
     this.deps.logger.info({
@@ -202,32 +222,9 @@ export class AdminInviteService {
       role: params.role,
     });
 
-    // ── Step 11: Enqueue outside transaction
-    // If enqueue throws, we log the failure but still return success to the caller.
-    // The invite row exists in the DB; a background retry mechanism can re-enqueue.
-    this.deps.queue
-      .enqueue({
-        type: 'admin.invite-email',
-        inviteId: summary.id,
-        email: summary.email,
-        role: summary.role,
-        inviteToken: rawToken,
-        tenantKey: params.tenantKey,
-      })
-      .catch((err: unknown) => {
-        this.deps.logger.error({
-          msg: 'admin-invite.create.enqueue-failed',
-          flow: 'admin-invite.create',
-          requestId: params.requestId,
-          tenantId: params.tenantId,
-          inviteId: summary.id,
-          error: err instanceof Error ? err.message : String(err),
-          enqueueFailed: true,
-        });
-      });
-
     return summary;
   }
+
   /**
    * Returns a paginated list of invites for the caller's tenant.
    * No transaction needed — read-only operation.
@@ -252,6 +249,7 @@ export class AdminInviteService {
       offset: params.offset,
     });
   }
+
   /**
    * Bulk-cancels ALL pending invites for (tenantId, email), then inserts a new
    * invite row and re-sends the invite email.
@@ -267,19 +265,16 @@ export class AdminInviteService {
    *
    * SECURITY:
    * - Tenant-scoped lookup prevents cross-tenant resend.
-   * - cancelPendingInvitesByEmail uses WHERE status='PENDING' as a TOCTOU guard:
-   *   if two concurrent requests race, one gets 0 rows updated and the service
-   *   throws inviteNotResendable.
-   * - rawToken never stored; enqueued only after the transaction commits.
+   * - cancelPendingInvitesByEmail uses WHERE status='PENDING' as a TOCTOU guard.
+   * - Outbox enqueue occurs within the same transaction as the new invite insert.
    */
   async resendInvite(params: ResendInviteParams): Promise<InviteSummary> {
-    // Rate limit before any DB work
     await this.deps.rateLimiter.hitOrThrow({
       key: `admin-invite-resend:tenant:${params.tenantId}:user:${params.userId}`,
       ...ADMIN_INVITE_RATE_LIMITS.resendInvite.perAdminPerTenant,
     });
 
-    const { newSummary, rawToken } = await this.deps.db.transaction().execute(async (trx) => {
+    const { newSummary } = await this.deps.db.transaction().execute(async (trx) => {
       const inviteRepo = this.deps.inviteRepo.withDb(trx);
 
       const audit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
@@ -288,8 +283,6 @@ export class AdminInviteService {
         userAgent: params.userAgent,
       }).withContext({ tenantId: params.tenantId, userId: params.userId });
 
-      // Step 1: Load invite — tenant scope is the security boundary.
-      // Returns undefined for cross-tenant → 404 (non-oracle: same response as missing).
       const existing = await getInviteByIdAndTenant(trx, {
         inviteId: params.inviteId,
         tenantId: params.tenantId,
@@ -298,16 +291,10 @@ export class AdminInviteService {
         throw AdminInviteErrors.inviteNotFound();
       }
 
-      // Step 2: Assert PENDING (preflight check before bulk-cancel)
       if (existing.status !== 'PENDING') {
         throw AdminInviteErrors.inviteNotResendable();
       }
 
-      // Step 3: Bulk-cancel ALL pending invites for (tenantId, email).
-      // single targeted invite. This ensures no other PENDING invites for the same
-      // email remain alive after the resend.
-      // The WHERE status='PENDING' clause is the TOCTOU guard: if a concurrent
-      // request already cancelled all of them, cancelledCount will be 0 → throw.
       const now = new Date();
       const cancelledCount = await inviteRepo.cancelPendingInvitesByEmail({
         tenantId: params.tenantId,
@@ -315,18 +302,13 @@ export class AdminInviteService {
         cancelledAt: now,
       });
       if (cancelledCount === 0) {
-        // Lost the race — another request cancelled all pending invites between
-        // our read and this write.
         throw AdminInviteErrors.inviteNotResendable();
       }
 
-      // Step 4: Generate new token + expiry
       const rawToken = generateSecureToken();
       const tokenHash = this.deps.tokenHasher.hash(rawToken);
       const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-      // Step 5: Insert new invite row (same email, role, tenant — new ID + token).
-      // Role is preserved from the old invite row (not from request body).
       const newRow = await inviteRepo.insertInvite({
         tenantId: params.tenantId,
         email: existing.email,
@@ -336,12 +318,25 @@ export class AdminInviteService {
         createdByUserId: params.userId,
       });
 
-      // Step 6: Audit inside transaction
       await auditInviteResent(audit, {
         oldInviteId: params.inviteId,
         newInviteId: newRow.id,
         email: existing.email,
         role: existing.role,
+      });
+
+      const payload = this.deps.outboxEncryption.encryptPayload({
+        token: rawToken,
+        toEmail: existing.email,
+        tenantKey: params.tenantKey,
+        inviteId: newRow.id,
+        role: existing.role,
+      });
+
+      await this.deps.outboxRepo.enqueueWithinTx(trx, {
+        type: 'invite.created',
+        payload,
+        idempotencyKey: `invite-resent:${newRow.id}:${tokenHash}`,
       });
 
       const newSummary: InviteSummary = {
@@ -356,7 +351,7 @@ export class AdminInviteService {
         createdByUserId: params.userId,
       };
 
-      return { newSummary, rawToken };
+      return { newSummary };
     });
 
     this.deps.logger.info({
@@ -367,27 +362,6 @@ export class AdminInviteService {
       oldInviteId: params.inviteId,
       newInviteId: newSummary.id,
     });
-
-    this.deps.queue
-      .enqueue({
-        type: 'admin.invite-email',
-        inviteId: newSummary.id,
-        email: newSummary.email,
-        role: newSummary.role,
-        inviteToken: rawToken,
-        tenantKey: params.tenantKey,
-      })
-      .catch((err: unknown) => {
-        this.deps.logger.error({
-          msg: 'admin-invite.resend.enqueue-failed',
-          flow: 'admin-invite.resend',
-          requestId: params.requestId,
-          tenantId: params.tenantId,
-          newInviteId: newSummary.id,
-          error: err instanceof Error ? err.message : String(err),
-          enqueueFailed: true,
-        });
-      });
 
     return newSummary;
   }
@@ -409,7 +383,6 @@ export class AdminInviteService {
         userAgent: params.userAgent,
       }).withContext({ tenantId: params.tenantId, userId: params.userId });
 
-      // Step 1: Load invite — tenant scope is the security boundary
       const existing = await getInviteByIdAndTenant(trx, {
         inviteId: params.inviteId,
         tenantId: params.tenantId,
@@ -418,12 +391,10 @@ export class AdminInviteService {
         throw AdminInviteErrors.inviteNotFound();
       }
 
-      // Step 2: Assert PENDING (preflight check)
       if (existing.status !== 'PENDING') {
         throw AdminInviteErrors.inviteNotCancellable();
       }
 
-      // Step 3: Cancel atomically — TOCTOU guard via WHERE status='PENDING'
       const cancelled = await inviteRepo.cancelInviteById({
         inviteId: params.inviteId,
         tenantId: params.tenantId,
@@ -433,7 +404,6 @@ export class AdminInviteService {
         throw AdminInviteErrors.inviteNotCancellable();
       }
 
-      // Step 4: Audit inside transaction
       await auditInviteCancelled(audit, {
         id: params.inviteId,
         email: existing.email,

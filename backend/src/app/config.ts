@@ -2,8 +2,12 @@
  * backend/src/app/config.ts
  *
  * WHY:
- * - Central place for env parsing + validation (12-factor friendly).
- * - Prevents "undefined env var" bugs at runtime.
+ * - Central env parsing + validation.
+ * - Adds Outbox config for durable email delivery.
+ *
+ * RULES:
+ * - Outbox worker must not run in test (enforced in build-app).
+ * - OUTBOX_ENC_KEY_V1 required; defaultVersion must reference an available key.
  */
 
 import 'dotenv/config';
@@ -15,6 +19,11 @@ const Base64Schema = z
   .string()
   .min(1)
   .regex(/^[A-Za-z0-9+/=]+$/, 'Must be base64');
+
+const OutboxEncVersionSchema = z
+  .string()
+  .regex(/^v[0-9]+$/, 'Must be like v1, v2')
+  .default('v1');
 
 const ConfigSchema = z.object({
   NODE_ENV: NodeEnvSchema,
@@ -34,22 +43,26 @@ const ConfigSchema = z.object({
 
   // MFA (Brick 9)
   MFA_ISSUER: z.string().min(1).default('Hubins'),
-
-  // Must decode to 32 bytes (validated in EncryptionService ctor).
   MFA_ENCRYPTION_KEY_BASE64: Base64Schema,
-
-  // Must be >= 16 bytes (validated in KeyedHasher ctor).
   MFA_HMAC_KEY_BASE64: Base64Schema,
 
   // SSO (Brick 10)
-  // Must decode to 32 bytes (validated in EncryptionService ctor).
   SSO_STATE_ENCRYPTION_KEY: Base64Schema,
-  // Base URL used for callback redirect URIs and post-login redirect.
   SSO_REDIRECT_BASE_URL: z.string().url(),
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   MICROSOFT_CLIENT_ID: z.string().min(1),
   MICROSOFT_CLIENT_SECRET: z.string().min(1),
+
+  // Outbox (PR2)
+  OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(250).max(60_000).default(5_000),
+  OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+  OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+
+  OUTBOX_ENC_DEFAULT_VERSION: OutboxEncVersionSchema,
+  OUTBOX_ENC_KEY_V1: Base64Schema,
+  OUTBOX_ENC_KEY_V2: Base64Schema.optional(),
+  OUTBOX_ENC_KEY_V3: Base64Schema.optional(),
 
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),
@@ -94,6 +107,14 @@ export type AppConfig = {
     microsoftClientSecret: string;
   };
 
+  outbox: {
+    pollIntervalMs: number;
+    batchSize: number;
+    maxAttempts: number;
+    encDefaultVersion: string;
+    encKeysByVersion: Record<string, string>;
+  };
+
   seed: {
     enabled: boolean;
     tenantKey: string;
@@ -105,6 +126,18 @@ export type AppConfig = {
 
 export function buildConfig(): AppConfig {
   const parsed = ConfigSchema.parse(process.env);
+
+  const encKeysByVersion: Record<string, string> = {
+    v1: parsed.OUTBOX_ENC_KEY_V1,
+  };
+  if (parsed.OUTBOX_ENC_KEY_V2) encKeysByVersion.v2 = parsed.OUTBOX_ENC_KEY_V2;
+  if (parsed.OUTBOX_ENC_KEY_V3) encKeysByVersion.v3 = parsed.OUTBOX_ENC_KEY_V3;
+
+  if (!encKeysByVersion[parsed.OUTBOX_ENC_DEFAULT_VERSION]) {
+    throw new Error(
+      `Config: OUTBOX_ENC_DEFAULT_VERSION=${parsed.OUTBOX_ENC_DEFAULT_VERSION} has no configured key`,
+    );
+  }
 
   return {
     nodeEnv: parsed.NODE_ENV,
@@ -132,6 +165,14 @@ export function buildConfig(): AppConfig {
       googleClientSecret: parsed.GOOGLE_CLIENT_SECRET,
       microsoftClientId: parsed.MICROSOFT_CLIENT_ID,
       microsoftClientSecret: parsed.MICROSOFT_CLIENT_SECRET,
+    },
+
+    outbox: {
+      pollIntervalMs: parsed.OUTBOX_POLL_INTERVAL_MS,
+      batchSize: parsed.OUTBOX_BATCH_SIZE,
+      maxAttempts: parsed.OUTBOX_MAX_ATTEMPTS,
+      encDefaultVersion: parsed.OUTBOX_ENC_DEFAULT_VERSION,
+      encKeysByVersion,
     },
 
     seed: {
