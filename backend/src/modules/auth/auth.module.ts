@@ -58,6 +58,7 @@ export function createAuthModule(deps: {
   outboxEncryption: OutboxEncryption;
 
   isProduction: boolean;
+  sessionTtlSeconds: number;
 
   // MFA
   totpService: TotpService;
@@ -97,7 +98,7 @@ export function createAuthModule(deps: {
     sso: deps.sso,
   });
 
-  const controller = new AuthController(authService, deps.isProduction);
+  const controller = new AuthController(authService, deps.isProduction, deps.sessionTtlSeconds);
 
   return {
     authService,

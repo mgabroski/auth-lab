@@ -3,10 +3,10 @@
  *
  * WHY:
  * - Centralizes request validation for GET /admin/audit-events.
- * - Enforces strict query param rules (limit max=100 → 400, no clamping).
+ * - Keeps controller clean: parse + basic validation only.
  *
  * RULES:
- * - limit > 100 → Zod rejects with 400. No clamping. Matches listInvitesSchema pattern.
+ * - limit is NOT validated with a max. The controller clamps it to 100 (ergonomic API).
  * - All datetime params validated as ISO 8601 strings.
  * - userId validated as UUID — malformed IDs never reach the DAL.
  * - tenantId is NOT returned in response rows (always the session tenant).
@@ -15,7 +15,8 @@
 import { z } from 'zod';
 
 export const auditEventsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  // NOTE: Upper bound is enforced via clamping (controller), not schema validation.
+  limit: z.coerce.number().int().min(1).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   action: z.string().optional(),
   userId: z.string().uuid('userId must be a valid UUID').optional(),

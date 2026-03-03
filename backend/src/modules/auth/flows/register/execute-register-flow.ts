@@ -77,6 +77,7 @@ export async function executeRegisterFlow(
 ): Promise<{ result: AuthResult; sessionId: string }> {
   const email = params.email.toLowerCase();
   const emailKey = deps.tokenHasher.hash(email);
+  const ipKey = deps.tokenHasher.hash(params.ip);
   const now = new Date();
 
   deps.logger.info({
@@ -94,7 +95,7 @@ export async function executeRegisterFlow(
   });
 
   await deps.rateLimiter.hitOrThrow({
-    key: `register:ip:${params.ip}`,
+    key: `register:ip:${ipKey}`,
     ...AUTH_RATE_LIMITS.register.perIp,
   });
 

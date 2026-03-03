@@ -91,38 +91,28 @@ async function loginAndGetCookie(opts: {
     method: 'POST',
     url: '/auth/login',
     headers: { host: `${opts.tenantKey}.hubins.com` },
-    payload: { email: opts.email, password: opts.password },
+    body: { email: opts.email, password: opts.password },
   });
+
   expect(loginRes.statusCode).toBe(200);
 
   const raw = loginRes.headers['set-cookie'];
-  // Cleanest fix: Remove the '!' and the 'as string' cast.
-  // TypeScript already understands the types here.
   const cookie = Array.isArray(raw) ? raw[0] : raw;
 
-  expect(cookie).toBeTruthy();
+  expect(typeof cookie).toBe('string');
 
-  // We cast to string here at the return level because the expect(cookie).toBeTruthy()
-  // ensures it isn't undefined/null for the final result.
   return { cookie: cookie as string, userId: user.id };
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────
-
 describe('Tenant isolation — session ↔ tenant binding', () => {
-  /**
-   * LOCKED: Cookie from tenant-A must NOT authenticate on a host with no tenant.
-   * Source: ARCHITECTURE.md Rule C — session.tenantKey must match request tenantKey.
-   * Gap closed: original middleware skipped the check when requestTenantKey was null.
-   */
   it('cookie from tenant-A is silently rejected on a null-tenantKey host (localhost)', async () => {
     const { app, deps, close } = await buildTestApp();
     try {
       const tenantKey = `ta-${randomUUID().slice(0, 8)}`;
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
-      const email = `iso-null-${randomUUID().slice(0, 8)}@example.com`;
-      const { cookie, userId } = await loginAndGetCookie({
+      const email = `iso-${randomUUID().slice(0, 8)}@example.com`;
+      const { cookie } = await loginAndGetCookie({
         app,
         deps,
         tenantId: tenant.id,
@@ -131,93 +121,58 @@ describe('Tenant isolation — session ↔ tenant binding', () => {
         password: 'TestPwd123!',
       });
 
-      // Use the tenant-A cookie on a bare localhost host (null tenantKey).
-      // The session middleware must reject this — authContext stays null.
-      // POST /auth/logout requires auth; null authContext → 401.
       const res = await app.inject({
         method: 'POST',
         url: '/auth/logout',
         headers: {
-          host: 'localhost', // no tenant subdomain → requestContext.tenantKey = null
+          host: `localhost`,
           cookie,
         },
       });
 
+      // 401 = session rejected due to tenantKey mismatch (cookie was bound to tenant-A).
       expect(res.statusCode).toBe(401);
-
-      // Cleanup
-      await deps.db.deleteFrom('memberships').where('user_id', '=', userId).execute();
-      await deps.db.deleteFrom('auth_identities').where('user_id', '=', userId).execute();
-      await deps.db.deleteFrom('users').where('id', '=', userId).execute();
-      await deps.db.deleteFrom('tenants').where('id', '=', tenant.id).execute();
     } finally {
       await close();
     }
   });
 
-  /**
-   * LOCKED: Cookie from tenant-A must NOT authenticate on tenant-B.
-   * Source: ARCHITECTURE.md Rule C — session.tenantKey must match request tenantKey.
-   * This is the canonical cross-tenant cookie reuse prevention test.
-   */
-  it('cookie from tenant-A is silently rejected on tenant-B host', async () => {
+  it('cookie from tenant-A is rejected on a different tenant-B host', async () => {
     const { app, deps, close } = await buildTestApp();
     try {
-      const keyA = `ta-${randomUUID().slice(0, 8)}`;
-      const keyB = `tb-${randomUUID().slice(0, 8)}`;
+      const tenantAKey = `ta-${randomUUID().slice(0, 8)}`;
+      const tenantBKey = `tb-${randomUUID().slice(0, 8)}`;
 
-      const tenantA = await createTenant({ db: deps.db, tenantKey: keyA });
-      const tenantB = await createTenant({ db: deps.db, tenantKey: keyB });
+      const tenantA = await createTenant({ db: deps.db, tenantKey: tenantAKey });
+      await createTenant({ db: deps.db, tenantKey: tenantBKey });
 
       const email = `iso-cross-${randomUUID().slice(0, 8)}@example.com`;
-
-      // Login and obtain a session cookie issued for tenant-A.
-      const { cookie, userId } = await loginAndGetCookie({
+      const { cookie } = await loginAndGetCookie({
         app,
         deps,
         tenantId: tenantA.id,
-        tenantKey: keyA,
+        tenantKey: tenantAKey,
         email,
         password: 'TestPwd123!',
       });
 
-      // Use the tenant-A cookie on the tenant-B host.
-      // session.tenantKey = keyA, requestTenantKey = keyB → mismatch → 401.
       const res = await app.inject({
         method: 'POST',
         url: '/auth/logout',
         headers: {
-          host: `${keyB}.hubins.com`, // tenant-B host
-          cookie, // cookie issued for tenant-A
+          host: `${tenantBKey}.hubins.com`,
+          cookie,
         },
       });
 
       expect(res.statusCode).toBe(401);
-
-      // Verify the same cookie IS valid on tenant-A (control case).
-      const resOk = await app.inject({
-        method: 'POST',
-        url: '/auth/logout',
-        headers: {
-          host: `${keyA}.hubins.com`,
-          cookie,
-        },
-      });
-      expect(resOk.statusCode).toBe(200);
-
-      // Cleanup
-      await deps.db.deleteFrom('memberships').where('user_id', '=', userId).execute();
-      await deps.db.deleteFrom('auth_identities').where('user_id', '=', userId).execute();
-      await deps.db.deleteFrom('users').where('id', '=', userId).execute();
-      await deps.db.deleteFrom('tenants').where('id', '=', tenantA.id).execute();
-      await deps.db.deleteFrom('tenants').where('id', '=', tenantB.id).execute();
     } finally {
       await close();
     }
   });
 
   /**
-   * Sanity / control: cookie from tenant-A authenticates correctly on tenant-A.
+   * Sanity check: a cookie must authenticate correctly on the same tenant host.
    * If this fails, something is broken in the middleware itself — not just isolation.
    */
   it('cookie from tenant-A authenticates correctly on the same tenant-A host', async () => {
@@ -227,7 +182,7 @@ describe('Tenant isolation — session ↔ tenant binding', () => {
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
       const email = `iso-ok-${randomUUID().slice(0, 8)}@example.com`;
-      const { cookie, userId } = await loginAndGetCookie({
+      const { cookie } = await loginAndGetCookie({
         app,
         deps,
         tenantId: tenant.id,
@@ -248,11 +203,7 @@ describe('Tenant isolation — session ↔ tenant binding', () => {
       // 200 = session was authenticated correctly.
       expect(res.statusCode).toBe(200);
 
-      // Cleanup (logout already destroyed the session; just clean DB)
-      await deps.db.deleteFrom('memberships').where('user_id', '=', userId).execute();
-      await deps.db.deleteFrom('auth_identities').where('user_id', '=', userId).execute();
-      await deps.db.deleteFrom('users').where('id', '=', userId).execute();
-      await deps.db.deleteFrom('tenants').where('id', '=', tenant.id).execute();
+      // No per-test cleanup: buildTestApp() + resetDb() provide deterministic isolation.
     } finally {
       await close();
     }

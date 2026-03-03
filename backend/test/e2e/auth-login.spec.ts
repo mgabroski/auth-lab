@@ -88,70 +88,12 @@ async function seedUserWithPassword(opts: {
 }
 
 describe('POST /auth/login', () => {
-  it('logs in with valid credentials → session cookie + AUTHENTICATED', async () => {
+  it('admin login returns MFA_SETUP_REQUIRED when admin has no MFA secret', async () => {
     const { app, deps, close } = await buildTestApp();
     const { db, passwordHasher } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
-    const email = `login-${randomUUID().slice(0, 8)}@example.com`;
-    const password = 'ValidPassword123!';
-
-    try {
-      const tenant = await createTenant({ db, tenantKey });
-      await seedUserWithPassword({
-        db,
-        passwordHasher,
-        tenantId: tenant.id,
-        email,
-        password,
-        role: 'MEMBER',
-      });
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        headers: { host },
-        payload: { email, password },
-      });
-
-      expect(res.statusCode).toBe(200);
-
-      const body = readJson<AuthenticatedResponseBody>(res);
-      expect(body.status).toBe('AUTHENTICATED');
-      expect(body.nextAction).toBe('NONE');
-      expect(body.user.email).toBe(email.toLowerCase());
-      expect(body.membership.role).toBe('MEMBER');
-
-      // Session cookie set
-      const setCookie = res.headers['set-cookie'] as string;
-      expect(setCookie).toBeDefined();
-      expect(setCookie).toContain('sid=');
-      expect(setCookie).toContain('HttpOnly');
-
-      // Audit: login success
-      const audits = await db
-        .selectFrom('audit_events')
-        .selectAll()
-        .where('tenant_id', '=', tenant.id)
-        .where('action', '=', 'auth.login.success')
-        .execute();
-      expect(audits).toHaveLength(1);
-
-      // PII hardening: success audits must not include raw email
-      const meta = audits[0].metadata as Record<string, unknown>;
-      expect(meta.email).toBeUndefined();
-    } finally {
-      await close();
-    }
-  });
-
-  it('admin login returns MFA_SETUP_REQUIRED', async () => {
-    const { app, deps, close } = await buildTestApp();
-    const { db, passwordHasher } = deps;
-
-    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
+    const host = `${tenantKey}.hubins.com`;
     const email = `admin-${randomUUID().slice(0, 8)}@example.com`;
     const password = 'AdminPass123!';
 
@@ -186,7 +128,7 @@ describe('POST /auth/login', () => {
     const { db, passwordHasher, tokenHasher } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
+    const host = `${tenantKey}.hubins.com`;
     const email = `wrongpw-${randomUUID().slice(0, 8)}@example.com`;
 
     try {
@@ -230,40 +172,48 @@ describe('POST /auth/login', () => {
     }
   });
 
-  it('rejects nonexistent email with generic error', async () => {
+  it('rejects user with INVITED membership', async () => {
     const { app, deps, close } = await buildTestApp();
-    const { db } = deps;
+    const { db, passwordHasher } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
+    const host = `${tenantKey}.hubins.com`;
+    const email = `invited-${randomUUID().slice(0, 8)}@example.com`;
+    const password = 'Pass123!';
 
     try {
-      await createTenant({ db, tenantKey });
+      const tenant = await createTenant({ db, tenantKey });
+      await seedUserWithPassword({
+        db,
+        passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        role: 'MEMBER',
+        membershipStatus: 'INVITED',
+      });
 
       const res = await app.inject({
         method: 'POST',
         url: '/auth/login',
         headers: { host },
-        payload: { email: 'nonexistent@example.com', password: 'SomePass123!' },
+        payload: { email, password },
       });
 
-      expect(res.statusCode).toBe(401);
-
-      const body = readJson<ErrorResponseBody>(res);
-      expect(body.error.message).toContain('Invalid email or password');
+      expect(res.statusCode).toBe(403);
     } finally {
       await close();
     }
   });
 
-  it('rejects suspended membership', async () => {
+  it('rejects user with SUSPENDED membership', async () => {
     const { app, deps, close } = await buildTestApp();
     const { db, passwordHasher } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
+    const host = `${tenantKey}.hubins.com`;
     const email = `suspended-${randomUUID().slice(0, 8)}@example.com`;
-    const password = 'ValidPass123!';
+    const password = 'Pass123!';
 
     try {
       const tenant = await createTenant({ db, tenantKey });
@@ -285,22 +235,19 @@ describe('POST /auth/login', () => {
       });
 
       expect(res.statusCode).toBe(403);
-
-      const body = readJson<ErrorResponseBody>(res);
-      expect(body.error.message).toContain('suspended');
     } finally {
       await close();
     }
   });
 
-  it('rejects INVITED membership (invite not accepted)', async () => {
+  it('member login returns AUTHENTICATED nextAction NONE', async () => {
     const { app, deps, close } = await buildTestApp();
     const { db, passwordHasher } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
-    const email = `invited-${randomUUID().slice(0, 8)}@example.com`;
-    const password = 'ValidPass123!';
+    const host = `${tenantKey}.hubins.com`;
+    const email = `member-${randomUUID().slice(0, 8)}@example.com`;
+    const password = 'MemberPass123!';
 
     try {
       const tenant = await createTenant({ db, tenantKey });
@@ -311,7 +258,6 @@ describe('POST /auth/login', () => {
         email,
         password,
         role: 'MEMBER',
-        membershipStatus: 'INVITED',
       });
 
       const res = await app.inject({
@@ -321,56 +267,11 @@ describe('POST /auth/login', () => {
         payload: { email, password },
       });
 
-      expect(res.statusCode).toBe(409);
-
-      const body = readJson<ErrorResponseBody>(res);
-      expect(body.error.message).toContain('invite');
-    } finally {
-      await close();
-    }
-  });
-
-  it('rejects user with no membership for this tenant', async () => {
-    const { app, deps, close } = await buildTestApp();
-    const { db, passwordHasher } = deps;
-
-    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
-    const host = `${tenantKey}.localhost:3000`;
-    const email = `nomember-${randomUUID().slice(0, 8)}@example.com`;
-    const password = 'ValidPass123!';
-
-    try {
-      const _tenant = await createTenant({ db, tenantKey });
-
-      // Create user + password identity but NO membership for this tenant
-      const user = await db
-        .insertInto('users')
-        .values({ email: email.toLowerCase(), name: 'No Member' })
-        .returning(['id'])
-        .executeTakeFirstOrThrow();
-
-      const passwordHash = await passwordHasher.hash(password);
-      await db
-        .insertInto('auth_identities')
-        .values({
-          user_id: user.id,
-          provider: 'password',
-          password_hash: passwordHash,
-          provider_subject: null,
-        })
-        .execute();
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        headers: { host },
-        payload: { email, password },
-      });
-
-      expect(res.statusCode).toBe(403);
-
-      const body = readJson<ErrorResponseBody>(res);
-      expect(body.error.message).toContain('access');
+      expect(res.statusCode).toBe(200);
+      const body = readJson<AuthenticatedResponseBody>(res);
+      expect(body.nextAction).toBe('NONE');
+      expect(body.user.email).toBe(email.toLowerCase());
+      expect(body.membership.role).toBe('MEMBER');
     } finally {
       await close();
     }

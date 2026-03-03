@@ -77,7 +77,8 @@ export type AuthNextAction =
 export type MfaNextAction = AuthNextAction;
 
 export type AuthResult = {
-  status: 'AUTHENTICATED';
+  // FIX: signup can legitimately return EMAIL_VERIFICATION_REQUIRED
+  status: 'AUTHENTICATED' | 'EMAIL_VERIFICATION_REQUIRED';
   nextAction: AuthNextAction;
   user: {
     id: string;

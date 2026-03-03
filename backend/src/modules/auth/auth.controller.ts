@@ -81,6 +81,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly isProduction: boolean,
+    private readonly sessionTtlSeconds: number,
   ) {}
 
   async register(req: FastifyRequest, reply: FastifyReply) {
@@ -102,7 +103,7 @@ export class AuthController {
       requestId: req.requestContext.requestId,
     });
 
-    setSessionCookie(reply, sessionId, this.isProduction);
+    setSessionCookie(reply, sessionId, this.isProduction, this.sessionTtlSeconds);
     return reply.status(201).send(result);
   }
 
@@ -123,7 +124,7 @@ export class AuthController {
       requestId: req.requestContext.requestId,
     });
 
-    setSessionCookie(reply, sessionId, this.isProduction);
+    setSessionCookie(reply, sessionId, this.isProduction, this.sessionTtlSeconds);
     return reply.status(200).send(result);
   }
 
@@ -203,7 +204,11 @@ export class AuthController {
       userAgent: req.headers['user-agent'] ?? null,
     });
 
-    return reply.status(200).send(result);
+    // Rotate session ID on privilege elevation (MFA verified).
+    const { sessionId: newSessionId, ...body } = result;
+    setSessionCookie(reply, newSessionId, this.isProduction, this.sessionTtlSeconds);
+
+    return reply.status(200).send(body);
   }
 
   async mfaVerify(req: FastifyRequest, reply: FastifyReply) {
@@ -228,7 +233,11 @@ export class AuthController {
       userAgent: req.headers['user-agent'] ?? null,
     });
 
-    return reply.status(200).send(result);
+    // Rotate session ID on privilege elevation (MFA verified).
+    const { sessionId: newSessionId, ...body } = result;
+    setSessionCookie(reply, newSessionId, this.isProduction, this.sessionTtlSeconds);
+
+    return reply.status(200).send(body);
   }
 
   async mfaRecover(req: FastifyRequest, reply: FastifyReply) {
@@ -253,14 +262,17 @@ export class AuthController {
       userAgent: req.headers['user-agent'] ?? null,
     });
 
-    return reply.status(200).send(result);
+    // Rotate session ID on privilege elevation (MFA verified).
+    const { sessionId: newSessionId, ...body } = result;
+    setSessionCookie(reply, newSessionId, this.isProduction, this.sessionTtlSeconds);
+
+    return reply.status(200).send(body);
   }
 
   async ssoStart(req: FastifyRequest, reply: FastifyReply) {
     const providerRaw = (req.params as { provider?: unknown } | undefined)?.provider;
-
-    const paramsParsed = ssoProviderSchema.safeParse(providerRaw);
-    if (!paramsParsed.success) {
+    const providerRawParsed = ssoProviderSchema.safeParse(providerRaw);
+    if (!providerRawParsed.success) {
       throw AppError.validationError('Invalid SSO provider', { provider: providerRaw });
     }
 
@@ -275,7 +287,7 @@ export class AuthController {
 
     const { redirectTo } = await this.authService.startSso({
       tenantKey: requireTenantKey(req.requestContext.tenantKey),
-      provider: paramsParsed.data,
+      provider: providerRawParsed.data,
       requestId: req.requestContext.requestId,
       returnTo,
       ip: req.ip,
@@ -309,7 +321,7 @@ export class AuthController {
       requestId: req.requestContext.requestId,
     });
 
-    setSessionCookie(reply, sessionId, this.isProduction);
+    setSessionCookie(reply, sessionId, this.isProduction, this.sessionTtlSeconds);
     return reply.status(302).redirect(redirectTo);
   }
 
@@ -338,7 +350,7 @@ export class AuthController {
       requestId: req.requestContext.requestId,
     });
 
-    setSessionCookie(reply, sessionId, this.isProduction);
+    setSessionCookie(reply, sessionId, this.isProduction, this.sessionTtlSeconds);
     return reply.status(201).send(result);
   }
 

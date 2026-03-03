@@ -18,6 +18,7 @@ import type { EncryptionService } from '../../../../shared/security/encryption';
 import { getMfaSecretForUser } from '../../queries/mfa.queries';
 import { auditMfaVerifyFailed, auditMfaVerifySuccess } from '../../auth.audit';
 import { MfaErrors } from './mfa-errors';
+import { AppError } from '../../../../shared/http/errors';
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
@@ -41,7 +42,7 @@ export async function verifyMfaFlow(params: {
     ip: string;
     userAgent: string | null;
   };
-}): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
+}): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE'; sessionId: string }> {
   const { deps, input } = params;
 
   if (input.mfaVerified) {
@@ -76,8 +77,12 @@ export async function verifyMfaFlow(params: {
     throw MfaErrors.invalidCode();
   }
 
-  await deps.sessionStore.updateSession(input.sessionId, { mfaVerified: true });
+  const newSessionId = await deps.sessionStore.rotateSession(input.sessionId, {
+    mfaVerified: true,
+  });
+  if (!newSessionId) throw AppError.unauthorized('Session expired. Please sign in again.');
+
   await auditMfaVerifySuccess(audit, { userId: input.userId });
 
-  return { status: 'AUTHENTICATED', nextAction: 'NONE' };
+  return { status: 'AUTHENTICATED', nextAction: 'NONE', sessionId: newSessionId };
 }

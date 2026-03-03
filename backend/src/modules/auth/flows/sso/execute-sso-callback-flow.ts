@@ -123,8 +123,10 @@ export async function executeSsoCallbackFlow(
   },
   params: SsoCallbackParams,
 ): Promise<{ sessionId: string; redirectTo: string }> {
+  const ipKey = deps.tokenHasher.hash(params.ip);
+
   await deps.rateLimiter.hitOrThrow({
-    key: `sso-callback:ip:${params.ip}`,
+    key: `sso-callback:ip:${ipKey}`,
     ...AUTH_RATE_LIMITS.ssoCallback.perIp,
   });
 

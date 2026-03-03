@@ -225,6 +225,7 @@ export async function buildDeps(
     userRepo: users.userRepo,
     membershipRepo: memberships.membershipRepo,
     isProduction: config.nodeEnv === 'production',
+    sessionTtlSeconds: config.sessionTtlSeconds,
     totpService,
     encryptionService,
     mfaKeyedHasher,

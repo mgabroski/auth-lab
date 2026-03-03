@@ -52,8 +52,10 @@ export async function resetPasswordFlow(
   },
   params: ResetPasswordParams,
 ): Promise<void> {
+  const ipKey = deps.tokenHasher.hash(params.ip);
+
   await deps.rateLimiter.hitOrThrow({
-    key: `reset:ip:${params.ip}`,
+    key: `reset:ip:${ipKey}`,
     ...AUTH_RATE_LIMITS.resetPassword.perIp,
   });
 

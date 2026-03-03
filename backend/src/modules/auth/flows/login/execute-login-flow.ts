@@ -99,6 +99,7 @@ export async function executeLoginFlow(
 ): Promise<{ result: AuthResult; sessionId: string }> {
   const email = params.email.toLowerCase();
   const emailKey = deps.tokenHasher.hash(email);
+  const ipKey = deps.tokenHasher.hash(params.ip);
 
   deps.logger.info({
     msg: 'auth.login.start',
@@ -114,7 +115,7 @@ export async function executeLoginFlow(
     ...AUTH_RATE_LIMITS.login.perEmail,
   });
   await deps.rateLimiter.hitOrThrow({
-    key: `login:ip:${params.ip}`,
+    key: `login:ip:${ipKey}`,
     ...AUTH_RATE_LIMITS.login.perIp,
   });
 

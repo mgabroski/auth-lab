@@ -5,6 +5,7 @@ import { SsoProviderRegistry } from '../../src/modules/auth/sso/sso-provider-reg
 import { GoogleSsoAdapter } from '../../src/modules/auth/sso/google/google-sso.adapter';
 import { MicrosoftSsoAdapter } from '../../src/modules/auth/sso/microsoft/microsoft-sso.adapter';
 import { FakeSsoAdapter } from './fake-sso-adapter';
+import { resetDb } from './reset-db';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -23,6 +24,9 @@ function requireEnv(name: string): string {
  * - Provides safe defaults for Outbox config so tests don't require OUTBOX_* env vars.
  */
 export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
+  // resetDb() guard requires this. Keep it local to tests.
+  if (!process.env.NODE_ENV) process.env.NODE_ENV = 'test';
+
   const baseConfig: AppConfig = {
     nodeEnv: 'test',
     port: 0,
@@ -121,6 +125,7 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     app: built.app,
     deps: built.deps,
     cryptoHelpers,
+    reset: async () => resetDb(built.deps.db),
     sso: {
       googleAdapter,
       microsoftAdapter,

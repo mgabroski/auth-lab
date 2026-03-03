@@ -26,6 +26,15 @@ export type AdminSessionResult = {
   cookie: string;
 };
 
+function extractFirstSetCookie(res: { headers: Record<string, unknown> }): string | undefined {
+  const raw = res.headers['set-cookie'];
+
+  if (typeof raw === 'string') return raw;
+  if (Array.isArray(raw) && typeof raw[0] === 'string') return raw[0];
+
+  return undefined;
+}
+
 export async function createAdminSession(opts: {
   app: FastifyInstance;
   deps: AppDeps;
@@ -39,7 +48,7 @@ export async function createAdminSession(opts: {
   // ── 1. Create user ────────────────────────────────────────────────────────
   const user = await db
     .insertInto('users')
-    .values({ email: opts.email.toLowerCase(), name: 'Admin User' })
+    .values({ email: opts.email.toLowerCase(), name: 'Admin User', email_verified: true })
     .returning(['id'])
     .executeTakeFirstOrThrow();
 
@@ -90,30 +99,35 @@ export async function createAdminSession(opts: {
     .execute();
 
   // ── 6. Login — establishes session (mfaVerified=false initially) ──────────
+  const host = `${opts.tenantKey}.localhost:3000`;
+
   const loginRes = await opts.app.inject({
     method: 'POST',
     url: '/auth/login',
-    headers: { host: `${opts.tenantKey}.hubins.com` },
+    headers: { host },
     body: { email: opts.email, password: opts.password },
   });
   expect(loginRes.statusCode).toBe(200);
 
-  const loginCookieHeader = loginRes.headers['set-cookie'];
-  const sessionCookie = Array.isArray(loginCookieHeader)
-    ? loginCookieHeader[0]
-    : (loginCookieHeader as string);
+  const sessionCookie = extractFirstSetCookie(loginRes);
   expect(sessionCookie).toBeTruthy();
 
   // ── 7. Verify MFA — flips session.mfaVerified to true ────────────────────
-  // Session is updated in-place; the same cookie remains valid.
+  // Session is rotated on MFA success (session fixation hardening). Capture the new cookie.
   const totpCode = totpService.generateCodeForTest(plaintextSecret);
   const mfaRes = await opts.app.inject({
     method: 'POST',
     url: '/auth/mfa/verify',
-    headers: { host: `${opts.tenantKey}.hubins.com`, cookie: sessionCookie },
+    headers: { host, cookie: sessionCookie as string },
     body: { code: totpCode },
   });
   expect(mfaRes.statusCode).toBe(200);
 
-  return { userId: user.id, cookie: sessionCookie };
+  const rotatedCookie = extractFirstSetCookie(mfaRes);
+
+  // Some implementations may return no Set-Cookie; fall back to the original cookie.
+  const finalCookie = rotatedCookie ?? (sessionCookie as string);
+  expect(finalCookie).toBeTruthy();
+
+  return { userId: user.id, cookie: finalCookie };
 }

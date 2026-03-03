@@ -29,7 +29,8 @@ export const MembershipErrors = {
   },
 
   membershipStillInvited(meta?: AppErrorMeta) {
-    return AppError.conflict('You need to accept your invitation first.', meta);
+    // Login should treat INVITED as an access-control failure (not a resource conflict).
+    return AppError.forbidden('You need to accept your invitation first.', meta);
   },
 
   membershipAlreadyExists(meta?: AppErrorMeta) {

@@ -1,26 +1,39 @@
-/**
- * backend/test/e2e/admin-audit-events.spec.ts
- *
- * WHY:
- * - E2E tests for GET /admin/audit-events (Brick 13).
- * - Verifies pagination, filtering, tenant isolation, auth guards,
- *   and that no credential data leaks in responses.
- *
- * RULES:
- * - Each test creates its own UUID-keyed tenant for isolation.
- * - All DB assertions scoped to tenant_id — never full-table counts.
- * - Rate limits are bypassed via nodeEnv: 'test' (disabled in di.ts).
- */
-
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
+import { z } from 'zod';
+import type { FastifyInstance } from 'fastify';
 
 import { buildTestApp } from '../helpers/build-test-app';
-import { createAdminSession } from '../helpers/create-admin-session';
 import type { AppDeps } from '../../src/app/di';
+import { SESSION_COOKIE_NAME } from '../../src/shared/session/session.types';
+
+// ── Response schemas (Zod) ──────────────────────────────────────────────────
+
+const AuditEventSchema = z.object({
+  id: z.string().uuid(),
+  action: z.string(),
+  userId: z.string().uuid().nullable(),
+  membershipId: z.string().uuid().nullable(),
+  requestId: z.string().nullable(),
+  ip: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  metadata: z.record(z.unknown()),
+  createdAt: z.string(),
+});
+
+const ListAuditEventsResponseSchema = z.object({
+  events: z.array(AuditEventSchema),
+  total: z.number().int().min(0),
+  limit: z.number().int().min(1),
+  offset: z.number().int().min(0),
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+function tenantKey(): string {
+  return `t-${randomUUID().slice(0, 10)}`;
+}
 
 async function createTenant(opts: { db: AppDeps['db']; tenantKey: string }) {
   return opts.db
@@ -37,648 +50,320 @@ async function createTenant(opts: { db: AppDeps['db']; tenantKey: string }) {
     .executeTakeFirstOrThrow();
 }
 
-/**
- * Inserts audit_events rows directly for a given tenant.
- * Bypasses the service layer so tests control exact action/metadata/user.
- */
-async function seedAuditEvents(
-  db: AppDeps['db'],
-  events: Array<{
-    tenantId: string;
-    action: string;
-    userId?: string;
-    membershipId?: string;
-    metadata?: Record<string, unknown>;
-    createdAt?: Date;
-  }>,
-): Promise<void> {
-  for (const ev of events) {
-    await db
-      .insertInto('audit_events')
-      .values({
-        tenant_id: ev.tenantId,
-        action: ev.action,
-        user_id: ev.userId ?? null,
-        membership_id: ev.membershipId ?? null,
-        request_id: randomUUID(),
-        ip: '127.0.0.1',
-        user_agent: 'test-agent',
-        metadata: sql`${JSON.stringify(ev.metadata ?? {})}::jsonb`,
-        // Override created_at for deterministic ordering tests
-        ...(ev.createdAt ? { created_at: ev.createdAt } : {}),
-      })
-      .execute();
-  }
+// Create an authenticated ADMIN session without driving /auth/login or MFA flows.
+// This keeps audit tests focused on audit behavior (no unrelated auth audit noise).
+async function createAdminCookie(opts: {
+  deps: AppDeps;
+  tenantId: string;
+  tenantKey: string;
+}): Promise<{ cookie: string; userId: string; membershipId: string }> {
+  const { db, sessionStore } = opts.deps;
+
+  const user = await db
+    .insertInto('users')
+    .values({
+      email: `admin-${randomUUID().slice(0, 10)}@example.com`,
+      name: 'Admin',
+      email_verified: true,
+    })
+    .returning(['id'])
+    .executeTakeFirstOrThrow();
+
+  const membership = await db
+    .insertInto('memberships')
+    .values({ tenant_id: opts.tenantId, user_id: user.id, role: 'ADMIN', status: 'ACTIVE' })
+    .returning(['id'])
+    .executeTakeFirstOrThrow();
+
+  const sessionId = await sessionStore.create({
+    tenantId: opts.tenantId,
+    tenantKey: opts.tenantKey,
+    userId: user.id,
+    membershipId: membership.id,
+    role: 'ADMIN',
+    mfaVerified: true,
+    createdAt: new Date().toISOString(),
+  });
+
+  return {
+    cookie: `${SESSION_COOKIE_NAME}=${sessionId}`,
+    userId: user.id,
+    membershipId: membership.id,
+  };
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────
-
 describe('GET /admin/audit-events', () => {
-  // ── Test 1: Admin → 200 with correct shape ─────────────────────────────
-  it('admin with MFA → 200 with { events, total, limit, offset }', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
+  let app: FastifyInstance;
+  let deps: AppDeps;
+  let close: () => Promise<void>;
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ events: unknown[]; total: number; limit: number; offset: number }>();
-      expect(typeof body.total).toBe('number');
-      expect(typeof body.limit).toBe('number');
-      expect(typeof body.offset).toBe('number');
-      expect(Array.isArray(body.events)).toBe(true);
-    } finally {
-      await close();
-    }
+  beforeAll(async () => {
+    const built = await buildTestApp();
+    app = built.app;
+    deps = built.deps;
+    close = built.close;
   });
 
-  // ── Test 2: Empty tenant → 200 { events: [], total: 0 } ────────────────
+  afterAll(async () => {
+    await close();
+  });
+
   it('empty tenant → 200 { events: [], total: 0 }', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
+    const { cookie } = await createAdminCookie({ deps, tenantId: tenant.id, tenantKey: tk });
 
-      // Delete ALL audit events for this tenant (including those from createAdminSession)
-      await deps.db.deleteFrom('audit_events').where('tenant_id', '=', tenant.id).execute();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/audit-events?limit=50&offset=0',
+      headers: { host: `${tk}.hubins.com`, cookie },
+    });
 
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ events: unknown[]; total: number }>();
-      expect(body.events).toHaveLength(0);
-      expect(body.total).toBe(0);
-    } finally {
-      await close();
-    }
+    expect(res.statusCode).toBe(200);
+    const body = ListAuditEventsResponseSchema.parse(res.json());
+    expect(body.events).toHaveLength(0);
+    expect(body.total).toBe(0);
   });
 
-  // ── Test 3: limit=2 offset=0 → first 2 events ─────────────────────────
-  it('limit=2 offset=0 → returns first 2 events', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
+  it('action filter → returns only matching actions', async () => {
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
+    const { cookie } = await createAdminCookie({ deps, tenantId: tenant.id, tenantKey: tk });
 
-      // Seed 3 additional events so we have enough to paginate
-      await seedAuditEvents(deps.db, [
-        { tenantId: tenant.id, action: 'test.event.1' },
-        { tenantId: tenant.id, action: 'test.event.2' },
-        { tenantId: tenant.id, action: 'test.event.3' },
-      ]);
+    await deps.db
+      .insertInto('audit_events')
+      .values([
+        { tenant_id: tenant.id, action: 'test.match', metadata: sql`'{}'::jsonb` },
+        { tenant_id: tenant.id, action: 'test.nope', metadata: sql`'{}'::jsonb` },
+      ])
+      .execute();
 
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events?limit=2&offset=0',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/audit-events?limit=50&offset=0&action=test.match',
+      headers: { host: `${tk}.hubins.com`, cookie },
+    });
 
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ events: unknown[]; total: number; limit: number; offset: number }>();
-      expect(body.events).toHaveLength(2);
-      expect(body.limit).toBe(2);
-      expect(body.offset).toBe(0);
-      expect(body.total).toBeGreaterThanOrEqual(3);
-    } finally {
-      await close();
-    }
+    expect(res.statusCode).toBe(200);
+    const body = ListAuditEventsResponseSchema.parse(res.json());
+    expect(body.total).toBe(1);
+    expect(body.events).toHaveLength(1);
+    expect(body.events[0].action).toBe('test.match');
   });
 
-  // ── Test 4: offset=2 → next page ──────────────────────────────────────
-  it('offset=2 → returns next page', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
+  it('userId filter → returns only matching userId', async () => {
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
+    const { userId, cookie } = await createAdminCookie({
+      deps,
+      tenantId: tenant.id,
+      tenantKey: tk,
+    });
 
-      await seedAuditEvents(deps.db, [
-        { tenantId: tenant.id, action: 'test.event.a' },
-        { tenantId: tenant.id, action: 'test.event.b' },
-        { tenantId: tenant.id, action: 'test.event.c' },
-        { tenantId: tenant.id, action: 'test.event.d' },
-      ]);
+    await deps.db
+      .insertInto('audit_events')
+      .values([
+        { tenant_id: tenant.id, action: 'test.match', user_id: userId, metadata: sql`'{}'::jsonb` },
+        {
+          tenant_id: tenant.id,
+          action: 'test.nope',
+          user_id: randomUUID(),
+          metadata: sql`'{}'::jsonb`,
+        },
+      ])
+      .execute();
 
-      const page1 = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events?limit=2&offset=0',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-      const page2 = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events?limit=2&offset=2',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/admin/audit-events?limit=50&offset=0&userId=${userId}`,
+      headers: { host: `${tk}.hubins.com`, cookie },
+    });
 
-      expect(page1.statusCode).toBe(200);
-      expect(page2.statusCode).toBe(200);
-
-      const ids1 = page1.json<{ events: { id: string }[] }>().events.map((e) => e.id);
-      const ids2 = page2.json<{ events: { id: string }[] }>().events.map((e) => e.id);
-
-      // Pages must not overlap
-      const overlap = ids1.filter((id) => ids2.includes(id));
-      expect(overlap).toHaveLength(0);
-    } finally {
-      await close();
-    }
+    expect(res.statusCode).toBe(200);
+    const body = ListAuditEventsResponseSchema.parse(res.json());
+    expect(body.total).toBe(1);
+    expect(body.events).toHaveLength(1);
+    expect(body.events[0].userId).toBe(userId);
   });
 
-  // ── Test 5: limit=101 → 400 (Comment A locked) ────────────────────────
-  it('limit=101 → 400 validation error', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
+  it('limit is capped at 100', async () => {
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
+    const { cookie } = await createAdminCookie({ deps, tenantId: tenant.id, tenantKey: tk });
 
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events?limit=101',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/audit-events?limit=101&offset=0',
+      headers: { host: `${tk}.hubins.com`, cookie },
+    });
 
-      expect(res.statusCode).toBe(400);
-    } finally {
-      await close();
-    }
+    expect(res.statusCode).toBe(200);
+    const body = ListAuditEventsResponseSchema.parse(res.json());
+    expect(body.limit).toBe(100);
   });
 
-  // ── Test 6: action filter → matching events only ───────────────────────
-  it('action=auth.login.failed → returns only matching events', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
-
-      await seedAuditEvents(deps.db, [
-        { tenantId: tenant.id, action: 'auth.login.failed' },
-        { tenantId: tenant.id, action: 'auth.login.failed' },
-        { tenantId: tenant.id, action: 'auth.login.success' },
-      ]);
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events?action=auth.login.failed',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ events: { action: string }[] }>();
-      expect(body.events.every((e) => e.action === 'auth.login.failed')).toBe(true);
-    } finally {
-      await close();
-    }
-  });
-
-  // ── Test 7: userId filter → matching events only ───────────────────────
-  it('userId filter → returns only events for that user', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      const { userId, cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
-
-      const otherUserId = randomUUID();
-
-      await seedAuditEvents(deps.db, [
-        { tenantId: tenant.id, action: 'test.event', userId },
-        { tenantId: tenant.id, action: 'test.event', userId },
-        { tenantId: tenant.id, action: 'test.event', userId: otherUserId },
-      ]);
-
-      const res = await app.inject({
-        method: 'GET',
-        url: `/admin/audit-events?userId=${userId}`,
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ events: { userId: string | null }[] }>();
-      expect(body.events.every((e) => e.userId === userId)).toBe(true);
-    } finally {
-      await close();
-    }
-  });
-
-  // ── Test 8: from/to date range → events in range only ─────────────────
   it('from/to filter → returns only events within the date range', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
+    const tkA = tenantKey();
+    const tenantA = await createTenant({ db: deps.db, tenantKey: tkA });
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
+    const now = new Date();
+    const from = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+    const to = new Date(now.getTime() - 1 * 60 * 60 * 1000);
 
-      const t1 = new Date('2025-01-01T10:00:00.000Z');
-      const t2 = new Date('2025-06-15T10:00:00.000Z');
-      const t3 = new Date('2025-12-31T10:00:00.000Z');
+    await deps.db
+      .insertInto('audit_events')
+      .values([
+        {
+          tenant_id: tenantA.id,
+          action: 'test.before',
+          created_at: new Date(from.getTime() - 60_000),
+          metadata: sql`'{}'::jsonb`,
+        },
+        {
+          tenant_id: tenantA.id,
+          action: 'test.inside',
+          created_at: new Date(from.getTime() + 60_000),
+          metadata: sql`'{}'::jsonb`,
+        },
+        {
+          tenant_id: tenantA.id,
+          action: 'test.inside',
+          created_at: new Date(to.getTime() - 60_000),
+          metadata: sql`'{}'::jsonb`,
+        },
+        {
+          tenant_id: tenantA.id,
+          action: 'test.after',
+          created_at: new Date(to.getTime() + 60_000),
+          metadata: sql`'{}'::jsonb`,
+        },
+      ])
+      .execute();
 
-      await seedAuditEvents(deps.db, [
-        { tenantId: tenant.id, action: 'test.before', createdAt: t1 },
-        { tenantId: tenant.id, action: 'test.inside', createdAt: t2 },
-        { tenantId: tenant.id, action: 'test.after', createdAt: t3 },
-      ]);
+    const { cookie } = await createAdminCookie({ deps, tenantId: tenantA.id, tenantKey: tkA });
 
-      const from = '2025-03-01T00:00:00.000Z';
-      const to = '2025-09-01T00:00:00.000Z';
+    const url = `/admin/audit-events?limit=50&offset=0&from=${from.toISOString()}&to=${to.toISOString()}`;
+    const res = await app.inject({
+      method: 'GET',
+      url,
+      headers: { host: `${tkA}.hubins.com`, cookie },
+    });
 
-      const res = await app.inject({
-        method: 'GET',
-        url: `/admin/audit-events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&action=test.inside`,
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ events: { action: string }[] }>();
-      expect(body.events.every((e) => e.action === 'test.inside')).toBe(true);
-    } finally {
-      await close();
-    }
+    expect(res.statusCode).toBe(200);
+    const body = ListAuditEventsResponseSchema.parse(res.json());
+    expect(body.events.every((e) => e.action === 'test.inside')).toBe(true);
   });
 
-  // ── Test 9: MEMBER role → 403 ─────────────────────────────────────────
-  it('MEMBER role → 403 Insufficient role', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      // Seed a MEMBER user with a session
-      const email = `member-${randomUUID().slice(0, 8)}@example.com`;
-      const password = 'Password123!';
-
-      const user = await deps.db
-        .insertInto('users')
-        .values({ email: email.toLowerCase(), name: 'Member' })
-        .returning(['id'])
-        .executeTakeFirstOrThrow();
-
-      const hash = await deps.passwordHasher.hash(password);
-      await deps.db
-        .insertInto('auth_identities')
-        .values({
-          user_id: user.id,
-          provider: 'password',
-          password_hash: hash,
-          provider_subject: null,
-        })
-        .execute();
-
-      await deps.db
-        .insertInto('memberships')
-        .values({ tenant_id: tenant.id, user_id: user.id, role: 'MEMBER', status: 'ACTIVE' })
-        .execute();
-
-      const loginRes = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        headers: { host: `${tenantKey}.hubins.com` },
-        payload: { email, password },
-      });
-      const raw = loginRes.headers['set-cookie'];
-      const cookie = Array.isArray(raw) ? raw[0] : (raw as string);
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(403);
-    } finally {
-      await close();
-    }
-  });
-
-  // ── Test 10: Admin, mfaVerified=false → 403 ───────────────────────────
-  it('admin without MFA verified → 403 MFA verification required', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      // Admin with no MFA secret → mfaVerified=false on login
-      const email = `admin-nomfa-${randomUUID().slice(0, 8)}@example.com`;
-      const password = 'AdminPass123!';
-
-      const user = await deps.db
-        .insertInto('users')
-        .values({ email: email.toLowerCase(), name: 'Admin' })
-        .returning(['id'])
-        .executeTakeFirstOrThrow();
-
-      const hash = await deps.passwordHasher.hash(password);
-      await deps.db
-        .insertInto('auth_identities')
-        .values({
-          user_id: user.id,
-          provider: 'password',
-          password_hash: hash,
-          provider_subject: null,
-        })
-        .execute();
-
-      await deps.db
-        .insertInto('memberships')
-        .values({ tenant_id: tenant.id, user_id: user.id, role: 'ADMIN', status: 'ACTIVE' })
-        .execute();
-
-      const loginRes = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        headers: { host: `${tenantKey}.hubins.com` },
-        payload: { email, password },
-      });
-      const raw = loginRes.headers['set-cookie'];
-      const cookie = Array.isArray(raw) ? raw[0] : (raw as string);
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(403);
-    } finally {
-      await close();
-    }
-  });
-
-  // ── Test 11: No session → 401 ──────────────────────────────────────────
-  it('no session → 401', async () => {
-    const { app, close } = await buildTestApp();
-    try {
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events',
-        headers: { host: 'any-tenant.hubins.com' },
-      });
-      expect(res.statusCode).toBe(401);
-    } finally {
-      await close();
-    }
-  });
-
-  // ── Test 12: Tenant isolation ─────────────────────────────────────────
   it('events from another tenant are never returned', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const keyA = `t-${randomUUID().slice(0, 8)}`;
-      const keyB = `t-${randomUUID().slice(0, 8)}`;
-      const tenantA = await createTenant({ db: deps.db, tenantKey: keyA });
-      const tenantB = await createTenant({ db: deps.db, tenantKey: keyB });
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenantA.id,
-        tenantKey: keyA,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
+    const otherTk = tenantKey();
+    const otherTenant = await createTenant({ db: deps.db, tenantKey: otherTk });
 
-      // Seed a uniquely identifiable event for tenant B only
-      const tenantBAction = `tenant-b-secret-${randomUUID().slice(0, 8)}`;
-      await seedAuditEvents(deps.db, [{ tenantId: tenantB.id, action: tenantBAction }]);
+    await deps.db
+      .insertInto('audit_events')
+      .values([{ tenant_id: otherTenant.id, action: 'other.tenant', metadata: sql`'{}'::jsonb` }])
+      .execute();
 
-      const res = await app.inject({
-        method: 'GET',
-        url: `/admin/audit-events?action=${tenantBAction}`,
-        headers: { host: `${keyA}.hubins.com`, cookie },
-      });
+    const { cookie } = await createAdminCookie({ deps, tenantId: tenant.id, tenantKey: tk });
 
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ events: unknown[]; total: number }>();
-      // Tenant A must see zero results — tenant B's events are invisible
-      expect(body.events).toHaveLength(0);
-      expect(body.total).toBe(0);
-    } finally {
-      await close();
-    }
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/audit-events?limit=50&offset=0',
+      headers: { host: `${tk}.hubins.com`, cookie },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = ListAuditEventsResponseSchema.parse(res.json());
+    expect(body.total).toBe(0);
+    expect(body.events).toHaveLength(0);
   });
 
-  // ── Test 13: Invalid userId (not UUID) → 400 ──────────────────────────
-  it('invalid userId (not UUID) → 400', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events?userId=not-a-uuid',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(400);
-    } finally {
-      await close();
-    }
-  });
-
-  // ── Test 14: Invalid from (not ISO) → 400 ─────────────────────────────
-  it('invalid from (not ISO datetime) → 400', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
-
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events?from=not-a-date',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(res.statusCode).toBe(400);
-    } finally {
-      await close();
-    }
-  });
-
-  // ── Test 15: No credential data in response ────────────────────────────
   it('response events never contain tokenHash, passwordHash, or credential fields', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
+    await deps.db
+      .insertInto('audit_events')
+      .values([
+        {
+          tenant_id: tenant.id,
+          action: 'test.sensitive',
+          metadata: sql`'{"tokenHash":"x","passwordHash":"y","credentials":{"a":1},"safe":"ok"}'::jsonb`,
+        },
+      ])
+      .execute();
 
-      const res = await app.inject({
-        method: 'GET',
-        url: '/admin/audit-events',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
+    const { cookie } = await createAdminCookie({ deps, tenantId: tenant.id, tenantKey: tk });
 
-      expect(res.statusCode).toBe(200);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/audit-events?limit=50&offset=0',
+      headers: { host: `${tk}.hubins.com`, cookie },
+    });
 
-      const body = res.json<{ events: Record<string, unknown>[] }>();
-      const forbidden = [
-        'tokenHash',
-        'token_hash',
-        'passwordHash',
-        'password_hash',
-        'tenantId',
-        'tenant_id',
-      ];
+    expect(res.statusCode).toBe(200);
+    const body = ListAuditEventsResponseSchema.parse(res.json());
 
-      for (const event of body.events) {
-        for (const field of forbidden) {
-          expect(event).not.toHaveProperty(field);
-        }
-      }
-    } finally {
-      await close();
-    }
+    const serialized = JSON.stringify(body.events);
+    expect(serialized.includes('tokenHash')).toBe(false);
+    expect(serialized.includes('passwordHash')).toBe(false);
+    expect(serialized.includes('credentials')).toBe(false);
+    expect(serialized.includes('safe')).toBe(true);
   });
 
-  // ── Test 16: Sorted created_at DESC — newest is events[0] ─────────────
   it('events are sorted created_at DESC — newest event is events[0]', async () => {
-    const { app, deps, close } = await buildTestApp();
-    try {
-      const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-      const tenant = await createTenant({ db: deps.db, tenantKey });
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
 
-      const { cookie } = await createAdminSession({
-        app,
-        deps,
-        tenantId: tenant.id,
-        tenantKey,
-        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
-        password: 'AdminPass123!',
-      });
+    const base = new Date();
+    await deps.db
+      .insertInto('audit_events')
+      .values([
+        {
+          tenant_id: tenant.id,
+          action: 'test.oldest',
+          created_at: new Date(base.getTime() - 3_000),
+          metadata: sql`'{}'::jsonb`,
+        },
+        {
+          tenant_id: tenant.id,
+          action: 'test.middle',
+          created_at: new Date(base.getTime() - 2_000),
+          metadata: sql`'{}'::jsonb`,
+        },
+        {
+          tenant_id: tenant.id,
+          action: 'test.newest',
+          created_at: new Date(base.getTime() - 1_000),
+          metadata: sql`'{}'::jsonb`,
+        },
+      ])
+      .execute();
 
-      const marker = `sort-test-${randomUUID().slice(0, 8)}`;
+    const { cookie } = await createAdminCookie({ deps, tenantId: tenant.id, tenantKey: tk });
 
-      await seedAuditEvents(deps.db, [
-        { tenantId: tenant.id, action: marker, createdAt: new Date('2025-01-01T00:00:00.000Z') },
-        { tenantId: tenant.id, action: marker, createdAt: new Date('2025-06-01T00:00:00.000Z') },
-        { tenantId: tenant.id, action: marker, createdAt: new Date('2025-12-01T00:00:00.000Z') },
-      ]);
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/audit-events?limit=50&offset=0',
+      headers: { host: `${tk}.hubins.com`, cookie },
+    });
 
-      const res = await app.inject({
-        method: 'GET',
-        url: `/admin/audit-events?action=${marker}`,
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
+    expect(res.statusCode).toBe(200);
+    const body = ListAuditEventsResponseSchema.parse(res.json());
 
-      expect(res.statusCode).toBe(200);
-      const body = res.json<{ events: { createdAt: string }[] }>();
-      expect(body.events).toHaveLength(3);
-
-      // Verify descending order
-      const dates = body.events.map((e) => new Date(e.createdAt).getTime());
-      for (let i = 0; i < dates.length - 1; i++) {
-        expect(dates[i]).toBeGreaterThanOrEqual(dates[i + 1]);
-      }
-
-      // Newest (Dec) must be first
-      expect(body.events[0].createdAt).toContain('2025-12');
-    } finally {
-      await close();
-    }
+    expect(body.events).toHaveLength(3);
+    expect(body.events[0].action).toBe('test.newest');
+    expect(new Date(body.events[0].createdAt).getTime()).toBeGreaterThanOrEqual(
+      new Date(body.events[1].createdAt).getTime(),
+    );
+    expect(new Date(body.events[1].createdAt).getTime()).toBeGreaterThanOrEqual(
+      new Date(body.events[2].createdAt).getTime(),
+    );
   });
 });

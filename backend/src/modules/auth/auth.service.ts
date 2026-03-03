@@ -121,8 +121,11 @@ export class AuthService {
     returnTo?: string;
     ip: string;
   }): Promise<{ redirectTo: string }> {
+    // PII SAFETY: never store raw IP in cache keys (hash first).
+    const ipKey = this.deps.tokenHasher.hash(input.ip);
+
     await this.deps.rateLimiter.hitOrThrow({
-      key: `sso-start:ip:${input.ip}`,
+      key: `sso-start:ip:${ipKey}`,
       ...AUTH_RATE_LIMITS.ssoStart.perIp,
     });
 
@@ -265,6 +268,10 @@ export class AuthService {
     });
   }
 
+  /**
+   * MFA setup verification elevates privilege: mfaVerified false → true.
+   * We rotate the session ID to reduce session fixation risk.
+   */
   async verifyMfaSetup(params: {
     sessionId: string;
     userId: string;
@@ -274,7 +281,7 @@ export class AuthService {
     requestId: string;
     ip: string;
     userAgent: string | null;
-  }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
+  }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE'; sessionId: string }> {
     return verifyMfaSetupFlow({
       deps: {
         db: this.deps.db,
@@ -288,6 +295,10 @@ export class AuthService {
     });
   }
 
+  /**
+   * MFA verification elevates privilege: mfaVerified false → true.
+   * We rotate the session ID to reduce session fixation risk.
+   */
   async verifyMfa(params: {
     sessionId: string;
     userId: string;
@@ -298,7 +309,7 @@ export class AuthService {
     requestId: string;
     ip: string;
     userAgent: string | null;
-  }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
+  }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE'; sessionId: string }> {
     return verifyMfaFlow({
       deps: {
         db: this.deps.db,
@@ -312,6 +323,10 @@ export class AuthService {
     });
   }
 
+  /**
+   * MFA recovery elevates privilege: mfaVerified false → true.
+   * We rotate the session ID to reduce session fixation risk.
+   */
   async recoverMfa(params: {
     sessionId: string;
     userId: string;
@@ -322,7 +337,7 @@ export class AuthService {
     requestId: string;
     ip: string;
     userAgent: string | null;
-  }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
+  }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE'; sessionId: string }> {
     return recoverMfaFlow({
       deps: {
         auditRepo: this.deps.auditRepo,

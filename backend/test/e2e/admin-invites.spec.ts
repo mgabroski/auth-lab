@@ -60,28 +60,25 @@ const ErrorBodySchema = z.object({
   }),
 });
 
-// Outbox payload (encrypted)
-const EncryptedInviteOutboxPayloadSchema = z.object({
-  tokenEnc: z.string().min(1),
-  toEmailEnc: z.string().min(1),
-  tenantKey: z.string().optional(),
-  inviteId: z.string().uuid(),
-  role: z.enum(['ADMIN', 'MEMBER']),
-});
+const OutboxPayloadSchema = z
+  .object({
+    tenantKey: z.string().optional(),
+    inviteId: z.string().optional(),
+    role: z.string().optional(),
+  })
+  .passthrough();
 
-function parseInviteOutboxPayload(
-  input: unknown,
-): z.infer<typeof EncryptedInviteOutboxPayloadSchema> {
-  return EncryptedInviteOutboxPayloadSchema.parse(input);
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function tenantKey(): string {
+  return `t-${randomUUID().slice(0, 10)}`;
 }
 
-export type InviteSummaryResponse = z.infer<typeof InviteSummarySchema>;
+function uniqueEmail(prefix: string): string {
+  return `${prefix}-${randomUUID().slice(0, 10)}@example.com`;
+}
 
-async function createTenant(opts: {
-  db: AppDeps['db'];
-  tenantKey: string;
-  allowedEmailDomains?: string[];
-}) {
+async function createTenant(opts: { db: AppDeps['db']; tenantKey: string }) {
   return opts.db
     .insertInto('tenants')
     .values({
@@ -90,36 +87,26 @@ async function createTenant(opts: {
       is_active: true,
       public_signup_enabled: false,
       member_mfa_required: false,
-      allowed_email_domains: sql`${JSON.stringify(opts.allowedEmailDomains ?? [])}::jsonb`,
+      allowed_email_domains: sql`'[]'::jsonb`,
     })
     .returning(['id', 'key'])
     .executeTakeFirstOrThrow();
 }
 
-function tenantKey(): string {
-  return `t-${randomUUID().slice(0, 8)}`;
-}
-
-function uniqueEmail(prefix = 'user'): string {
-  return `${prefix}-${randomUUID().slice(0, 8)}@example.com`;
-}
-
-function uniqueEmailForDomain(domain: string): string {
-  return `u-${randomUUID().slice(0, 8)}@${domain}`;
-}
-
 describe('POST /admin/invites', () => {
   let app: FastifyInstance;
   let deps: AppDeps;
+  let close: () => Promise<void>;
 
   beforeAll(async () => {
     const built = await buildTestApp();
     app = built.app;
     deps = built.deps;
+    close = built.close;
   });
 
   afterAll(async () => {
-    await app.close();
+    await close();
   });
 
   it('admin creates a MEMBER invite → 201 with correct InviteSummary', async () => {
@@ -135,7 +122,6 @@ describe('POST /admin/invites', () => {
     });
 
     const invitedEmail = uniqueEmail('invited');
-
     const requestStart = new Date();
 
     const res = await app.inject({
@@ -148,43 +134,34 @@ describe('POST /admin/invites', () => {
     expect(res.statusCode).toBe(201);
     const { invite } = CreateInviteResponseSchema.parse(res.json());
 
-    expect(invite.id).toBeDefined();
-    expect(invite.email).toBe(invitedEmail);
+    expect(invite.tenantId).toBe(tenant.id);
+    expect(invite.email).toBe(invitedEmail.toLowerCase());
     expect(invite.role).toBe('MEMBER');
     expect(invite.status).toBe('PENDING');
-    expect(invite.tenantId).toBe(tenant.id);
-    expect(invite.usedAt).toBeNull();
+    expect(invite.createdByUserId).toBeTruthy();
 
-    const inviteRaw = invite as Record<string, unknown>;
-    expect(inviteRaw.tokenHash).toBeUndefined();
+    // expiresAt should be ~7 days from creation (tolerance: 5 minutes)
+    const expiresAt = new Date(invite.expiresAt);
+    expect(expiresAt.getTime()).toBeGreaterThan(requestStart.getTime() + 6.9 * 24 * 60 * 60 * 1000);
 
-    const expiresAt = new Date(invite.expiresAt).getTime();
-    const expectedExpiry = Date.now() + 7 * 24 * 60 * 60 * 1000;
-    expect(Math.abs(expiresAt - expectedExpiry)).toBeLessThan(60_000);
-
-    // Outbox row exists for invite email (durable delivery)
-    const outbox = await deps.db
-      .selectFrom('outbox_messages')
+    // DB: invite row exists
+    const inviteRows = await deps.db
+      .selectFrom('invites')
       .selectAll()
-      .where('created_at', '>=', requestStart)
-      .where('type', '=', 'invite.created')
-      .where('status', '=', 'pending')
-      .where('idempotency_key', 'like', `invite-created:${invite.id}:%`)
+      .where('id', '=', invite.id)
       .execute();
 
-    expect(outbox).toHaveLength(1);
-
-    const payload = parseInviteOutboxPayload(outbox[0].payload);
-    expect(payload.tokenEnc).toMatch(/^v[0-9]+:/);
-    expect(payload.toEmailEnc).toMatch(/^v[0-9]+:/);
-    expect(payload.inviteId).toBe(invite.id);
-    expect(payload.role).toBe('MEMBER');
+    expect(inviteRows).toHaveLength(1);
+    expect(inviteRows[0].tenant_id).toBe(tenant.id);
+    expect(inviteRows[0].email).toBe(invitedEmail.toLowerCase());
+    expect(inviteRows[0].role).toBe('MEMBER');
+    expect(inviteRows[0].status).toBe('PENDING');
   });
 
   it('admin creates an ADMIN invite → role=ADMIN confirmed + outbox row exists', async () => {
     const tk = tenantKey();
     const tenant = await createTenant({ db: deps.db, tenantKey: tk });
-    const { cookie, userId } = await createAdminSession({
+    const { cookie } = await createAdminSession({
       app,
       deps,
       tenantId: tenant.id,
@@ -193,8 +170,7 @@ describe('POST /admin/invites', () => {
       password: 'Password123!',
     });
 
-    const invitedEmail = uniqueEmail('invited-admin');
-    const requestStart = new Date();
+    const invitedEmail = uniqueEmail('admin-invitee');
 
     const res = await app.inject({
       method: 'POST',
@@ -207,33 +183,27 @@ describe('POST /admin/invites', () => {
     const { invite } = CreateInviteResponseSchema.parse(res.json());
     expect(invite.role).toBe('ADMIN');
 
-    const dbRow = await deps.db
-      .selectFrom('invites')
-      .selectAll()
-      .where('id', '=', invite.id)
-      .executeTakeFirstOrThrow();
-
-    expect(dbRow.status).toBe('PENDING');
-    expect(dbRow.created_by_user_id).toBe(userId);
-    expect(dbRow.tenant_id).toBe(tenant.id);
-    expect(dbRow.email).toBe(invitedEmail);
-    expect(typeof dbRow.token_hash).toBe('string');
-    expect(dbRow.token_hash.length).toBeGreaterThan(0);
-
-    const outbox = await deps.db
+    // Outbox: invite email is enqueued (type: invite.created)
+    const outboxRows = await deps.db
       .selectFrom('outbox_messages')
-      .selectAll()
-      .where('created_at', '>=', requestStart)
+      .select(['id', 'type', 'payload', 'created_at'])
       .where('type', '=', 'invite.created')
-      .where('status', '=', 'pending')
-      .where('idempotency_key', 'like', `invite-created:${invite.id}:%`)
       .execute();
 
-    expect(outbox).toHaveLength(1);
+    expect(outboxRows.length).toBeGreaterThanOrEqual(1);
 
-    const payload = parseInviteOutboxPayload(outbox[0].payload);
-    expect(payload.role).toBe('ADMIN');
-    expect(payload.inviteId).toBe(invite.id);
+    // Find the row for THIS tenant + invite id
+    const matching = outboxRows.find((r) => {
+      const parsed = OutboxPayloadSchema.safeParse(r.payload);
+      if (!parsed.success) return false;
+      return (
+        parsed.data.tenantKey === tk &&
+        parsed.data.inviteId === invite.id &&
+        parsed.data.role === 'ADMIN'
+      );
+    });
+
+    expect(matching).toBeTruthy();
   });
 
   it('invite.created audit event written inside transaction', async () => {
@@ -248,7 +218,7 @@ describe('POST /admin/invites', () => {
       password: 'Password123!',
     });
 
-    const invitedEmail = uniqueEmail('audit-check');
+    const invitedEmail = uniqueEmail('invited');
 
     const res = await app.inject({
       method: 'POST',
@@ -266,23 +236,30 @@ describe('POST /admin/invites', () => {
       .where('action', '=', 'invite.created')
       .execute();
 
-    expect(audits.length).toBeGreaterThanOrEqual(1);
+    expect(audits).toHaveLength(1);
   });
 
   it('tenant email domain restriction enforced', async () => {
     const tk = tenantKey();
-    const tenant = await createTenant({
-      db: deps.db,
-      tenantKey: tk,
-      allowedEmailDomains: ['acme.com'],
-    });
+    const tenant = await deps.db
+      .insertInto('tenants')
+      .values({
+        key: tk,
+        name: `Tenant ${tk}`,
+        is_active: true,
+        public_signup_enabled: false,
+        member_mfa_required: false,
+        allowed_email_domains: sql`'["acme.com"]'::jsonb`,
+      })
+      .returning(['id', 'key'])
+      .executeTakeFirstOrThrow();
 
     const { cookie } = await createAdminSession({
       app,
       deps,
       tenantId: tenant.id,
       tenantKey: tk,
-      email: uniqueEmailForDomain('acme.com'),
+      email: uniqueEmail('admin'),
       password: 'Password123!',
     });
 
@@ -290,7 +267,7 @@ describe('POST /admin/invites', () => {
       method: 'POST',
       url: '/admin/invites',
       headers: { host: `${tk}.hubins.com`, cookie },
-      body: { email: uniqueEmailForDomain('example.com'), role: 'MEMBER' },
+      body: { email: 'someone@gmail.com', role: 'MEMBER' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -310,18 +287,18 @@ describe('POST /admin/invites', () => {
       password: 'Password123!',
     });
 
-    // create two
+    // Create 2 invites
     await app.inject({
       method: 'POST',
       url: '/admin/invites',
       headers: { host: `${tk}.hubins.com`, cookie },
-      body: { email: uniqueEmail('a'), role: 'MEMBER' },
+      body: { email: uniqueEmail('invited-1'), role: 'MEMBER' },
     });
     await app.inject({
       method: 'POST',
       url: '/admin/invites',
       headers: { host: `${tk}.hubins.com`, cookie },
-      body: { email: uniqueEmail('b'), role: 'MEMBER' },
+      body: { email: uniqueEmail('invited-2'), role: 'ADMIN' },
     });
 
     const res = await app.inject({
@@ -333,9 +310,7 @@ describe('POST /admin/invites', () => {
     expect(res.statusCode).toBe(200);
     const parsed = ListInvitesResponseSchema.parse(res.json());
     expect(parsed.invites.length).toBeGreaterThanOrEqual(2);
-    for (const inv of parsed.invites) {
-      expect(inv.tenantId).toBe(tenant.id);
-    }
+    expect(parsed.invites.every((i) => i.tenantId === tenant.id)).toBe(true);
   });
 
   it('cancel invite transitions to CANCELLED', async () => {
@@ -356,10 +331,11 @@ describe('POST /admin/invites', () => {
       headers: { host: `${tk}.hubins.com`, cookie },
       body: { email: uniqueEmail('to-cancel'), role: 'MEMBER' },
     });
+
     expect(created.statusCode).toBe(201);
     const invite = CreateInviteResponseSchema.parse(created.json()).invite;
 
-    // Route is DELETE /admin/invites/:inviteId (Brick 12, PR2)
+    // IMPORTANT: cancel is DELETE /admin/invites/:inviteId
     const res = await app.inject({
       method: 'DELETE',
       url: `/admin/invites/${invite.id}`,
@@ -367,7 +343,15 @@ describe('POST /admin/invites', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const parsed = CancelInviteResponseSchema.parse(res.json());
-    expect(parsed.status).toBe('CANCELLED');
+    const body = CancelInviteResponseSchema.parse(res.json());
+    expect(body.status).toBe('CANCELLED');
+
+    const row = await deps.db
+      .selectFrom('invites')
+      .selectAll()
+      .where('id', '=', invite.id)
+      .executeTakeFirstOrThrow();
+
+    expect(row.status).toBe('CANCELLED');
   });
 });

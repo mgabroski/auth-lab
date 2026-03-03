@@ -29,8 +29,11 @@ export type BuildAuthResultParams = {
 export function buildAuthResult(params: BuildAuthResultParams): AuthResult {
   const { nextAction, user, membership } = params;
 
+  const status: AuthResult['status'] =
+    nextAction === 'EMAIL_VERIFICATION_REQUIRED' ? 'EMAIL_VERIFICATION_REQUIRED' : 'AUTHENTICATED';
+
   return {
-    status: 'AUTHENTICATED',
+    status,
     nextAction,
     user: {
       id: user.id,

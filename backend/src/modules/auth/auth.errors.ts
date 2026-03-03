@@ -47,9 +47,8 @@ export const AuthErrors = {
     return AppError.forbidden('Your account has been suspended.', meta);
   },
 
-  /** Membership is INVITED — user needs to accept invite first. */
   inviteNotYetAccepted(meta?: AppErrorMeta) {
-    return AppError.conflict('Please accept your invite before signing in.', meta);
+    return AppError.forbidden('Please accept your invite before signing in.', meta);
   },
 
   /** No membership for this tenant. */

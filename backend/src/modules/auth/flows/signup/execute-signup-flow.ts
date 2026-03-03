@@ -108,6 +108,7 @@ export async function executeSignupFlow(
 ): Promise<{ result: AuthResult; sessionId: string }> {
   const email = params.email.toLowerCase();
   const emailKey = deps.tokenHasher.hash(email);
+  const ipKey = deps.tokenHasher.hash(params.ip);
   const now = new Date();
 
   deps.logger.info({
@@ -125,7 +126,7 @@ export async function executeSignupFlow(
     ...AUTH_RATE_LIMITS.signup.perEmail,
   });
   await deps.rateLimiter.hitOrThrow({
-    key: `signup:ip:${params.ip}`,
+    key: `signup:ip:${ipKey}`,
     ...AUTH_RATE_LIMITS.signup.perIp,
   });
 

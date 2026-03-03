@@ -21,6 +21,24 @@ import {
   type AuditEventsCountFilter,
 } from './audit.query-sql';
 
+// Even though this is an admin-only endpoint, audit metadata can contain
+// token-like or credential-like values that must never be returned.
+const SENSITIVE_KEYS = new Set(['tokenHash', 'passwordHash', 'credentials']);
+
+function sanitizeMetadata(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeMetadata);
+  if (value && typeof value === 'object') {
+    const input = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input)) {
+      if (SENSITIVE_KEYS.has(k)) continue;
+      out[k] = sanitizeMetadata(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 function rowToDto(
   row: Awaited<ReturnType<typeof selectAuditEventsByTenantSql>>[number],
 ): AuditEventDto {
@@ -32,7 +50,7 @@ function rowToDto(
     requestId: row.request_id,
     ip: row.ip,
     userAgent: row.user_agent,
-    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    metadata: sanitizeMetadata(row.metadata ?? {}) as Record<string, unknown>,
     createdAt: row.created_at.toISOString(),
   };
 }

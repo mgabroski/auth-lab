@@ -21,8 +21,18 @@ export function setSessionCookie(
   reply: FastifyReply,
   sessionId: string,
   isProduction: boolean,
+  sessionTtlSeconds: number,
 ): void {
-  const parts = [`${SESSION_COOKIE_NAME}=${sessionId}`, 'Path=/', 'HttpOnly', 'SameSite=Strict'];
+  const expires = new Date(Date.now() + sessionTtlSeconds * 1000).toUTCString();
+
+  const parts = [
+    `${SESSION_COOKIE_NAME}=${sessionId}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    `Max-Age=${sessionTtlSeconds}`,
+    `Expires=${expires}`,
+  ];
 
   if (isProduction) {
     parts.push('Secure');
@@ -33,7 +43,14 @@ export function setSessionCookie(
 
 export function clearSessionCookie(reply: FastifyReply, isProduction: boolean): void {
   // Max-Age=0 instructs the browser to delete the cookie immediately.
-  const parts = [`${SESSION_COOKIE_NAME}=`, 'Path=/', 'HttpOnly', 'SameSite=Strict', 'Max-Age=0'];
+  const parts = [
+    `${SESSION_COOKIE_NAME}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    'Max-Age=0',
+    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+  ];
 
   if (isProduction) {
     parts.push('Secure');

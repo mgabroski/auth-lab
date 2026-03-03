@@ -116,7 +116,8 @@ export async function requestPasswordResetFlow(
     const payload = deps.outboxEncryption.encryptPayload({
       token: rawToken,
       toEmail: email,
-      tenantKey: params.tenantKey ?? '',
+      // tenantKey may be null (eg. localhost/no subdomain). Never coerce to ''.
+      tenantKey: params.tenantKey ?? undefined,
       userId: user.id,
     });
 

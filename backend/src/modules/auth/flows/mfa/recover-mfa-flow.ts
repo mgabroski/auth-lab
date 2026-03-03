@@ -16,6 +16,7 @@ import type { KeyedHasher } from '../../../../shared/security/keyed-hasher';
 import type { MfaRepo } from '../../dal/mfa.repo';
 import { auditMfaRecoveryUsed } from '../../auth.audit';
 import { MfaErrors } from './mfa-errors';
+import { AppError } from '../../../../shared/http/errors';
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
@@ -38,7 +39,7 @@ export async function recoverMfaFlow(params: {
     ip: string;
     userAgent: string | null;
   };
-}): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
+}): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE'; sessionId: string }> {
   const { deps, input } = params;
 
   if (input.mfaVerified) {
@@ -71,8 +72,12 @@ export async function recoverMfaFlow(params: {
     throw MfaErrors.invalidRecoveryCode();
   }
 
-  await deps.sessionStore.updateSession(input.sessionId, { mfaVerified: true });
+  const newSessionId = await deps.sessionStore.rotateSession(input.sessionId, {
+    mfaVerified: true,
+  });
+  if (!newSessionId) throw AppError.unauthorized('Session expired. Please sign in again.');
+
   await auditMfaRecoveryUsed(audit, { userId: input.userId });
 
-  return { status: 'AUTHENTICATED', nextAction: 'NONE' };
+  return { status: 'AUTHENTICATED', nextAction: 'NONE', sessionId: newSessionId };
 }

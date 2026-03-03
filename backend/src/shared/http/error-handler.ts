@@ -49,12 +49,30 @@ const SENSITIVE_META_KEYS = new Set([
   'code',
 ]);
 
-function redactMeta(meta: unknown): unknown {
-  if (!meta || typeof meta !== 'object') return meta;
+/**
+ * Redacts sensitive fields in meta recursively.
+ *
+ * WHY:
+ * - Meta objects often contain nested payloads (eg. { token: { raw: '...' } }).
+ * - A shallow redact leaks nested secrets during unexpected failures.
+ *
+ * RULES:
+ * - Preserve shape; only replace values.
+ * - Depth-limited to avoid pathological objects.
+ */
+function redactMeta(meta: unknown, depth = 0): unknown {
+  if (depth > 6) return '[REDACTED:DEPTH]';
+  if (meta === null || meta === undefined) return meta;
+
+  if (Array.isArray(meta)) {
+    return meta.map((v) => redactMeta(v, depth + 1));
+  }
+
+  if (typeof meta !== 'object') return meta;
 
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(meta as Record<string, unknown>)) {
-    out[k] = SENSITIVE_META_KEYS.has(k) ? '[REDACTED]' : v;
+    out[k] = SENSITIVE_META_KEYS.has(k) ? '[REDACTED]' : redactMeta(v, depth + 1);
   }
   return out;
 }

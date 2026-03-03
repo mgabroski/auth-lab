@@ -133,6 +133,40 @@ export class SessionStore {
   }
 
   /**
+   * Rotates a session ID and applies `partial` updates atomically at the application level.
+   *
+   * WHY:
+   * - Best practice on privilege elevation (eg. MFA success) to reduce session fixation risk.
+   *
+   * NOTES:
+   * - Cache interface does not expose "remaining TTL"; rotation sets the configured TTL.
+   *   This is acceptable because rotation is only used immediately after login/MFA where
+   *   the session is fresh. We intentionally keep updateSession() as keepTtl:true for
+   *   non-rotation updates.
+   *
+   * Returns the new sessionId, or null if the session does not exist.
+   */
+  async rotateSession(sessionId: string, partial: Partial<SessionData>): Promise<string | null> {
+    const existing = await this.get(sessionId);
+    if (!existing) return null;
+
+    const newSessionId = randomUUID();
+    const updated: SessionData = { ...existing, ...partial };
+
+    await this.cache.set(this.key(newSessionId), JSON.stringify(updated), {
+      ttlSeconds: this.ttlSeconds,
+    });
+
+    await this.cache.sadd(this.userIndexKey(updated.userId), newSessionId, {
+      ttlSeconds: this.ttlSeconds,
+    });
+
+    await this.destroy(sessionId);
+
+    return newSessionId;
+  }
+
+  /**
    * Destroys ALL sessions for a user.
    *
    * WHY: Called after password reset (Brick 8) and future credential changes

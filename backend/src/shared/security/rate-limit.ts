@@ -11,8 +11,12 @@
  *
  * HOW TO USE:
  * - const limiter = new RateLimiter(cache, { prefix: "rl" })
- * - await limiter.hitOrThrow({ key: "login:ip:1.2.3.4", limit: 5, windowSeconds: 900 })
+ * - await limiter.hitOrThrow({ key: "login:ip:<hashed-ip>", limit: 5, windowSeconds: 900 })
  * - const allowed = await limiter.hitOrSkip({ key: "forgot:email:...", limit: 3, windowSeconds: 3600 })
+ *
+ * PII SAFETY:
+ * - Never embed raw identifiers (email, IP) into cache keys.
+ * - Always hash identifiers first (eg. tokenHasher.hash(email/ip)).
  *
  * TWO MODES:
  * - hitOrThrow: increments counter → throws AppError.rateLimited() if over limit.

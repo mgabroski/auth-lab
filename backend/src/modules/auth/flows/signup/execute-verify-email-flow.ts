@@ -63,8 +63,11 @@ export async function executeVerifyEmailFlow(
   params: VerifyEmailParams,
 ): Promise<{ status: 'VERIFIED' }> {
   // ── Rate limit (before any DB work — Decision 5) ────────────────────────
+
+  const ipKey = deps.tokenHasher.hash(params.ip);
+
   await deps.rateLimiter.hitOrThrow({
-    key: `verify-email:ip:${params.ip}`,
+    key: `verify-email:ip:${ipKey}`,
     ...AUTH_RATE_LIMITS.verifyEmail.perIp,
   });
 

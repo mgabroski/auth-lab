@@ -10,7 +10,7 @@
  * - No DB access here.
  * - requireSession({ role: 'ADMIN', requireMfa: true }) — locked guard.
  * - Validate query params with Zod; throw AppError.validationError on failure.
- * - limit > 100 → Zod rejects → 400 (no clamping, Comment A locked).
+ * - limit is capped to 100 (ergonomic API; never 400 just for being high).
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -32,13 +32,16 @@ export class AdminAuditController {
       });
     }
 
+    // Contract: limit is capped at 100 (ergonomic API).
+    const limit = Math.min(parsed.data.limit, 100);
+
     const result = await this.adminAuditService.listEvents({
       tenantId: auth.tenantId,
       action: parsed.data.action,
       userId: parsed.data.userId,
       from: parsed.data.from,
       to: parsed.data.to,
-      limit: parsed.data.limit,
+      limit,
       offset: parsed.data.offset,
     });
 

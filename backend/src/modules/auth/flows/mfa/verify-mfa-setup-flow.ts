@@ -24,6 +24,7 @@ import type { MfaRepo } from '../../dal/mfa.repo';
 import { getMfaSecretForUser } from '../../queries/mfa.queries';
 import { auditMfaVerifyFailed, auditMfaSetupCompleted } from '../../auth.audit';
 import { MfaErrors } from './mfa-errors';
+import { AppError } from '../../../../shared/http/errors';
 
 export async function verifyMfaSetupFlow(params: {
   deps: {
@@ -44,7 +45,7 @@ export async function verifyMfaSetupFlow(params: {
     ip: string;
     userAgent: string | null;
   };
-}): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE' }> {
+}): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE'; sessionId: string }> {
   const { deps, input } = params;
 
   const audit = new AuditWriter(deps.auditRepo, {
@@ -71,9 +72,13 @@ export async function verifyMfaSetupFlow(params: {
   }
 
   await deps.mfaRepo.verifyMfaSecret({ userId: input.userId });
-  await deps.sessionStore.updateSession(input.sessionId, { mfaVerified: true });
+
+  const newSessionId = await deps.sessionStore.rotateSession(input.sessionId, {
+    mfaVerified: true,
+  });
+  if (!newSessionId) throw AppError.unauthorized('Session expired. Please sign in again.');
 
   await auditMfaSetupCompleted(audit, { userId: input.userId });
 
-  return { status: 'AUTHENTICATED', nextAction: 'NONE' };
+  return { status: 'AUTHENTICATED', nextAction: 'NONE', sessionId: newSessionId };
 }

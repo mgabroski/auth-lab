@@ -93,13 +93,14 @@ async function seedAdminWithMfaAndRecovery(opts: {
 
 describe('POST /auth/mfa/recover', () => {
   it('successfully consumes recovery code and returns AUTHENTICATED', async () => {
-    const { app, deps, cryptoHelpers } = await buildTestApp();
+    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
     const password = 'password123';
     const recoveryCode = 'RecoveryCode123456';
 
     try {
+      await reset();
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
       const plainSecret = cryptoHelpers.generateTotpSecret();
@@ -126,13 +127,14 @@ describe('POST /auth/mfa/recover', () => {
       expect(loginRes.statusCode).toBe(200);
       const cookie = loginRes.headers['set-cookie'];
       expect(cookie).toBeTruthy();
+      const preMfaCookie = Array.isArray(cookie) ? cookie[0] : (cookie as string);
 
       const res = await app.inject({
         method: 'POST',
         url: '/auth/mfa/recover',
         headers: {
           host: `${tenantKey}.hubins.com`,
-          cookie: Array.isArray(cookie) ? cookie[0] : (cookie as string),
+          cookie: preMfaCookie,
         },
         body: { recoveryCode },
       });
@@ -141,19 +143,34 @@ describe('POST /auth/mfa/recover', () => {
       const body = parseJson<{ status: string; nextAction: string }>(res);
       expect(body.status).toBe('AUTHENTICATED');
       expect(body.nextAction).toBe('NONE');
+
+      // LOCKED hardening: MFA recovery rotates session cookie.
+      const postCookie = res.headers['set-cookie'];
+      expect(postCookie).toBeTruthy();
+      const postMfaCookie = Array.isArray(postCookie) ? postCookie[0] : (postCookie as string);
+      expect(postMfaCookie).not.toEqual(preMfaCookie);
+
+      const usingOld = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/recover',
+        headers: { host: `${tenantKey}.hubins.com`, cookie: preMfaCookie },
+        body: { recoveryCode },
+      });
+      expect(usingOld.statusCode).toBe(401);
     } finally {
       await app.close();
     }
   });
 
   it('rejects invalid recovery code', async () => {
-    const { app, deps, cryptoHelpers } = await buildTestApp();
+    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
     const password = 'password123';
     const recoveryCode = 'RecoveryCode123456';
 
     try {
+      await reset();
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
       const plainSecret = cryptoHelpers.generateTotpSecret();
@@ -180,13 +197,14 @@ describe('POST /auth/mfa/recover', () => {
       expect(loginRes.statusCode).toBe(200);
       const cookie = loginRes.headers['set-cookie'];
       expect(cookie).toBeTruthy();
+      const preMfaCookie = Array.isArray(cookie) ? cookie[0] : (cookie as string);
 
       const res = await app.inject({
         method: 'POST',
         url: '/auth/mfa/recover',
         headers: {
           host: `${tenantKey}.hubins.com`,
-          cookie: Array.isArray(cookie) ? cookie[0] : (cookie as string),
+          cookie: preMfaCookie,
         },
         body: { recoveryCode: 'WrongCode1234567' },
       });
@@ -198,13 +216,14 @@ describe('POST /auth/mfa/recover', () => {
   });
 
   it('second call after successful recovery -> 403 (already MFA-verified session)', async () => {
-    const { app, deps, cryptoHelpers } = await buildTestApp();
+    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
     const password = 'password123';
     const recoveryCode = 'RecoveryCode123456';
 
     try {
+      await reset();
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
       const plainSecret = cryptoHelpers.generateTotpSecret();
@@ -241,10 +260,25 @@ describe('POST /auth/mfa/recover', () => {
       });
       expect(first.statusCode).toBe(200);
 
-      const second = await app.inject({
+      const firstSetCookie = first.headers['set-cookie'];
+      expect(firstSetCookie).toBeTruthy();
+      const rotatedCookie = Array.isArray(firstSetCookie)
+        ? firstSetCookie[0]
+        : (firstSetCookie as string);
+      expect(rotatedCookie).not.toEqual(cookieHeader);
+
+      const usingOld = await app.inject({
         method: 'POST',
         url: '/auth/mfa/recover',
         headers: { host: `${tenantKey}.hubins.com`, cookie: cookieHeader },
+        body: { recoveryCode },
+      });
+      expect(usingOld.statusCode).toBe(401);
+
+      const second = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/recover',
+        headers: { host: `${tenantKey}.hubins.com`, cookie: rotatedCookie },
         body: { recoveryCode },
       });
 
