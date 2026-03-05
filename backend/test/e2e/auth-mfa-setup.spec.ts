@@ -14,6 +14,7 @@ import { buildTestApp } from '../helpers/build-test-app';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
 import type { MembershipRole } from '../../src/modules/memberships/membership.types';
+import type { CacheSetOptions } from '../../src/shared/cache/cache';
 
 function parseJson<T>(res: LightMyRequestResponse): T {
   const body = Buffer.isBuffer(res.body) ? res.body.toString('utf8') : res.body;
@@ -254,6 +255,158 @@ describe('POST /auth/mfa/setup and /auth/mfa/verify-setup', () => {
         headers: { host: `${tenantKey}.hubins.com`, cookie: postMfaCookie },
       });
       expect(logoutNew.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('replay protection: same TOTP code submitted twice → only one succeeds (other is non-200)', async () => {
+    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
+    const tenantKey = `tenant-${randomUUID()}`;
+    const email = `admin-${randomUUID()}@example.com`;
+    const password = 'password123';
+
+    try {
+      await reset();
+      const tenant = await createTenant({ db: deps.db, tenantKey });
+
+      await seedUserWithPassword({
+        db: deps.db,
+        passwordHasher: deps.passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        role: 'ADMIN',
+      });
+
+      const cookie = await loginAndGetCookie({ app, tenantKey, email, password });
+
+      const setupRes = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/setup',
+        headers: { host: `${tenantKey}.hubins.com`, cookie },
+      });
+
+      expect(setupRes.statusCode).toBe(200);
+      const setupBody = parseJson<{ secret: string }>(setupRes);
+      const validCode = cryptoHelpers.generateTotpCode(setupBody.secret);
+
+      const host = `${tenantKey}.hubins.com`;
+      const makeReq = () =>
+        app.inject({
+          method: 'POST',
+          url: '/auth/mfa/verify-setup',
+          headers: { host, cookie },
+          body: { code: validCode },
+        });
+
+      const [a, b] = await Promise.all([makeReq(), makeReq()]);
+      const codes = [a.statusCode, b.statusCode].sort();
+
+      // We only require that exactly one call succeeds. The other may fail with 401 (invalid code)
+      // OR 409 (setup already completed / no setup in progress) depending on race timing.
+      expect(codes[0]).toBe(200);
+      expect(codes[1]).not.toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('fail-open on replay cache READ error: valid code still succeeds', async () => {
+    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
+    const tenantKey = `tenant-${randomUUID()}`;
+    const email = `admin-${randomUUID()}@example.com`;
+    const password = 'password123';
+
+    try {
+      await reset();
+      const tenant = await createTenant({ db: deps.db, tenantKey });
+
+      await seedUserWithPassword({
+        db: deps.db,
+        passwordHasher: deps.passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        role: 'ADMIN',
+      });
+
+      const cookie = await loginAndGetCookie({ app, tenantKey, email, password });
+
+      const setupRes = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/setup',
+        headers: { host: `${tenantKey}.hubins.com`, cookie },
+      });
+
+      expect(setupRes.statusCode).toBe(200);
+      const setupBody = parseJson<{ secret: string }>(setupRes);
+      const validCode = cryptoHelpers.generateTotpCode(setupBody.secret);
+
+      const originalGet = deps.cache.get.bind(deps.cache);
+      deps.cache.get = async (key: string) => {
+        if (key.startsWith('totp:used:')) throw new Error('redis_read_error');
+        return originalGet(key);
+      };
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/verify-setup',
+        headers: { host: `${tenantKey}.hubins.com`, cookie },
+        body: { code: validCode },
+      });
+
+      expect(res.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('fail-open on replay cache WRITE error: valid code still succeeds', async () => {
+    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
+    const tenantKey = `tenant-${randomUUID()}`;
+    const email = `admin-${randomUUID()}@example.com`;
+    const password = 'password123';
+
+    try {
+      await reset();
+      const tenant = await createTenant({ db: deps.db, tenantKey });
+
+      await seedUserWithPassword({
+        db: deps.db,
+        passwordHasher: deps.passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        role: 'ADMIN',
+      });
+
+      const cookie = await loginAndGetCookie({ app, tenantKey, email, password });
+
+      const setupRes = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/setup',
+        headers: { host: `${tenantKey}.hubins.com`, cookie },
+      });
+
+      expect(setupRes.statusCode).toBe(200);
+      const setupBody = parseJson<{ secret: string }>(setupRes);
+      const validCode = cryptoHelpers.generateTotpCode(setupBody.secret);
+
+      const originalSet = deps.cache.set.bind(deps.cache);
+      deps.cache.set = async (key: string, value: string, opts?: CacheSetOptions) => {
+        if (key.startsWith('totp:used:')) throw new Error('redis_write_error');
+        return originalSet(key, value, opts);
+      };
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/verify-setup',
+        headers: { host: `${tenantKey}.hubins.com`, cookie },
+        body: { code: validCode },
+      });
+
+      expect(res.statusCode).toBe(200);
     } finally {
       await app.close();
     }

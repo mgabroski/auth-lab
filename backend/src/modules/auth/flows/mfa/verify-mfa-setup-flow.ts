@@ -18,6 +18,7 @@ import type { DbExecutor } from '../../../../shared/db/db';
 import type { SessionStore } from '../../../../shared/session/session.store';
 import type { Cache } from '../../../../shared/cache/cache';
 import type { TokenHasher } from '../../../../shared/security/token-hasher';
+import type { Logger } from '../../../../shared/logger/logger';
 
 import type { TotpService } from '../../../../shared/security/totp';
 import type { EncryptionService } from '../../../../shared/security/encryption';
@@ -36,6 +37,7 @@ export async function verifyMfaSetupFlow(params: {
     mfaRepo: MfaRepo;
     cache: Cache;
     tokenHasher: TokenHasher;
+    logger: Logger;
     totpService: TotpService;
     encryptionService: EncryptionService;
   };
@@ -76,14 +78,36 @@ export async function verifyMfaSetupFlow(params: {
   }
 
   // Replay protection: the same TOTP code must not be accepted twice.
-  // We store a short-lived per-user+code marker in Redis.
+  // Fail-open on cache errors: a Redis blip must not lock out all MFA users.
   const userKey = deps.tokenHasher.hash(input.userId);
-  const codeKey = deps.tokenHasher.hash(input.code);
-  const usedKey = `totp:used:user:${userKey}:code:${codeKey}`;
-  const usedCount = await deps.cache.incr(usedKey, { ttlSeconds: 60 });
-  if (usedCount > 1) {
+  const usedCodeKey = `totp:used:${userKey}:${input.code}`;
+
+  let alreadyUsed: string | null = null;
+  try {
+    alreadyUsed = await deps.cache.get(usedCodeKey);
+  } catch (err) {
+    deps.logger.warn('mfa.replay_cache_read_error', {
+      flow: 'mfa.verify_setup',
+      userId: input.userId,
+      error: (err as Error).message,
+    });
+  }
+
+  if (alreadyUsed) {
     await auditMfaVerifyFailed(audit, { userId: input.userId });
     throw MfaErrors.invalidCode();
+  }
+
+  // Mark as used for 2 full TOTP periods (120s covers ±1 window + realistic clock drift).
+  // Fail-open on cache WRITE error — rate limiting bounds worst-case replay exposure.
+  try {
+    await deps.cache.set(usedCodeKey, '1', { ttlSeconds: 120 });
+  } catch (err) {
+    deps.logger.warn('mfa.replay_cache_write_error', {
+      flow: 'mfa.verify_setup',
+      userId: input.userId,
+      error: (err as Error).message,
+    });
   }
 
   await deps.mfaRepo.verifyMfaSecret({ userId: input.userId });
