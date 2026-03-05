@@ -8,6 +8,10 @@
  * RULES:
  * - Outbox worker must not run in test (enforced in build-app).
  * - OUTBOX_ENC_KEY_V1 required; defaultVersion must reference an available key.
+ *
+ * X10 UPDATE:
+ * - Added optional SENTRY_DSN. When absent (dev, CI, test), Sentry is never
+ *   initialised and captureException() is a safe no-op.
  */
 
 import 'dotenv/config';
@@ -64,6 +68,9 @@ const ConfigSchema = z.object({
   OUTBOX_ENC_KEY_V2: Base64Schema.optional(),
   OUTBOX_ENC_KEY_V3: Base64Schema.optional(),
 
+  // X10 — Sentry (optional; omitting disables Sentry entirely)
+  SENTRY_DSN: z.string().url().optional(),
+
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),
   SEED_TENANT_KEY: z.string().default('goodwill-ca'),
@@ -114,6 +121,9 @@ export type AppConfig = {
     encDefaultVersion: string;
     encKeysByVersion: Record<string, string>;
   };
+
+  /** X10: undefined when SENTRY_DSN is not set — Sentry stays uninitialised. */
+  sentryDsn: string | undefined;
 
   seed: {
     enabled: boolean;
@@ -174,6 +184,8 @@ export function buildConfig(): AppConfig {
       encDefaultVersion: parsed.OUTBOX_ENC_DEFAULT_VERSION,
       encKeysByVersion,
     },
+
+    sentryDsn: parsed.SENTRY_DSN,
 
     seed: {
       enabled: parsed.SEED_ON_START,

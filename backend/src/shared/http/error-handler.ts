@@ -18,11 +18,21 @@
  * - Log full error details (including REDACTED meta) for observability.
  * - Always use withRequestContext(req) so requestId, tenantKey, userId,
  *   and role are automatically included in every log line.
- * TODO:
- * - Sentry capture for unexpected errors (observability/sentry.ts).
+ *
+ * X10 — Sentry capture for unhandled 500 errors only:
+ * - AppError instances are EXPECTED application behavior (auth failures,
+ *   validation errors, rate limits, etc.). They are NOT bugs. They must
+ *   NOT be sent to Sentry — capturing them would create noise that drowns
+ *   out real incidents.
+ * - Only the "unexpected errors" branch (non-AppError, non-ZodError)
+ *   captures to Sentry. This is the branch that indicates a real bug.
+ * - If SENTRY_DSN is unset (dev, CI, test), Sentry.init() is never called
+ *   (see server.ts) and Sentry.captureException() is a safe no-op.
+ *   Zero behavior or test changes in those environments.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import * as Sentry from '@sentry/node';
 import { AppError } from './errors';
 import { withRequestContext } from '../logger/with-context';
 
@@ -86,6 +96,8 @@ export function registerErrorHandler(app: FastifyInstance): void {
     const log = withRequestContext(req);
 
     // 1) Known application errors (includes rate limit — AppError.rateLimited())
+    //    AppError = expected application behavior, NOT a bug.
+    //    Must NOT be sent to Sentry — would create noise that drowns out real incidents.
     if (err instanceof AppError) {
       log.warn('app_error', {
         flow: 'http.error',
@@ -98,8 +110,18 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return reply.status(err.status).send(buildResponse(err.code, err.message));
     }
 
-    // 2) Unexpected errors — never leak internals
-    // TODO: Sentry.captureException(err)
+    // 2) Unexpected errors — a real bug reached the handler.
+    //    X10: Capture to Sentry so on-call gets an immediate signal.
+    //    When SENTRY_DSN is unset, captureException() is a no-op (Sentry never initialised).
+    Sentry.captureException(err, {
+      extra: {
+        requestId: req.requestContext?.requestId,
+        tenantKey: req.requestContext?.tenantKey,
+        path: req.url,
+        method: req.method,
+      },
+    });
+
     log.error('unhandled_error', {
       flow: 'http.error',
       message: err.message,
