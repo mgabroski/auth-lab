@@ -5,6 +5,7 @@ import { buildTestApp } from '../helpers/build-test-app';
 import { getLatestOutboxPayloadForUser } from '../helpers/outbox-test-helpers';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { OutboxEncryption } from '../../src/shared/outbox/outbox-encryption';
+import { SESSION_COOKIE_NAME } from '../../src/shared/session/session.types';
 
 /**
  * E2E tests for POST /auth/verify-email.
@@ -15,7 +16,8 @@ import type { OutboxEncryption } from '../../src/shared/outbox/outbox-encryption
  * - Ownership-checked: a token belonging to another user is rejected as invalid.
  * - Idempotent: already-verified user with a VALID UNUSED token → 200 (token consumed, no error).
  * - Single error message for all invalid token states (expired / used / wrong) — no oracle.
- * - Does NOT modify the session — caller keeps their existing cookie.
+ * - Upgrades the existing server-side session in Redis so emailVerified becomes true.
+ *   The cookie value does NOT change (no logout/login needed).
  * - Rate limited: 10/IP/15min — prevents brute-forcing verification tokens.
  *
  * SETUP PATTERN:
@@ -40,6 +42,16 @@ function extractCookie(res: { headers: Record<string, unknown> }): string {
   const raw = res.headers['set-cookie'];
   if (Array.isArray(raw)) return raw[0] as string;
   return raw as string;
+}
+
+function extractSessionId(cookieHeader: string): string {
+  // cookieHeader example: "sid=<uuid>; Path=/; HttpOnly; SameSite=Strict"
+  const first = cookieHeader.split(';')[0];
+  const [name, value] = first.split('=');
+  if (name !== SESSION_COOKIE_NAME || !value) {
+    throw new Error(`Unexpected cookie header: ${cookieHeader}`);
+  }
+  return value;
 }
 
 async function createSignupTenant(opts: { db: DbExecutor; tenantKey: string }) {
@@ -111,6 +123,11 @@ describe('POST /auth/verify-email', () => {
         email,
       });
 
+      const sessionId = extractSessionId(cookie);
+      const sessionBefore = await deps.sessionStore.get(sessionId);
+      expect(sessionBefore).not.toBeNull();
+      expect(sessionBefore?.emailVerified).toBe(false);
+
       const userBefore = await db
         .selectFrom('users')
         .selectAll()
@@ -128,6 +145,9 @@ describe('POST /auth/verify-email', () => {
       expect(res.statusCode).toBe(200);
       const body = readJson<VerifyEmailResponse>(res);
       expect(body.status).toBe('VERIFIED');
+
+      // verify-email must not rotate session cookie
+      expect(res.headers['set-cookie']).toBeUndefined();
 
       const userAfter = await db
         .selectFrom('users')
@@ -151,6 +171,11 @@ describe('POST /auth/verify-email', () => {
         .where('action', '=', 'auth.email.verified')
         .execute();
       expect(audits).toHaveLength(1);
+
+      // Stage 3: the existing session is upgraded in Redis.
+      const sessionAfter = await deps.sessionStore.get(sessionId);
+      expect(sessionAfter).not.toBeNull();
+      expect(sessionAfter?.emailVerified).toBe(true);
     } finally {
       await close();
     }

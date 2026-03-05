@@ -380,6 +380,7 @@ export class AuthService {
         rateLimiter: this.deps.rateLimiter,
         auditRepo: this.deps.auditRepo,
         emailVerificationRepo: this.deps.emailVerificationRepo,
+        sessionStore: this.deps.sessionStore,
       },
       params,
     );

@@ -358,7 +358,8 @@ export class AuthController {
    * POST /auth/verify-email
    *
    * Requires an authenticated session (user signed up and has a session cookie).
-   * Does NOT modify the session — only flips email_verified in DB.
+   * Upgrades the existing server-side session (Redis) so emailVerified becomes true.
+   * This removes the need for logout/login after verification.
    * Returns 200 { status: 'VERIFIED' } on success.
    */
   async verifyEmail(req: FastifyRequest, reply: FastifyReply) {
@@ -372,6 +373,7 @@ export class AuthController {
     }
 
     const result = await this.authService.verifyEmail({
+      sessionId: session.sessionId,
       sessionUserId: session.userId,
       tenantId: session.tenantId,
       membershipId: session.membershipId,

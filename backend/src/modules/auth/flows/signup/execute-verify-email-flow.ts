@@ -6,9 +6,10 @@
  * - Session-required: the user must be authenticated (they just signed up).
  *
  * RULES (from locked decisions):
- * - POST /auth/verify-email does NOT create a new session and does NOT modify
- *   the existing session. It only flips email_verified and consumes the token.
- *   The user continues with their current session.
+ * - POST /auth/verify-email does NOT create a new session.
+ * - It DOES upgrade the existing server-side session (Redis) so that
+ *   session.emailVerified becomes true after successful verification.
+ *   This removes the need for logout/login after verification.
  * - Idempotency: if the token is valid AND belongs to the session user AND the
  *   user is already verified, return success without error. This prevents a
  *   token oracle.
@@ -30,6 +31,8 @@ import type { Logger } from '../../../../shared/logger/logger';
 import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
+import type { SessionStore } from '../../../../shared/session/session.store';
+import { AppError } from '../../../../shared/http/errors';
 
 import type { EmailVerificationRepo } from '../../dal/email-verification.repo';
 import { getValidVerificationToken } from '../../queries/email-verification.queries';
@@ -40,6 +43,8 @@ import { auditEmailVerified } from '../../auth.audit';
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 export type VerifyEmailParams = {
+  /** Session id (cookie) — used to upgrade the session payload in Redis after verification. */
+  sessionId: string;
   /** From session (controller calls requireSession first). */
   sessionUserId: string;
   tenantId: string;
@@ -59,6 +64,7 @@ export async function executeVerifyEmailFlow(
     rateLimiter: RateLimiter;
     auditRepo: AuditRepo;
     emailVerificationRepo: EmailVerificationRepo;
+    sessionStore: SessionStore;
   },
   params: VerifyEmailParams,
 ): Promise<{ status: 'VERIFIED' }> {
@@ -139,6 +145,24 @@ export async function executeVerifyEmailFlow(
 
     await auditEmailVerified(fullAudit, { userId: params.sessionUserId });
   });
+
+  // ── 7. Upgrade the existing session in Redis (Stage 3) ──────────────────
+  // IMPORTANT:
+  // - This must happen AFTER the DB transaction commits.
+  // - If we fail to upgrade the session, the user would be verified in DB
+  //   but still blocked by requireEmailVerified on admin endpoints.
+  try {
+    await deps.sessionStore.updateSession(params.sessionId, { emailVerified: true });
+  } catch (err) {
+    deps.logger.error({
+      msg: 'auth.verify-email.session-upgrade-failed',
+      flow: 'auth.verify-email',
+      requestId: params.requestId,
+      userId: params.sessionUserId,
+      error: (err as Error).message,
+    });
+    throw AppError.internal('Failed to upgrade session after verification');
+  }
 
   deps.logger.info({
     msg: 'auth.verify-email.success',
