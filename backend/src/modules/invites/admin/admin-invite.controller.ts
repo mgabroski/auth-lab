@@ -8,7 +8,7 @@
  * RULES:
  * - No business rules here.
  * - No DB access here.
- * - requireSession({ role: 'ADMIN', requireMfa: true }) on every handler.
+ * - requireSession({ role: 'ADMIN', requireMfa: true, requireEmailVerified: true }) on every handler.
  * - Validate with Zod; throw AppError.validationError on parse failure.
  */
 
@@ -22,7 +22,11 @@ export class AdminInviteController {
   constructor(private readonly adminInviteService: AdminInviteService) {}
 
   async createInvite(req: FastifyRequest, reply: FastifyReply) {
-    const auth = requireSession(req, { role: 'ADMIN', requireMfa: true });
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
 
     const parsed = createInviteSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -49,7 +53,11 @@ export class AdminInviteController {
   }
 
   async listInvites(req: FastifyRequest, reply: FastifyReply) {
-    const auth = requireSession(req, { role: 'ADMIN', requireMfa: true });
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
 
     const parsed = listInvitesSchema.safeParse(req.query);
     if (!parsed.success) {
@@ -74,7 +82,11 @@ export class AdminInviteController {
   }
 
   async resendInvite(req: FastifyRequest, reply: FastifyReply) {
-    const auth = requireSession(req, { role: 'ADMIN', requireMfa: true });
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
 
     const parsedParams = inviteIdParamSchema.safeParse(req.params);
     if (!parsedParams.success) {
@@ -100,7 +112,11 @@ export class AdminInviteController {
   }
 
   async cancelInvite(req: FastifyRequest, reply: FastifyReply) {
-    const auth = requireSession(req, { role: 'ADMIN', requireMfa: true });
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
 
     const parsedParams = inviteIdParamSchema.safeParse(req.params);
     if (!parsedParams.success) {

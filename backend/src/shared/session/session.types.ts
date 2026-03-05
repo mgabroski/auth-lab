@@ -20,6 +20,7 @@ export type SessionData = {
   membershipId: string;
   role: 'ADMIN' | 'MEMBER';
   mfaVerified: boolean;
+  emailVerified: boolean;
   createdAt: string; // ISO string (JSON-safe)
 };
 

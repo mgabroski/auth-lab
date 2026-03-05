@@ -43,7 +43,6 @@ import { auditSsoLoginFailed, auditSsoLoginSuccess } from '../../auth.audit';
 
 import { hasVerifiedMfaSecret } from '../../helpers/has-verified-mfa-secret';
 import { isMfaRequiredForLogin } from '../../policies/mfa-required.policy';
-import { decideLoginNextAction } from '../../policies/login-next-action.policy';
 
 import { createAuthSession } from '../../helpers/create-auth-session';
 
@@ -58,7 +57,7 @@ export type SsoCallbackParams = {
 };
 
 type TxResult = {
-  user: { id: string; email: string; name: string | null };
+  user: { id: string; email: string; name: string | null; emailVerified: boolean };
   membership: { id: string; role: 'ADMIN' | 'MEMBER'; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
   tenant: Tenant;
 };
@@ -297,7 +296,12 @@ export async function executeSsoCallbackFlow(
       });
 
       return {
-        user: { id: user.id, email: user.email, name: user.name ?? null },
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name ?? null,
+          emailVerified: user.emailVerified,
+        },
         membership: { id: membership.id, role: membership.role, status: membership.status },
         tenant,
       };
@@ -346,14 +350,8 @@ export async function executeSsoCallbackFlow(
     ? await hasVerifiedMfaSecret(deps.db, txResult.user.id)
     : false;
 
-  const nextAction = decideLoginNextAction({
-    role: txResult.membership.role,
-    memberMfaRequired: txResult.tenant.memberMfaRequired,
-    hasVerifiedMfaSecret: hasVerifiedMfaSecretValue,
-  });
-
-  // K) Session creation (outside tx) — unchanged
-  const { sessionId } = await createAuthSession({
+  // K) Session creation (outside tx) — now also persists emailVerified
+  const { sessionId, nextAction } = await createAuthSession({
     sessionStore: deps.sessionStore,
     userId: txResult.user.id,
     tenantId: txResult.tenant.id,
@@ -362,6 +360,7 @@ export async function executeSsoCallbackFlow(
     role: txResult.membership.role,
     tenant: txResult.tenant,
     hasVerifiedMfaSecret: hasVerifiedMfaSecretValue,
+    emailVerified: txResult.user.emailVerified,
     now: new Date(),
   });
 

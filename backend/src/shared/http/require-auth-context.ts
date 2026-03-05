@@ -2,13 +2,11 @@
  * backend/src/shared/http/require-auth-context.ts
  *
  * WHY:
- * - Controllers must not duplicate "require session/auth" logic.
- * - Centralizes authContext validation to prevent drift across endpoints.
+ * - Centralizes session/auth guards so controllers don’t drift.
  *
  * RULES:
- * - HTTP-only helper (may depend on Fastify request typing).
- * - Must NOT touch DB, services, or transactions.
- * - Throws AppError so error-handler maps it consistently.
+ * - No DB access.
+ * - Throws AppError for consistent error handling.
  */
 
 import type { FastifyRequest } from 'fastify';
@@ -22,21 +20,15 @@ export type RequiredAuthContext = Readonly<{
   membershipId: string;
   role: MembershipRole;
   mfaVerified: boolean;
+  emailVerified: boolean;
 }>;
 
 export type RequireSessionOptions = Readonly<{
   role?: MembershipRole;
   requireMfa?: boolean;
+  requireEmailVerified?: boolean;
 }>;
 
-/**
- * Controller guard: requires a session, and optionally enforces role + MFA.
- *
- * Guard sequence (LOCKED):
- * 1) no session -> 401 "Authentication required"
- * 2) wrong role -> 403 "Insufficient role."
- * 3) mfaVerified false (when requireMfa) -> 403 "MFA verification required."
- */
 export function requireSession(
   req: FastifyRequest,
   opts: RequireSessionOptions = {},
@@ -52,6 +44,10 @@ export function requireSession(
     throw AppError.forbidden('Insufficient role.');
   }
 
+  if (opts.requireEmailVerified && ctx.emailVerified !== true) {
+    throw AppError.forbidden('Email verification required.');
+  }
+
   if (opts.requireMfa && ctx.mfaVerified !== true) {
     throw AppError.forbidden('MFA verification required.');
   }
@@ -63,5 +59,6 @@ export function requireSession(
     membershipId: ctx.membershipId,
     role: ctx.role,
     mfaVerified: ctx.mfaVerified,
+    emailVerified: ctx.emailVerified,
   };
 }

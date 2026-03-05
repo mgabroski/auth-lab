@@ -82,6 +82,7 @@ async function createAdminCookie(opts: {
     membershipId: membership.id,
     role: 'ADMIN',
     mfaVerified: true,
+    emailVerified: true,
     createdAt: new Date().toISOString(),
   });
 

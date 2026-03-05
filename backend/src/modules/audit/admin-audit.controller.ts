@@ -8,7 +8,7 @@
  * RULES:
  * - No business logic here.
  * - No DB access here.
- * - requireSession({ role: 'ADMIN', requireMfa: true }) — locked guard.
+ * - requireSession({ role: 'ADMIN', requireMfa: true, requireEmailVerified: true }) — locked guard.
  * - Validate query params with Zod; throw AppError.validationError on failure.
  * - limit is capped to 100 (ergonomic API; never 400 just for being high).
  */
@@ -23,7 +23,11 @@ export class AdminAuditController {
   constructor(private readonly adminAuditService: AdminAuditService) {}
 
   async listEvents(req: FastifyRequest, reply: FastifyReply) {
-    const auth = requireSession(req, { role: 'ADMIN', requireMfa: true });
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
 
     const parsed = auditEventsQuerySchema.safeParse(req.query);
     if (!parsed.success) {
