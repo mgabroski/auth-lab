@@ -84,7 +84,6 @@ export class AuthService {
 
       /**
        * Legacy queue: kept wired to avoid unrelated churn.
-       * PR2 migrates auth/invite EMAIL side-effects to DB Outbox.
        */
       queue: Queue;
 
@@ -110,10 +109,6 @@ export class AuthService {
     },
   ) {}
 
-  /**
-   * SSO: Build provider authorization redirect URL.
-   * Rate limited early (per IP).
-   */
   async startSso(input: {
     tenantKey: string;
     provider: SsoProvider;
@@ -121,7 +116,6 @@ export class AuthService {
     returnTo?: string;
     ip: string;
   }): Promise<{ redirectTo: string }> {
-    // PII SAFETY: never store raw IP in cache keys (hash first).
     const ipKey = this.deps.tokenHasher.hash(input.ip);
 
     await this.deps.rateLimiter.hitOrThrow({
@@ -268,10 +262,6 @@ export class AuthService {
     });
   }
 
-  /**
-   * MFA setup verification elevates privilege: mfaVerified false → true.
-   * We rotate the session ID to reduce session fixation risk.
-   */
   async verifyMfaSetup(params: {
     sessionId: string;
     userId: string;
@@ -295,10 +285,6 @@ export class AuthService {
     });
   }
 
-  /**
-   * MFA verification elevates privilege: mfaVerified false → true.
-   * We rotate the session ID to reduce session fixation risk.
-   */
   async verifyMfa(params: {
     sessionId: string;
     userId: string;
@@ -316,6 +302,7 @@ export class AuthService {
         auditRepo: this.deps.auditRepo,
         sessionStore: this.deps.sessionStore,
         rateLimiter: this.deps.rateLimiter,
+        tokenHasher: this.deps.tokenHasher,
         totpService: this.deps.totpService,
         encryptionService: this.deps.encryptionService,
       },
@@ -323,10 +310,6 @@ export class AuthService {
     });
   }
 
-  /**
-   * MFA recovery elevates privilege: mfaVerified false → true.
-   * We rotate the session ID to reduce session fixation risk.
-   */
   async recoverMfa(params: {
     sessionId: string;
     userId: string;
@@ -343,6 +326,7 @@ export class AuthService {
         auditRepo: this.deps.auditRepo,
         sessionStore: this.deps.sessionStore,
         rateLimiter: this.deps.rateLimiter,
+        tokenHasher: this.deps.tokenHasher,
         mfaRepo: this.deps.mfaRepo,
         mfaKeyedHasher: this.deps.mfaKeyedHasher,
       },
@@ -401,10 +385,6 @@ export class AuthService {
     );
   }
 
-  /**
-   * Destroys the Redis session and writes a best-effort audit event.
-   * Audit failure MUST NOT surface as 500 — caller always gets a clean return.
-   */
   async logout(params: {
     sessionId: string;
     userId: string;
@@ -416,7 +396,6 @@ export class AuthService {
   }): Promise<void> {
     await this.deps.sessionStore.destroy(params.sessionId);
 
-    // Audit is best-effort: failure must not surface as a 500.
     const audit = new AuditWriter(this.deps.auditRepo, {
       requestId: params.requestId,
       ip: params.ip,

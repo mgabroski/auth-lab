@@ -10,6 +10,7 @@ import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import type { SessionStore } from '../../../../shared/session/session.store';
 import type { RateLimiter } from '../../../../shared/security/rate-limit';
+import type { TokenHasher } from '../../../../shared/security/token-hasher';
 
 import type { KeyedHasher } from '../../../../shared/security/keyed-hasher';
 
@@ -25,6 +26,7 @@ export async function recoverMfaFlow(params: {
     auditRepo: AuditRepo;
     sessionStore: SessionStore;
     rateLimiter: RateLimiter;
+    tokenHasher: TokenHasher; // Stage 4
     mfaRepo: MfaRepo;
     mfaKeyedHasher: KeyedHasher;
   };
@@ -46,8 +48,11 @@ export async function recoverMfaFlow(params: {
     throw MfaErrors.alreadyVerified();
   }
 
+  // Stage 4: hash stable identifiers in Redis key material.
+  const userKey = deps.tokenHasher.hash(input.userId);
+
   await deps.rateLimiter.hitOrThrow({
-    key: `mfa:recover:user:${input.userId}`,
+    key: `mfa:recover:user:${userKey}`,
     ...AUTH_RATE_LIMITS.mfaRecover.perUser,
   });
 

@@ -11,6 +11,7 @@ import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../../../shared/db/db';
 import type { SessionStore } from '../../../../shared/session/session.store';
 import type { RateLimiter } from '../../../../shared/security/rate-limit';
+import type { TokenHasher } from '../../../../shared/security/token-hasher';
 
 import type { TotpService } from '../../../../shared/security/totp';
 import type { EncryptionService } from '../../../../shared/security/encryption';
@@ -28,6 +29,7 @@ export async function verifyMfaFlow(params: {
     auditRepo: AuditRepo;
     sessionStore: SessionStore;
     rateLimiter: RateLimiter;
+    tokenHasher: TokenHasher; // Stage 4
     totpService: TotpService;
     encryptionService: EncryptionService;
   };
@@ -49,8 +51,11 @@ export async function verifyMfaFlow(params: {
     throw MfaErrors.alreadyVerified();
   }
 
+  // Stage 4: hash stable identifiers in Redis key material.
+  const userKey = deps.tokenHasher.hash(input.userId);
+
   await deps.rateLimiter.hitOrThrow({
-    key: `mfa:verify:user:${input.userId}`,
+    key: `mfa:verify:user:${userKey}`,
     ...AUTH_RATE_LIMITS.mfaVerify.perUser,
   });
 

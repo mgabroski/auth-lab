@@ -167,7 +167,7 @@ export async function buildDeps(
 
   // shared repos / stores
   const auditRepo = new AuditRepo(db);
-  const sessionStore = new SessionStore(redis, config.sessionTtlSeconds);
+  const sessionStore = new SessionStore(redis, config.sessionTtlSeconds, tokenHasher);
 
   // Brick 9 (MFA)
   const totpService = new TotpService(config.mfa.issuer);

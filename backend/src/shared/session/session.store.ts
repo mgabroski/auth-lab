@@ -26,6 +26,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Cache } from '../cache/cache';
+import type { TokenHasher } from '../security/token-hasher';
 import type { SessionData } from './session.types';
 import { SESSION_KEY_PREFIX, SESSION_USER_INDEX_PREFIX } from './session.types';
 
@@ -33,6 +34,7 @@ export class SessionStore {
   constructor(
     private readonly cache: Cache,
     private readonly ttlSeconds: number,
+    private readonly tokenHasher: TokenHasher,
   ) {}
 
   private key(sessionId: string): string {
@@ -40,7 +42,9 @@ export class SessionStore {
   }
 
   private userIndexKey(userId: string): string {
-    return `${SESSION_USER_INDEX_PREFIX}:${userId}`;
+    // Stage 4: never place stable identifiers (UUIDs) directly in Redis keys.
+    // Hash userId to reduce accidental PII leakage via key scans/metrics/logs.
+    return `${SESSION_USER_INDEX_PREFIX}:${this.tokenHasher.hash(userId)}`;
   }
 
   /**
@@ -57,7 +61,6 @@ export class SessionStore {
 
     // Register session in per-user index.
     // TTL on the index is refreshed to at least as long as the session TTL.
-    // This ensures the index doesn't expire while sessions are still alive.
     await this.cache.sadd(this.userIndexKey(data.userId), sessionId, {
       ttlSeconds: this.ttlSeconds,
     });
@@ -86,7 +89,6 @@ export class SessionStore {
    * Also removes the session ID from the per-user index.
    */
   async destroy(sessionId: string): Promise<void> {
-    // Load session first to get userId for index cleanup
     const raw = await this.cache.get(this.key(sessionId));
     if (raw) {
       try {
@@ -101,49 +103,22 @@ export class SessionStore {
   }
 
   /**
-   * Updates specific fields of an existing session in place.
-   * Used by MFA flows to flip `mfaVerified` from false → true
-   * after successful TOTP verification or recovery code consumption.
-   *
-   * WHY UPDATE IN PLACE (not rotate session ID):
-   * - Session ID rotation after privilege elevation is best practice against
-   *   session fixation. In this threat model, fixation requires the attacker
-   *   to have already planted a cookie on the victim's browser AND know their
-   *   TOTP secret — a high prerequisite bar for Phase 1.
-   * - Update-in-place keeps the client cookie and Redis index consistent
-   *   without a remove-and-add operation.
-   * - Session ID rotation is a candidate for a future hardening brick.
-   *
-   * RULES:
-   * - Only updates the session data; TTL is refreshed to the configured session TTL
-   *   to match current SessionStore semantics (create() and updateSession() both write).
-   * - No-op if the session does not exist (already expired or destroyed).
+   * IMPORTANT (Brick 9 locked rule):
+   * - Update session payload WITHOUT extending its lifetime.
    */
   async updateSession(sessionId: string, partial: Partial<SessionData>): Promise<void> {
     const existing = await this.get(sessionId);
-    if (!existing) return; // session expired or does not exist — no-op
+    if (!existing) return;
 
     const updated: SessionData = { ...existing, ...partial };
 
-    // IMPORTANT (Brick 9 locked rule):
-    // Update session payload WITHOUT extending its lifetime.
     await this.cache.set(this.key(sessionId), JSON.stringify(updated), {
       keepTtl: true,
     });
   }
 
   /**
-   * Rotates a session ID and applies `partial` updates atomically at the application level.
-   *
-   * WHY:
-   * - Best practice on privilege elevation (eg. MFA success) to reduce session fixation risk.
-   *
-   * NOTES:
-   * - Cache interface does not expose "remaining TTL"; rotation sets the configured TTL.
-   *   This is acceptable because rotation is only used immediately after login/MFA where
-   *   the session is fresh. We intentionally keep updateSession() as keepTtl:true for
-   *   non-rotation updates.
-   *
+   * Rotates a session ID and applies `partial` updates.
    * Returns the new sessionId, or null if the session does not exist.
    */
   async rotateSession(sessionId: string, partial: Partial<SessionData>): Promise<string | null> {
@@ -168,27 +143,12 @@ export class SessionStore {
 
   /**
    * Destroys ALL sessions for a user.
-   *
-   * WHY: Called after password reset (Brick 8) and future credential changes
-   * (admin suspend, MFA revocation). An attacker who had the old password must
-   * not retain access via an existing session cookie.
-   *
-   * HOW:
-   * 1. SMEMBERS → get all session IDs registered for this user.
-   * 2. DEL each session key.
-   * 3. DEL the user index key.
-   *
-   * Stale IDs (sessions already expired naturally) are harmless — DEL on a
-   * non-existent key is a no-op in Redis.
    */
   async destroyAllForUser(userId: string): Promise<void> {
     const indexKey = this.userIndexKey(userId);
     const sessionIds = await this.cache.smembers(indexKey);
 
-    // Destroy each session (parallel for performance)
     await Promise.all(sessionIds.map((id) => this.cache.del(this.key(id))));
-
-    // Remove the index itself
     await this.cache.del(indexKey);
   }
 }
