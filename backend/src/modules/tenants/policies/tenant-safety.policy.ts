@@ -5,6 +5,10 @@ import type { Tenant } from '../tenant.types';
  * Tenant safety rules:
  * - Pure (no DB / no I/O)
  * - Throws AppError
+ *
+ * All three functions now produce byte-identical 404 + "This workspace is not
+ * available." via the TenantErrors aliases. Call sites are unchanged — the aliases
+ * map transparently. tenantKeyMissing previously produced 400; it now produces 404.
  */
 
 export function assertTenantKeyPresent(tenantKey: string | null): asserts tenantKey is string {

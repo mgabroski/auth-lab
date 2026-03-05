@@ -10,6 +10,14 @@
  * - Worker start/stop is done in build-app (lifecycle), not in DI.
  * - EmailAdapter must be idempotent; NoopEmailAdapter is used in dev/test now.
  * - Avoid `any` and unsafe casts; validate + narrow config at boundaries.
+ *
+ * X8 UPDATE:
+ * - Removed `queue` from createInviteModule() call — AdminInviteService no longer
+ *   accepts Queue after the dead-code removal in admin-invite.service.ts.
+ * - InMemQueue + Queue remain wired for createAuthModule() because auth.service.ts
+ *   and execute-register-flow.ts still declare the Queue dep. Those usages are
+ *   also dead (queue.enqueue is never called) but are out of scope for this commit.
+ *   A follow-up can remove them from the auth module path once confirmed safe.
  */
 
 import type { AppConfig } from './config';
@@ -91,7 +99,7 @@ export type AppDeps = {
 
   ssoStateEncryptionService: EncryptionService;
 
-  // messaging (legacy)
+  // messaging (legacy — still used by auth module path; see X8 note above)
   queue: Queue;
 
   // outbox
@@ -185,7 +193,8 @@ export async function buildDeps(
         new MicrosoftSsoAdapter(config.sso.microsoftClientId, config.sso.microsoftClientSecret),
       );
 
-  // Legacy queue (kept for now; no longer used by auth/invite flows after Step 2)
+  // Legacy queue — still referenced by auth module (execute-register-flow.ts).
+  // Not used by invite module after X8.
   const queue: Queue = new InMemQueue();
 
   // Outbox
@@ -197,16 +206,18 @@ export async function buildDeps(
 
   // modules
   const tenants = createTenantModule({ db });
+
+  // X8: queue removed from invite module — AdminInviteService no longer takes Queue.
   const invites = createInviteModule({
     db,
     tokenHasher,
     logger,
     auditRepo,
     rateLimiter,
-    queue,
     outboxRepo,
     outboxEncryption,
   });
+
   const users = createUserModule({ db });
   const memberships = createMembershipModule({ db });
   const audit = createAuditModule({ db });

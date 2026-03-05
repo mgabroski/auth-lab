@@ -10,7 +10,11 @@
  * - No DB access here.
  * - requireSession({ role: 'ADMIN', requireMfa: true, requireEmailVerified: true }) — locked guard.
  * - Validate query params with Zod; throw AppError.validationError on failure.
- * - limit is capped to 100 (ergonomic API; never 400 just for being high).
+ *
+ * X7 — Strict reject, not silent clamp:
+ * - The Math.min(parsed.data.limit, 100) clamp is removed. The schema's .max(100)
+ *   now owns this boundary. limit=101 returns 400, not silently-clamped 100 items.
+ * - parsed.data.limit is passed directly to the service.
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -36,16 +40,15 @@ export class AdminAuditController {
       });
     }
 
-    // Contract: limit is capped at 100 (ergonomic API).
-    const limit = Math.min(parsed.data.limit, 100);
-
+    // X7: Zod schema enforces .max(100) — no manual clamp needed here.
+    // limit=101 is rejected with 400 before reaching this line.
     const result = await this.adminAuditService.listEvents({
       tenantId: auth.tenantId,
       action: parsed.data.action,
       userId: parsed.data.userId,
       from: parsed.data.from,
       to: parsed.data.to,
-      limit,
+      limit: parsed.data.limit,
       offset: parsed.data.offset,
     });
 

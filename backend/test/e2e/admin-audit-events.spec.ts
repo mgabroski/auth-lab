@@ -190,7 +190,7 @@ describe('GET /admin/audit-events', () => {
     expect(body.events[0].userId).toBe(userId);
   });
 
-  it('limit is capped at 100', async () => {
+  it('limit=101 returns 400 (strict reject, not silent clamp)', async () => {
     const tk = tenantKey();
     const tenant = await createTenant({ db: deps.db, tenantKey: tk });
 
@@ -199,6 +199,25 @@ describe('GET /admin/audit-events', () => {
     const res = await app.inject({
       method: 'GET',
       url: '/admin/audit-events?limit=101&offset=0',
+      headers: { host: `${tk}.hubins.com`, cookie },
+    });
+
+    expect(res.statusCode).toBe(400);
+
+    const body: { error: { code: string } } = res.json();
+
+    expect(body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('limit=100 returns 200 (inclusive upper boundary)', async () => {
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
+
+    const { cookie } = await createAdminCookie({ deps, tenantId: tenant.id, tenantKey: tk });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/admin/audit-events?limit=100&offset=0',
       headers: { host: `${tk}.hubins.com`, cookie },
     });
 

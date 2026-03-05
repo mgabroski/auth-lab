@@ -15,6 +15,11 @@
  * - tokenHash never returned in InviteSummary responses.
  * - No membership pre-creation (Decision C — locked).
  * - Outbox payload must never store raw email/token (tokenEnc + toEmailEnc only).
+ *
+ * X8 — Remove dead Queue dependency:
+ * - Queue was imported and declared in deps but never called (no this.deps.queue.enqueue()).
+ * - The outbox replaced the queue in a prior brick for durable email delivery.
+ * - Dead import removed so future engineers are not misled about the delivery mechanism.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -22,7 +27,6 @@ import type { TokenHasher } from '../../../shared/security/token-hasher';
 import type { RateLimiter } from '../../../shared/security/rate-limit';
 import type { Logger } from '../../../shared/logger/logger';
 import type { AuditRepo } from '../../../shared/audit/audit.repo';
-import type { Queue } from '../../../shared/messaging/queue';
 import { AuditWriter } from '../../../shared/audit/audit.writer';
 import { AppError } from '../../../shared/http/errors';
 
@@ -96,9 +100,7 @@ export class AdminInviteService {
       logger: Logger;
       inviteRepo: InviteRepo;
       auditRepo: AuditRepo;
-      queue: Queue;
-
-      // Outbox (PR2)
+      // X8: Queue removed — email delivery is handled by the Outbox (durable).
       outboxRepo: OutboxRepo;
       outboxEncryption: OutboxEncryption;
     },

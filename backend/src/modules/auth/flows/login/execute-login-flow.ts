@@ -20,6 +20,11 @@
  *   EMAIL_VERIFICATION_REQUIRED takes precedence over MFA decisions.
  * - emailVerified is forwarded to createAuthSession so mfaVerified in the
  *   session is set correctly (false when email not verified).
+ *
+ * X6 — Login lockout message:
+ * - Both rate-limit call sites now pass LOGIN_LOCKOUT_MESSAGE so the 429
+ *   error body carries the exact copy mandated by the provisioning spec:
+ *   "Too many failed attempts. Try again in 15 minutes."
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';
@@ -58,6 +63,7 @@ import {
 } from '../../policies/login-password-identity-gating.policy';
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
+import { LOGIN_LOCKOUT_MESSAGE } from '../../../../shared/security/rate-limit';
 import { emailDomain } from '../../helpers/email-domain';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -110,13 +116,17 @@ export async function executeLoginFlow(
     emailKey,
   });
 
+  // X6: Pass LOGIN_LOCKOUT_MESSAGE so 429 body carries the locked copy from
+  // the provisioning spec ("Too many failed attempts. Try again in 15 minutes.")
   await deps.rateLimiter.hitOrThrow({
     key: `login:email:${emailKey}`,
     ...AUTH_RATE_LIMITS.login.perEmail,
+    message: LOGIN_LOCKOUT_MESSAGE,
   });
   await deps.rateLimiter.hitOrThrow({
     key: `login:ip:${ipKey}`,
     ...AUTH_RATE_LIMITS.login.perIp,
+    message: LOGIN_LOCKOUT_MESSAGE,
   });
 
   let failureCtx: LoginFailureContext | null = null;

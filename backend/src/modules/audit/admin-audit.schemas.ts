@@ -6,17 +6,29 @@
  * - Keeps controller clean: parse + basic validation only.
  *
  * RULES:
- * - limit is NOT validated with a max. The controller clamps it to 100 (ergonomic API).
+ * - limit is validated with .max(100) — out-of-range values return 400.
  * - All datetime params validated as ISO 8601 strings.
  * - userId validated as UUID — malformed IDs never reach the DAL.
  * - tenantId is NOT returned in response rows (always the session tenant).
+ *
+ * X7 — Strict reject, not silent clamp:
+ * - Previously: schema had no upper bound on limit; the controller silently
+ *   clamped limit=101 → 100. Silent behavior changes on a security-sensitive
+ *   admin endpoint are inconsistent with the system-wide strict-validation pattern.
+ * - Fix: add .max(100) directly to the schema. Passing limit=101 now returns
+ *   400 VALIDATION_ERROR. The Math.min() clamp in the controller is removed.
+ * - The NOTE comment about clamping is removed — it described the old contract.
  */
 
 import { z } from 'zod';
 
 export const auditEventsQuerySchema = z.object({
-  // NOTE: Upper bound is enforced via clamping (controller), not schema validation.
-  limit: z.coerce.number().int().min(1).default(50),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(100, { message: 'limit must be between 1 and 100' })
+    .default(50),
   offset: z.coerce.number().int().min(0).default(0),
   action: z.string().optional(),
   userId: z.string().uuid('userId must be a valid UUID').optional(),

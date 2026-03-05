@@ -9,6 +9,14 @@
  * - This file MUST stay small.
  * - Do NOT add module-specific error factories here.
  * - Each module owns its own semantic error factories (e.g. tenants/tenant.errors.ts).
+ *
+ * X6 — Custom message on rateLimited():
+ * - Previously rateLimited() always returned the generic "Rate limited" string.
+ * - The provisioning spec mandates exact copy for login lockout:
+ *   "Too many failed attempts. Try again in 15 minutes."
+ * - Fix: accept an optional second `message` param so call sites can supply
+ *   the locked copy. The default fallback ("Rate limited") keeps all other
+ *   rate-limited paths unchanged.
  */
 
 export const APP_ERROR_CODES = [
@@ -53,8 +61,18 @@ export class AppError extends Error {
     return new AppError({ code: 'VALIDATION_ERROR', status: 400, message, meta });
   }
 
-  static rateLimited(meta?: AppErrorMeta) {
-    return new AppError({ code: 'RATE_LIMITED', status: 429, message: 'Rate limited', meta });
+  /**
+   * X6: Accepts an optional `message` param so callers can supply locked copy
+   * (e.g. LOGIN_LOCKOUT_MESSAGE from rate-limit.ts). Defaults to "Rate limited"
+   * for all other rate-limited paths — no behavior change at existing call sites.
+   */
+  static rateLimited(meta?: AppErrorMeta, message?: string) {
+    return new AppError({
+      code: 'RATE_LIMITED',
+      status: 429,
+      message: message ?? 'Rate limited',
+      meta,
+    });
   }
 
   static conflict(message = 'Conflict', meta?: AppErrorMeta) {

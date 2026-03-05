@@ -10,11 +10,15 @@
  * - No globals/singletons here.
  *
  * BRICK 12 UPDATE:
- * - Added rateLimiter + queue deps (required by AdminInviteService).
+ * - Added rateLimiter deps (required by AdminInviteService).
  * - Wired AdminInviteController and registerAdminInviteRoutes.
  *
  * PR2 UPDATE:
  * - Admin invite emails are delivered via DB Outbox (durable).
+ *
+ * X8 UPDATE:
+ * - Removed queue dep — AdminInviteService no longer accepts Queue.
+ *   Email delivery is exclusively via the Outbox; the Queue import was dead code.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -23,7 +27,6 @@ import type { TokenHasher } from '../../shared/security/token-hasher';
 import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { Logger } from '../../shared/logger/logger';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
-import type { Queue } from '../../shared/messaging/queue';
 
 // Outbox (PR2)
 import type { OutboxRepo } from '../../shared/outbox/outbox.repo';
@@ -46,7 +49,7 @@ export function createInviteModule(deps: {
   rateLimiter: RateLimiter;
   logger: Logger;
   auditRepo: AuditRepo;
-  queue: Queue;
+  // X8: queue removed — AdminInviteService uses Outbox exclusively.
 
   // Outbox (PR2)
   outboxRepo: OutboxRepo;
@@ -69,7 +72,6 @@ export function createInviteModule(deps: {
     logger: deps.logger,
     inviteRepo,
     auditRepo: deps.auditRepo,
-    queue: deps.queue,
     outboxRepo: deps.outboxRepo,
     outboxEncryption: deps.outboxEncryption,
   });
