@@ -15,11 +15,10 @@ import type {
   SsoProviderAdapter,
   SsoTokenExchangeResult,
 } from '../sso-provider.interface';
-import { parseJwt } from '../jwt';
 import { AuthErrors } from '../../auth.errors';
 import { getString, isRecord } from '../sso-adapter-utils';
+import { verifyGoogleJwt } from '../jwt';
 
-const GOOGLE_ISSUER = 'https://accounts.google.com';
 const GOOGLE_AUTH_BASE = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
@@ -78,29 +77,24 @@ export class GoogleSsoAdapter implements SsoProviderAdapter {
     return { idToken };
   }
 
-  validateAndExtractIdentity(input: {
+  async validateAndExtractIdentity(input: {
     idToken: string;
     expectedNonce: string;
     now: Date;
-  }): SsoIdentityPayload {
+  }): Promise<SsoIdentityPayload> {
     let payload: Record<string, unknown>;
     try {
-      payload = parseJwt(input.idToken).payload;
-    } catch {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'jwt_parse_failed' });
-    }
-
-    if (payload.iss !== GOOGLE_ISSUER) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'issuer_mismatch' });
-    }
-    if (payload.aud !== this.clientId) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'audience_mismatch' });
-    }
-    if (typeof payload.exp !== 'number' || payload.exp * 1000 <= input.now.getTime()) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'token_expired' });
-    }
-    if (payload.nonce !== input.expectedNonce) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'nonce_mismatch' });
+      payload = (await verifyGoogleJwt({
+        idToken: input.idToken,
+        clientId: this.clientId,
+        expectedNonce: input.expectedNonce,
+      })) as unknown as Record<string, unknown>;
+    } catch (e: unknown) {
+      const reason =
+        e instanceof Error && e.message === 'jwt_nonce_mismatch'
+          ? 'nonce_mismatch'
+          : 'jwt_verify_failed';
+      throw AuthErrors.ssoTokenValidationFailed({ reason });
     }
 
     const email = getString(payload, 'email');

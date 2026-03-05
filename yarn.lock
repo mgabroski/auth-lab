@@ -15,6 +15,7 @@ __metadata:
     bcrypt: "npm:^6.0.0"
     dotenv: "npm:^16.4.5"
     fastify: "npm:^4.28.1"
+    jose: "npm:^6.1.3"
     kysely: "npm:^0.27.4"
     kysely-codegen: "npm:^0.16.0"
     otpauth: "npm:^9.5.0"
@@ -2551,6 +2552,13 @@ __metadata:
   version: 3.1.4
   resolution: "isexe@npm:3.1.4"
   checksum: 10c0/6e1f78dd794118d263319c27c26a339eda6855b43e11e1a9013cb68578ce0396b74f11ea635e52b9466fb48a60abe70f3c9faf682f67988be092cf89b7c0dc1c
+  languageName: node
+  linkType: hard
+
+"jose@npm:^6.1.3":
+  version: 6.1.3
+  resolution: "jose@npm:6.1.3"
+  checksum: 10c0/b9577b4a7a5e84131011c23823db9f5951eae3ba796771a6a2401ae5dd50daf71104febc8ded9c38146aa5ebe94a92ac09c725e699e613ef26949b9f5a8bc30f
   languageName: node
   linkType: hard
 

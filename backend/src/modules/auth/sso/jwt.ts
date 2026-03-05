@@ -2,88 +2,81 @@
  * backend/src/modules/auth/sso/jwt.ts
  *
  * WHY:
- * - Lightweight JWT parsing for OIDC ID tokens.
- * - Brick 10 requires validating claims (iss/aud/exp/nonce/etc.).
+ * - Cryptographically verifies OIDC ID tokens (SSO boundary).
+ * - Prevents accepting forged / tampered JWTs (P0).
  *
  * RULES:
- * - Do NOT log tokens.
- * - It is used with mocked token exchange in tests.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * ⚠️  PRODUCTION GAP: JWT SIGNATURES ARE NOT VERIFIED
- * ─────────────────────────────────────────────────────────────────────────────
- *
- * This file ONLY parses and decodes the JWT. It does NOT verify the
- * cryptographic signature. In production, any well-formed token with
- * valid claims (iss, aud, exp, nonce) will be accepted, even if it
- * was not issued by Google or Microsoft.
- *
- * This was a deliberate lab decision. It MUST be resolved before shipping.
- *
- * HOW TO FIX — use the `jose` library (standard, maintained, Node.js native):
- *
- *   npm install jose
- *
- * Google:
- *   import { createRemoteJWKSet, jwtVerify } from 'jose';
- *
- *   const GOOGLE_JWKS = createRemoteJWKSet(
- *     new URL('https://www.googleapis.com/oauth2/v3/certs')
- *   );
- *
- *   const { payload } = await jwtVerify(idToken, GOOGLE_JWKS, {
- *     issuer: 'https://accounts.google.com',
- *     audience: clientId,
- *   });
- *
- * Microsoft:
- *   const MICROSOFT_JWKS = createRemoteJWKSet(
- *     new URL('https://login.microsoftonline.com/common/discovery/v2.0/keys')
- *   );
- *
- *   const { payload } = await jwtVerify(idToken, MICROSOFT_JWKS, {
- *     issuer: `https://login.microsoftonline.com/${tid}/v2.0`, // tid from payload
- *     audience: clientId,
- *   });
- *
- * JWKS responses should be cached (jose does this automatically via
- * createRemoteJWKSet). Do not fetch the JWKS on every request.
- *
- * Once signature verification is in place:
- * - Remove parseJwt() from the adapter validate methods.
- * - Replace the manual iss/aud/exp checks — jwtVerify handles them.
- * - Keep the nonce check: jwtVerify does NOT check nonce by default.
- *   Pass { typ: 'JWT' } and check payload.nonce manually after verify.
- * - FakeSsoAdapter in tests continues to work because it skips
- *   exchangeAuthorizationCode and the token is only parsed, not remotely verified.
- *   You will need to sign fake tokens with a test key or mock jwtVerify.
- * ─────────────────────────────────────────────────────────────────────────────
+ * - Never log raw tokens.
+ * - JWKS must be remotely fetched with caching (jose handles caching).
+ * - jwtVerify enforces iss/aud/exp; we still enforce nonce explicitly.
  */
 
-function base64UrlToJson(input: string): unknown {
-  const padded = input
-    .replace(/-/g, '+')
-    .replace(/_/g, '/')
-    .padEnd(Math.ceil(input.length / 4) * 4, '=');
-  const raw = Buffer.from(padded, 'base64').toString('utf8');
-  return JSON.parse(raw) as unknown;
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+
+export const GOOGLE_JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/oauth2/v3/certs'),
+);
+
+export const MICROSOFT_JWKS = createRemoteJWKSet(
+  new URL('https://login.microsoftonline.com/common/discovery/v2.0/keys'),
+);
+
+export async function verifyGoogleJwt(params: {
+  idToken: string;
+  clientId: string;
+  expectedNonce: string;
+}): Promise<JWTPayload> {
+  const { payload } = await jwtVerify(params.idToken, GOOGLE_JWKS, {
+    issuer: 'https://accounts.google.com',
+    audience: params.clientId,
+  });
+
+  // jose does not validate nonce by default.
+  if (payload.nonce !== params.expectedNonce) {
+    throw new Error('jwt_nonce_mismatch');
+  }
+
+  return payload;
 }
 
-export type JwtParts = { header: Record<string, unknown>; payload: Record<string, unknown> };
+/**
+ * Microsoft issuer is tenant-specific (tid). We must validate against the correct
+ * issuer URL, which requires tid. (locked spec requirement)
+ */
+export async function verifyMicrosoftJwt(params: {
+  idToken: string;
+  clientId: string;
+  expectedNonce: string;
+  tid: string;
+}): Promise<JWTPayload> {
+  const { payload } = await jwtVerify(params.idToken, MICROSOFT_JWKS, {
+    issuer: `https://login.microsoftonline.com/${params.tid}/v2.0`,
+    audience: params.clientId,
+  });
 
-export function parseJwt(token: string): JwtParts {
-  const parts = token.split('.');
-  if (parts.length < 2) {
-    throw new Error('invalid_jwt');
+  if (payload.nonce !== params.expectedNonce) {
+    throw new Error('jwt_nonce_mismatch');
   }
-  const header = base64UrlToJson(parts[0]);
-  const payload = base64UrlToJson(parts[1]);
 
-  if (!header || typeof header !== 'object') throw new Error('invalid_jwt_header');
+  return payload;
+}
+
+/**
+ * Unsafe helper: decode JWT payload WITHOUT verifying signature.
+ *
+ * WHY:
+ * - For Microsoft, we need `tid` to build the issuer string that jwtVerify()
+ *   will enforce. The `tid` value itself is not trusted; it only influences the
+ *   expected issuer which is cryptographically enforced by jwtVerify.
+ */
+export function decodeJwtPayloadUnsafe(idToken: string): Record<string, unknown> {
+  const parts = idToken.split('.');
+  if (parts.length < 2) throw new Error('invalid_jwt');
+
+  const rawPayload = Buffer.from(parts[1], 'base64url').toString('utf8');
+  const payload = JSON.parse(rawPayload) as unknown;
+
   if (!payload || typeof payload !== 'object') throw new Error('invalid_jwt_payload');
 
-  return {
-    header: header as Record<string, unknown>,
-    payload: payload as Record<string, unknown>,
-  };
+  return payload as Record<string, unknown>;
 }

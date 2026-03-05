@@ -15,15 +15,23 @@ import type {
   SsoProviderAdapter,
   SsoTokenExchangeResult,
 } from '../sso-provider.interface';
-import { parseJwt } from '../jwt';
 import { AuthErrors } from '../../auth.errors';
 import { getString, isRecord } from '../sso-adapter-utils';
+import { decodeJwtPayloadUnsafe, verifyMicrosoftJwt } from '../jwt';
 
 const MICROSOFT_AUTH_BASE = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize';
 const MICROSOFT_TOKEN_ENDPOINT = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
 
-function microsoftIssuer(tid: string): string {
-  return `https://login.microsoftonline.com/${tid}/v2.0`;
+// Helper: resolve email from Microsoft claim priority chain.
+// Microsoft does not guarantee an email claim; preferred_username and upn are
+// common alternatives in enterprise (Entra ID) tenants.
+function resolveMicrosoftEmail(payload: Record<string, unknown>): string {
+  const candidates = ['email', 'preferred_username', 'upn'] as const;
+  for (const key of candidates) {
+    const val = payload[key];
+    if (typeof val === 'string' && val.includes('@')) return val;
+  }
+  throw AuthErrors.ssoTokenValidationFailed({ reason: 'email_missing' });
 }
 
 export class MicrosoftSsoAdapter implements SsoProviderAdapter {
@@ -81,43 +89,44 @@ export class MicrosoftSsoAdapter implements SsoProviderAdapter {
     return { idToken };
   }
 
-  validateAndExtractIdentity(input: {
+  async validateAndExtractIdentity(input: {
     idToken: string;
     expectedNonce: string;
     now: Date;
-  }): SsoIdentityPayload {
-    let payload: Record<string, unknown>;
+  }): Promise<SsoIdentityPayload> {
+    // 1) Decode tid from unverified payload — needed to build issuer URL.
+    //    This is safe: tid is only used to construct the expected issuer,
+    //    which jwtVerify then cryptographically enforces.
+    let rawPayload: Record<string, unknown>;
     try {
-      payload = parseJwt(input.idToken).payload;
+      rawPayload = decodeJwtPayloadUnsafe(input.idToken);
     } catch {
       throw AuthErrors.ssoTokenValidationFailed({ reason: 'jwt_parse_failed' });
     }
 
-    const tid = getString(payload, 'tid');
+    const tid = getString(rawPayload, 'tid');
     if (!tid) {
       throw AuthErrors.ssoTokenValidationFailed({ reason: 'tid_missing' });
     }
-    if (payload.iss !== microsoftIssuer(tid)) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'issuer_mismatch' });
-    }
-    if (payload.aud !== this.clientId) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'audience_mismatch' });
-    }
-    if (typeof payload.exp !== 'number' || payload.exp * 1000 <= input.now.getTime()) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'token_expired' });
-    }
-    if (payload.nonce !== input.expectedNonce) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'nonce_mismatch' });
+
+    // 2) Cryptographic verification — jwtVerify enforces iss, aud, exp.
+    let payload: Record<string, unknown>;
+    try {
+      payload = (await verifyMicrosoftJwt({
+        idToken: input.idToken,
+        clientId: this.clientId,
+        expectedNonce: input.expectedNonce,
+        tid,
+      })) as unknown as Record<string, unknown>;
+    } catch (e: unknown) {
+      const reason =
+        e instanceof Error && e.message === 'jwt_nonce_mismatch'
+          ? 'nonce_mismatch'
+          : 'jwt_verify_failed';
+      throw AuthErrors.ssoTokenValidationFailed({ reason });
     }
 
-    const email =
-      getString(payload, 'email') ??
-      getString(payload, 'preferred_username') ??
-      getString(payload, 'upn');
-
-    if (!email) {
-      throw AuthErrors.ssoTokenValidationFailed({ reason: 'email_missing' });
-    }
+    const email = resolveMicrosoftEmail(payload);
 
     const sub = getString(payload, 'sub');
     if (!sub) {

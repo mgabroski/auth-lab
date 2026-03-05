@@ -187,7 +187,7 @@ export async function executeSsoCallbackFlow(
       });
 
       // E+F) Validate ID token claims + extract identity
-      const identity = adapter.validateAndExtractIdentity({
+      const identity = await adapter.validateAndExtractIdentity({
         idToken: tokens.idToken,
         expectedNonce: statePayload.nonce,
         now: new Date(),

@@ -37,9 +37,14 @@ export interface SsoProviderAdapter {
     redirectUri: string;
   }): Promise<SsoTokenExchangeResult>;
 
+  /**
+   * Cryptographically verify the ID token and extract a normalized identity.
+   *
+   * NOTE: This is async because JWKS verification is async (jose).
+   */
   validateAndExtractIdentity(input: {
     idToken: string;
     expectedNonce: string;
     now: Date;
-  }): SsoIdentityPayload;
+  }): Promise<SsoIdentityPayload>;
 }
