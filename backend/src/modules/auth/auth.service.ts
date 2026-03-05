@@ -279,6 +279,7 @@ export class AuthService {
         db: this.deps.db,
         auditRepo: this.deps.auditRepo,
         sessionStore: this.deps.sessionStore,
+        rateLimiter: this.deps.rateLimiter,
         mfaRepo: this.deps.mfaRepo,
         cache: this.deps.cache,
         tokenHasher: this.deps.tokenHasher,

@@ -11,11 +11,17 @@
  * - No business rules here.
  * - Cookie logic lives in shared/session/set-session-cookie (DRY).
  *
- * MFA:
- * - /auth/mfa/setup: requires an authenticated session (from login/register)
- * - /auth/mfa/verify-setup: verifies the provisional secret and flips session.mfaVerified
- * - /auth/mfa/verify: verifies MFA for a partially authenticated session (mfaVerified=false)
- * - /auth/mfa/recover: uses a recovery code, flips session.mfaVerified
+ * MFA — emailVerified gates (X1):
+ * - /auth/mfa/setup:        requireEmailVerified: true
+ * - /auth/mfa/verify-setup: requireEmailVerified: true
+ * - /auth/mfa/verify:       requireEmailVerified: true
+ * - /auth/mfa/recover:      requireEmailVerified: true
+ *
+ * Deliberately NOT gated by requireEmailVerified:
+ * - /auth/verify-email:        IS the verification flow itself.
+ * - /auth/resend-verification: IS the verification flow itself.
+ * - /auth/logout:              trapping an unverified user from logging out
+ *                              creates a support burden with zero security benefit.
  *
  * Public Signup + Email Verification:
  * - /auth/signup: session required = false (unauthenticated endpoint)
@@ -167,8 +173,12 @@ export class AuthController {
     return reply.status(200).send(RESET_PASSWORD_RESPONSE);
   }
 
+  // ─── MFA handlers ────────────────────────────────────────────────────────────
+  // All four require emailVerified: true (X1).
+  // verifyEmail / resendVerification / logout are deliberately excluded — see file header.
+
   async mfaSetup(req: FastifyRequest, reply: FastifyReply) {
-    const session = requireSession(req);
+    const session = requireSession(req, { requireEmailVerified: true });
 
     const result = await this.authService.setupMfa({
       sessionId: session.sessionId,
@@ -184,7 +194,7 @@ export class AuthController {
   }
 
   async mfaVerifySetup(req: FastifyRequest, reply: FastifyReply) {
-    const session = requireSession(req);
+    const session = requireSession(req, { requireEmailVerified: true });
 
     const parsed = mfaCodeSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -212,7 +222,7 @@ export class AuthController {
   }
 
   async mfaVerify(req: FastifyRequest, reply: FastifyReply) {
-    const session = requireSession(req);
+    const session = requireSession(req, { requireEmailVerified: true });
 
     const parsed = mfaCodeSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -241,7 +251,7 @@ export class AuthController {
   }
 
   async mfaRecover(req: FastifyRequest, reply: FastifyReply) {
-    const session = requireSession(req);
+    const session = requireSession(req, { requireEmailVerified: true });
 
     const parsed = mfaRecoverSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -268,6 +278,8 @@ export class AuthController {
 
     return reply.status(200).send(body);
   }
+
+  // ─── SSO handlers ─────────────────────────────────────────────────────────────
 
   async ssoStart(req: FastifyRequest, reply: FastifyReply) {
     const providerRaw = (req.params as { provider?: unknown } | undefined)?.provider;
@@ -325,6 +337,8 @@ export class AuthController {
     return reply.status(302).redirect(redirectTo);
   }
 
+  // ─── Signup + email verification handlers ─────────────────────────────────────
+
   /**
    * POST /auth/signup
    *
@@ -361,6 +375,8 @@ export class AuthController {
    * Upgrades the existing server-side session (Redis) so emailVerified becomes true.
    * This removes the need for logout/login after verification.
    * Returns 200 { status: 'VERIFIED' } on success.
+   *
+   * NOT gated by requireEmailVerified — this IS the verification flow itself.
    */
   async verifyEmail(req: FastifyRequest, reply: FastifyReply) {
     const session = requireSession(req);
@@ -392,6 +408,8 @@ export class AuthController {
    * Requires an authenticated session.
    * Always returns 200 — never reveals rate-limit status or email_verified state.
    * No request body required.
+   *
+   * NOT gated by requireEmailVerified — this IS the verification flow itself.
    */
   async resendVerification(req: FastifyRequest, reply: FastifyReply) {
     const session = requireSession(req);
@@ -410,9 +428,10 @@ export class AuthController {
   /**
    * POST /auth/logout
    *
-   * Guard: requireSession only — no role, no MFA requirement.
-   * A user who has not yet completed MFA must still be able to log out;
-   * an MFA gate would trap partial-auth sessions permanently.
+   * Guard: requireSession only — no role, no MFA requirement, no emailVerified gate.
+   * A user who has not yet verified email must still be able to log out;
+   * gating on emailVerified would permanently trap unverified sessions.
+   * This is a deliberate product decision — see file header for rationale.
    *
    * Flow:
    *   1. requireSession → 401 if no session

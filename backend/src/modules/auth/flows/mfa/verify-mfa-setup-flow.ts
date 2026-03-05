@@ -10,12 +10,23 @@
  * - Verifies TOTP code
  * - Marks secret verified + marks session mfaVerified=true
  * - Audits: verify failed (on wrong code), setup completed (on success)
+ *
+ * X2 — Rate limit added:
+ * - verify-setup was the only MFA endpoint without a rate limit.
+ * - An attacker holding a setup-phase session could brute-force 6-digit TOTP
+ *   codes (10^6 attempts) without restriction.
+ * - Rate limit key: mfa:setup-verify:user:<hashed-userId>
+ * - Reuses AUTH_RATE_LIMITS.mfaVerify.perUser (5 attempts / 15 min) — same
+ *   policy as the login-phase MFA verify endpoint.
+ * - hitOrThrow fires BEFORE any DB work, consistent with the house rule:
+ *   "rate limit early — before DB work — on every endpoint that accepts credentials."
  */
 
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../../../shared/db/db';
 import type { SessionStore } from '../../../../shared/session/session.store';
+import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { Cache } from '../../../../shared/cache/cache';
 import type { TokenHasher } from '../../../../shared/security/token-hasher';
 import type { Logger } from '../../../../shared/logger/logger';
@@ -28,12 +39,14 @@ import { getMfaSecretForUser } from '../../queries/mfa.queries';
 import { auditMfaVerifyFailed, auditMfaSetupCompleted } from '../../auth.audit';
 import { MfaErrors } from './mfa-errors';
 import { AppError } from '../../../../shared/http/errors';
+import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 export async function verifyMfaSetupFlow(params: {
   deps: {
     db: DbExecutor;
     auditRepo: AuditRepo;
     sessionStore: SessionStore;
+    rateLimiter: RateLimiter;
     mfaRepo: MfaRepo;
     cache: Cache;
     tokenHasher: TokenHasher;
@@ -53,6 +66,16 @@ export async function verifyMfaSetupFlow(params: {
   };
 }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE'; sessionId: string }> {
   const { deps, input } = params;
+
+  // X2: Rate limit before any DB work.
+  // Hash userId for key material — consistent with D1 (never embed raw stable
+  // identifiers in Redis keys).
+  const userKey = deps.tokenHasher.hash(input.userId);
+
+  await deps.rateLimiter.hitOrThrow({
+    key: `mfa:setup-verify:user:${userKey}`,
+    ...AUTH_RATE_LIMITS.mfaVerify.perUser,
+  });
 
   const audit = new AuditWriter(deps.auditRepo, {
     requestId: input.requestId,
@@ -79,7 +102,7 @@ export async function verifyMfaSetupFlow(params: {
 
   // Replay protection: the same TOTP code must not be accepted twice.
   // Fail-open on cache errors: a Redis blip must not lock out all MFA users.
-  const userKey = deps.tokenHasher.hash(input.userId);
+  // userKey already computed above for the rate-limit call — reuse it.
   const usedCodeKey = `totp:used:${userKey}:${input.code}`;
 
   let alreadyUsed: string | null = null;
