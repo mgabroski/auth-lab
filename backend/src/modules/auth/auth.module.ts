@@ -12,6 +12,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { DbExecutor } from '../../shared/db/db';
+import type { Cache } from '../../shared/cache/cache';
 import type { TokenHasher } from '../../shared/security/token-hasher';
 import type { PasswordHasher } from '../../shared/security/password-hasher';
 import type { Logger } from '../../shared/logger/logger';
@@ -43,6 +44,7 @@ export type AuthModule = ReturnType<typeof createAuthModule>;
 
 export function createAuthModule(deps: {
   db: DbExecutor;
+  cache: Cache;
   tokenHasher: TokenHasher;
   passwordHasher: PasswordHasher;
   logger: Logger;
@@ -78,6 +80,7 @@ export function createAuthModule(deps: {
 
   const authService = new AuthService({
     db: deps.db,
+    cache: deps.cache,
     tokenHasher: deps.tokenHasher,
     passwordHasher: deps.passwordHasher,
     logger: deps.logger,

@@ -10,6 +10,7 @@
  */
 
 import type { DbExecutor } from '../../shared/db/db';
+import type { Cache } from '../../shared/cache/cache';
 import type { TokenHasher } from '../../shared/security/token-hasher';
 import type { PasswordHasher } from '../../shared/security/password-hasher';
 import type { Logger } from '../../shared/logger/logger';
@@ -75,6 +76,7 @@ export class AuthService {
   constructor(
     private readonly deps: {
       db: DbExecutor;
+      cache: Cache;
       tokenHasher: TokenHasher;
       passwordHasher: PasswordHasher;
       logger: Logger;
@@ -278,6 +280,8 @@ export class AuthService {
         auditRepo: this.deps.auditRepo,
         sessionStore: this.deps.sessionStore,
         mfaRepo: this.deps.mfaRepo,
+        cache: this.deps.cache,
+        tokenHasher: this.deps.tokenHasher,
         totpService: this.deps.totpService,
         encryptionService: this.deps.encryptionService,
       },
@@ -303,6 +307,7 @@ export class AuthService {
         sessionStore: this.deps.sessionStore,
         rateLimiter: this.deps.rateLimiter,
         tokenHasher: this.deps.tokenHasher,
+        cache: this.deps.cache,
         totpService: this.deps.totpService,
         encryptionService: this.deps.encryptionService,
       },

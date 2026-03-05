@@ -213,6 +213,7 @@ export async function buildDeps(
 
   const auth = createAuthModule({
     db,
+    cache: redis,
     tokenHasher,
     passwordHasher,
     logger,

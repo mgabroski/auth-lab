@@ -16,6 +16,8 @@ import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../../../shared/db/db';
 import type { SessionStore } from '../../../../shared/session/session.store';
+import type { Cache } from '../../../../shared/cache/cache';
+import type { TokenHasher } from '../../../../shared/security/token-hasher';
 
 import type { TotpService } from '../../../../shared/security/totp';
 import type { EncryptionService } from '../../../../shared/security/encryption';
@@ -32,6 +34,8 @@ export async function verifyMfaSetupFlow(params: {
     auditRepo: AuditRepo;
     sessionStore: SessionStore;
     mfaRepo: MfaRepo;
+    cache: Cache;
+    tokenHasher: TokenHasher;
     totpService: TotpService;
     encryptionService: EncryptionService;
   };
@@ -67,6 +71,17 @@ export async function verifyMfaSetupFlow(params: {
   const ok = deps.totpService.verify(plaintextSecret, input.code);
 
   if (!ok) {
+    await auditMfaVerifyFailed(audit, { userId: input.userId });
+    throw MfaErrors.invalidCode();
+  }
+
+  // Replay protection: the same TOTP code must not be accepted twice.
+  // We store a short-lived per-user+code marker in Redis.
+  const userKey = deps.tokenHasher.hash(input.userId);
+  const codeKey = deps.tokenHasher.hash(input.code);
+  const usedKey = `totp:used:user:${userKey}:code:${codeKey}`;
+  const usedCount = await deps.cache.incr(usedKey, { ttlSeconds: 60 });
+  if (usedCount > 1) {
     await auditMfaVerifyFailed(audit, { userId: input.userId });
     throw MfaErrors.invalidCode();
   }
