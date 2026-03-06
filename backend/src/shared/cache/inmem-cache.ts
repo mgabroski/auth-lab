@@ -41,18 +41,14 @@ export class InMemCache implements Cache {
   set(key: string, value: string, opts?: CacheSetOptions): Promise<void> {
     const existing = this.getEntry(key);
 
-    // If ttlSeconds explicitly provided, it always wins.
     if (opts?.ttlSeconds !== undefined) {
       const expiresAtMs = this.now() + opts.ttlSeconds * 1000;
       this.store.set(key, { value, expiresAtMs });
       return Promise.resolve();
     }
 
-    // keepTtl means: preserve the existing expiry timestamp.
     if (opts?.keepTtl) {
       if (!existing) {
-        // If key doesn't exist, behave like a normal set with no TTL.
-        // (SessionStore.updateSession already guards this, so this is just safe.)
         this.store.set(key, { value, expiresAtMs: null });
         return Promise.resolve();
       }
@@ -61,9 +57,20 @@ export class InMemCache implements Cache {
       return Promise.resolve();
     }
 
-    // Default: overwrite value, but keep previous expiry if it existed (same behavior as before)
     this.store.set(key, { value, expiresAtMs: existing?.expiresAtMs ?? null });
     return Promise.resolve();
+  }
+
+  setIfAbsent(key: string, value: string, opts?: { ttlSeconds?: number }): Promise<boolean> {
+    const existing = this.getEntry(key);
+    if (existing) {
+      return Promise.resolve(false);
+    }
+
+    const expiresAtMs = opts?.ttlSeconds !== undefined ? this.now() + opts.ttlSeconds * 1000 : null;
+
+    this.store.set(key, { value, expiresAtMs });
+    return Promise.resolve(true);
   }
 
   del(key: string): Promise<void> {

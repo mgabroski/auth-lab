@@ -9,6 +9,7 @@
  * - cache.get(key)
  * - cache.set(key, value, { ttlSeconds })
  * - cache.set(key, value, { keepTtl: true })  // do NOT refresh TTL
+ * - cache.setIfAbsent(key, value, { ttlSeconds }) -> atomic claim primitive
  * - cache.incr(key, { ttlSeconds }) -> counter with expiration
  * - cache.sadd / smembers / srem -> Redis SET semantics for user-session index
  */
@@ -31,6 +32,15 @@ export interface CacheSetOptions {
 export interface Cache {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, opts?: CacheSetOptions): Promise<void>;
+
+  /**
+   * Atomically set a key only when it does not already exist.
+   * Returns true when this caller won the claim, false when the key already exists.
+   *
+   * Used for security-sensitive single-use markers like TOTP replay protection.
+   */
+  setIfAbsent(key: string, value: string, opts?: { ttlSeconds?: number }): Promise<boolean>;
+
   del(key: string): Promise<void>;
 
   /**

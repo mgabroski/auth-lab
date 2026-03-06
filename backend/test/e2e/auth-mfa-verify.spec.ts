@@ -13,7 +13,6 @@ import type { LightMyRequestResponse } from 'fastify';
 import { buildTestApp } from '../helpers/build-test-app';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
-import type { CacheSetOptions } from '../../src/shared/cache/cache';
 
 function parseJson<T>(res: LightMyRequestResponse): T {
   const body = Buffer.isBuffer(res.body) ? res.body.toString('utf8') : res.body;
@@ -71,7 +70,6 @@ async function seedAdminWithMfa(opts: {
     .returning(['id'])
     .executeTakeFirstOrThrow();
 
-  // Insert a VERIFIED MFA secret
   await opts.db
     .insertInto('mfa_secrets')
     .values({
@@ -173,13 +171,11 @@ describe('POST /auth/mfa/verify', () => {
       expect(body.status).toBe('AUTHENTICATED');
       expect(body.nextAction).toBe('NONE');
 
-      // LOCKED hardening: MFA success rotates session cookie.
       const postCookie = verifyRes.headers['set-cookie'];
       expect(postCookie).toBeTruthy();
       const postMfaCookie = Array.isArray(postCookie) ? postCookie[0] : (postCookie as string);
       expect(postMfaCookie).not.toEqual(preMfaCookie);
 
-      // Old session cookie must no longer authenticate.
       const usingOld = await app.inject({
         method: 'POST',
         url: '/auth/mfa/verify',
@@ -214,30 +210,26 @@ describe('POST /auth/mfa/verify', () => {
         mfaSecretEncrypted: encryptedSecret,
       });
 
-      // Session A: issued via login (normal path)
-      const loginRes = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        headers: { host: `${tenantKey}.hubins.com` },
-        body: { email, password },
+      const sessionIdA = await deps.sessionStore.create({
+        userId: seeded.userId,
+        tenantId: tenant.id,
+        tenantKey,
+        membershipId: seeded.membershipId,
+        role: 'ADMIN',
+        emailVerified: true,
+        mfaVerified: false,
+        createdAt: new Date().toISOString(),
       });
+      const sessionCookieA = `sid=${sessionIdA}`;
 
-      expect(loginRes.statusCode).toBe(200);
-      const cookieHeader = loginRes.headers['set-cookie'];
-      expect(cookieHeader).toBeTruthy();
-      const sessionCookieA = Array.isArray(cookieHeader)
-        ? cookieHeader[0]
-        : (cookieHeader as string);
-
-      // Session B: a second parallel session for the same user (mfaVerified=false).
       const sessionIdB = await deps.sessionStore.create({
         userId: seeded.userId,
         tenantId: tenant.id,
         tenantKey,
         membershipId: seeded.membershipId,
         role: 'ADMIN',
-        mfaVerified: false,
         emailVerified: true,
+        mfaVerified: false,
         createdAt: new Date().toISOString(),
       });
       const sessionCookieB = `sid=${sessionIdB}`;
@@ -299,7 +291,6 @@ describe('POST /auth/mfa/verify', () => {
       const preMfaCookie = Array.isArray(cookieHeader) ? cookieHeader[0] : (cookieHeader as string);
 
       const originalGet = deps.cache.get.bind(deps.cache);
-      // Only break replay-cache reads.
       deps.cache.get = async (key: string) => {
         if (key.startsWith('totp:used:')) throw new Error('redis_read_error');
         return originalGet(key);
@@ -352,11 +343,14 @@ describe('POST /auth/mfa/verify', () => {
       expect(cookieHeader).toBeTruthy();
       const preMfaCookie = Array.isArray(cookieHeader) ? cookieHeader[0] : (cookieHeader as string);
 
-      const originalSet = deps.cache.set.bind(deps.cache);
-      // Only break replay-cache writes.
-      deps.cache.set = async (key: string, value: string, opts?: CacheSetOptions) => {
+      const originalSetIfAbsent = deps.cache.setIfAbsent.bind(deps.cache);
+      deps.cache.setIfAbsent = async (
+        key: string,
+        value: string,
+        opts?: { ttlSeconds?: number },
+      ) => {
         if (key.startsWith('totp:used:')) throw new Error('redis_write_error');
-        return originalSet(key, value, opts);
+        return originalSetIfAbsent(key, value, opts);
       };
 
       const validCode = cryptoHelpers.generateTotpCode(plainSecret);
@@ -473,7 +467,6 @@ describe('POST /auth/mfa/verify', () => {
       expect(postCookie).toBeTruthy();
       const postMfaCookie = Array.isArray(postCookie) ? postCookie[0] : (postCookie as string);
 
-      // Session is now MFA-verified; the endpoint must reject further verify calls.
       const again = await app.inject({
         method: 'POST',
         url: '/auth/mfa/verify',

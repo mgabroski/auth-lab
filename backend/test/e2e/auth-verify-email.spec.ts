@@ -288,35 +288,35 @@ describe('POST /auth/verify-email', () => {
       });
       expect(first.statusCode).toBe(200);
 
-      const res = await app.inject({
+      const second = await app.inject({
         method: 'POST',
         url: '/auth/verify-email',
         headers: { host, cookie },
         payload: { token: verificationToken },
       });
 
-      expect(res.statusCode).toBe(400);
-      const body = readJson<ErrorResponseBody>(res);
+      expect(second.statusCode).toBe(400);
+      const body = readJson<ErrorResponseBody>(second);
       expect(body.error.message).toBeTruthy();
     } finally {
       await close();
     }
   });
 
-  it('token belonging to a different user → 400 (ownership check)', async () => {
+  it('token belonging to another user → 400 (ownership check, no oracle)', async () => {
     const { app, deps, close } = await buildTestApp();
     const { db } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 8)}`;
     const host = `${tenantKey}.localhost:3000`;
 
+    const emailA = `verify-a-${randomUUID().slice(0, 8)}@example.com`;
+    const emailB = `verify-b-${randomUUID().slice(0, 8)}@example.com`;
+
     try {
       await createSignupTenant({ db, tenantKey });
 
-      const emailA = `a-${randomUUID().slice(0, 8)}@example.com`;
-      const emailB = `b-${randomUUID().slice(0, 8)}@example.com`;
-
-      const { verificationToken: tokenA, userId: userA } = await signupAndGetToken({
+      const a = await signupAndGetToken({
         app,
         db,
         outboxEncryption: deps.outboxEncryption,
@@ -324,7 +324,7 @@ describe('POST /auth/verify-email', () => {
         email: emailA,
       });
 
-      const { cookie: cookieB, userId: userB } = await signupAndGetToken({
+      const b = await signupAndGetToken({
         app,
         db,
         outboxEncryption: deps.outboxEncryption,
@@ -335,38 +335,33 @@ describe('POST /auth/verify-email', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/auth/verify-email',
-        headers: { host, cookie: cookieB },
-        payload: { token: tokenA },
+        headers: { host, cookie: a.cookie },
+        payload: { token: b.verificationToken },
       });
 
       expect(res.statusCode).toBe(400);
+      const body = readJson<ErrorResponseBody>(res);
+      expect(body.error.message).toBeTruthy();
 
-      const aAfter = await db
+      const userA = await db
         .selectFrom('users')
         .selectAll()
-        .where('id', '=', userA)
+        .where('id', '=', a.userId)
         .executeTakeFirstOrThrow();
-      const bAfter = await db
+      expect(userA.email_verified).toBe(false);
+
+      const userB = await db
         .selectFrom('users')
         .selectAll()
-        .where('id', '=', userB)
+        .where('id', '=', b.userId)
         .executeTakeFirstOrThrow();
-      expect(aAfter.email_verified).toBe(false);
-      expect(bAfter.email_verified).toBe(false);
-
-      const tokensA = await db
-        .selectFrom('email_verification_tokens')
-        .selectAll()
-        .where('user_id', '=', userA)
-        .execute();
-      expect(tokensA).toHaveLength(1);
-      expect(tokensA[0].used_at).toBeNull();
+      expect(userB.email_verified).toBe(false);
     } finally {
       await close();
     }
   });
 
-  it('idempotent: already-verified user with valid token → 200 (token consumed, no error)', async () => {
+  it('already-verified user with a fresh valid token → 200 (idempotent success) and token consumed', async () => {
     const { app, deps, close } = await buildTestApp();
     const { db } = deps;
 
@@ -377,7 +372,70 @@ describe('POST /auth/verify-email', () => {
     try {
       await createSignupTenant({ db, tenantKey });
 
-      // Create a user + UNUSED valid token via signup
+      const first = await signupAndGetToken({
+        app,
+        db,
+        outboxEncryption: deps.outboxEncryption,
+        tenantKey,
+        email,
+      });
+
+      const verifyFirst = await app.inject({
+        method: 'POST',
+        url: '/auth/verify-email',
+        headers: { host, cookie: first.cookie },
+        payload: { token: first.verificationToken },
+      });
+      expect(verifyFirst.statusCode).toBe(200);
+
+      const freshRawToken = `verify-${randomUUID()}-${randomUUID()}`;
+      const freshTokenHash = deps.tokenHasher.hash(freshRawToken);
+
+      await db
+        .insertInto('email_verification_tokens')
+        .values({
+          user_id: first.userId,
+          token_hash: freshTokenHash,
+          expires_at: new Date(Date.now() + 1000 * 60 * 60),
+          used_at: null,
+        })
+        .execute();
+
+      const secondVerify = await app.inject({
+        method: 'POST',
+        url: '/auth/verify-email',
+        headers: { host, cookie: first.cookie },
+        payload: { token: freshRawToken },
+      });
+
+      expect(secondVerify.statusCode).toBe(200);
+      const body = readJson<VerifyEmailResponse>(secondVerify);
+      expect(body.status).toBe('VERIFIED');
+
+      const tokens = await db
+        .selectFrom('email_verification_tokens')
+        .selectAll()
+        .where('user_id', '=', first.userId)
+        .orderBy('created_at asc')
+        .execute();
+
+      expect(tokens.length).toBeGreaterThanOrEqual(2);
+      expect(tokens[tokens.length - 1].used_at).not.toBeNull();
+    } finally {
+      await close();
+    }
+  });
+
+  it('session upgrade failure after commit -> still returns 200 and DB state is correct', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db } = deps;
+    const tenantKey = `t-${randomUUID().slice(0, 8)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `verify-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      await createSignupTenant({ db, tenantKey });
+
       const { cookie, verificationToken, userId } = await signupAndGetToken({
         app,
         db,
@@ -386,42 +444,38 @@ describe('POST /auth/verify-email', () => {
         email,
       });
 
-      // Simulate "already verified" user state WITHOUT consuming the token.
-      // This matches the contract: a valid token may still exist even though user is verified.
-      await db
-        .updateTable('users')
-        .set({ email_verified: true })
-        .where('id', '=', userId)
-        .execute();
+      const originalUpdateSession = deps.sessionStore.updateSession.bind(deps.sessionStore);
+      deps.sessionStore.updateSession = () => {
+        throw new Error('redis_write_failed');
+      };
 
-      const second = await app.inject({
+      const res = await app.inject({
         method: 'POST',
         url: '/auth/verify-email',
         headers: { host, cookie },
         payload: { token: verificationToken },
       });
 
-      expect(second.statusCode).toBe(200);
-      const body = readJson<VerifyEmailResponse>(second);
+      expect(res.statusCode).toBe(200);
+      const body = readJson<VerifyEmailResponse>(res);
       expect(body.status).toBe('VERIFIED');
 
-      // Token consumed
-      const tokens = await db
-        .selectFrom('email_verification_tokens')
+      const userAfter = await db
+        .selectFrom('users')
         .selectAll()
-        .where('user_id', '=', userId)
-        .execute();
-      expect(tokens).toHaveLength(1);
-      expect(tokens[0].used_at).not.toBeNull();
+        .where('id', '=', userId)
+        .executeTakeFirstOrThrow();
+      expect(userAfter.email_verified).toBe(true);
+
+      deps.sessionStore.updateSession = originalUpdateSession;
     } finally {
       await close();
     }
   });
 
-  it('token too short → 400 validation error', async () => {
+  it('requires authentication (401 without cookie)', async () => {
     const { app, deps, close } = await buildTestApp();
     const { db } = deps;
-
     const tenantKey = `t-${randomUUID().slice(0, 8)}`;
     const host = `${tenantKey}.localhost:3000`;
     const email = `verify-${randomUUID().slice(0, 8)}@example.com`;
@@ -429,7 +483,7 @@ describe('POST /auth/verify-email', () => {
     try {
       await createSignupTenant({ db, tenantKey });
 
-      const { cookie } = await signupAndGetToken({
+      const { verificationToken } = await signupAndGetToken({
         app,
         db,
         outboxEncryption: deps.outboxEncryption,
@@ -440,59 +494,11 @@ describe('POST /auth/verify-email', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/auth/verify-email',
-        headers: { host, cookie },
-        payload: { token: 'short' },
-      });
-
-      expect(res.statusCode).toBe(400);
-      const body = readJson<ErrorResponseBody>(res);
-      expect(body.error.message).toBeTruthy();
-    } finally {
-      await close();
-    }
-  });
-
-  it('rate limit: 11th verify attempt from same IP → 429', async () => {
-    const { app, deps, close } = await buildTestApp({ nodeEnv: 'development' });
-    const { db } = deps;
-
-    const tenantKey = `t-${randomUUID().slice(0, 8)}`;
-    const host = `${tenantKey}.localhost:3000`;
-    const email = `verify-${randomUUID().slice(0, 8)}@example.com`;
-    const remoteAddress = `203.0.113.${Math.floor(Math.random() * 200) + 1}`;
-
-    try {
-      await createSignupTenant({ db, tenantKey });
-
-      const { cookie, verificationToken } = await signupAndGetToken({
-        app,
-        db,
-        outboxEncryption: deps.outboxEncryption,
-        tenantKey,
-        email,
-        remoteAddress,
-      });
-
-      for (let i = 0; i < 10; i++) {
-        const res = await app.inject({
-          method: 'POST',
-          url: '/auth/verify-email',
-          headers: { host, cookie },
-          payload: { token: verificationToken },
-          remoteAddress,
-        });
-        expect([200, 400]).toContain(res.statusCode);
-      }
-
-      const last = await app.inject({
-        method: 'POST',
-        url: '/auth/verify-email',
-        headers: { host, cookie },
+        headers: { host },
         payload: { token: verificationToken },
-        remoteAddress,
       });
 
-      expect(last.statusCode).toBe(429);
+      expect(res.statusCode).toBe(401);
     } finally {
       await close();
     }

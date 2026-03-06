@@ -205,4 +205,59 @@ describe('POST /auth/reset-password', () => {
       await close();
     }
   });
+
+  it('same token used concurrently -> exactly one request succeeds', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db, passwordHasher } = deps;
+    const tenantKey = `t-${randomUUID().slice(0, 8)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `user-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createTenant({ db, tenantKey });
+      const user = await seedUserWithPassword({
+        db,
+        passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password: 'OldPass123!',
+      });
+
+      const rawToken = await obtainResetToken({
+        inject: app.inject.bind(app),
+        db,
+        outboxEncryption: deps.outboxEncryption,
+        host,
+        email,
+        userId: user.id,
+      });
+
+      const makeReq = (newPassword: string) =>
+        app.inject({
+          method: 'POST',
+          url: '/auth/reset-password',
+          headers: { host },
+          payload: { token: rawToken, newPassword },
+        });
+
+      const [a, b] = await Promise.all([makeReq('RacePassA1!'), makeReq('RacePassB1!')]);
+      const codes = [a.statusCode, b.statusCode].sort((x, y) => x - y);
+
+      expect(codes).toEqual([200, 400]);
+
+      const userIdentity = await db
+        .selectFrom('auth_identities')
+        .select(['password_hash'])
+        .where('user_id', '=', user.id)
+        .where('provider', '=', 'password')
+        .executeTakeFirstOrThrow();
+
+      const matchesA = await passwordHasher.verify('RacePassA1!', userIdentity.password_hash ?? '');
+      const matchesB = await passwordHasher.verify('RacePassB1!', userIdentity.password_hash ?? '');
+
+      expect(Number(matchesA) + Number(matchesB)).toBe(1);
+    } finally {
+      await close();
+    }
+  });
 });

@@ -14,7 +14,6 @@ import { buildTestApp } from '../helpers/build-test-app';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
 import type { MembershipRole } from '../../src/modules/memberships/membership.types';
-import type { CacheSetOptions } from '../../src/shared/cache/cache';
 
 function parseJson<T>(res: LightMyRequestResponse): T {
   const body = Buffer.isBuffer(res.body) ? res.body.toString('utf8') : res.body;
@@ -393,10 +392,14 @@ describe('POST /auth/mfa/setup and /auth/mfa/verify-setup', () => {
       const setupBody = parseJson<{ secret: string }>(setupRes);
       const validCode = cryptoHelpers.generateTotpCode(setupBody.secret);
 
-      const originalSet = deps.cache.set.bind(deps.cache);
-      deps.cache.set = async (key: string, value: string, opts?: CacheSetOptions) => {
+      const originalSetIfAbsent = deps.cache.setIfAbsent.bind(deps.cache);
+      deps.cache.setIfAbsent = async (
+        key: string,
+        value: string,
+        opts?: { ttlSeconds?: number },
+      ) => {
         if (key.startsWith('totp:used:')) throw new Error('redis_write_error');
-        return originalSet(key, value, opts);
+        return originalSetIfAbsent(key, value, opts);
       };
 
       const res = await app.inject({

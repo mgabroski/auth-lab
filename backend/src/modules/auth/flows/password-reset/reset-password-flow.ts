@@ -25,7 +25,7 @@ import { auditPasswordResetCompleted } from '../../auth.audit';
 import { AuthErrors } from '../../auth.errors';
 
 import type { AuthRepo } from '../../dal/auth.repo';
-import { getValidResetToken, hasAuthIdentity } from '../../queries/auth.queries';
+import { hasAuthIdentity } from '../../queries/auth.queries';
 import { getUserById } from '../../../users';
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
@@ -60,48 +60,59 @@ export async function resetPasswordFlow(
   });
 
   const tokenHash = deps.tokenHasher.hash(params.token);
-  const resetToken = await getValidResetToken(deps.db, tokenHash);
-
-  if (!resetToken) throw AuthErrors.resetTokenInvalid();
-
-  const user = await getUserById(deps.db, resetToken.userId);
-  if (!user) throw AuthErrors.resetTokenInvalid();
-
-  const hasPassword = await hasAuthIdentity(deps.db, {
-    userId: user.id,
-    provider: 'password',
-  });
-
-  if (!hasPassword) throw AuthErrors.resetTokenInvalid();
-
   const newHash = await deps.passwordHasher.hash(params.newPassword);
 
-  await deps.db.transaction().execute(async (trx) => {
+  const userId = await deps.db.transaction().execute(async (trx) => {
     const authRepo = deps.authRepo.withDb(trx);
+    const now = new Date();
+
+    const consumed = await authRepo.consumeResetTokenAtomic({
+      tokenHash,
+      now,
+    });
+
+    if (!consumed) {
+      throw AuthErrors.resetTokenInvalid();
+    }
+
+    const user = await getUserById(trx, consumed.userId);
+    if (!user) {
+      throw AuthErrors.resetTokenInvalid();
+    }
+
+    const hasPassword = await hasAuthIdentity(trx, {
+      userId: user.id,
+      provider: 'password',
+    });
+
+    if (!hasPassword) {
+      throw AuthErrors.resetTokenInvalid();
+    }
 
     await authRepo.updatePasswordHash({
       userId: user.id,
       newHash,
     });
 
-    await authRepo.markResetTokenUsed({ tokenHash });
     await authRepo.invalidateActiveResetTokensForUser({ userId: user.id });
+
+    return user.id;
   });
 
-  await deps.sessionStore.destroyAllForUser(user.id);
+  await deps.sessionStore.destroyAllForUser(userId);
 
   const audit = new AuditWriter(deps.auditRepo, {
     requestId: params.requestId,
     ip: params.ip,
     userAgent: params.userAgent,
-  }).withContext({ userId: user.id });
+  }).withContext({ userId });
 
-  await auditPasswordResetCompleted(audit, { userId: user.id });
+  await auditPasswordResetCompleted(audit, { userId });
 
   deps.logger.info({
     msg: 'auth.password_reset.completed',
     flow: 'auth.reset-password',
     requestId: params.requestId,
-    userId: user.id,
+    userId,
   });
 }

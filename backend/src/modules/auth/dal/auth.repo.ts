@@ -98,7 +98,6 @@ export class AuthRepo {
     provider: 'google' | 'microsoft';
     providerSubject: string;
   }): Promise<{ id: string }> {
-    // ── INSERT … ON CONFLICT DO NOTHING (concurrency-safe) ───────────────
     const inserted = await this.db
       .insertInto('auth_identities')
       .values({
@@ -115,9 +114,6 @@ export class AuthRepo {
       return { id: inserted.id };
     }
 
-    // ── Conflict: concurrent callback created this identity first ─────────
-    // Re-read within the same db/tx scope. The row MUST exist (it caused the
-    // conflict), so executeTakeFirstOrThrow is correct here.
     const existing = await this.db
       .selectFrom('auth_identities')
       .select(['id'])
@@ -126,6 +122,29 @@ export class AuthRepo {
       .executeTakeFirstOrThrow();
 
     return { id: existing.id };
+  }
+
+  /**
+   * Atomically consumes one valid reset token.
+   *
+   * Returns the owning user when the token was active and is now consumed.
+   * Returns null when the token is missing, expired, or already used.
+   */
+  async consumeResetTokenAtomic(params: {
+    tokenHash: string;
+    now: Date;
+  }): Promise<{ userId: string } | null> {
+    const row = await this.db
+      .updateTable('password_reset_tokens')
+      .set({ used_at: params.now })
+      .where('token_hash', '=', params.tokenHash)
+      .where('used_at', 'is', null)
+      .where('expires_at', '>', params.now)
+      .returning(['user_id'])
+      .executeTakeFirst();
+
+    if (!row) return null;
+    return { userId: row.user_id };
   }
 
   /**
@@ -147,18 +166,6 @@ export class AuthRepo {
       .set({ used_at: new Date() })
       .where('user_id', '=', params.userId)
       .where('used_at', 'is', null)
-      .execute();
-  }
-
-  /**
-   * Marks a single specific token as used (by its token_hash).
-   * Called immediately after a successful password reset to consume the token.
-   */
-  async markResetTokenUsed(params: { tokenHash: string }): Promise<void> {
-    await this.db
-      .updateTable('password_reset_tokens')
-      .set({ used_at: new Date() })
-      .where('token_hash', '=', params.tokenHash)
       .execute();
   }
 }

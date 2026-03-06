@@ -22,21 +22,6 @@ import { logger } from '../logger/logger';
 type RedisClient = ReturnType<typeof createClient>;
 
 export class RedisCache implements Cache {
-  /**
-   * Lua script: atomically INCR a key and set its TTL on first use.
-   *
-   * Why KEYS[1] / ARGV[1] instead of inline values:
-   * - Redis Cluster requires all keys touched by a script to be declared in KEYS[]
-   *   so the cluster can route the command to the correct shard.
-   * - ARGV[] carries non-key arguments (TTL seconds here).
-   *
-   * Why only set EXPIRE when v == 1:
-   * - The window starts the moment the first request arrives (v becomes 1).
-   * - Subsequent requests within the same window increment the counter but must
-   *   NOT extend the window. Resetting EXPIRE on every increment would allow an
-   *   attacker to prevent the window from ever expiring by sending a steady
-   *   stream of requests.
-   */
   private static readonly INCR_EXPIRE_SCRIPT = `
     local v = redis.call("INCR", KEYS[1])
     if v == 1 then
@@ -71,24 +56,26 @@ export class RedisCache implements Cache {
   }
 
   async set(key: string, value: string, opts?: CacheSetOptions): Promise<void> {
-    // NOTE:
-    // - If ttlSeconds is provided: set with EX.
-    // - If keepTtl is true: set with KEEPTTL (does not change existing TTL).
-    // - If neither provided: plain set.
-    //
-    // If both are provided, ttlSeconds wins (explicit TTL is intentional).
     if (opts?.ttlSeconds !== undefined) {
       await this.client.set(key, value, { EX: opts.ttlSeconds });
       return;
     }
 
     if (opts?.keepTtl) {
-      // Redis >= 6 supports KEEPTTL.
       await this.client.set(key, value, { KEEPTTL: true });
       return;
     }
 
     await this.client.set(key, value);
+  }
+
+  async setIfAbsent(key: string, value: string, opts?: { ttlSeconds?: number }): Promise<boolean> {
+    const res = await this.client.set(key, value, {
+      NX: true,
+      ...(opts?.ttlSeconds !== undefined ? { EX: opts.ttlSeconds } : {}),
+    });
+
+    return res === 'OK';
   }
 
   async del(key: string): Promise<void> {
@@ -97,13 +84,9 @@ export class RedisCache implements Cache {
 
   async incr(key: string, opts?: { ttlSeconds?: number }): Promise<number> {
     if (!opts?.ttlSeconds) {
-      // No TTL requested — plain INCR is correct and cheaper (no Lua overhead).
       return this.client.incr(key);
     }
 
-    // X4: Lua script makes INCR + conditional EXPIRE atomic.
-    // Without this, a crash between INCR and EXPIRE produces a no-TTL key that
-    // accumulates forever and permanently rate-locks users out of affected flows.
     const result = await this.client.eval(RedisCache.INCR_EXPIRE_SCRIPT, {
       keys: [key],
       arguments: [String(opts.ttlSeconds)],

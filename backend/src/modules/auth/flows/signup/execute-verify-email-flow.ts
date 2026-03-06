@@ -32,7 +32,6 @@ import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { SessionStore } from '../../../../shared/session/session.store';
-import { AppError } from '../../../../shared/http/errors';
 
 import type { EmailVerificationRepo } from '../../dal/email-verification.repo';
 import { getValidVerificationToken } from '../../queries/email-verification.queries';
@@ -43,13 +42,10 @@ import { auditEmailVerified } from '../../auth.audit';
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 export type VerifyEmailParams = {
-  /** Session id (cookie) — used to upgrade the session payload in Redis after verification. */
   sessionId: string;
-  /** From session (controller calls requireSession first). */
   sessionUserId: string;
   tenantId: string;
   membershipId: string;
-  /** Raw token from request body. */
   token: string;
   ip: string;
   userAgent: string | null;
@@ -68,8 +64,6 @@ export async function executeVerifyEmailFlow(
   },
   params: VerifyEmailParams,
 ): Promise<{ status: 'VERIFIED' }> {
-  // ── Rate limit (before any DB work — Decision 5) ────────────────────────
-
   const ipKey = deps.tokenHasher.hash(params.ip);
 
   await deps.rateLimiter.hitOrThrow({
@@ -95,48 +89,33 @@ export async function executeVerifyEmailFlow(
       userAgent: params.userAgent,
     });
 
-    // ── 1. Load valid token ────────────────────────────────────────────────
     const token = await getValidVerificationToken(trx, tokenHash);
 
     if (!token) {
       throw AuthErrors.verificationTokenInvalid();
     }
 
-    // ── 2. Verify token belongs to the session user ────────────────────────
-    // This check is non-negotiable: prevents one user from consuming another
-    // user's token. Always enforce even if user.emailVerified is already true.
     if (token.userId !== params.sessionUserId) {
-      // Return the same error as invalid token — no oracle.
       throw AuthErrors.verificationTokenInvalid();
     }
 
-    // ── 3. Load current user to check idempotency ──────────────────────────
     const user = await getUserById(trx, params.sessionUserId);
     if (!user) {
-      // Should never happen (session guarantees user exists), but be defensive.
       throw AuthErrors.verificationTokenInvalid();
     }
 
-    // ── 4. Idempotency guard ───────────────────────────────────────────────
-    // If user is already verified and the token is valid + belongs to them,
-    // treat it as success — consume the token to prevent re-use but don't error.
     if (user.emailVerified) {
-      // Consume token so it can't be replayed.
       await emailVerificationRepo.markVerificationTokenUsed({ tokenHash });
-      // No audit written for no-op re-verification.
       return;
     }
 
-    // ── 5. Atomic: consume token + flip email_verified ─────────────────────
     await emailVerificationRepo.markVerificationTokenUsed({ tokenHash });
     await emailVerificationRepo.markUserEmailVerified({ userId: params.sessionUserId });
 
-    // Invalidate any other active tokens for this user (cleanup).
     await emailVerificationRepo.invalidateActiveVerificationTokensForUser({
       userId: params.sessionUserId,
     });
 
-    // ── 6. Audit (inside tx) ──────────────────────────────────────────────
     const fullAudit = baseAudit.withContext({
       tenantId: params.tenantId,
       userId: params.sessionUserId,
@@ -146,11 +125,6 @@ export async function executeVerifyEmailFlow(
     await auditEmailVerified(fullAudit, { userId: params.sessionUserId });
   });
 
-  // ── 7. Upgrade the existing session in Redis (Stage 3) ──────────────────
-  // IMPORTANT:
-  // - This must happen AFTER the DB transaction commits.
-  // - If we fail to upgrade the session, the user would be verified in DB
-  //   but still blocked by requireEmailVerified on admin endpoints.
   try {
     await deps.sessionStore.updateSession(params.sessionId, { emailVerified: true });
   } catch (err) {
@@ -161,7 +135,6 @@ export async function executeVerifyEmailFlow(
       userId: params.sessionUserId,
       error: (err as Error).message,
     });
-    throw AppError.internal('Failed to upgrade session after verification');
   }
 
   deps.logger.info({

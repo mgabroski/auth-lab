@@ -31,7 +31,7 @@ export async function verifyMfaFlow(params: {
     auditRepo: AuditRepo;
     sessionStore: SessionStore;
     rateLimiter: RateLimiter;
-    tokenHasher: TokenHasher; // Stage 4
+    tokenHasher: TokenHasher;
     cache: Cache;
     logger: Logger;
     totpService: TotpService;
@@ -55,7 +55,6 @@ export async function verifyMfaFlow(params: {
     throw MfaErrors.alreadyVerified();
   }
 
-  // Stage 4: hash stable identifiers in Redis key material.
   const userKey = deps.tokenHasher.hash(input.userId);
 
   await deps.rateLimiter.hitOrThrow({
@@ -86,36 +85,22 @@ export async function verifyMfaFlow(params: {
     throw MfaErrors.invalidCode();
   }
 
-  // Replay protection: the same TOTP code must not be accepted twice.
-  // Fail-open on cache errors: a Redis blip must not lock out all MFA users.
   const usedCodeKey = `totp:used:${userKey}:${input.code}`;
 
-  let alreadyUsed: string | null = null;
+  let claimed = true;
   try {
-    alreadyUsed = await deps.cache.get(usedCodeKey);
-  } catch (err) {
-    deps.logger.warn('mfa.replay_cache_read_error', {
-      flow: 'mfa.verify',
-      userId: input.userId,
-      error: (err as Error).message,
-    });
-  }
-
-  if (alreadyUsed) {
-    await auditMfaVerifyFailed(audit, { userId: input.userId });
-    throw MfaErrors.invalidCode();
-  }
-
-  // Mark as used for 2 full TOTP periods (120s covers ±1 window + realistic clock drift).
-  // Fail-open on cache WRITE error — the rate limiter bounds worst-case replay exposure.
-  try {
-    await deps.cache.set(usedCodeKey, '1', { ttlSeconds: 120 });
+    claimed = await deps.cache.setIfAbsent(usedCodeKey, '1', { ttlSeconds: 120 });
   } catch (err) {
     deps.logger.warn('mfa.replay_cache_write_error', {
       flow: 'mfa.verify',
       userId: input.userId,
       error: (err as Error).message,
     });
+  }
+
+  if (!claimed) {
+    await auditMfaVerifyFailed(audit, { userId: input.userId });
+    throw MfaErrors.invalidCode();
   }
 
   const newSessionId = await deps.sessionStore.rotateSession(input.sessionId, {

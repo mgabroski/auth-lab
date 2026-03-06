@@ -2,14 +2,15 @@
  * backend/src/modules/invites/invite.service.ts
  *
  * WHY:
- * - Orchestrates invite acceptance end-to-end (Brick 6).
- * - Only place allowed to start transactions.
+ * - Accepts an invite token for the current tenant.
+ * - Writes acceptance + audit in one transaction.
  *
  * RULES:
- * - No raw DB access outside queries/DAL.
- * - Enforce tenant safety here.
- * - Never store/log raw tokens (hash immediately).
- * - Audit meaningful actions via AuditWriter (context built progressively).
+ * - Tenant is resolved from request subdomain and REQUIRED.
+ * - Invite lookup is tenant-scoped.
+ * - Token is hashed before lookup.
+ * - No queue side-effects here.
+ * - Keep AppError usage out of DAL/queries/policies.
  */
 
 import type { DbExecutor } from '../../shared/db/db';
@@ -19,12 +20,15 @@ import type { AuditRepo } from '../../shared/audit/audit.repo';
 import { AuditWriter } from '../../shared/audit/audit.writer';
 
 import {
+  getTenantByKey,
+  assertTenantKeyPresent,
   assertTenantExists,
   assertTenantIsActive,
-  assertTenantKeyPresent,
-} from '../tenants/policies/tenant-safety.policy';
-import { getTenantByKey } from '../tenants/queries/tenant.queries';
+} from '../tenants';
+import { getUserByEmail } from '../users';
+import { getMfaSecretForUser } from '../auth/queries/mfa.queries';
 import { getInviteByTenantAndTokenHash } from './queries/invite.queries';
+
 import {
   assertInviteBelongsToTenant,
   assertInviteExists,
@@ -46,10 +50,6 @@ export type AcceptInviteParams = {
 
 export type AcceptInviteResult = {
   status: 'ACCEPTED';
-  // TODO(brick-7): Derive nextAction from user state:
-  //   - User exists + has password → 'SIGN_IN'
-  //   - User exists + admin without MFA → 'MFA_SETUP_REQUIRED'
-  //   - User is new → 'SET_PASSWORD'
   nextAction: 'SET_PASSWORD' | 'SIGN_IN' | 'MFA_SETUP_REQUIRED';
 };
 
@@ -76,42 +76,34 @@ export class InviteService {
     });
 
     return this.deps.db.transaction().execute(async (trx) => {
-      // Bind repos to transaction
       const inviteRepo = this.deps.inviteRepo.withDb(trx);
 
-      // Audit writer: start with request-level context, enrich as we resolve
       const audit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
         requestId: params.requestId,
         ip: params.ip,
         userAgent: params.userAgent,
       });
 
-      // 1) Tenant boundary (LOCKED)
       assertTenantKeyPresent(params.tenantKey);
 
       const tenant = await getTenantByKey(trx, params.tenantKey);
       assertTenantExists(tenant, params.tenantKey);
       assertTenantIsActive(tenant);
 
-      // Enrich audit context with resolved tenant
       const tenantAudit = audit.withContext({ tenantId: tenant.id });
 
-      // 2) Hash token immediately (never store raw token)
       const tokenHash = this.deps.tokenHasher.hash(params.token);
 
-      // 3) Load invite (tenant-scoped)
       const invite = await getInviteByTenantAndTokenHash(trx, {
         tenantId: tenant.id,
         tokenHash,
       });
 
-      // 4) Enforce invite rules (pure policies)
       assertInviteExists(invite);
       assertInviteBelongsToTenant(invite, tenant.id);
       assertInviteIsPending(invite);
       assertInviteNotExpired(invite, now);
 
-      // 5) Write: mark accepted (idempotency guard)
       const updated = await inviteRepo.markAccepted({
         inviteId: invite.id,
         usedAt: now,
@@ -121,7 +113,20 @@ export class InviteService {
         throw InviteErrors.inviteNotPending({ inviteId: invite.id });
       }
 
-      // 6) Audit (DB) — meaningful action
+      const existingUser = await getUserByEmail(trx, invite.email);
+
+      let nextAction: AcceptInviteResult['nextAction'] = 'SET_PASSWORD';
+      if (existingUser) {
+        nextAction = 'SIGN_IN';
+
+        if (invite.role === 'ADMIN') {
+          const mfaSecret = await getMfaSecretForUser(trx, existingUser.id);
+          if (!mfaSecret?.isVerified) {
+            nextAction = 'MFA_SETUP_REQUIRED';
+          }
+        }
+      }
+
       await auditInviteAccepted(tenantAudit, invite);
 
       this.deps.logger.info({
@@ -131,11 +136,12 @@ export class InviteService {
         tenantId: tenant.id,
         inviteId: invite.id,
         role: invite.role,
+        nextAction,
       });
 
       return {
         status: 'ACCEPTED',
-        nextAction: 'SET_PASSWORD',
+        nextAction,
       };
     });
   }
