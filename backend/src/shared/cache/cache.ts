@@ -10,6 +10,7 @@
  * - cache.set(key, value, { ttlSeconds })
  * - cache.set(key, value, { keepTtl: true })  // do NOT refresh TTL
  * - cache.setIfAbsent(key, value, { ttlSeconds }) -> atomic claim primitive
+ * - cache.delMany(keys) -> batched deletion for large invalidation flows
  * - cache.incr(key, { ttlSeconds }) -> counter with expiration
  * - cache.sadd / smembers / srem -> Redis SET semantics for user-session index
  */
@@ -42,6 +43,12 @@ export interface Cache {
   setIfAbsent(key: string, value: string, opts?: { ttlSeconds?: number }): Promise<boolean>;
 
   del(key: string): Promise<void>;
+
+  /**
+   * Delete multiple keys in one operation when the backend supports it.
+   * No-op when the array is empty.
+   */
+  delMany(keys: string[]): Promise<void>;
 
   /**
    * Atomically increment a counter and (optionally) ensure it expires.

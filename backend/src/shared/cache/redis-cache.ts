@@ -82,6 +82,11 @@ export class RedisCache implements Cache {
     await this.client.del(key);
   }
 
+  async delMany(keys: string[]): Promise<void> {
+    if (keys.length === 0) return;
+    await this.client.del(keys);
+  }
+
   async incr(key: string, opts?: { ttlSeconds?: number }): Promise<number> {
     if (!opts?.ttlSeconds) {
       return this.client.incr(key);

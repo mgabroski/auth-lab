@@ -9,8 +9,8 @@
  * - This is DAL only: no business rules, no AppError, no HTTP.
  * - Must work with DbExecutor OR DbTx (same signature via DbExecutor type).
  * - enqueueWithinTx MUST NOT open its own transaction.
- * - claimBatch MUST use the canonical CTE + SELECT FOR UPDATE SKIP LOCKED.
- * - Status MUST remain 'pending' during claim; row lock is the exclusivity mechanism.
+ * - claimBatch atomically stamps locked_at / locked_by so send can happen outside tx.
+ * - Finalization methods MUST be guarded by worker ownership (locked_by = workerId).
  * - No `any` / unsafe access. Validate row shapes at the boundary.
  */
 
@@ -22,8 +22,8 @@ import { z } from 'zod';
 export type OutboxMessageType = 'password.reset' | 'email.verify' | 'invite.created';
 
 export type EncryptedOutboxPayload = {
-  tokenEnc: string; // e.g. "v1:base64..."
-  toEmailEnc: string; // e.g. "v1:base64..."
+  tokenEnc: string;
+  toEmailEnc: string;
   tenantKey?: string;
   userId?: string;
   inviteId?: string;
@@ -122,20 +122,31 @@ export class OutboxRepo {
   }
 
   /**
-   * Claims a batch of *pending* rows for this worker.
+   * Claims a batch of pending rows for this worker by stamping a claim lease.
    *
-   * IMPORTANT:
-   * - Call this from inside a transaction if you need the row locks to be held
-   *   while you send + markSent/scheduleRetry/markDead.
-   * - If called outside a transaction, the claim will still work, but locks will
-   *   be released immediately after the statement completes.
+   * Rows are claimable when:
+   * - status = pending
+   * - available_at <= now()
+   * - lease is empty OR stale
+   *
+   * This allows send to happen outside a DB transaction while still preventing
+   * concurrent workers from finalizing the same row.
    */
-  async claimBatch(workerId: string, batchSize: number): Promise<OutboxMessage[]> {
+  async claimBatch(
+    workerId: string,
+    batchSize: number,
+    claimLeaseSeconds = 900,
+  ): Promise<OutboxMessage[]> {
     const res = await sql`
       WITH to_claim AS (
         SELECT id
         FROM outbox_messages
-        WHERE status = 'pending' AND available_at <= now()
+        WHERE status = 'pending'
+          AND available_at <= now()
+          AND (
+            locked_at IS NULL
+            OR locked_at < now() - (${claimLeaseSeconds} * interval '1 second')
+          )
         ORDER BY available_at ASC
         LIMIT ${batchSize}
         FOR UPDATE SKIP LOCKED
@@ -152,42 +163,71 @@ export class OutboxRepo {
     return rows.map(mapRow);
   }
 
-  async markSent(id: string): Promise<void> {
-    await this.db
+  /**
+   * Marks a message as sent only if this worker still owns the claim.
+   * Returns false when ownership was lost (e.g. stale-lease reclaim).
+   */
+  async markSentByWorker(id: string, workerId: string): Promise<boolean> {
+    const row = await this.db
       .updateTable('outbox_messages')
       .set({
         status: 'sent',
         last_error: null,
+        locked_at: null,
+        locked_by: null,
       })
       .where('id', '=', id)
-      .execute();
+      .where('locked_by', '=', workerId)
+      .returning(['id'])
+      .executeTakeFirst();
+
+    return Boolean(row);
   }
 
-  async scheduleRetry(
+  /**
+   * Schedules a retry only if this worker still owns the claim.
+   */
+  async scheduleRetryByWorker(
     id: string,
+    workerId: string,
     attempts: number,
     availableAt: Date,
     lastError: string,
-  ): Promise<void> {
-    await this.db
+  ): Promise<boolean> {
+    const row = await this.db
       .updateTable('outbox_messages')
       .set({
         attempts,
         available_at: availableAt,
         last_error: lastError,
+        locked_at: null,
+        locked_by: null,
       })
       .where('id', '=', id)
-      .execute();
+      .where('locked_by', '=', workerId)
+      .returning(['id'])
+      .executeTakeFirst();
+
+    return Boolean(row);
   }
 
-  async markDead(id: string, lastError: string): Promise<void> {
-    await this.db
+  /**
+   * Dead-letters a message only if this worker still owns the claim.
+   */
+  async markDeadByWorker(id: string, workerId: string, lastError: string): Promise<boolean> {
+    const row = await this.db
       .updateTable('outbox_messages')
       .set({
         status: 'dead',
         last_error: lastError,
+        locked_at: null,
+        locked_by: null,
       })
       .where('id', '=', id)
-      .execute();
+      .where('locked_by', '=', workerId)
+      .returning(['id'])
+      .executeTakeFirst();
+
+    return Boolean(row);
   }
 }

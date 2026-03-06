@@ -80,6 +80,16 @@ export class InMemCache implements Cache {
     return Promise.resolve();
   }
 
+  delMany(keys: string[]): Promise<void> {
+    for (const key of keys) {
+      this.store.delete(key);
+      this.sets.delete(key);
+      this.setExpiry.delete(key);
+    }
+
+    return Promise.resolve();
+  }
+
   incr(key: string, opts?: { ttlSeconds?: number }): Promise<number> {
     const entry = this.getEntry(key);
     const next = entry ? Number(entry.value) + 1 : 1;

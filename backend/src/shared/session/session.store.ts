@@ -10,7 +10,8 @@
  * - On create(): SADD session:user:{userId} {sessionId} with TTL refresh.
  *   This maintains a Redis SET of all active session IDs for the user.
  * - On destroy(): SREM removes the session ID from the user index, then DELs the session.
- * - On destroyAllForUser(): SMEMBERS reads all session IDs → DEL each → DEL the index.
+ * - On destroyAllForUser(): SMEMBERS reads all session IDs → DEL all session keys in one batch
+ *   → DEL the index key. This keeps large fan-out invalidation cheaper than N individual DEL calls.
  *
  * WHY REDIS SET, NOT JSON ARRAY:
  * - SADD is idempotent → no duplicates possible.
@@ -143,12 +144,17 @@ export class SessionStore {
 
   /**
    * Destroys ALL sessions for a user.
+   *
+   * Uses batched key deletion via Cache.delMany() so larger session fan-out does
+   * not turn into one cache round-trip per session key.
    */
   async destroyAllForUser(userId: string): Promise<void> {
     const indexKey = this.userIndexKey(userId);
     const sessionIds = await this.cache.smembers(indexKey);
 
-    await Promise.all(sessionIds.map((id) => this.cache.del(this.key(id))));
-    await this.cache.del(indexKey);
+    const keysToDelete = sessionIds.map((id) => this.key(id));
+    keysToDelete.push(indexKey);
+
+    await this.cache.delMany(keysToDelete);
   }
 }
