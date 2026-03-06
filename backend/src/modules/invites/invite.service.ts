@@ -18,6 +18,7 @@ import type { TokenHasher } from '../../shared/security/token-hasher';
 import type { Logger } from '../../shared/logger/logger';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import { AuditWriter } from '../../shared/audit/audit.writer';
+import type { RateLimiter } from '../../shared/security/rate-limit';
 
 import {
   getTenantByKey,
@@ -37,9 +38,9 @@ import {
 } from './policies/invite.policy';
 import { InviteErrors } from './invite.errors';
 import { auditInviteAccepted } from './invite.audit';
+import { INVITE_ACCEPT_RATE_LIMITS } from './invite.constants';
 
 import type { InviteRepo } from './dal/invite.repo';
-import { RateLimiter } from '../../shared/security/rate-limit';
 
 export type AcceptInviteParams = {
   tenantKey: string | null;
@@ -68,6 +69,12 @@ export class InviteService {
 
   async acceptInvite(params: AcceptInviteParams): Promise<AcceptInviteResult> {
     const now = new Date();
+    const ipKey = this.deps.tokenHasher.hash(params.ip);
+
+    await this.deps.rateLimiter.hitOrThrow({
+      key: `invite-accept:ip:${ipKey}`,
+      ...INVITE_ACCEPT_RATE_LIMITS.acceptInvite.perIp,
+    });
 
     this.deps.logger.info({
       msg: 'invites.accept.start',
@@ -129,7 +136,11 @@ export class InviteService {
         }
       }
 
-      await auditInviteAccepted(tenantAudit, invite);
+      const finalAudit = existingUser
+        ? tenantAudit.withContext({ userId: existingUser.id })
+        : tenantAudit;
+
+      await auditInviteAccepted(finalAudit, invite);
 
       this.deps.logger.info({
         msg: 'invites.accept.success',
