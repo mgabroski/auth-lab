@@ -27,7 +27,6 @@ import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { SessionStore } from '../../../../shared/session/session.store';
-import type { Queue } from '../../../../shared/messaging/queue';
 
 import type { UserRepo } from '../../../users/dal/user.repo';
 import type { MembershipRepo } from '../../../memberships/dal/membership.repo';
@@ -68,7 +67,6 @@ export async function executeRegisterFlow(
     rateLimiter: RateLimiter;
     auditRepo: AuditRepo;
     sessionStore: SessionStore;
-    queue: Queue;
     userRepo: UserRepo;
     membershipRepo: MembershipRepo;
     authRepo: AuthRepo;
@@ -129,8 +127,6 @@ export async function executeRegisterFlow(
       tenantId: tenant.id,
       role: invite.role,
       now,
-      // Invite-based registration: emailVerifiedForNewUser omitted.
-      // DB default (true) applies — no email verification needed for invite flow.
     });
 
     await ensurePasswordIdentity({
@@ -152,12 +148,8 @@ export async function executeRegisterFlow(
     return { ...provisionResult, tenant };
   });
 
-  // Newly registered via invite never has MFA configured yet.
   const hasVerifiedMfaSecret = false;
 
-  // Decision 3 (Brick 11): for invite-based registration, user.emailVerified
-  // is always true (DB default). Passing it explicitly keeps the flow
-  // consistent with the signup flow which may pass false.
   const nextAction = decideRegisterNextAction({
     role: membership.role,
     memberMfaRequired: tenant.memberMfaRequired,

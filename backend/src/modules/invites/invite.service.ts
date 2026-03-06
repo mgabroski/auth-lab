@@ -39,6 +39,7 @@ import { InviteErrors } from './invite.errors';
 import { auditInviteAccepted } from './invite.audit';
 
 import type { InviteRepo } from './dal/invite.repo';
+import { RateLimiter } from '../../shared/security/rate-limit';
 
 export type AcceptInviteParams = {
   tenantKey: string | null;
@@ -58,6 +59,7 @@ export class InviteService {
     private readonly deps: {
       db: DbExecutor;
       tokenHasher: TokenHasher;
+      rateLimiter: RateLimiter;
       logger: Logger;
       inviteRepo: InviteRepo;
       auditRepo: AuditRepo;

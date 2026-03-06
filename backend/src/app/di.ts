@@ -10,14 +10,6 @@
  * - Worker start/stop is done in build-app (lifecycle), not in DI.
  * - EmailAdapter must be idempotent; NoopEmailAdapter is used in dev/test now.
  * - Avoid `any` and unsafe casts; validate + narrow config at boundaries.
- *
- * X8 UPDATE:
- * - Removed `queue` from createInviteModule() call — AdminInviteService no longer
- *   accepts Queue after the dead-code removal in admin-invite.service.ts.
- * - InMemQueue + Queue remain wired for createAuthModule() because auth.service.ts
- *   and execute-register-flow.ts still declare the Queue dep. Those usages are
- *   also dead (queue.enqueue is never called) but are out of scope for this commit.
- *   A follow-up can remove them from the auth module path once confirmed safe.
  */
 
 import type { AppConfig } from './config';
@@ -39,16 +31,11 @@ import type { Logger } from '../shared/logger/logger';
 import { AuditRepo } from '../shared/audit/audit.repo';
 import { SessionStore } from '../shared/session/session.store';
 
-import { InMemQueue } from '../shared/messaging/inmem-queue';
-import type { Queue } from '../shared/messaging/queue';
-
-// Brick 9 (MFA)
 import { TotpService } from '../shared/security/totp';
 import { EncryptionService } from '../shared/security/encryption';
 import { HmacSha256KeyedHasher } from '../shared/security/keyed-hasher';
 import type { KeyedHasher } from '../shared/security/keyed-hasher';
 
-// Outbox (PR2)
 import { OutboxRepo } from '../shared/outbox/outbox.repo';
 import {
   OutboxEncryption,
@@ -99,15 +86,10 @@ export type AppDeps = {
 
   ssoStateEncryptionService: EncryptionService;
 
-  // messaging (legacy — still used by auth module path; see X8 note above)
-  queue: Queue;
-
-  // outbox
   outboxRepo: OutboxRepo;
   outboxEncryption: OutboxEncryption;
   emailAdapter: EmailAdapter;
 
-  // modules
   tenants: TenantModule;
   invites: InviteModule;
   users: UserModule;
@@ -115,7 +97,6 @@ export type AppDeps = {
   auth: AuthModule;
   audit: AuditModule;
 
-  // lifecycle
   close: () => Promise<void>;
 };
 
@@ -160,7 +141,6 @@ export async function buildDeps(
 ): Promise<AppDeps> {
   const db = createDb(config.databaseUrl);
 
-  // Redis is mandatory (dev + prod)
   const redis = await RedisCache.connect(config.redisUrl);
 
   const tokenHasher: TokenHasher = new Sha256TokenHasher();
@@ -173,16 +153,13 @@ export async function buildDeps(
     disabled: config.nodeEnv === 'test',
   });
 
-  // shared repos / stores
   const auditRepo = new AuditRepo(db);
   const sessionStore = new SessionStore(redis, config.sessionTtlSeconds, tokenHasher);
 
-  // Brick 9 (MFA)
   const totpService = new TotpService(config.mfa.issuer);
   const encryptionService = new EncryptionService(config.mfa.encryptionKeyBase64);
   const mfaKeyedHasher: KeyedHasher = new HmacSha256KeyedHasher(config.mfa.hmacKeyBase64);
 
-  // Brick 10 (SSO)
   const ssoStateEncryptionService = new EncryptionService(config.sso.stateEncryptionKeyBase64);
 
   const ssoProviderRegistry =
@@ -193,21 +170,12 @@ export async function buildDeps(
         new MicrosoftSsoAdapter(config.sso.microsoftClientId, config.sso.microsoftClientSecret),
       );
 
-  // Legacy queue — still referenced by auth module (execute-register-flow.ts).
-  // Not used by invite module after X8.
-  const queue: Queue = new InMemQueue();
-
-  // Outbox
   const outboxRepo = new OutboxRepo(db);
   const outboxEncryption = new OutboxEncryption(buildOutboxEncryptionConfig(config));
-
-  // Dev/test adapter by default (provider adapter swaps later via DI only)
   const emailAdapter: EmailAdapter = new NoopEmailAdapter({ logger, tokenHasher });
 
-  // modules
   const tenants = createTenantModule({ db });
 
-  // X8: queue removed from invite module — AdminInviteService no longer takes Queue.
   const invites = createInviteModule({
     db,
     tokenHasher,
@@ -231,7 +199,6 @@ export async function buildDeps(
     rateLimiter,
     auditRepo,
     sessionStore,
-    queue,
     outboxRepo,
     outboxEncryption,
     userRepo: users.userRepo,
@@ -263,8 +230,6 @@ export async function buildDeps(
     mfaKeyedHasher,
 
     ssoStateEncryptionService,
-
-    queue,
 
     outboxRepo,
     outboxEncryption,

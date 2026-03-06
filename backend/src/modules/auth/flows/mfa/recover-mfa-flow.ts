@@ -4,8 +4,13 @@
  * WHY:
  * - Deep module for MFA recovery code verification (Brick 9c).
  * - Preserves rate limit + atomic recovery code usage + audit behavior exactly.
+ *
+ * RULES:
+ * - Recovery code consumption and success audit must commit together.
+ * - Session rotation stays outside the DB transaction (Redis concern).
  */
 
+import type { DbExecutor } from '../../../../shared/db/db';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import type { SessionStore } from '../../../../shared/session/session.store';
@@ -23,10 +28,11 @@ import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 export async function recoverMfaFlow(params: {
   deps: {
+    db: DbExecutor;
     auditRepo: AuditRepo;
     sessionStore: SessionStore;
     rateLimiter: RateLimiter;
-    tokenHasher: TokenHasher; // Stage 4
+    tokenHasher: TokenHasher;
     mfaRepo: MfaRepo;
     mfaKeyedHasher: KeyedHasher;
   };
@@ -48,7 +54,6 @@ export async function recoverMfaFlow(params: {
     throw MfaErrors.alreadyVerified();
   }
 
-  // Stage 4: hash stable identifiers in Redis key material.
   const userKey = deps.tokenHasher.hash(input.userId);
 
   await deps.rateLimiter.hitOrThrow({
@@ -56,33 +61,37 @@ export async function recoverMfaFlow(params: {
     ...AUTH_RATE_LIMITS.mfaRecover.perUser,
   });
 
-  const audit = new AuditWriter(deps.auditRepo, {
-    requestId: input.requestId,
-    ip: input.ip,
-    userAgent: input.userAgent,
-  }).withContext({
-    tenantId: input.tenantId,
-    userId: input.userId,
-    membershipId: input.membershipId,
-  });
-
   const codeHash = deps.mfaKeyedHasher.hash(input.recoveryCode);
 
-  const used = await deps.mfaRepo.useRecoveryCodeAtomic({
-    userId: input.userId,
-    codeHash,
-  });
+  await deps.db.transaction().execute(async (trx) => {
+    const audit = new AuditWriter(deps.auditRepo.withDb(trx), {
+      requestId: input.requestId,
+      ip: input.ip,
+      userAgent: input.userAgent,
+    }).withContext({
+      tenantId: input.tenantId,
+      userId: input.userId,
+      membershipId: input.membershipId,
+    });
 
-  if (!used) {
-    throw MfaErrors.invalidRecoveryCode();
-  }
+    const used = await deps.mfaRepo.withDb(trx).useRecoveryCodeAtomic({
+      userId: input.userId,
+      codeHash,
+    });
+
+    if (!used) {
+      throw MfaErrors.invalidRecoveryCode();
+    }
+
+    await auditMfaRecoveryUsed(audit, { userId: input.userId });
+  });
 
   const newSessionId = await deps.sessionStore.rotateSession(input.sessionId, {
     mfaVerified: true,
   });
-  if (!newSessionId) throw AppError.unauthorized('Session expired. Please sign in again.');
-
-  await auditMfaRecoveryUsed(audit, { userId: input.userId });
+  if (!newSessionId) {
+    throw AppError.unauthorized('Session expired. Please sign in again.');
+  }
 
   return { status: 'AUTHENTICATED', nextAction: 'NONE', sessionId: newSessionId };
 }

@@ -50,8 +50,6 @@ import { getMembershipByTenantAndUser } from '../../memberships';
 import { AdminInviteErrors } from './admin-invite.errors';
 import { generateSecureToken } from '../../../shared/security/token';
 
-// ── Param types ──────────────────────────────────────────────────────────────
-
 export type CreateInviteParams = {
   tenantId: string;
   userId: string;
@@ -100,23 +98,19 @@ export class AdminInviteService {
       logger: Logger;
       inviteRepo: InviteRepo;
       auditRepo: AuditRepo;
-      // X8: Queue removed — email delivery is handled by the Outbox (durable).
       outboxRepo: OutboxRepo;
       outboxEncryption: OutboxEncryption;
     },
   ) {}
 
   async createInvite(params: CreateInviteParams): Promise<InviteSummary> {
-    // ── Step 1: Rate limit — before any DB work ───────────────────────────────
     await this.deps.rateLimiter.hitOrThrow({
       key: `admin-invite-create:tenant:${params.tenantId}:user:${params.userId}`,
       ...ADMIN_INVITE_RATE_LIMITS.createInvite.perAdminPerTenant,
     });
 
-    // ── Step 2: Normalize email ───────────────────────────────────────────────
     const email = params.email.toLowerCase();
 
-    // ── Steps 3–11: inside transaction ───────────────────────────────────────
     const { summary } = await this.deps.db.transaction().execute(async (trx) => {
       const inviteRepo = this.deps.inviteRepo.withDb(trx);
 
@@ -126,19 +120,16 @@ export class AdminInviteService {
         userAgent: params.userAgent,
       }).withContext({ tenantId: params.tenantId, userId: params.userId });
 
-      // Step 3: Load tenant, assert active.
       const tenant = await getTenantById(trx, params.tenantId);
       if (!tenant) {
         throw AppError.notFound('Tenant not found.');
       }
       assertTenantIsActive(tenant);
 
-      // Step 4: Email domain check
       if (!isEmailDomainAllowed(tenant, email)) {
         throw AdminInviteErrors.emailDomainNotPermitted();
       }
 
-      // Step 5: Duplicate pending invite check
       const existingPending = await getPendingInviteByTenantAndEmail(trx, {
         tenantId: params.tenantId,
         email,
@@ -147,7 +138,6 @@ export class AdminInviteService {
         throw AdminInviteErrors.inviteAlreadyExists();
       }
 
-      // Step 6: Membership check (only if user already exists in the system)
       const existingUser = await getUserByEmail(trx, email);
       if (existingUser) {
         const membership = await getMembershipByTenantAndUser(trx, {
@@ -160,12 +150,10 @@ export class AdminInviteService {
         }
       }
 
-      // Step 7: Generate token
       const rawToken = generateSecureToken();
       const tokenHash = this.deps.tokenHasher.hash(rawToken);
       const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-      // Step 8: Insert invite row
       const inserted = await inviteRepo.insertInvite({
         tenantId: params.tenantId,
         email,
@@ -175,9 +163,6 @@ export class AdminInviteService {
         createdByUserId: params.userId,
       });
 
-      // Step 9 (Decision C — locked): No membership pre-creation.
-
-      // Step 10: Audit inside transaction
       await auditInviteCreated(audit, {
         id: inserted.id,
         email,
@@ -185,7 +170,6 @@ export class AdminInviteService {
         createdByUserId: params.userId,
       });
 
-      // Step 11: Outbox enqueue INSIDE transaction (durable)
       const payload = this.deps.outboxEncryption.encryptPayload({
         token: rawToken,
         toEmail: email,
@@ -227,10 +211,6 @@ export class AdminInviteService {
     return summary;
   }
 
-  /**
-   * Returns a paginated list of invites for the caller's tenant.
-   * No transaction needed — read-only operation.
-   */
   async listInvites(
     params: ListInvitesParams,
   ): Promise<{ invites: InviteSummary[]; total: number }> {
@@ -252,24 +232,6 @@ export class AdminInviteService {
     });
   }
 
-  /**
-   * Bulk-cancels ALL pending invites for (tenantId, email), then inserts a new
-   * invite row and re-sends the invite email.
-   *
-   * Returns the new InviteSummary (new ID, new token, same email/role/tenant).
-   *
-   * WHY bulk-cancel:
-   * - The spec requires "one active invite at a time" per (tenant, email).
-   * - Drift can cause multiple PENDING rows to exist (e.g. from a previous resend
-   *   that partially failed). Bulk-cancel collapses all of them atomically.
-   * - The old approach (cancel only by inviteId) left any other PENDING invites
-   *   for the same email alive — creating extra valid entry points.
-   *
-   * SECURITY:
-   * - Tenant-scoped lookup prevents cross-tenant resend.
-   * - cancelPendingInvitesByEmail uses WHERE status='PENDING' as a TOCTOU guard.
-   * - Outbox enqueue occurs within the same transaction as the new invite insert.
-   */
   async resendInvite(params: ResendInviteParams): Promise<InviteSummary> {
     await this.deps.rateLimiter.hitOrThrow({
       key: `admin-invite-resend:tenant:${params.tenantId}:user:${params.userId}`,
@@ -368,14 +330,12 @@ export class AdminInviteService {
     return newSummary;
   }
 
-  /**
-   * Cancels a PENDING invite by ID.
-   *
-   * SECURITY:
-   * - Tenant-scoped lookup prevents cross-tenant cancel.
-   * - cancelInviteById uses WHERE status='PENDING' as a TOCTOU guard.
-   */
   async cancelInvite(params: CancelInviteParams): Promise<void> {
+    await this.deps.rateLimiter.hitOrThrow({
+      key: `admin-invite-cancel:tenant:${params.tenantId}:user:${params.userId}`,
+      ...ADMIN_INVITE_RATE_LIMITS.cancelInvite.perAdminPerTenant,
+    });
+
     await this.deps.db.transaction().execute(async (trx) => {
       const inviteRepo = this.deps.inviteRepo.withDb(trx);
 

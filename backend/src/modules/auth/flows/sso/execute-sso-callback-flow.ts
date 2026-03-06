@@ -20,6 +20,7 @@ import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { SessionStore } from '../../../../shared/session/session.store';
 import type { EncryptionService } from '../../../../shared/security/encryption';
 import type { SsoProviderRegistry } from '../../sso/sso-provider-registry';
+import { AppError } from '../../../../shared/http/errors';
 
 import { resolveTenantForAuth, Tenant } from '../../../tenants';
 import { isEmailDomainAllowed } from '../../../tenants';
@@ -34,12 +35,14 @@ import type { AuthRepo } from '../../dal/auth.repo';
 import { AuthErrors } from '../../auth.errors';
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
-import { AppError } from '../../../../shared/http/errors';
-
 import { decryptAndValidateSsoState } from '../../helpers/sso-state-validate';
 import type { SsoProvider } from '../../helpers/sso-state';
 import { findSsoIdentityByUserAndProvider } from '../../queries/auth.queries';
-import { auditSsoLoginFailed, auditSsoLoginSuccess } from '../../auth.audit';
+import {
+  auditMembershipActivated,
+  auditSsoLoginFailed,
+  auditSsoLoginSuccess,
+} from '../../auth.audit';
 
 import { hasVerifiedMfaSecret } from '../../helpers/has-verified-mfa-secret';
 import { isMfaRequiredForLogin } from '../../policies/mfa-required.policy';
@@ -131,8 +134,6 @@ export async function executeSsoCallbackFlow(
 
   let txResult: TxResult;
 
-  // Best-effort context for failure audits (written OUTSIDE the tx).
-  // This is progressively enriched inside the tx as we learn tenant/user/membership.
   const failureAuditCtx: {
     tenantId: string | null;
     userId: string | null;
@@ -151,11 +152,9 @@ export async function executeSsoCallbackFlow(
         userAgent: params.userAgent,
       });
 
-      // A) Resolve tenant
       const tenant = await resolveTenantForAuth(trx, params.tenantKey);
       failureAuditCtx.tenantId = tenant.id;
 
-      // B) Provider allow-list
       if (!tenant.allowedSso.includes(params.provider)) {
         throw new SsoDeniedError({
           appError: AuthErrors.ssoProviderNotAllowed(),
@@ -166,7 +165,6 @@ export async function executeSsoCallbackFlow(
         });
       }
 
-      // C) Validate encrypted state binding
       const statePayload = decryptAndValidateSsoState({
         encryptionService: deps.sso.stateEncryptionService,
         encryptedState: params.state,
@@ -175,7 +173,6 @@ export async function executeSsoCallbackFlow(
         now: new Date(),
       });
 
-      // D) Exchange code -> tokens
       const redirectUri = `${deps.sso.redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/${params.provider}/callback`;
 
       const adapter = deps.sso.providerRegistry.getOrThrow(params.provider);
@@ -185,14 +182,12 @@ export async function executeSsoCallbackFlow(
         redirectUri,
       });
 
-      // E+F) Validate ID token claims + extract identity
       const identity = await adapter.validateAndExtractIdentity({
         idToken: tokens.idToken,
         expectedNonce: statePayload.nonce,
         now: new Date(),
       });
 
-      // Domain allow-list (after email known)
       if (!isEmailDomainAllowed(tenant, identity.email)) {
         throw new SsoDeniedError({
           appError: AuthErrors.noAccess(),
@@ -205,7 +200,6 @@ export async function executeSsoCallbackFlow(
 
       const emailKey = deps.tokenHasher.hash(identity.email);
 
-      // G) User (find or create) — shared logic via users module use case
       const { user } = await findOrCreateUser({
         trx,
         userRepo: deps.userRepo.withDb(trx),
@@ -216,7 +210,6 @@ export async function executeSsoCallbackFlow(
 
       failureAuditCtx.userId = user.id;
 
-      // H) Membership enforcement (NO CREATE)
       const membership = await getMembershipByTenantAndUser(trx, {
         tenantId: tenant.id,
         userId: user.id,
@@ -227,7 +220,7 @@ export async function executeSsoCallbackFlow(
           appError: AuthErrors.noAccess(),
           audit: {
             ctx: toFailureAuditContext({ tenantId: tenant.id, userId: user.id }),
-            payload: { provider: params.provider, reason: 'no_membership', emailKey },
+            payload: { provider: params.provider, reason: 'membership_missing', emailKey },
           },
         });
       }
@@ -236,15 +229,42 @@ export async function executeSsoCallbackFlow(
 
       if (membership.status === 'SUSPENDED') {
         throw new SsoDeniedError({
-          appError: AuthErrors.accountSuspended(),
+          appError: AuthErrors.noAccess(),
           audit: {
             ctx: toFailureAuditContext({
               tenantId: tenant.id,
               userId: user.id,
               membershipId: membership.id,
             }),
-            payload: { provider: params.provider, reason: 'suspended', emailKey },
+            payload: { provider: params.provider, reason: 'membership_suspended', emailKey },
           },
+        });
+      }
+
+      const existingIdentity = await findSsoIdentityByUserAndProvider(trx, {
+        userId: user.id,
+        provider: params.provider,
+      });
+
+      if (existingIdentity) {
+        if (existingIdentity.providerSubject !== identity.sub) {
+          throw new SsoDeniedError({
+            appError: AppError.forbidden('SSO identity mismatch.'),
+            audit: {
+              ctx: toFailureAuditContext({
+                tenantId: tenant.id,
+                userId: user.id,
+                membershipId: membership.id,
+              }),
+              payload: { provider: params.provider, reason: 'subject_mismatch', emailKey },
+            },
+          });
+        }
+      } else {
+        await deps.authRepo.withDb(trx).insertSsoIdentity({
+          userId: user.id,
+          provider: params.provider,
+          providerSubject: identity.sub,
         });
       }
 
@@ -253,105 +273,80 @@ export async function executeSsoCallbackFlow(
           membershipId: membership.id,
           acceptedAt: new Date(),
         });
-      }
 
-      // I) Identity upsert + subject drift protection
-      const existing = await findSsoIdentityByUserAndProvider(trx, {
-        userId: user.id,
-        provider: params.provider,
-      });
-
-      if (existing && existing.providerSubject !== identity.sub) {
-        throw new SsoDeniedError({
-          appError: AuthErrors.ssoSubjectDrift(),
-          audit: {
-            ctx: toFailureAuditContext({
-              tenantId: tenant.id,
-              userId: user.id,
-              membershipId: membership.id,
-            }),
-            payload: { provider: params.provider, reason: 'subject_drift', emailKey },
+        await auditMembershipActivated(
+          audit.withContext({
+            tenantId: tenant.id,
+            userId: user.id,
+            membershipId: membership.id,
+          }),
+          {
+            membershipId: membership.id,
+            userId: user.id,
+            role: membership.role,
           },
-        });
+        );
       }
 
-      if (!existing) {
-        await deps.authRepo.withDb(trx).insertSsoIdentity({
+      await auditSsoLoginSuccess(
+        audit.withContext({
+          tenantId: tenant.id,
           userId: user.id,
+          membershipId: membership.id,
+        }),
+        {
+          userId: user.id,
+          membershipId: membership.id,
           provider: params.provider,
-          providerSubject: identity.sub,
-        });
-      }
-
-      // Success audit INSIDE tx
-      const fullAudit = audit
-        .withContext({ tenantId: tenant.id })
-        .withContext({ userId: user.id, membershipId: membership.id });
-
-      await auditSsoLoginSuccess(fullAudit, {
-        userId: user.id,
-        membershipId: membership.id,
-        role: membership.role,
-        provider: params.provider,
-      });
+          role: membership.role,
+        },
+      );
 
       return {
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name ?? null,
-          emailVerified: user.emailVerified,
+        user,
+        membership: {
+          id: membership.id,
+          role: membership.role,
+          status: membership.status === 'INVITED' ? 'ACTIVE' : membership.status,
         },
-        membership: { id: membership.id, role: membership.role, status: membership.status },
         tenant,
       };
     });
   } catch (err) {
     if (err instanceof SsoDeniedError) {
-      const writer = new AuditWriter(deps.auditRepo, {
-        requestId: params.requestId,
-        ip: params.ip,
-        userAgent: params.userAgent,
-      }).withContext(err.audit.ctx);
+      if (err.audit.ctx.tenantId) {
+        try {
+          const audit = new AuditWriter(deps.auditRepo, {
+            requestId: params.requestId,
+            ip: params.ip,
+            userAgent: params.userAgent,
+          }).withContext(err.audit.ctx);
 
-      await auditSsoLoginFailed(writer, err.audit.payload);
+          await auditSsoLoginFailed(audit, err.audit.payload);
+        } catch (auditErr) {
+          deps.logger.error({
+            msg: 'auth.sso.failure_audit_failed',
+            flow: 'auth.sso.callback',
+            requestId: params.requestId,
+            provider: params.provider,
+            error: auditErr,
+          });
+        }
+      }
+
       throw err.appError;
-    }
-
-    // Token/state validation failures (and other AppErrors) must also be audited.
-    // These errors can occur before membership/user is known, so we audit with best-effort context.
-    if (err instanceof AppError) {
-      const writer = new AuditWriter(deps.auditRepo, {
-        requestId: params.requestId,
-        ip: params.ip,
-        userAgent: params.userAgent,
-      }).withContext(failureAuditCtx);
-
-      const reasonFromMeta = typeof err.meta?.reason === 'string' ? err.meta.reason : undefined;
-
-      await auditSsoLoginFailed(writer, {
-        provider: params.provider,
-        reason: reasonFromMeta ?? `app_error:${err.code}`,
-      });
-
-      throw err;
     }
 
     throw err;
   }
 
-  // J) MFA enforcement (outside tx) — unchanged
-  const mfaIsRequired = isMfaRequiredForLogin({
+  const mfaConfigured = await hasVerifiedMfaSecret(deps.db, txResult.user.id);
+  const mfaRequired = isMfaRequiredForLogin({
     role: txResult.membership.role,
     tenantMemberMfaRequired: txResult.tenant.memberMfaRequired,
   });
 
-  const hasVerifiedMfaSecretValue = mfaIsRequired
-    ? await hasVerifiedMfaSecret(deps.db, txResult.user.id)
-    : false;
-
-  // K) Session creation (outside tx) — now also persists emailVerified
-  const { sessionId, nextAction } = await createAuthSession({
+  const { sessionId } = await createAuthSession({
     sessionStore: deps.sessionStore,
     userId: txResult.user.id,
     tenantId: txResult.tenant.id,
@@ -359,23 +354,24 @@ export async function executeSsoCallbackFlow(
     membershipId: txResult.membership.id,
     role: txResult.membership.role,
     tenant: txResult.tenant,
-    hasVerifiedMfaSecret: hasVerifiedMfaSecretValue,
+    hasVerifiedMfaSecret: mfaConfigured,
     emailVerified: txResult.user.emailVerified,
     now: new Date(),
   });
 
-  // L) Success redirect — unchanged
-  const redirectTo = `${deps.sso.redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/done?nextAction=${encodeURIComponent(nextAction)}`;
+  const nextAction = mfaRequired ? (mfaConfigured ? 'MFA_REQUIRED' : 'MFA_SETUP_REQUIRED') : 'NONE';
+
+  const redirectTo = `/auth/sso/done?nextAction=${encodeURIComponent(nextAction)}`;
 
   deps.logger.info({
-    msg: 'auth.sso.login.success',
-    flow: 'auth.sso.login',
+    msg: 'auth.sso.callback.success',
+    flow: 'auth.sso.callback',
     requestId: params.requestId,
     provider: params.provider,
-    tenantKey: params.tenantKey,
     tenantId: txResult.tenant.id,
     userId: txResult.user.id,
     membershipId: txResult.membership.id,
+    nextAction,
   });
 
   return { sessionId, redirectTo };

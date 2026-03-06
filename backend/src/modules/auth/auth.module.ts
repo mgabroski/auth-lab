@@ -19,17 +19,14 @@ import type { Logger } from '../../shared/logger/logger';
 import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { SessionStore } from '../../shared/session/session.store';
-import type { Queue } from '../../shared/messaging/queue';
 import type { UserRepo } from '../users/dal/user.repo';
 import type { MembershipRepo } from '../memberships/dal/membership.repo';
 
-// MFA
 import type { TotpService } from '../../shared/security/totp';
 import type { EncryptionService } from '../../shared/security/encryption';
 import type { KeyedHasher } from '../../shared/security/keyed-hasher';
 import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
-// Outbox (PR2)
 import type { OutboxRepo } from '../../shared/outbox/outbox.repo';
 import type { OutboxEncryption } from '../../shared/outbox/outbox-encryption';
 
@@ -51,23 +48,19 @@ export function createAuthModule(deps: {
   rateLimiter: RateLimiter;
   auditRepo: AuditRepo;
   sessionStore: SessionStore;
-  queue: Queue;
   userRepo: UserRepo;
   membershipRepo: MembershipRepo;
 
-  // Outbox (PR2)
   outboxRepo: OutboxRepo;
   outboxEncryption: OutboxEncryption;
 
   isProduction: boolean;
   sessionTtlSeconds: number;
 
-  // MFA
   totpService: TotpService;
   encryptionService: EncryptionService;
   mfaKeyedHasher: KeyedHasher;
 
-  // SSO
   sso: {
     stateEncryptionService: EncryptionService;
     redirectBaseUrl: string;
@@ -87,7 +80,6 @@ export function createAuthModule(deps: {
     rateLimiter: deps.rateLimiter,
     auditRepo: deps.auditRepo,
     sessionStore: deps.sessionStore,
-    queue: deps.queue,
     userRepo: deps.userRepo,
     membershipRepo: deps.membershipRepo,
     authRepo,

@@ -28,7 +28,6 @@ import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { Logger } from '../../shared/logger/logger';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 
-// Outbox (PR2)
 import type { OutboxRepo } from '../../shared/outbox/outbox.repo';
 import type { OutboxEncryption } from '../../shared/outbox/outbox-encryption';
 
@@ -49,9 +48,6 @@ export function createInviteModule(deps: {
   rateLimiter: RateLimiter;
   logger: Logger;
   auditRepo: AuditRepo;
-  // X8: queue removed — AdminInviteService uses Outbox exclusively.
-
-  // Outbox (PR2)
   outboxRepo: OutboxRepo;
   outboxEncryption: OutboxEncryption;
 }) {
@@ -60,6 +56,7 @@ export function createInviteModule(deps: {
   const inviteService = new InviteService({
     db: deps.db,
     tokenHasher: deps.tokenHasher,
+    rateLimiter: deps.rateLimiter,
     logger: deps.logger,
     inviteRepo,
     auditRepo: deps.auditRepo,

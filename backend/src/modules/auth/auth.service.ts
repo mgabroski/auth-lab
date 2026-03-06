@@ -17,9 +17,7 @@ import type { Logger } from '../../shared/logger/logger';
 import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { SessionStore } from '../../shared/session/session.store';
-import type { Queue } from '../../shared/messaging/queue';
 
-// Outbox (PR2)
 import type { OutboxRepo } from '../../shared/outbox/outbox.repo';
 import type { OutboxEncryption } from '../../shared/outbox/outbox-encryption';
 
@@ -84,12 +82,6 @@ export class AuthService {
       auditRepo: AuditRepo;
       sessionStore: SessionStore;
 
-      /**
-       * Legacy queue: kept wired to avoid unrelated churn.
-       */
-      queue: Queue;
-
-      // Outbox (PR2)
       outboxRepo: OutboxRepo;
       outboxEncryption: OutboxEncryption;
 
@@ -102,7 +94,6 @@ export class AuthService {
       encryptionService: EncryptionService;
       mfaKeyedHasher: KeyedHasher;
 
-      // SSO
       sso: {
         stateEncryptionService: EncryptionService;
         redirectBaseUrl: string;
@@ -186,7 +177,6 @@ export class AuthService {
         rateLimiter: this.deps.rateLimiter,
         auditRepo: this.deps.auditRepo,
         sessionStore: this.deps.sessionStore,
-        queue: this.deps.queue,
         userRepo: this.deps.userRepo,
         membershipRepo: this.deps.membershipRepo,
         authRepo: this.deps.authRepo,
@@ -331,6 +321,7 @@ export class AuthService {
   }): Promise<{ status: 'AUTHENTICATED'; nextAction: 'NONE'; sessionId: string }> {
     return recoverMfaFlow({
       deps: {
+        db: this.deps.db,
         auditRepo: this.deps.auditRepo,
         sessionStore: this.deps.sessionStore,
         rateLimiter: this.deps.rateLimiter,
