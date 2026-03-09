@@ -64,7 +64,7 @@ import {
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 import { LOGIN_LOCKOUT_MESSAGE } from '../../../../shared/security/rate-limit';
-import { emailDomain } from '../../helpers/email-domain';
+import { emailDomain } from '../../../../shared/utils/email-domain';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type LoginParams = {

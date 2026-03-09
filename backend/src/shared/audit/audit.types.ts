@@ -18,9 +18,13 @@
 // Known audit actions (add as modules grow)
 export type KnownAuditAction =
   | 'invite.accepted'
+  | 'invite.accept.failed'
   | 'invite.created'
+  | 'invite.create.failed'
   | 'invite.cancelled'
+  | 'invite.cancel.failed'
   | 'invite.resent'
+  | 'invite.resend.failed'
   | 'auth.register.success'
   | 'auth.login.success'
   | 'auth.login.failed'

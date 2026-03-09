@@ -33,12 +33,12 @@
  * Breaking changes require an ADR.
  */
 
-import { findOrCreateUser } from '../../users/use-cases/find-or-create-user';
-import type { UserRepo } from '../../users/dal/user.repo';
+import { findOrCreateUser } from '../../users';
+import type { UserRepo } from '../../users';
 import type { User } from '../../users/user.types';
 
-import { getMembershipByTenantAndUser } from '../../memberships/queries/membership.queries';
-import type { MembershipRepo } from '../../memberships/dal/membership.repo';
+import { getMembershipByTenantAndUser } from '../../memberships';
+import type { MembershipRepo } from '../../memberships';
 import type { Membership, MembershipRole } from '../../memberships/membership.types';
 
 import type { DbExecutor } from '../../../shared/db/db';

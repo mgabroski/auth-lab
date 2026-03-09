@@ -2,58 +2,29 @@
  * backend/src/modules/invites/invite.service.ts
  *
  * WHY:
- * - Accepts an invite token for the current tenant.
- * - Writes acceptance + audit in one transaction.
+ * - Thin facade. Delegates acceptInvite to execute-accept-invite-flow.ts.
+ * - All orchestration, transactions, rate limiting, and audit live in the flow.
  *
  * RULES:
- * - Tenant is resolved from request subdomain and REQUIRED.
- * - Invite lookup is tenant-scoped.
- * - Token is hashed before lookup.
- * - No queue side-effects here.
- * - Keep AppError usage out of DAL/queries/policies.
+ * - No transactions here — flow owns the orchestration boundary (ER-18).
+ * - No business logic — this method is a one-liner (ER-16).
  */
 
 import type { DbExecutor } from '../../shared/db/db';
 import type { TokenHasher } from '../../shared/security/token-hasher';
 import type { Logger } from '../../shared/logger/logger';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
-import { AuditWriter } from '../../shared/audit/audit.writer';
 import type { RateLimiter } from '../../shared/security/rate-limit';
-
-import {
-  getTenantByKey,
-  assertTenantKeyPresent,
-  assertTenantExists,
-  assertTenantIsActive,
-} from '../tenants';
-import { getUserByEmail } from '../users';
-import { getMfaSecretForUser } from '../auth/queries/mfa.queries';
-import { getInviteByTenantAndTokenHash } from './queries/invite.queries';
-
-import {
-  assertInviteBelongsToTenant,
-  assertInviteExists,
-  assertInviteIsPending,
-  assertInviteNotExpired,
-} from './policies/invite.policy';
-import { InviteErrors } from './invite.errors';
-import { auditInviteAccepted } from './invite.audit';
-import { INVITE_ACCEPT_RATE_LIMITS } from './invite.constants';
-
 import type { InviteRepo } from './dal/invite.repo';
 
-export type AcceptInviteParams = {
-  tenantKey: string | null;
-  token: string;
-  ip: string;
-  userAgent: string | null;
-  requestId: string;
-};
+import {
+  executeAcceptInviteFlow,
+  type AcceptInviteFlowParams,
+  type AcceptInviteFlowResult,
+} from './flows/execute-accept-invite-flow';
 
-export type AcceptInviteResult = {
-  status: 'ACCEPTED';
-  nextAction: 'SET_PASSWORD' | 'SIGN_IN' | 'MFA_SETUP_REQUIRED';
-};
+export type AcceptInviteParams = AcceptInviteFlowParams;
+export type AcceptInviteResult = AcceptInviteFlowResult;
 
 export class InviteService {
   constructor(
@@ -68,94 +39,6 @@ export class InviteService {
   ) {}
 
   async acceptInvite(params: AcceptInviteParams): Promise<AcceptInviteResult> {
-    const now = new Date();
-    const ipKey = this.deps.tokenHasher.hash(params.ip);
-
-    await this.deps.rateLimiter.hitOrThrow({
-      key: `invite-accept:ip:${ipKey}`,
-      ...INVITE_ACCEPT_RATE_LIMITS.acceptInvite.perIp,
-    });
-
-    this.deps.logger.info({
-      msg: 'invites.accept.start',
-      flow: 'invites.accept',
-      requestId: params.requestId,
-      tenantKey: params.tenantKey,
-      ip: params.ip,
-    });
-
-    return this.deps.db.transaction().execute(async (trx) => {
-      const inviteRepo = this.deps.inviteRepo.withDb(trx);
-
-      const audit = new AuditWriter(this.deps.auditRepo.withDb(trx), {
-        requestId: params.requestId,
-        ip: params.ip,
-        userAgent: params.userAgent,
-      });
-
-      assertTenantKeyPresent(params.tenantKey);
-
-      const tenant = await getTenantByKey(trx, params.tenantKey);
-      assertTenantExists(tenant, params.tenantKey);
-      assertTenantIsActive(tenant);
-
-      const tenantAudit = audit.withContext({ tenantId: tenant.id });
-
-      const tokenHash = this.deps.tokenHasher.hash(params.token);
-
-      const invite = await getInviteByTenantAndTokenHash(trx, {
-        tenantId: tenant.id,
-        tokenHash,
-      });
-
-      assertInviteExists(invite);
-      assertInviteBelongsToTenant(invite, tenant.id);
-      assertInviteIsPending(invite);
-      assertInviteNotExpired(invite, now);
-
-      const updated = await inviteRepo.markAccepted({
-        inviteId: invite.id,
-        usedAt: now,
-      });
-
-      if (!updated) {
-        throw InviteErrors.inviteNotPending({ inviteId: invite.id });
-      }
-
-      const existingUser = await getUserByEmail(trx, invite.email);
-
-      let nextAction: AcceptInviteResult['nextAction'] = 'SET_PASSWORD';
-      if (existingUser) {
-        nextAction = 'SIGN_IN';
-
-        if (invite.role === 'ADMIN') {
-          const mfaSecret = await getMfaSecretForUser(trx, existingUser.id);
-          if (!mfaSecret?.isVerified) {
-            nextAction = 'MFA_SETUP_REQUIRED';
-          }
-        }
-      }
-
-      const finalAudit = existingUser
-        ? tenantAudit.withContext({ userId: existingUser.id })
-        : tenantAudit;
-
-      await auditInviteAccepted(finalAudit, invite);
-
-      this.deps.logger.info({
-        msg: 'invites.accept.success',
-        flow: 'invites.accept',
-        requestId: params.requestId,
-        tenantId: tenant.id,
-        inviteId: invite.id,
-        role: invite.role,
-        nextAction,
-      });
-
-      return {
-        status: 'ACCEPTED',
-        nextAction,
-      };
-    });
+    return executeAcceptInviteFlow(this.deps, params);
   }
 }

@@ -20,7 +20,7 @@
  *   directly since it does not use the SsoDeniedError carrier pattern.
  */
 
-import { emailDomain } from '../../auth/helpers/email-domain';
+import { emailDomain } from '../../../shared/utils/email-domain';
 import { TenantErrors } from '../tenant.errors';
 import type { Tenant } from '../tenant.types';
 

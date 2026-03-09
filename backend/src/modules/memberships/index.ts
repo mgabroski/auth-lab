@@ -12,3 +12,5 @@
 
 export { getMembershipByTenantAndUser } from './queries/membership.queries';
 export type { Membership, MembershipRole, MembershipStatus } from './membership.types';
+
+export type { MembershipRepo } from './dal/membership.repo';

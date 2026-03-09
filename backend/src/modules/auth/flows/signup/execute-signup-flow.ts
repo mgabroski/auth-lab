@@ -36,8 +36,8 @@ import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { SessionStore } from '../../../../shared/session/session.store';
 
-import type { UserRepo } from '../../../users/dal/user.repo';
-import type { MembershipRepo } from '../../../memberships/dal/membership.repo';
+import type { UserRepo } from '../../../users';
+import type { MembershipRepo } from '../../../memberships';
 import type { AuthRepo } from '../../dal/auth.repo';
 import type { EmailVerificationRepo } from '../../dal/email-verification.repo';
 
@@ -63,7 +63,7 @@ import {
 
 import { generateSecureToken } from '../../../../shared/security/token';
 import { AUTH_RATE_LIMITS, EMAIL_VERIFICATION_TTL_SECONDS } from '../../auth.constants';
-import { emailDomain } from '../../helpers/email-domain';
+import { emailDomain } from '../../../../shared/utils/email-domain';
 
 // Outbox (PR2)
 import type { OutboxRepo } from '../../../../shared/outbox/outbox.repo';

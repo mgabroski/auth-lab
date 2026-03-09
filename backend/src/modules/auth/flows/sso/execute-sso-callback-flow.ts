@@ -28,8 +28,8 @@ import { isEmailDomainAllowed } from '../../../tenants';
 import { findOrCreateUser } from '../../../users';
 import { getMembershipByTenantAndUser } from '../../../memberships';
 
-import type { MembershipRepo } from '../../../memberships/dal/membership.repo';
-import type { UserRepo } from '../../../users/dal/user.repo';
+import type { MembershipRepo } from '../../../memberships';
+import type { UserRepo } from '../../../users';
 import type { AuthRepo } from '../../dal/auth.repo';
 
 import { AuthErrors } from '../../auth.errors';

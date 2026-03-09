@@ -21,8 +21,8 @@ import type { SessionStore } from '../../shared/session/session.store';
 import type { OutboxRepo } from '../../shared/outbox/outbox.repo';
 import type { OutboxEncryption } from '../../shared/outbox/outbox-encryption';
 
-import type { UserRepo } from '../users/dal/user.repo';
-import type { MembershipRepo } from '../memberships/dal/membership.repo';
+import type { UserRepo } from '../users';
+import type { MembershipRepo } from '../memberships';
 
 import type { TotpService } from '../../shared/security/totp';
 import type { EncryptionService } from '../../shared/security/encryption';
@@ -51,11 +51,10 @@ import { verifyMfaSetupFlow } from './flows/mfa/verify-mfa-setup-flow';
 import { verifyMfaFlow } from './flows/mfa/verify-mfa-flow';
 import { recoverMfaFlow } from './flows/mfa/recover-mfa-flow';
 
-import type { SsoProvider } from './helpers/sso-state';
-import { buildSsoAuthorizationUrl } from './helpers/sso-authorize-url';
-import { AUTH_RATE_LIMITS } from './auth.constants';
-
 import { executeSsoCallbackFlow } from './flows/sso/execute-sso-callback-flow';
+import { executeStartSsoFlow } from './flows/sso/execute-start-sso-flow';
+import { executeLogoutFlow } from './flows/logout/execute-logout-flow';
+import type { SsoProvider } from './helpers/sso-state';
 import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
 import type { SignupParams } from './flows/signup/execute-signup-flow';
@@ -66,9 +65,6 @@ import { executeVerifyEmailFlow } from './flows/signup/execute-verify-email-flow
 
 import type { ResendVerificationParams } from './flows/signup/execute-resend-verification-flow';
 import { executeResendVerificationFlow } from './flows/signup/execute-resend-verification-flow';
-
-import { AuditWriter } from '../../shared/audit/audit.writer';
-import { auditLogout } from './auth.audit';
 
 export class AuthService {
   constructor(
@@ -109,24 +105,14 @@ export class AuthService {
     returnTo?: string;
     ip: string;
   }): Promise<{ redirectTo: string }> {
-    const ipKey = this.deps.tokenHasher.hash(input.ip);
-
-    await this.deps.rateLimiter.hitOrThrow({
-      key: `sso-start:ip:${ipKey}`,
-      ...AUTH_RATE_LIMITS.ssoStart.perIp,
-    });
-
-    const redirectTo = buildSsoAuthorizationUrl({
-      provider: input.provider,
-      tenantKey: input.tenantKey,
-      requestId: input.requestId,
-      returnTo: input.returnTo,
-      encryptionService: this.deps.sso.stateEncryptionService,
-      redirectBaseUrl: this.deps.sso.redirectBaseUrl,
-      providerRegistry: this.deps.sso.providerRegistry,
-    });
-
-    return { redirectTo };
+    return executeStartSsoFlow(
+      {
+        tokenHasher: this.deps.tokenHasher,
+        rateLimiter: this.deps.rateLimiter,
+        sso: this.deps.sso,
+      },
+      input,
+    );
   }
 
   async handleSsoCallback(input: {
@@ -393,28 +379,13 @@ export class AuthService {
     userAgent: string | null;
     requestId: string;
   }): Promise<void> {
-    await this.deps.sessionStore.destroy(params.sessionId);
-
-    const audit = new AuditWriter(this.deps.auditRepo, {
-      requestId: params.requestId,
-      ip: params.ip,
-      userAgent: params.userAgent,
-    }).withContext({
-      userId: params.userId,
-      tenantId: params.tenantId,
-      membershipId: params.membershipId,
-    });
-
-    try {
-      await auditLogout(audit, { sessionId: params.sessionId });
-    } catch (err) {
-      this.deps.logger.error({
-        msg: 'auth.logout.audit_failed',
-        requestId: params.requestId,
-        userId: params.userId,
-        tenantId: params.tenantId,
-        err,
-      });
-    }
+    return executeLogoutFlow(
+      {
+        sessionStore: this.deps.sessionStore,
+        auditRepo: this.deps.auditRepo,
+        logger: this.deps.logger,
+      },
+      params,
+    );
   }
 }

@@ -19,8 +19,8 @@ import type { Logger } from '../../shared/logger/logger';
 import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { SessionStore } from '../../shared/session/session.store';
-import type { UserRepo } from '../users/dal/user.repo';
-import type { MembershipRepo } from '../memberships/dal/membership.repo';
+import type { UserRepo } from '../users';
+import type { MembershipRepo } from '../memberships';
 
 import type { TotpService } from '../../shared/security/totp';
 import type { EncryptionService } from '../../shared/security/encryption';

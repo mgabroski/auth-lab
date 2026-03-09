@@ -28,8 +28,8 @@ import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { SessionStore } from '../../../../shared/session/session.store';
 
-import type { UserRepo } from '../../../users/dal/user.repo';
-import type { MembershipRepo } from '../../../memberships/dal/membership.repo';
+import type { UserRepo } from '../../../users';
+import type { MembershipRepo } from '../../../memberships';
 import type { AuthRepo } from '../../dal/auth.repo';
 
 import type { AuthResult } from '../../auth.types';
@@ -45,7 +45,7 @@ import { buildAuthResult } from '../../helpers/build-auth-result';
 import { decideRegisterNextAction } from '../../policies/register-next-action.policy';
 
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
-import { emailDomain } from '../../helpers/email-domain';
+import { emailDomain } from '../../../../shared/utils/email-domain';
 
 export type RegisterParams = {
   tenantKey: string | null;

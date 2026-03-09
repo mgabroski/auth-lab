@@ -62,3 +62,31 @@ export function auditInviteResent(
     role: data.role,
   });
 }
+
+export function auditInviteAcceptFailed(
+  writer: AuditWriter,
+  data: { reason: string },
+): Promise<void> {
+  return writer.append('invite.accept.failed', { reason: data.reason });
+}
+
+export function auditInviteCreateFailed(
+  writer: AuditWriter,
+  data: { reason: string },
+): Promise<void> {
+  return writer.append('invite.create.failed', { reason: data.reason });
+}
+
+export function auditInviteResendFailed(
+  writer: AuditWriter,
+  data: { reason: string },
+): Promise<void> {
+  return writer.append('invite.resend.failed', { reason: data.reason });
+}
+
+export function auditInviteCancelFailed(
+  writer: AuditWriter,
+  data: { reason: string },
+): Promise<void> {
+  return writer.append('invite.cancel.failed', { reason: data.reason });
+}

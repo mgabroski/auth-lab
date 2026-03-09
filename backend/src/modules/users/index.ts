@@ -19,3 +19,5 @@ export { getUserByEmail, getUserById } from './queries/user.queries';
 export { findOrCreateUser } from './use-cases/find-or-create-user';
 export type { FindOrCreateUserResult } from './use-cases/find-or-create-user';
 export type { User } from './user.types';
+
+export type { UserRepo } from './dal/user.repo';
