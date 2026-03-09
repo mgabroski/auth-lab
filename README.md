@@ -55,7 +55,7 @@ The first implemented backend module of the Insynctive platform. Auth Lab is the
 cp backend/.env.example backend/.env
 
 # 2. Start local infrastructure — Postgres + Redis (run from repo root)
-yarn dev:infra
+yarn dev
 
 # 3. Run migrations and generate DB types (run from backend/)
 cd backend
@@ -114,25 +114,29 @@ See `backend/src/app/config.ts` for the complete Zod schema.
 ## Useful commands
 
 ```bash
-# Development
-yarn dev               # start backend in watch mode
-yarn dev:infra         # start Postgres + Redis in Docker
+# Infrastructure (run from repo root)
+yarn dev               # start Postgres + Redis in Docker
 yarn stop              # stop Docker containers
 yarn status            # show running container status
+yarn reset-db          # drop and recreate the local dev database
 
-# Database
+# Backend (run from backend/)
+cd backend
+yarn dev               # start backend in watch mode
+
+# Database (run from backend/)
 yarn db:migrate        # run pending migrations
 yarn db:make <name>    # scaffold a new migration file
 yarn db:types          # regenerate src/shared/db/database.types.ts from schema
-yarn reset-db          # drop and recreate the local dev database
 
-# Code quality
+# Code quality (run from repo root)
 yarn lint              # ESLint
+yarn lint:fix          # ESLint with auto-fix
 yarn typecheck         # tsc --noEmit
 yarn test              # all tests (unit + DAL + E2E)
-yarn test:unit         # unit tests only
-yarn test:dal          # DAL tests only
-yarn test:e2e          # E2E tests only
+yarn test:watch        # tests in watch mode
+yarn fmt               # Prettier write
+yarn fmt:check         # Prettier check
 ```
 
 ---
@@ -181,7 +185,7 @@ Tests run against real infrastructure (Postgres + Redis). There are no mocks for
 
 ```bash
 # Start infra first (run from repo root)
-yarn dev:infra
+yarn dev
 
 # Run all tests (run from backend/)
 cd backend && yarn test

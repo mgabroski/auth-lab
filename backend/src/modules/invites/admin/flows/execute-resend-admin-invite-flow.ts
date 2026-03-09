@@ -64,7 +64,6 @@ export async function executeResendAdminInviteFlow(
   });
 
   let failureCtx: FailureCtx | null = null;
-  let newSummary: InviteSummary | null = null;
 
   try {
     const result = await deps.db.transaction().execute(async (trx) => {
@@ -152,7 +151,18 @@ export async function executeResendAdminInviteFlow(
       return { newSummary: s };
     });
 
-    newSummary = result.newSummary;
+    const newSummary = result.newSummary;
+
+    deps.logger.info({
+      msg: 'admin-invite.resend.success',
+      flow: 'admin-invite.resend',
+      requestId: params.requestId,
+      tenantId: params.tenantId,
+      oldInviteId: params.inviteId,
+      newInviteId: newSummary.id,
+    });
+
+    return newSummary;
   } catch (err) {
     // ── Failure audit — bare auditRepo, outside tx (ER-39) ───────────
     if (failureCtx) {
@@ -166,15 +176,4 @@ export async function executeResendAdminInviteFlow(
     }
     throw err;
   }
-
-  deps.logger.info({
-    msg: 'admin-invite.resend.success',
-    flow: 'admin-invite.resend',
-    requestId: params.requestId,
-    tenantId: params.tenantId,
-    oldInviteId: params.inviteId,
-    newInviteId: newSummary.id,
-  });
-
-  return newSummary;
 }

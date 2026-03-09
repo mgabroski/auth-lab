@@ -73,7 +73,6 @@ export async function executeCreateAdminInviteFlow(
   const email = params.email.toLowerCase();
 
   let failureCtx: FailureCtx | null = null;
-  let summary: InviteSummary | null = null;
 
   try {
     const result = await deps.db.transaction().execute(async (trx) => {
@@ -175,7 +174,18 @@ export async function executeCreateAdminInviteFlow(
       return { summary: s };
     });
 
-    summary = result.summary;
+    const summary = result.summary;
+
+    deps.logger.info({
+      msg: 'admin-invite.create.success',
+      flow: 'admin-invite.create',
+      requestId: params.requestId,
+      tenantId: params.tenantId,
+      inviteId: summary.id,
+      role: params.role,
+    });
+
+    return summary;
   } catch (err) {
     // ── Failure audit — bare auditRepo, outside tx (ER-39) ───────────
     if (failureCtx) {
@@ -189,15 +199,4 @@ export async function executeCreateAdminInviteFlow(
     }
     throw err;
   }
-
-  deps.logger.info({
-    msg: 'admin-invite.create.success',
-    flow: 'admin-invite.create',
-    requestId: params.requestId,
-    tenantId: params.tenantId,
-    inviteId: summary.id,
-    role: params.role,
-  });
-
-  return summary;
 }

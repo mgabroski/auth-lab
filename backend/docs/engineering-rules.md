@@ -23,8 +23,6 @@ Rules marked **[ARCH]** are architectural boundaries. Violations require an ADR 
 
 All other rules are enforced but may be discussed if a genuine edge case exists. The edge case must be documented in the file header comment of the affected file.
 
-**On known legacy violations:** The current auth/user-provisioning module contains violations of ER-2, ER-16, and ER-18 that predate this document. These are tracked and must be corrected before introducing new modules. New code must not add to these violations.
-
 ---
 
 ## 1. MODULE BOUNDARY RULES
@@ -50,8 +48,6 @@ Sources: `src/modules/tenants/index.ts`, `src/modules/memberships/index.ts`.
 **ER-4** Cross-module synchronous reads use the target module's exported query functions via `index.ts`. Cross-module writes and side effects use the DB outbox. No module calls another module's service directly from inside a flow.
 
 **ER-5** The `src/modules/_shared/use-cases/` folder holds cross-module use cases that are reused by three or more flows. A use case belongs there only when it is a stable, locked contract. Breaking changes to a `_shared` use case require an ADR.
-
-> **Current exception:** `provision-user-to-tenant.usecase.ts` in `_shared` currently imports from internal DAL paths of `users/` and `memberships/`. This is a known legacy violation. New `_shared` use cases must not repeat this pattern — they must depend on stable `index.ts` exports only.
 
 ---
 
@@ -166,8 +162,6 @@ Source: `src/modules/audit/admin-audit.service.ts`.
 
 The definition of "flow" for this rule: any mutation that requires a transaction. If a service method owns rate limiting, a transaction, and audit writing, it is a flow that has not yet been extracted. Extract it.
 
-> **Known violations:** `src/modules/invites/invite.service.ts` and `src/modules/invites/admin/admin-invite.service.ts` currently own their own transactions. These are tracked for correction. `src/modules/auth/auth.service.ts` (startSso and logout methods) similarly contains orchestration that belongs in flow files.
-
 **ER-19** [HARD] Rate limit checks MUST be the first operation in a flow, before `db.transaction()` opens. A rejected request must never open a database transaction.
 
 ```typescript
@@ -214,8 +208,6 @@ if (!txResult) throw new Error('<module>.<action>: transaction completed without
 Source: `src/modules/auth/policies/login-membership-gating.policy.ts`.
 
 **ER-25** Policies import only from `<module>.errors.ts`, from TypeScript built-ins, and from `src/shared/utils/`. No imports from repos, queries, services, or other modules.
-
-> **Known violation:** `src/modules/tenants/policies/tenant-access.policy.ts` imports `emailDomain()` from `src/modules/auth/helpers/email-domain`. This violates ER-25 and contradicts its own file header. Fix: move `emailDomain()` to `src/shared/utils/email-domain.ts`. Tracked for correction.
 
 ### Queries
 
@@ -608,4 +600,4 @@ Before marking a PR ready for review, the author verifies:
 
 _End of engineering-rules.md_
 _Tier 1 — Global Stable. This is the only authoritative implementation rules file._
-_Cite rule numbers (ER-N) in PR comments. Update only on `ARCHITECTURE.md` change._
+_Cite rule numbers (ER-N) in PR comments. Update when the architecture changes, a new pattern is locked, or a rule is resolved as no longer applicable._
