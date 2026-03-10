@@ -17,6 +17,7 @@ import type { Logger } from '../../shared/logger/logger';
 import type { RateLimiter } from '../../shared/security/rate-limit';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { SessionStore } from '../../shared/session/session.store';
+import type { RequiredAuthContext } from '../../shared/http/require-auth-context';
 
 import type { OutboxRepo } from '../../shared/outbox/outbox.repo';
 import type { OutboxEncryption } from '../../shared/outbox/outbox-encryption';
@@ -28,7 +29,7 @@ import type { TotpService } from '../../shared/security/totp';
 import type { EncryptionService } from '../../shared/security/encryption';
 import type { KeyedHasher } from '../../shared/security/keyed-hasher';
 
-import type { AuthResult } from './auth.types';
+import type { AuthResult, ConfigResponse, MeResponse } from './auth.types';
 
 import type { AuthRepo } from './dal/auth.repo';
 import type { MfaRepo } from './dal/mfa.repo';
@@ -54,6 +55,8 @@ import { recoverMfaFlow } from './flows/mfa/recover-mfa-flow';
 import { executeSsoCallbackFlow } from './flows/sso/execute-sso-callback-flow';
 import { executeStartSsoFlow } from './flows/sso/execute-start-sso-flow';
 import { executeLogoutFlow } from './flows/logout/execute-logout-flow';
+import { getAuthConfig } from './helpers/get-auth-config';
+import { getMe } from './helpers/get-me';
 import type { SsoProvider } from './helpers/sso-state';
 import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
@@ -184,6 +187,14 @@ export class AuthService {
       },
       params,
     );
+  }
+
+  async getMe(auth: RequiredAuthContext): Promise<MeResponse> {
+    return getMe(auth, this.deps.db);
+  }
+
+  async getConfig(tenantKey: string | null): Promise<ConfigResponse> {
+    return getAuthConfig(tenantKey, this.deps.db);
   }
 
   async requestPasswordReset(params: RequestPasswordResetParams): Promise<void> {

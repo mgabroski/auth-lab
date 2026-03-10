@@ -27,6 +27,10 @@
  * - /auth/signup: session required = false (unauthenticated endpoint)
  * - /auth/verify-email: session required (user authenticated after signup)
  * - /auth/resend-verification: session required (user authenticated after signup)
+ *
+ * STAGE 1:
+ * - /auth/me: session required (any valid session)
+ * - /auth/config: public endpoint for frontend bootstrap
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -131,6 +135,17 @@ export class AuthController {
     });
 
     setSessionCookie(reply, sessionId, this.isProduction, this.sessionTtlSeconds);
+    return reply.status(200).send(result);
+  }
+
+  async me(req: FastifyRequest, reply: FastifyReply) {
+    const auth = requireSession(req);
+    const result = await this.authService.getMe(auth);
+    return reply.status(200).send(result);
+  }
+
+  async config(req: FastifyRequest, reply: FastifyReply) {
+    const result = await this.authService.getConfig(req.requestContext.tenantKey);
     return reply.status(200).send(result);
   }
 

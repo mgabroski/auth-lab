@@ -17,6 +17,10 @@
  * - MfaNextAction kept as a type alias for backward compatibility during the
  *   transition — remove once all callers have migrated.
  * - Added EmailVerificationToken domain type.
+ *
+ * STAGE 1 UPDATE:
+ * - Added MeResponse for GET /auth/me.
+ * - Added ConfigResponse for GET /auth/config.
  */
 
 export type AuthProvider = 'password' | 'google' | 'microsoft';
@@ -88,6 +92,46 @@ export type AuthResult = {
   membership: {
     id: string;
     role: 'ADMIN' | 'MEMBER';
+  };
+};
+
+/**
+ * Response shape for GET /auth/me.
+ * All fields are derived from session data + minimal DB reads (user name/email, tenant name).
+ * Never contains raw secrets or tokens.
+ */
+export type MeResponse = {
+  user: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
+  membership: {
+    id: string;
+    role: 'ADMIN' | 'MEMBER';
+  };
+  tenant: {
+    id: string;
+    key: string;
+    name: string;
+  };
+  session: {
+    mfaVerified: boolean;
+    emailVerified: boolean;
+  };
+  nextAction: AuthNextAction;
+};
+
+/**
+ * Response shape for GET /auth/config.
+ * Public-safe only. Never contains allowedEmailDomains or memberMfaRequired.
+ */
+export type ConfigResponse = {
+  tenant: {
+    name: string;
+    isActive: boolean;
+    publicSignupEnabled: boolean;
+    allowedSso: ('google' | 'microsoft')[];
   };
 };
 
