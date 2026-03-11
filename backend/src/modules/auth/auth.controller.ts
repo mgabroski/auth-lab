@@ -48,6 +48,11 @@ import {
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
 import { setSessionCookie, clearSessionCookie } from '../../shared/session/set-session-cookie';
+import {
+  setSsoStateCookie,
+  clearSsoStateCookie,
+  readSsoStateCookie,
+} from '../../shared/session/set-sso-state-cookie';
 import { requireSession } from '../../shared/http/require-auth-context';
 
 const FORGOT_PASSWORD_RESPONSE = {
@@ -312,13 +317,19 @@ export class AuthController {
     const returnTo =
       rawReturnTo !== undefined && isSafeReturnTo(rawReturnTo) ? rawReturnTo : undefined;
 
-    const { redirectTo } = await this.authService.startSso({
+    const { redirectTo, ssoState } = await this.authService.startSso({
       tenantKey: requireTenantKey(req.requestContext.tenantKey),
       provider: providerRawParsed.data,
       requestId: req.requestContext.requestId,
+      requestPublicOrigin: req.requestContext.publicOrigin,
       returnTo,
       ip: req.ip,
     });
+
+    // Set the SSO state cookie (SameSite=Lax — required for OAuth redirect callback).
+    // The callback validates that the cookie value matches the state query param.
+    // This provides an additional CSRF binding layer.
+    setSsoStateCookie(reply, ssoState, this.isProduction);
 
     return reply.status(302).redirect(redirectTo);
   }
@@ -338,6 +349,23 @@ export class AuthController {
       throw AppError.validationError('Missing state parameter');
     }
 
+    // ── SSO state cookie CSRF binding ─────────────────────────────────────────
+    // WHY: The sso-state cookie was set at SSO start (SameSite=Lax).
+    // The OAuth provider returns the state value as a query param on callback.
+    // We validate that both match — the cookie ensures the callback originates
+    // from the same browser that initiated the SSO flow, not a CSRF attempt.
+    //
+    // The cookie must be present AND equal to the state query param.
+    // Mismatch or absence is a hard rejection — we never downgrade to
+    // "cookie-optional" because that would defeat the entire CSRF protection.
+    const cookieState = readSsoStateCookie(req.headers.cookie, this.isProduction);
+    if (!cookieState) {
+      throw AppError.validationError('SSO state cookie missing — possible CSRF or expired flow');
+    }
+    if (cookieState !== q.state) {
+      throw AppError.validationError('SSO state mismatch — cookie does not match query parameter');
+    }
+
     const { sessionId, redirectTo } = await this.authService.handleSsoCallback({
       tenantKey: req.requestContext.tenantKey,
       provider: providerParsed.data,
@@ -349,6 +377,8 @@ export class AuthController {
     });
 
     setSessionCookie(reply, sessionId, this.isProduction, this.sessionTtlSeconds);
+    // Clear the SSO state cookie immediately — it served its purpose (CSRF binding).
+    clearSsoStateCookie(reply, this.isProduction);
     return reply.status(302).redirect(redirectTo);
   }
 

@@ -1,77 +1,161 @@
 # infra/docker-compose.yml
 #
 # WHY:
-# - Local development should be fast and consistent across machines.
-# - We run ONLY infrastructure in Docker (Postgres + Redis).
-# - The backend runs on the host machine using hot reload (tsx watch),
-#   so developers never rebuild Docker images while coding.
+# - Full topology foundation: one file, one command, entire local stack.
+# - Only the proxy is bound to the host network (port 3000).
+# - Frontend and backend are INTERNAL only — never reachable directly from
+#   the host. All traffic flows through the reverse proxy.
+# - Postgres + Redis expose ports to the host (DEV ONLY) for local tooling
+#   (DBeaver, redis-cli, migrations from host-based scripts).
 #
-# HOW TO USE (IMPORTANT):
-# - Use the project scripts (single source of truth):
-#     ./scripts/dev.sh       -> starts infra (and later will also run migrations + start backend)
-#     ./scripts/stop.sh      -> stops infra
-#     ./scripts/reset-db.sh  -> deletes local DB data (volumes) for a clean reset
+# TOPOLOGY:
+#   Browser → proxy:3000 → frontend:3000 (/* and /_next/*)
+#                        → backend:3001  (/api/*)
 #
-# NOTE:
-# - You can run docker compose manually for debugging, but scripts are the official path.
+# TENANT RESOLUTION:
+#   goodwill-ca.lvh.me:3000 → proxy preserves Host → backend reads tenantKey
+#
+# RULES:
+# - Only `proxy` gets a `ports:` mapping.
+# - Frontend + backend have NO ports: entries (internal only).
+# - All services share hubins_net bridge network.
+# - INTERNAL_API_URL lets Next.js SSR call backend directly (container-to-container).
+#   Client-side calls always use relative /api/* through the proxy.
+#
+# HOW TO START (full stack):
+#   docker compose -f infra/docker-compose.yml up --build
+#
+# HOW TO START (infra only, backend on host for hot-reload dev):
+#   docker compose -f infra/docker-compose-infra.yml up -d
+#   (then run backend with: yarn workspace @auth-lab/backend dev)
 
-name: auth-lab
+name: hubins
+
+networks:
+  hubins_net:
+    driver: bridge
 
 services:
+  # ── Reverse proxy (single public-facing entry point) ────────────────────
+  proxy:
+    image: caddy:2
+    ports:
+      - '3000:3000' # ONLY publicly exposed port in dev
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks: [hubins_net]
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Next.js frontend (internal only) ────────────────────────────────────
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    environment:
+      # IMPORTANT: this container runs the standalone production build, not
+      # `next dev`. Stack mode validates topology/proxy wiring, not HMR.
+      - NODE_ENV=production
+      # WHY: SSR server components call the backend directly (container-to-container).
+      # Client-side code always uses relative /api/* through the proxy.
+      - INTERNAL_API_URL=http://backend:3001
+      - NEXT_PUBLIC_ENV=development
+    networks: [hubins_net]
+    # No ports: — internal only; all traffic through proxy
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Fastify backend (internal only) ─────────────────────────────────────
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=postgres://auth_lab:auth_lab@postgres:5432/auth_lab
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=info
+      - SERVICE_NAME=auth-lab-backend
+      - BCRYPT_COST=12
+      - SEED_ON_START=true
+      - SEED_TENANT_KEY=goodwill-ca
+      - SEED_TENANT_NAME=GoodWill California
+      - SEED_ADMIN_EMAIL=system_admin@example.com
+      - SEED_INVITE_TTL_HOURS=168
+      - SESSION_TTL_SECONDS=86400
+      - MFA_ISSUER=Hubins
+      # DEV ONLY — example keys, safe to commit for local dev
+      - MFA_ENCRYPTION_KEY_BASE64=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+      - MFA_HMAC_KEY_BASE64=8Emt6e4gn6r8rgRGSuYTVQ+D/3upFEckXRoMQYKJRJ8=
+      - SSO_STATE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      # Fallback only: startSso prefers the real request public origin.
+      # Keep this as a controlled fallback for environments where host/proto
+      # forwarding is unavailable or intentionally overridden.
+      - SSO_REDIRECT_BASE_URL=http://goodwill-ca.lvh.me:3000/api
+      - GOOGLE_CLIENT_ID=test-google-client-id
+      - GOOGLE_CLIENT_SECRET=test-google-client-secret
+      - MICROSOFT_CLIENT_ID=test-microsoft-client-id
+      - MICROSOFT_CLIENT_SECRET=test-microsoft-client-secret
+      - OUTBOX_ENC_DEFAULT_VERSION=v1
+      - OUTBOX_ENC_KEY_V1=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+    networks: [hubins_net]
+    # No ports: — internal only; all traffic through proxy
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── Postgres (DEV: port exposed for local tooling) ───────────────────────
   postgres:
-    # WHY:
-    # - Postgres is our primary datastore (matches our architecture).
-    # - We pin a major version to avoid "it works on my machine" differences.
     image: postgres:17
     container_name: auth-lab-postgres
     environment:
-      # WHY:
-      # - These are safe LOCAL defaults for dev only.
-      # - In production we will inject real secrets via environment variables / secret manager.
       POSTGRES_DB: auth_lab
       POSTGRES_USER: auth_lab
       POSTGRES_PASSWORD: auth_lab
     ports:
-      # WHY:
-      # - Expose to host so the backend (running on host) can connect.
+      # DEV ONLY: exposed so host-based scripts (migrations, seeds) can connect
       - '5432:5432'
     volumes:
-      # WHY:
-      # - Persist DB data between restarts.
-      # - Deleted by scripts/reset-db.sh when you want a clean slate.
-      - auth_lab_pg:/var/lib/postgresql/data
+      - hubins_pg:/var/lib/postgresql/data
+    networks: [hubins_net]
     healthcheck:
-      # WHY:
-      # - scripts/dev.sh waits for DB readiness before running migrations.
       test: ['CMD-SHELL', 'pg_isready -U auth_lab -d auth_lab']
       interval: 5s
       timeout: 3s
       retries: 20
 
+  # ── Redis (DEV: port exposed for local tooling) ──────────────────────────
   redis:
-    # WHY:
-    # - Redis is optional in Phase 1 but we include it early for:
-    #   rate limiting, session-like state, and future queue/outbox patterns.
     image: redis:7-alpine
     container_name: auth-lab-redis
     ports:
-      # WHY:
-      # - Expose to host so backend can connect.
+      # DEV ONLY: exposed for redis-cli and session inspection
       - '6379:6379'
     volumes:
-      # WHY:
-      # - Keep redis data between restarts (useful in debugging).
-      - auth_lab_redis:/data
+      - hubins_redis:/data
+    networks: [hubins_net]
     healthcheck:
-      # WHY:
-      # - Lets us verify container is responding if we ever add readiness gating.
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 20
 
 volumes:
-  # WHY:
-  # - Named volumes are the simplest reliable persistence mechanism for local Docker.
-  auth_lab_pg:
-  auth_lab_redis:
+  hubins_pg:
+  hubins_redis:

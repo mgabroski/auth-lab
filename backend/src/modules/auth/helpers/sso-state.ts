@@ -28,6 +28,22 @@ export type SsoStatePayload = {
   issuedAt: number;
   expiresAt: number;
   requestId: string;
+  /**
+   * WHY: The redirectUri is embedded in the encrypted state at SSO start time.
+   * The callback uses this value to reconstruct the exact URI it sends to the
+   * provider for token exchange — instead of re-deriving it from a global
+   * SSO_REDIRECT_BASE_URL config value.
+   *
+   * This makes the callback tenant-aware: each tenant's subdomain produces
+   * its own redirect URI (e.g. goodwill-ca.hubins.com vs acme.hubins.com),
+   * and the callback validates that the URI it constructs matches what was
+   * registered with the provider at start time.
+   *
+   * Without this, a single global redirectBaseUrl would make all tenants
+   * share one OAuth registered redirect URI — which breaks in multi-tenant
+   * setups where each tenant may have its own OAuth app or subdomain.
+   */
+  redirectUri: string;
   returnTo?: string;
 };
 
@@ -47,6 +63,7 @@ export function buildEncryptedSsoState(input: {
   provider: SsoProvider;
   tenantKey: string;
   requestId: string;
+  redirectUri: string;
   returnTo?: string;
   now?: Date;
 }): { state: string; nonce: string; payload: SsoStatePayload } {
@@ -62,6 +79,7 @@ export function buildEncryptedSsoState(input: {
     issuedAt,
     expiresAt,
     requestId: input.requestId,
+    redirectUri: input.redirectUri,
     ...(input.returnTo ? { returnTo: input.returnTo } : {}),
   };
 

@@ -3,10 +3,14 @@
   "private": true,
   "packageManager": "yarn@4.12.0",
   "workspaces": [
-    "backend"
+    "backend",
+    "frontend"
   ],
   "scripts": {
     "dev": "./scripts/dev.sh",
+    "stack": "./scripts/stack.sh up",
+    "stack:down": "./scripts/stack.sh down",
+    "stack:test": "./scripts/stack.sh test",
     "stop": "./scripts/stop.sh",
     "status": "./scripts/status.sh",
     "reset-db": "./scripts/reset-db.sh",
@@ -14,9 +18,17 @@
     "fmt:check": "prettier . --check",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "typecheck": "yarn workspace @auth-lab/backend typecheck",
-    "test": "yarn workspace @auth-lab/backend test",
-    "test:watch": "yarn workspace @auth-lab/backend test:watch",
+    "lint:backend": "eslint backend",
+    "lint:frontend": "eslint frontend",
+    "typecheck": "yarn typecheck:backend && yarn typecheck:frontend",
+    "typecheck:backend": "yarn workspace @auth-lab/backend typecheck",
+    "typecheck:frontend": "yarn workspace frontend typecheck",
+    "build:frontend": "yarn workspace frontend build",
+    "test": "yarn test:backend",
+    "test:backend": "yarn workspace @auth-lab/backend test",
+    "test:watch": "yarn test:watch:backend",
+    "test:watch:backend": "yarn workspace @auth-lab/backend test:watch",
+    "verify": "yarn fmt:check && yarn lint && yarn typecheck && yarn build:frontend && yarn test",
     "prepare": "husky"
   },
   "devDependencies": {
@@ -35,5 +47,8 @@
     "*.{js,mjs,cjs,ts,tsx}": [
       "eslint --fix"
     ]
+  },
+  "dependencies": {
+    "concurrently": "^9.2.1"
   }
 }

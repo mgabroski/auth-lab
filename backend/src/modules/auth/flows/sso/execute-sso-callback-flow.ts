@@ -173,7 +173,11 @@ export async function executeSsoCallbackFlow(
         now: new Date(),
       });
 
-      const redirectUri = `${deps.sso.redirectBaseUrl.replace(/\/+$/g, '')}/auth/sso/${params.provider}/callback`;
+      // WHY: Use the redirectUri embedded in the encrypted state, not the
+      // global redirectBaseUrl config. This ensures the token exchange uses
+      // the exact URI registered with the provider at SSO start time,
+      // which is tenant-aware (e.g. goodwill-ca.hubins.com vs acme.hubins.com).
+      const redirectUri = statePayload.redirectUri;
 
       const adapter = deps.sso.providerRegistry.getOrThrow(params.provider);
 

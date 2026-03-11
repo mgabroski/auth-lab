@@ -1,22 +1,42 @@
 #!/usr/bin/env bash
-# scripts/dev.sh
-#
-# WHY:
-# - One command for local dev:
-#   1) start infra (postgres + redis)
-#   2) run migrations
-#   3) generate DB types
-#   4) start backend watch
-#
-# HOW:
-# - `yarn dev`
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MODE="${1:-}"
+
+ensure_env_file() {
+  local target_file="$1"
+  local example_file="$2"
+  local label="$3"
+
+  if [ -f "$target_file" ]; then
+    echo "✅ $label env already present: $target_file"
+    return 0
+  fi
+
+  if [ ! -f "$example_file" ]; then
+    echo "❌ Missing required example env file: $example_file"
+    echo "   This repo expects example env templates to be committed."
+    echo "   Restore the missing file and re-run yarn dev."
+    exit 1
+  fi
+
+  cp "$example_file" "$target_file"
+  echo "✅ Created $target_file from $example_file"
+}
+
+if [ "$MODE" = "--stack" ]; then
+  echo "🐳 Starting full Docker stack..."
+  docker compose -f "$ROOT_DIR/infra/docker-compose.yml" up --build -d
+  echo "✅ Full stack started."
+  echo "   Proxy root: http://goodwill-ca.lvh.me:3000"
+  echo "   API health: http://goodwill-ca.lvh.me:3000/api/health"
+  exit 0
+fi
 
 echo "🔧 Starting infra (Postgres + Redis)..."
-docker compose -f "$ROOT_DIR/infra/docker-compose.yml" up -d
+docker compose -f "$ROOT_DIR/infra/docker-compose-infra.yml" up -d
 
 echo "⏳ Waiting for Postgres to be ready..."
 until docker exec auth-lab-postgres pg_isready -U auth_lab -d auth_lab >/dev/null 2>&1; do
@@ -25,22 +45,32 @@ done
 
 echo "✅ Infra is up."
 
-echo "📦 Installing dependencies (workspace)..."
+echo "📦 Installing dependencies..."
 cd "$ROOT_DIR"
 yarn install
 
 echo "🧩 Ensuring backend env file exists..."
-cd "$ROOT_DIR/backend"
-if [ ! -f .env ]; then
-  cp .env.example .env
-  echo "✅ Created backend/.env from backend/.env.example"
-fi
+ensure_env_file "$ROOT_DIR/backend/.env" "$ROOT_DIR/backend/.env.example" "Backend"
+
+echo "🧩 Ensuring frontend env file exists..."
+ensure_env_file "$ROOT_DIR/frontend/.env.local" "$ROOT_DIR/frontend/.env.example" "Frontend"
 
 echo "🗄️  Running migrations..."
-yarn db:migrate
+cd "$ROOT_DIR"
+yarn workspace @auth-lab/backend db:migrate
 
 echo "🧬 Generating DB types..."
-yarn db:types
+yarn workspace @auth-lab/backend db:types
 
-echo "🚀 Starting backend (hot reload)..."
-yarn dev
+echo "🚀 Starting backend + frontend (host-run mode)..."
+echo "   Frontend URL: http://goodwill-ca.localhost:3000"
+echo "   Backend URL:  http://localhost:3001"
+echo ""
+echo "ℹ️  Use goodwill-ca.localhost:3000 in the browser for tenant-aware frontend behaviour."
+echo "   Plain localhost:3000 does not include a tenant subdomain."
+echo "   In host-run mode, browser /api/* is proxied by Next Route Handlers."
+echo ""
+
+yarn concurrently \
+  "yarn workspace @auth-lab/backend dev" \
+  "yarn workspace frontend dev"

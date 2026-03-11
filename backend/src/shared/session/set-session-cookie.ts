@@ -3,19 +3,31 @@
  *
  * WHY:
  * - Session cookie construction is not unique to AuthController.
- * - SSO (Brick 10), MFA verify (Brick 9), and logout (Brick 13) all need to
- *   set or clear the same cookie with the same flags.
+ * - SSO (sso-callback), MFA verify, and logout all need to set or clear
+ *   the same cookie with the same flags.
  * - Centralising here means the HttpOnly / SameSite=Strict / Secure (prod)
  *   rules are defined in one place and can never drift between controllers.
+ *
+ * COOKIE CONTRACT (v2 CORRECTED — topology doc Section 2.1):
+ * - Production name: __Host-sid (enforced by getSessionCookieName)
+ * - Dev name: sid
+ * - HttpOnly: always true
+ * - Secure: true in production (required by __Host- prefix), false in dev (HTTP)
+ * - SameSite: Strict — always. All session-authenticated calls are same-site fetch().
+ *   Cross-site navigations (e.g. SSO callback) do NOT need the session cookie —
+ *   the session is created inside the callback handler, not read.
+ * - Domain: INTENTIONALLY OMITTED — host-only binding.
+ *   NEVER add domain: '.hubins.com'. That breaks __Host- and weakens isolation.
+ * - Path: /
  *
  * RULES:
  * - No business logic here.
  * - No DB access here.
- * - Receives isProduction from the caller (injected at construction time in each controller).
+ * - isProduction is injected at construction time from config.nodeEnv.
  */
 
 import type { FastifyReply } from 'fastify';
-import { SESSION_COOKIE_NAME } from './session.types';
+import { getSessionCookieName } from './session.types';
 
 export function setSessionCookie(
   reply: FastifyReply,
@@ -23,15 +35,19 @@ export function setSessionCookie(
   isProduction: boolean,
   sessionTtlSeconds: number,
 ): void {
+  const cookieName = getSessionCookieName(isProduction);
   const expires = new Date(Date.now() + sessionTtlSeconds * 1000).toUTCString();
 
   const parts = [
-    `${SESSION_COOKIE_NAME}=${sessionId}`,
+    `${cookieName}=${sessionId}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Strict',
     `Max-Age=${sessionTtlSeconds}`,
     `Expires=${expires}`,
+    // Domain intentionally omitted — host-only binding.
+    // __Host- prefix enforces this in production.
+    // NEVER add: Domain=.hubins.com
   ];
 
   if (isProduction) {
@@ -42,9 +58,11 @@ export function setSessionCookie(
 }
 
 export function clearSessionCookie(reply: FastifyReply, isProduction: boolean): void {
+  const cookieName = getSessionCookieName(isProduction);
+
   // Max-Age=0 instructs the browser to delete the cookie immediately.
   const parts = [
-    `${SESSION_COOKIE_NAME}=`,
+    `${cookieName}=`,
     'Path=/',
     'HttpOnly',
     'SameSite=Strict',

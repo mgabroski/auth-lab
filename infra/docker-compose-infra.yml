@@ -1,0 +1,48 @@
+# infra/docker-compose-infra.yml
+#
+# WHY:
+# - Used when running backend + frontend on the HOST for active development
+#   (hot reload, no Docker rebuild cycle).
+# - Provides only the infrastructure dependencies: Postgres + Redis.
+# - The full topology (with proxy) is in docker-compose.yml.
+#
+# HOW TO USE:
+#   docker compose -f infra/docker-compose-infra.yml up -d
+#   (then: cd backend && yarn dev   or   ./scripts/dev.sh)
+
+name: hubins-infra
+
+services:
+  postgres:
+    image: postgres:17
+    container_name: auth-lab-postgres
+    environment:
+      POSTGRES_DB: auth_lab
+      POSTGRES_USER: auth_lab
+      POSTGRES_PASSWORD: auth_lab
+    ports:
+      - '5432:5432'
+    volumes:
+      - hubins_infra_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U auth_lab -d auth_lab']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: auth-lab-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - hubins_infra_redis:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  hubins_infra_pg:
+  hubins_infra_redis:

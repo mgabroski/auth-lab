@@ -1,351 +1,485 @@
-# Auth / User Provisioning — Configuration Guide
+# Auth / User Provisioning — Backend Module Guide
 
-`docs/modules/auth-user-provisioning.md`
+This document explains the **current backend behavior** of the Auth + User Provisioning foundation in this repository.
 
-This document explains the tenant-level configuration options that control Auth / User Provisioning behavior. It is written for product managers, QA engineers, and other stakeholders who need to understand Auth / User Provisioning behavior without reading code.
+It is written for:
 
----
+- backend engineers
+- frontend engineers integrating with auth/bootstrap behavior
+- QA engineers verifying tenant-aware auth behavior
+- PM/technical stakeholders who need a truthful view of what the backend currently supports
 
-## What this module controls
+This is **not** a generic platform vision document.
+It is a backend module guide for the module surface that exists now.
 
-This module is responsible for how users get into the platform, how they authenticate, and how their access is managed. Every user-facing action related to identity — signing up, logging in, resetting a password, verifying an email, setting up MFA, using SSO — is governed by this module.
+Read this after:
 
-The settings described in this document control which of those actions are available, for which tenants, and under what conditions.
-
----
-
-## How configuration works
-
-Every tenant (workspace) has its own settings. One tenant can allow public signup while another requires invites only. One can use Google SSO while another uses passwords only.
-
-Settings are stored per tenant and are intended to be applied without redeploy.
-
-Some features also require platform-level credentials to be configured (for example, Google SSO requires a Google client ID and secret in the server environment). Those are noted where relevant.
+1. `README.md`
+2. `docs/current-foundation-status.md`
+3. `ARCHITECTURE.md`
+4. `docs/decision-log.md`
+5. `backend/docs/api/auth.md`
 
 ---
 
-## The flags
+## 1. What this module is responsible for
+
+At the current repo phase, the Auth + User Provisioning backend foundation is responsible for:
+
+- authenticating users by password
+- establishing and destroying tenant-bound sessions
+- exposing auth bootstrap endpoints (`/auth/me`, `/auth/config`)
+- handling public signup where tenant policy allows it
+- handling invite-based registration / provisioning
+- handling email verification and resend flows
+- handling password reset initiation and completion
+- handling MFA setup / verify / recovery
+- handling Google and Microsoft SSO start/callback flows
+- coordinating tenant membership creation/activation during provisioning flows
+- supporting admin invite lifecycle behavior
+
+This module is foundational because it sits on top of:
+
+- tenant resolution
+- request context
+- session infrastructure
+- tenant membership behavior
+- email/outbox delivery
+- audit behavior
 
 ---
 
-### Public signup
+## 2. What this module does not claim to do yet
 
-**What it does:** Controls whether anyone can create an account at the tenant's URL without being invited first.
+This guide must remain truthful about current scope.
 
-| Setting         | What happens                                                                          |
-| --------------- | ------------------------------------------------------------------------------------- |
-| Off _(default)_ | The signup page is not available. Users must receive an invite from an admin to join. |
-| On              | Any user can visit the tenant URL and register an account directly.                   |
+It does **not** claim that the repo already has:
 
-**Things to know:**
+- full frontend auth screens
+- full frontend route guards/bootstrap state
+- full tenant-admin UX for every auth configuration branch
+- every future Hubins identity/provisioning feature that broader platform docs may discuss
 
-- When public signup is off, admins are the only way to bring new users in.
-- When public signup is on, you can optionally restrict which email domains are allowed (see [Allowed email domains](#allowed-email-domains)).
-- Password-based public signups require email verification by default. SSO-based signups do not — the SSO provider acts as the verification.
-
-**What users see when it's off:** "Sign-up is disabled for this workspace. You need an invitation to join."
+If a behavior is planned but not yet implemented, it must not be described here as current backend capability.
 
 ---
 
-### Admin invites
+## 3. Core backend model
 
-**What it does:** Controls whether tenant admins can invite new users by email through the admin panel.
+## 3.1 Tenant identity
 
-| Setting        | What happens                                                 |
-| -------------- | ------------------------------------------------------------ |
-| On _(default)_ | Admins can send invite emails, resend them, and cancel them. |
-| Off            | The invite creation controls are disabled for this tenant.   |
+Tenant identity is derived from the request host/subdomain.
 
-**Things to know:**
+The backend does **not** trust the client to choose tenant identity through:
 
-- Turning this off does not cancel invites that have already been sent. Users with a valid pending invite can still accept it.
-- If both public signup and admin invites are off, users must be provisioned through another administrative or platform-controlled process.
+- request body
+- query params
+- local storage
+- arbitrary headers
 
----
-
-### Password login
-
-**What it does:** Controls whether users can sign in with an email address and password.
-
-| Setting        | What happens                                                       |
-| -------------- | ------------------------------------------------------------------ |
-| On _(default)_ | The email + password login form is available.                      |
-| Off            | Password login is blocked. Users must sign in via an SSO provider. |
-
-**Things to know:**
-
-- If you turn this off, make sure at least one SSO provider (Google or Microsoft) is turned on. At least one login method should remain available at all times.
-- Users who previously used a password to sign in will not be able to until this is re-enabled.
-- Password reset becomes unavailable automatically when password login is off.
-
-**What users see when it's off:** "Please sign in using your SSO provider."
+This means every auth/provisioning behavior is tenant-aware by construction.
 
 ---
 
-### Password reset
+## 3.2 Sessions
 
-**What it does:** Controls whether users can request a "forgot my password" email.
+Sessions are server-side and Redis-backed.
 
-| Setting        | What happens                                                                                       |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| On _(default)_ | Users can request a password reset email from the login page.                                      |
-| Off            | No reset email is sent. The page still shows "Check your email" — this is intentional (see below). |
+Important consequences:
 
-**Things to know:**
+- browser code does not manage auth tokens in local storage
+- the backend can revoke or rotate session state centrally
+- session state can represent intermediate continuation state such as MFA verification status
+- session identity is tenant-bound
 
-- The forgot-password page always shows the same confirmation message regardless of whether the email exists in the system or whether this flag is on or off. This is a deliberate security decision — it prevents anyone from discovering which email addresses have accounts.
-- Users who sign in only via Google or Microsoft cannot reset a password — they don't have one. The system silently skips them regardless of this setting.
-- This flag has no effect when password login is off.
-
----
-
-### Email verification
-
-**What it does:** Controls whether users who sign up with a password must verify their email address before they can access the workspace.
-
-| Setting        | What happens                                                                                                      |
-| -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| On _(default)_ | After signing up, users receive a verification email. They cannot access the workspace until they click the link. |
-| Off            | Signup immediately grants access. No verification email is sent.                                                  |
-
-**Things to know:**
-
-- Email verification only applies to password-based public signup. Invited users and SSO users are not asked to verify — the invite or the SSO provider is already a sufficient signal of identity.
-- If your email delivery is delayed or unreliable, make sure resend verification is also on so users are not stuck.
+A session from tenant A must not authenticate on tenant B.
+That is a foundational security rule of this module.
 
 ---
 
-### Resend verification email
+## 3.3 Continuation state
 
-**What it does:** Controls whether users who haven't yet verified their email can request another verification email.
+Authentication is not modeled as a single binary “logged in / not logged in” result.
 
-| Setting        | What happens                                                           |
-| -------------- | ---------------------------------------------------------------------- |
-| On _(default)_ | A "resend verification email" option is available to unverified users. |
-| Off            | Users cannot request another verification email.                       |
+The backend can require continued action after session establishment, such as:
 
-**Things to know:**
+- email verification
+- MFA setup
+- MFA verification
 
-- Only relevant when email verification is on.
-- Resend requests are rate-limited (a user can only request a few per hour) regardless of this setting. This protects against abuse.
+This is surfaced through backend truth, especially:
 
----
+- `AuthResult.nextAction`
+- `GET /auth/me`
 
-### Google SSO
-
-**What it does:** Controls whether users can sign in with a Google account.
-
-| Setting         | What happens                                            |
-| --------------- | ------------------------------------------------------- |
-| Off _(default)_ | No Google sign-in button is shown.                      |
-| On              | Users can sign in with their Google account via OAuth2. |
-
-**Things to know:**
-
-- Requires Google OAuth credentials to be set up at the platform level. If those credentials are not configured, turning this on has no visible effect.
-- Users who sign in via Google are not asked to set a password and are not subject to password reset.
-- If Google SSO is later turned off, users who only have a Google login will not be able to sign in until it is re-enabled or they set a password via an admin-initiated flow.
+The frontend is expected to follow backend continuation truth rather than re-derive it independently.
 
 ---
 
-### Microsoft SSO
+## 4. Current backend capability areas
 
-**What it does:** Controls whether users can sign in with a Microsoft (Office 365 / Azure AD) account.
+## 4.1 Password login
 
-| Setting         | What happens                                               |
-| --------------- | ---------------------------------------------------------- |
-| Off _(default)_ | No Microsoft sign-in button is shown.                      |
-| On              | Users can sign in with their Microsoft account via OAuth2. |
+The module supports tenant-aware email/password login.
 
-**Things to know:**
+Behavior summary:
 
-- Requires Microsoft OAuth credentials to be set up at the platform level.
-- Behaves identically to Google SSO in all other respects.
-
----
-
-### MFA (multi-factor authentication)
-
-**What it does:** Controls whether TOTP-based MFA (Google Authenticator, Authy, etc.) is available for users in this tenant.
-
-| Setting        | What happens                                                                                                                     |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| On _(default)_ | MFA setup and verification are available. Admins are required to complete MFA on every login. Members follow the tenant setting. |
-| Off            | MFA is not required or available for members.                                                                                    |
-
-**Things to know:**
-
-- **Admin MFA is always required.** This cannot be turned off by tenant configuration. An admin who has not set up MFA will be prompted to do so before they can access the workspace. This is a platform-wide security guarantee.
-- Turning this off disables MFA for members only.
-- When MFA is off, the MFA recovery option below has no effect.
+- validates credentials against the current tenant context
+- creates a session on success
+- returns continuation-aware auth result
+- may still require next-step action (`nextAction`) rather than immediate app access
 
 ---
 
-### MFA recovery codes
+## 4.2 Invite-based registration / provisioning
 
-**What it does:** Controls whether users are given one-time recovery codes during MFA setup, which they can use if they lose access to their authenticator device.
+The module supports invite-based registration.
 
-| Setting        | What happens                                                                                                   |
-| -------------- | -------------------------------------------------------------------------------------------------------------- |
-| On _(default)_ | Recovery codes are generated at MFA setup time and can be used as a fallback login method.                     |
-| Off            | No recovery codes are issued. Users who lose their device cannot self-recover and must contact an admin or IT. |
+Behavior summary:
 
-**Things to know:**
+- registration is tied to an invite token
+- provisioning happens in the context of the current tenant
+- the resulting user is associated to the tenant membership created or activated by the flow
+- successful completion establishes a session and returns auth result data
 
-- Users who already have recovery codes from a previous setup will retain them even if this setting is turned off. Turning this off only affects new MFA setups going forward.
-- Only relevant when MFA is on.
-
----
-
-### Allowed email domains
-
-**What it does:** Restricts which email addresses are permitted to join the tenant, based on their domain.
-
-| Setting                                   | What happens                                                                  |
-| ----------------------------------------- | ----------------------------------------------------------------------------- |
-| Empty _(default)_                         | No domain restriction. Any email can be invited or sign up.                   |
-| One or more domains set (e.g. `acme.com`) | Only email addresses from those domains are accepted. All others are blocked. |
-
-**Things to know:**
-
-- This restriction applies at every entry point: public signup, admin invite creation, invite acceptance, and SSO login.
-- Domain matching is exact and case-insensitive. Setting `acme.com` permits `user@acme.com` but not `user@mail.acme.com`.
-- A user who was previously a member and then changes their email to a non-permitted domain is not automatically removed. This restriction only applies at the point of joining.
-
-**What users see when blocked:** "Your email domain is not permitted for this workspace. Contact your admin."
+This is distinct from public self-signup.
 
 ---
 
-## How flags interact
+## 4.3 Public signup
 
-A few combinations are worth knowing before you configure a tenant.
+The module supports self-service signup **only** when the tenant policy allows it.
 
-**If you turn off password login:**
-Password reset becomes unavailable automatically. At least one SSO provider must be on. Check that your users have SSO identities set up before making this change.
+Behavior summary:
 
-**If you turn on public signup:**
-Email verification should also be on unless you have a separate reason to trust unverified emails. Without verification, anyone can claim any email address.
+- signup is tenant-scoped by host/subdomain
+- backend checks tenant availability / signup policy
+- successful signup may still require email verification before the session is considered fully continued
 
-**If you turn off MFA:**
-This only affects members. Admin MFA remains mandatory and cannot be disabled.
-
-**If you set allowed email domains:**
-This applies to every entry point. Test with a realistic email address before rolling out to avoid locking out users unexpectedly.
+This is why the frontend must use backend bootstrap/config endpoints instead of assuming signup is globally allowed.
 
 ---
 
-## Common tenant setups
+## 4.4 Email verification
 
-### Invite-only with passwords
+The module supports:
 
-Users must be invited by an admin. They sign in with email and password. Admins require MFA.
+- verify email via token
+- resend verification email
 
-```
-Public signup:          Off
-Admin invites:          On
-Password login:         On
-Password reset:         On
-Email verification:     Off   (invite is sufficient verification)
-Google SSO:             Off
-Microsoft SSO:          Off
-MFA:                    On
-MFA recovery:           On
-Allowed domains:        acme.com
-```
+Behavior summary:
+
+- verification is associated with the authenticated user/session flow
+- verifying email upgrades server-side truth so the session reflects verified state
+- resend flow intentionally uses a generic success message rather than leaking detailed state
+
+This is part of the continuation flow, not a separate unrelated feature.
 
 ---
 
-### SSO-only (no passwords)
+## 4.5 Password reset
 
-Users must be invited. They sign in with Google only. No passwords are managed by the platform.
+The module supports:
 
-```
-Public signup:          Off
-Admin invites:          On
-Password login:         Off
-Password reset:         Off   (automatic — no passwords)
-Email verification:     Off
-Google SSO:             On
-Microsoft SSO:          Off
-MFA:                    On
-MFA recovery:           On
-Allowed domains:        acme.com
-```
+- forgot password initiation
+- reset password completion
+
+Behavior summary:
+
+- forgot-password always returns generic success
+- this is deliberate anti-enumeration behavior
+- reset-password consumes a reset token and updates the password
+- reset-password does not automatically log the user in
 
 ---
 
-### Open community signup
+## 4.6 MFA
 
-Anyone can register. Email is verified to prevent throwaway accounts.
+The module supports:
 
-```
-Public signup:          On
-Admin invites:          On
-Password login:         On
-Password reset:         On
-Email verification:     On
-Resend verification:    On
-Google SSO:             On
-Microsoft SSO:          Off
-MFA:                    On
-MFA recovery:           On
-Allowed domains:        (none — open)
-```
+- MFA setup
+- MFA setup verification
+- MFA verification for partially authenticated sessions
+- MFA recovery via recovery code
 
----
+Behavior summary:
 
-### Enterprise — Microsoft, no self-service
+- MFA endpoints require an authenticated, email-verified session
+- setup returns secret / QR URI / recovery codes
+- verify-setup and verify elevate the session into MFA-verified state
+- session rotation occurs on privilege elevation
+- recovery also results in MFA-verified session elevation
 
-Large organisation. All users provisioned by HR import. Sign-in via Microsoft only. IT manages device recovery.
-
-```
-Public signup:          Off
-Admin invites:          Off
-Password login:         Off
-Password reset:         Off
-Email verification:     Off
-Google SSO:             Off
-Microsoft SSO:          On
-MFA:                    On
-MFA recovery:           Off   (IT manages recovery)
-Allowed domains:        corp.acme.com
-```
+This is a security-critical part of the module, not optional decoration.
 
 ---
 
-## What QA should check when a flag changes
+## 4.7 SSO
 
-**When turning public signup on:**
+The module supports SSO start/callback for:
 
-- Unauthenticated users can reach the signup page.
-- Email verification prompt appears after registration (if verification is on).
-- Users outside allowed domains are blocked at submission.
-- Users inside allowed domains can complete registration.
+- Google
+- Microsoft
 
-**When turning public signup off:**
+Behavior summary:
 
-- Signup page returns the correct blocked message.
-- Existing members are not affected.
+- start endpoint validates provider and optional safe `returnTo`
+- encrypted state carries redirect context
+- short-lived `sso-state` cookie binds browser callback state for CSRF protection
+- callback validates query `state` against the cookie
+- successful callback provisions or signs in the user in the current tenant context
+- successful callback establishes session and redirects back into the app
 
-**When turning an SSO provider on or off:**
-
-- SSO button appears or disappears on the login page.
-- Users who only have that SSO identity cannot sign in when the provider is off.
-- Users with a fallback password identity can still sign in via password when SSO is off.
-
-**When turning MFA off for members:**
-
-- Members can complete login without being prompted for a code.
-- Admins are still prompted for MFA — this must not change.
-
-**When changing allowed email domains:**
-
-- Invite creation with a non-permitted domain fails with the correct message.
-- Public signup with a non-permitted domain fails with the correct message.
-- SSO login from a non-permitted domain fails with the correct message.
-- Users who were already members are not affected.
+This is intentionally tenant-aware and topology-aware.
+It is not a generic global callback hack.
 
 ---
 
-_End of auth-user-provisioning.md_
-_Update this document when a flag is added, removed, or its behavior changes._
+## 4.8 Logout
+
+The module supports authenticated logout.
+
+Behavior summary:
+
+- destroys session state
+- clears session cookie
+- works even if the current user has not yet completed email verification
+
+That last point is deliberate: unverified users must still be able to log out.
+
+---
+
+## 4.9 Auth bootstrap surface
+
+This is one of the most important responsibilities of the current backend foundation.
+
+The backend exposes:
+
+- `GET /auth/config`
+- `GET /auth/me`
+
+These are the main frontend bootstrap endpoints.
+
+### `GET /auth/config`
+
+Purpose:
+
+- tell the unauthenticated/bootstrap UI what public-safe tenant auth configuration is visible
+
+Current truth exposed:
+
+- tenant display name
+- tenant active/inactive availability
+- whether public signup is enabled
+- which SSO providers are allowed
+
+Deliberately not exposed:
+
+- internal tenant security settings not required by bootstrap UI
+- sensitive tenant policy data that would overexpose internal configuration
+
+### `GET /auth/me`
+
+Purpose:
+
+- tell the frontend who the current authenticated user is
+- tell the frontend what tenant and membership are active
+- tell the frontend whether email/MFA continuation is required
+
+These two endpoints are central to the current frontend-readiness plan.
+
+---
+
+## 5. Tenant configuration behavior that currently matters
+
+This section describes tenant-scoped backend behavior that is meaningful today.
+It does **not** claim to document every possible future tenant setting.
+
+## 5.1 Tenant active/inactive availability
+
+Current effect:
+
+- inactive or unavailable tenant state affects public-facing auth bootstrap behavior
+- `GET /auth/config` deliberately returns the same unavailable shape for unknown and inactive tenants
+
+Why:
+
+- avoids unnecessary tenant state enumeration
+- keeps public bootstrap behavior privacy-preserving
+
+---
+
+## 5.2 Public signup enabled/disabled
+
+Current effect:
+
+- controls whether self-service signup is available for the current tenant
+- exposed as public-safe bootstrap information via `/auth/config`
+
+This matters to both backend enforcement and frontend visibility.
+
+---
+
+## 5.3 Allowed SSO providers
+
+Current effect:
+
+- controls which SSO providers are allowed for the current tenant
+- exposed through `/auth/config` as public-safe bootstrap truth
+- current supported providers are Google and Microsoft
+
+The frontend should show SSO entrypoints based on backend truth, not static UI assumptions.
+
+---
+
+## 6. Privacy and anti-enumeration posture
+
+The current backend module intentionally avoids exposing too much account or tenant state through public responses.
+
+Important behaviors:
+
+### Unknown vs inactive tenant
+
+`GET /auth/config` returns the same unavailable shape for both.
+
+### Forgot password
+
+`POST /auth/forgot-password` always returns generic success.
+
+### Resend verification
+
+`POST /auth/resend-verification` always returns generic success.
+
+These are contract decisions, not implementation accidents.
+They should not be “simplified” casually because they are part of the module’s privacy posture.
+
+---
+
+## 7. Current interaction with neighboring backend modules
+
+The Auth + User Provisioning module does not exist in isolation.
+
+It currently relies on neighboring bounded contexts such as:
+
+- tenants
+- users
+- memberships
+- invites
+- audit
+
+Typical responsibilities across boundaries:
+
+### Tenants
+
+- resolve tenant by key/host context
+- provide tenant availability/config inputs
+
+### Users
+
+- user lookup and user creation/update behaviors needed by auth flows
+
+### Memberships
+
+- membership lookup, creation, activation, role information
+
+### Invites
+
+- invite lookup, validation, acceptance/provisioning coordination
+
+### Audit
+
+- structured audit recording for auth/admin-sensitive actions
+
+This document describes the module behavior, not every internal boundary detail.
+Those boundaries are governed by the repo’s backend engineering rules and actual code structure.
+
+---
+
+## 8. Current frontend integration truth
+
+The frontend integration model expected by this backend foundation is:
+
+### Before authentication
+
+Use `GET /auth/config` to decide:
+
+- whether the tenant is effectively available
+- whether signup should be shown
+- which SSO options should be shown
+
+### After a session exists
+
+Use `GET /auth/me` to decide:
+
+- current user identity
+- current membership role
+- current tenant identity
+- current continuation requirement through `nextAction`
+
+### Do not re-derive continuation logic in frontend
+
+The backend owns continuation truth.
+The frontend should follow it.
+
+### Do not hardcode browser-to-backend origins
+
+Browser calls stay same-origin through `/api/*`.
+SSR may call backend directly through `INTERNAL_API_URL` while forwarding request identity headers.
+
+---
+
+## 9. What is strong and stable enough to build on now
+
+The following parts of this module should be treated as stable foundation behavior unless intentionally changed:
+
+- tenant-scoped auth behavior
+- session-tenant binding
+- `/auth/config` as public-safe bootstrap endpoint
+- `/auth/me` as authenticated bootstrap endpoint
+- continuation semantics through `nextAction`
+- generic success responses for selected privacy-sensitive endpoints
+- tenant-aware SSO start/callback model
+- MFA session elevation + rotation behavior
+
+These are not temporary conveniences.
+They are foundational behaviors for the next frontend and module work.
+
+---
+
+## 10. What is still intentionally next-step work
+
+This backend module guide must remain explicit that some work is still ahead.
+
+Not yet represented here as completed product surface:
+
+- rich frontend auth screens and shells
+- full frontend continuation routing behavior
+- broader identity/admin settings UX beyond the current backend foundation
+- future Hubins modules beyond this foundation slice
+
+That future work should build on the behaviors described here, not replace them casually.
+
+---
+
+## 11. When to update this file
+
+Update this file whenever:
+
+- auth/provisioning backend behavior changes materially
+- tenant-facing auth configuration behavior changes
+- privacy/anti-enumeration behaviors change
+- bootstrap endpoint responsibilities change
+- new provisioning paths are added
+- current documented capability becomes obsolete or removed
+
+If the backend module changed and this file still describes the old behavior, this file is stale.
+
+---
+
+## 12. Final truth rule
+
+This file should help future contributors answer one question clearly:
+
+**What does the Auth + User Provisioning backend foundation actually do today?**
+
+If the document becomes broader, vaguer, or more aspirational than the code, it has failed its job.

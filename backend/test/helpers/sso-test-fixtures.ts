@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { Response } from 'light-my-request';
-import type { DbExecutor } from '../../src/shared/db/db';
 import { sql } from 'kysely';
 
+import type { DbExecutor } from '../../src/shared/db/db';
+
+/**
+ * Creates a tenant specifically configured for SSO testing.
+ */
 export async function createSsoTenant(opts: {
   db: DbExecutor;
   tenantKey: string;
@@ -27,6 +31,9 @@ export async function createSsoTenant(opts: {
     .executeTakeFirstOrThrow();
 }
 
+/**
+ * Creates a user and an associated membership record in a single flow.
+ */
 export async function createUserWithMembership(opts: {
   db: DbExecutor;
   tenantId: string;
@@ -61,6 +68,9 @@ export async function createUserWithMembership(opts: {
   return { user, membership };
 }
 
+/**
+ * Generates an unsigned, Base64Url encoded JWT for mocking SSO providers.
+ */
 export function buildFakeIdToken(payload: Record<string, unknown>): string {
   const header = base64UrlJson({ alg: 'none', typ: 'JWT' });
   const body = base64UrlJson(payload);
@@ -75,11 +85,15 @@ function base64UrlJson(value: unknown): string {
     .replace(/=+$/g, '');
 }
 
+/**
+ * Simulates the initial GET request to an SSO endpoint and extracts
+ * the required state, nonce, and session cookies for the callback phase.
+ */
 export async function getSsoStateFromStart(opts: {
   app: FastifyInstance;
   host: string;
   provider: 'google' | 'microsoft';
-}): Promise<{ state: string; nonce: string }> {
+}): Promise<{ state: string; nonce: string; cookieHeader: string }> {
   const res: Response = await opts.app.inject({
     method: 'GET',
     url: `/auth/sso/${opts.provider}`,
@@ -91,12 +105,29 @@ export async function getSsoStateFromStart(opts: {
   }
 
   const location = res.headers.location;
-  if (typeof location !== 'string') throw new Error('Location header missing in 302 response');
+  if (typeof location !== 'string') {
+    throw new Error('Location header missing in 302 response');
+  }
 
-  const u = new URL(location, `http://${opts.host}`);
-  const state = u.searchParams.get('state');
-  const nonce = u.searchParams.get('nonce');
+  const url = new URL(location, `http://${opts.host}`);
+  const state = url.searchParams.get('state');
+  const nonce = url.searchParams.get('nonce');
 
-  if (!state || !nonce) throw new Error('state/nonce missing in SSO redirect URL');
-  return { state, nonce };
+  if (!state || !nonce) {
+    throw new Error('state/nonce missing in SSO redirect URL');
+  }
+
+  const rawSetCookie = res.headers['set-cookie'];
+  const setCookie = Array.isArray(rawSetCookie) ? rawSetCookie[0] : rawSetCookie;
+
+  if (typeof setCookie !== 'string' || !setCookie.length) {
+    throw new Error('Set-Cookie header missing in SSO start response');
+  }
+
+  const cookieHeader = setCookie.split(';')[0] ?? '';
+  if (!cookieHeader) {
+    throw new Error('Unable to extract SSO state cookie from Set-Cookie header');
+  }
+
+  return { state, nonce, cookieHeader };
 }

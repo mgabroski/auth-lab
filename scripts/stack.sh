@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# scripts/stack.sh
+#
+# WHY:
+# - Full Docker topology stack runner.
+# - Validates the real deployment wiring: reverse proxy, subdomain tenant
+#   resolution, forwarded headers, cookie/session behaviour.
+# - NOT the daily inner-loop dev mode. Use yarn dev for that.
+#
+# WHEN TO USE:
+# - Before merging any change to: infra/, proxy config, cookie policy,
+#   session middleware, SSO callback URLs, CORS config.
+# - When verifying that tenant resolution works through the proxy.
+# - On CI for the proxy conformance test gate.
+#
+# VALIDATES (host-run dev mode does NOT give you these):
+# - Real Caddy proxy behaviour (X-Forwarded-For chain, /api prefix stripping)
+# - SameSite=Lax cookie behaviour via proxy (OAuth redirect flow)
+# - HttpOnly + Path=/ cookie scoping via proxy
+# - Single public origin: http://<tenant>.lvh.me:3000
+# - Subdomain tenant resolution end-to-end
+#
+# DOES NOT VALIDATE (local stack is HTTP only):
+# - __Host- cookie name prefix (requires HTTPS + Secure flag — production only)
+# - True production Secure cookie behaviour
+# - Proxy-mediated HMR hot reload (Docker image runs standalone/production build)
+#
+# USAGE:
+#   ./scripts/stack.sh up       — build and start full stack
+#   ./scripts/stack.sh down     — stop all containers
+#   ./scripts/stack.sh logs     — tail all logs
+#   ./scripts/stack.sh rebuild  — rebuild images and restart
+#   ./scripts/stack.sh test     — run proxy conformance tests
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMPOSE="docker compose -f $ROOT_DIR/infra/docker-compose.yml"
+
+CMD="${1:-up}"
+
+case "$CMD" in
+  up)
+    echo "🐳 Starting full Hubins stack..."
+    $COMPOSE up --build -d
+    echo ""
+    echo "✅ Stack started."
+    echo ""
+    echo "  Proxy:    http://goodwill-ca.lvh.me:3000"
+    echo "  Health:   http://goodwill-ca.lvh.me:3000/api/health"
+    echo "  Frontend: http://goodwill-ca.lvh.me:3000/"
+    echo ""
+    echo "  Logs: ./scripts/stack.sh logs"
+    echo "  Test: ./scripts/stack.sh test"
+    ;;
+
+  down)
+    echo "🛑 Stopping full Hubins stack..."
+    $COMPOSE down
+    ;;
+
+  logs)
+    $COMPOSE logs -f
+    ;;
+
+  rebuild)
+    echo "🔨 Rebuilding and restarting full Hubins stack..."
+    $COMPOSE down
+    $COMPOSE up --build -d
+    ;;
+
+  test)
+    echo "🧪 Running proxy conformance tests..."
+    "$ROOT_DIR/scripts/proxy-conformance.sh"
+    ;;
+
+  *)
+    echo "Usage: ./scripts/stack.sh [up|down|logs|rebuild|test]"
+    exit 1
+    ;;
+esac

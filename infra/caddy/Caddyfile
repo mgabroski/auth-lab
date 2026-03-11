@@ -1,0 +1,69 @@
+# infra/caddy/Caddyfile
+#
+# WHY:
+# - Single public origin in local dev. Browser only ever talks to one host/port.
+# - Eliminates CORS, simplifies cookie scoping, mirrors production topology.
+# - Caddy used for dev; nginx used for prod (proxy conformance tests ensure parity).
+#
+# RULES:
+# - /api/*   → backend:3001, strip /api prefix (backend registers routes without /api)
+# - /_next/* → frontend:3000, NO prefix strip
+# - /*       → frontend:3000
+# - Host header forwarded EXACTLY as received (tenant resolution depends on this)
+# - X-Forwarded-Host forwarded explicitly (belt-and-suspenders for tenant fallback)
+# - X-Forwarded-For left to Caddy default append behaviour
+# - X-Forwarded-Proto forwarded (backend uses this for public-origin reconstruction)
+# - CORS is intentionally NOT configured here (same-origin architecture eliminates it)
+#
+# LOCAL DEV:
+# - auto_https off — HTTP only (sid cookie is NOT Secure in dev; __Host- not used)
+# - lvh.me wildcard — goodwill-ca.lvh.me resolves to 127.0.0.1, zero config
+# - Stack mode runs the standalone Next build, not `next dev`, so this file does
+#   NOT represent a proxy-mediated HMR environment.
+#
+# TENANT RESOLUTION:
+# - Browser navigates to goodwill-ca.lvh.me:3000
+# - Caddy preserves the Host header as-is
+# - Backend extractTenantKey() reads "goodwill-ca" from Host
+# - Session middleware enforces session.tenantKey === request tenantKey
+
+{
+  admin off
+  auto_https off # HTTP only in local dev (Secure=false for sid cookie)
+}
+
+*.lvh.me:3000 {
+  # ── API routes → backend (strip /api prefix) ──────────────────────────
+  @api path /api/*
+
+  handle @api {
+    uri strip_prefix /api
+    reverse_proxy backend:3001 {
+      header_up Host {host}
+      header_up X-Forwarded-Host {host}
+      header_up X-Forwarded-Proto {scheme}
+      # WHY: X-Forwarded-For is intentionally NOT set here.
+      # Caddy's reverse_proxy directive already appends the real client IP
+      # to the X-Forwarded-For chain by default.
+    }
+  }
+
+  # ── Next.js assets → frontend ──────────────────────────────────────────
+  # Handles static chunks and runtime asset requests for the standalone build.
+  @nextAssets path /_next/*
+
+  handle @nextAssets {
+    reverse_proxy frontend:3000 {
+      header_up Host {host}
+      header_up X-Forwarded-Host {host}
+    }
+  }
+
+  # ── All other routes → Next.js frontend ───────────────────────────────
+  handle {
+    reverse_proxy frontend:3000 {
+      header_up Host {host}
+      header_up X-Forwarded-Host {host}
+    }
+  }
+}

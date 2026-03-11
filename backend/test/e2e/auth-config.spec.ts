@@ -2,24 +2,30 @@
  * backend/test/e2e/auth-config.spec.ts
  *
  * WHY:
- * - Verifies GET /auth/config public bootstrap contract.
+ * - Verifies GET /auth/config as the public frontend bootstrap endpoint.
  * - Locks anti-enumeration parity for unknown vs inactive tenants.
+ * - Verifies only public-safe tenant auth config is exposed.
  *
  * RULES:
- * - Use buildTestApp() per test.
+ * - Build a fresh app per test.
  * - Seed tenants directly with deps.db.
  * - No session cookie is required for this endpoint.
  */
 
-import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
-import { buildTestApp } from '../helpers/build-test-app';
-import type { DbExecutor } from '../../src/shared/db/db';
+import { describe, expect, it } from 'vitest';
+
 import type { ConfigResponse } from '../../src/modules/auth/auth.types';
+import type { DbExecutor } from '../../src/shared/db/db';
+import { buildTestApp } from '../helpers/build-test-app';
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
+}
+
+function hostForTenant(tenantKey: string): string {
+  return `${tenantKey}.hubins.com`;
 }
 
 async function createTenant(opts: {
@@ -51,7 +57,7 @@ async function createTenant(opts: {
 describe('GET /auth/config', () => {
   it('returns unavailable shape for an unknown tenant', async () => {
     const { app, close } = await buildTestApp();
-    const host = `unknown-${randomUUID().slice(0, 8)}.hubins.com`;
+    const host = hostForTenant(`unknown-${randomUUID().slice(0, 8)}`);
 
     try {
       const res = await app.inject({
@@ -90,12 +96,13 @@ describe('GET /auth/config', () => {
       const unknownRes = await app.inject({
         method: 'GET',
         url: '/auth/config',
-        headers: { host: `unknown-${randomUUID().slice(0, 8)}.hubins.com` },
+        headers: { host: hostForTenant(`unknown-${randomUUID().slice(0, 8)}`) },
       });
+
       const inactiveRes = await app.inject({
         method: 'GET',
         url: '/auth/config',
-        headers: { host: `${tenantKey}.hubins.com` },
+        headers: { host: hostForTenant(tenantKey) },
       });
 
       expect(inactiveRes.statusCode).toBe(200);
@@ -115,7 +122,7 @@ describe('GET /auth/config', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/auth/config',
-        headers: { host: `${tenantKey}.hubins.com` },
+        headers: { host: hostForTenant(tenantKey) },
       });
 
       expect(res.statusCode).toBe(200);
@@ -135,7 +142,7 @@ describe('GET /auth/config', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/auth/config',
-        headers: { host: `${tenantKey}.hubins.com` },
+        headers: { host: hostForTenant(tenantKey) },
       });
 
       expect(res.statusCode).toBe(200);
@@ -150,12 +157,16 @@ describe('GET /auth/config', () => {
     const tenantKey = `both-${randomUUID().slice(0, 8)}`;
 
     try {
-      await createTenant({ db: deps.db, tenantKey, allowedSso: ['microsoft', 'google'] });
+      await createTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['microsoft', 'google'],
+      });
 
       const res = await app.inject({
         method: 'GET',
         url: '/auth/config',
-        headers: { host: `${tenantKey}.hubins.com` },
+        headers: { host: hostForTenant(tenantKey) },
       });
 
       expect(res.statusCode).toBe(200);
@@ -175,7 +186,7 @@ describe('GET /auth/config', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/auth/config',
-        headers: { host: `${tenantKey}.hubins.com` },
+        headers: { host: hostForTenant(tenantKey) },
       });
 
       expect(res.statusCode).toBe(200);
@@ -199,10 +210,11 @@ describe('GET /auth/config', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/auth/config',
-        headers: { host: `${tenantKey}.hubins.com` },
+        headers: { host: hostForTenant(tenantKey) },
       });
 
       expect(res.statusCode).toBe(200);
+
       const body = readJson<ConfigResponse>(res);
       expect(body.tenant).not.toHaveProperty('allowedEmailDomains');
     } finally {
@@ -220,7 +232,7 @@ describe('GET /auth/config', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/auth/config',
-        headers: { host: `${tenantKey}.hubins.com` },
+        headers: { host: hostForTenant(tenantKey) },
       });
 
       expect(res.statusCode).toBe(200);

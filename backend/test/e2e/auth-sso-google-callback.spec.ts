@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+
 import { buildTestApp } from '../helpers/build-test-app';
 import {
   buildFakeIdToken,
@@ -18,8 +19,8 @@ describe('GET /auth/sso/google/callback', () => {
 
     try {
       const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
-
       const email = `u-${randomUUID().slice(0, 8)}@example.com`;
+
       await createUserWithMembership({
         db: deps.db,
         tenantId: tenant.id,
@@ -28,7 +29,11 @@ describe('GET /auth/sso/google/callback', () => {
         status: 'ACTIVE',
       });
 
-      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
 
       sso.googleAdapter.willSucceed({
         idToken: buildFakeIdToken({
@@ -36,7 +41,7 @@ describe('GET /auth/sso/google/callback', () => {
           aud: GOOGLE_CLIENT_ID,
           exp: Math.floor(Date.now() / 1000) + 60,
           nonce,
-          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          sub: `g-sub-${randomUUID()}`,
           email,
           email_verified: true,
         }),
@@ -45,23 +50,21 @@ describe('GET /auth/sso/google/callback', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-        headers: { host },
+        headers: { host, cookie: cookieHeader },
       });
 
       expect(res.statusCode).toBe(302);
       expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
       expect(res.headers['set-cookie']).toBeTruthy();
 
-      // Audit: success event written, scoped to tenant
       const audits = await deps.db
         .selectFrom('audit_events')
         .selectAll()
         .where('tenant_id', '=', tenant.id)
         .where('action', '=', 'auth.sso.login.success')
         .execute();
-      expect(audits).toHaveLength(1);
 
-      // PII hardening: success audit must not include raw email
+      expect(audits).toHaveLength(1);
       const meta = audits[0].metadata as Record<string, unknown>;
       expect(meta.email).toBeUndefined();
       expect(meta.provider).toBe('google');
@@ -77,8 +80,8 @@ describe('GET /auth/sso/google/callback', () => {
 
     try {
       const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
-
       const email = `admin-${randomUUID().slice(0, 8)}@example.com`;
+
       await createUserWithMembership({
         db: deps.db,
         tenantId: tenant.id,
@@ -87,7 +90,11 @@ describe('GET /auth/sso/google/callback', () => {
         status: 'ACTIVE',
       });
 
-      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
 
       sso.googleAdapter.willSucceed({
         idToken: buildFakeIdToken({
@@ -95,7 +102,7 @@ describe('GET /auth/sso/google/callback', () => {
           aud: GOOGLE_CLIENT_ID,
           exp: Math.floor(Date.now() / 1000) + 60,
           nonce,
-          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          sub: `g-sub-${randomUUID()}`,
           email,
           email_verified: true,
         }),
@@ -104,7 +111,7 @@ describe('GET /auth/sso/google/callback', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-        headers: { host },
+        headers: { host, cookie: cookieHeader },
       });
 
       expect(res.statusCode).toBe(302);
@@ -124,8 +131,8 @@ describe('GET /auth/sso/google/callback', () => {
 
     try {
       const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
-
       const email = `inv-${randomUUID().slice(0, 8)}@example.com`;
+
       const created = await createUserWithMembership({
         db: deps.db,
         tenantId: tenant.id,
@@ -134,7 +141,11 @@ describe('GET /auth/sso/google/callback', () => {
         status: 'INVITED',
       });
 
-      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
 
       sso.googleAdapter.willSucceed({
         idToken: buildFakeIdToken({
@@ -142,7 +153,7 @@ describe('GET /auth/sso/google/callback', () => {
           aud: GOOGLE_CLIENT_ID,
           exp: Math.floor(Date.now() / 1000) + 60,
           nonce,
-          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          sub: `g-sub-${randomUUID()}`,
           email,
           email_verified: true,
         }),
@@ -151,7 +162,7 @@ describe('GET /auth/sso/google/callback', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-        headers: { host },
+        headers: { host, cookie: cookieHeader },
       });
 
       expect(res.statusCode).toBe(302);
@@ -176,25 +187,28 @@ describe('GET /auth/sso/google/callback', () => {
 
     try {
       const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['microsoft'] });
-      const { state } = await getSsoStateFromStart({ app, host, provider: 'google' });
+      const { state, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
 
       const res = await app.inject({
         method: 'GET',
         url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-        headers: { host },
+        headers: { host, cookie: cookieHeader },
       });
 
       expect(res.statusCode).toBe(403);
 
-      // Audit: failure event written even when denied before user resolution
       const audits = await deps.db
         .selectFrom('audit_events')
         .selectAll()
         .where('tenant_id', '=', tenant.id)
         .where('action', '=', 'auth.sso.login.failed')
         .execute();
-      expect(audits).toHaveLength(1);
 
+      expect(audits).toHaveLength(1);
       const meta = audits[0].metadata as Record<string, unknown>;
       expect(meta.provider).toBe('google');
       expect(meta.reason).toBe('provider_not_allowed');
@@ -216,7 +230,11 @@ describe('GET /auth/sso/google/callback', () => {
         allowedEmailDomains: ['acme.com'],
       });
 
-      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
 
       sso.googleAdapter.willSucceed({
         idToken: buildFakeIdToken({
@@ -224,7 +242,7 @@ describe('GET /auth/sso/google/callback', () => {
           aud: GOOGLE_CLIENT_ID,
           exp: Math.floor(Date.now() / 1000) + 60,
           nonce,
-          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          sub: `g-sub-${randomUUID()}`,
           email: `u-${randomUUID().slice(0, 8)}@gmail.com`,
           email_verified: true,
         }),
@@ -233,7 +251,7 @@ describe('GET /auth/sso/google/callback', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-        headers: { host },
+        headers: { host, cookie: cookieHeader },
       });
 
       expect(res.statusCode).toBe(403);
@@ -249,7 +267,11 @@ describe('GET /auth/sso/google/callback', () => {
 
     try {
       await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
-      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
 
       sso.googleAdapter.willSucceed({
         idToken: buildFakeIdToken({
@@ -257,7 +279,7 @@ describe('GET /auth/sso/google/callback', () => {
           aud: GOOGLE_CLIENT_ID,
           exp: Math.floor(Date.now() / 1000) + 60,
           nonce,
-          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          sub: `g-sub-${randomUUID()}`,
           email: `u-${randomUUID().slice(0, 8)}@example.com`,
           email_verified: true,
         }),
@@ -266,7 +288,7 @@ describe('GET /auth/sso/google/callback', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-        headers: { host },
+        headers: { host, cookie: cookieHeader },
       });
 
       expect(res.statusCode).toBe(403);
@@ -292,7 +314,11 @@ describe('GET /auth/sso/google/callback', () => {
         status: 'SUSPENDED',
       });
 
-      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
 
       sso.googleAdapter.willSucceed({
         idToken: buildFakeIdToken({
@@ -300,7 +326,7 @@ describe('GET /auth/sso/google/callback', () => {
           aud: GOOGLE_CLIENT_ID,
           exp: Math.floor(Date.now() / 1000) + 60,
           nonce,
-          sub: `g-sub-${randomUUID()}`, // full UUID (no slice)
+          sub: `g-sub-${randomUUID()}`,
           email,
           email_verified: true,
         }),
@@ -309,8 +335,9 @@ describe('GET /auth/sso/google/callback', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-        headers: { host },
+        headers: { host, cookie: cookieHeader },
       });
+
       expect(res.statusCode).toBe(403);
     } finally {
       await close();
@@ -334,8 +361,6 @@ describe('GET /auth/sso/google/callback', () => {
         status: 'ACTIVE',
       });
 
-      // Existing SSO identity with a different provider_subject.
-      // (provider, provider_subject) is UNIQUE in DB, so ensure it's unique per test.
       const existingSub = `g-existing-${randomUUID()}`;
       const tokenSub = `g-token-${randomUUID()}`;
 
@@ -349,7 +374,11 @@ describe('GET /auth/sso/google/callback', () => {
         })
         .execute();
 
-      const { state, nonce } = await getSsoStateFromStart({ app, host, provider: 'google' });
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
 
       sso.googleAdapter.willSucceed({
         idToken: buildFakeIdToken({
@@ -357,7 +386,7 @@ describe('GET /auth/sso/google/callback', () => {
           aud: GOOGLE_CLIENT_ID,
           exp: Math.floor(Date.now() / 1000) + 60,
           nonce,
-          sub: tokenSub, // drift vs existingSub
+          sub: tokenSub,
           email,
           email_verified: true,
         }),
@@ -366,7 +395,7 @@ describe('GET /auth/sso/google/callback', () => {
       const res = await app.inject({
         method: 'GET',
         url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
-        headers: { host },
+        headers: { host, cookie: cookieHeader },
       });
 
       expect(res.statusCode).toBe(403);

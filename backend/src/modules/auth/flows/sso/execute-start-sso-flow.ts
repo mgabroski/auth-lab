@@ -9,6 +9,15 @@
  * - Rate limit before any work (ER-19).
  * - No transaction needed — no DB writes.
  * - No audit event — redirect initiation is not a security-significant action.
+ *
+ * TOPOLOGY UPDATE:
+ * - Prefer the real public request origin (tenant subdomain) when building the
+ *   OAuth callback URI. This removes the last major dependency on one global
+ *   SSO redirect base for all tenants.
+ * - Keep `redirectBaseUrl` as a controlled fallback for environments where the
+ *   public request origin is unavailable.
+ * - Return `ssoState` so the controller can bind the browser to the callback via
+ *   the SameSite=Lax sso-state cookie.
  */
 
 import type { TokenHasher } from '../../../../shared/security/token-hasher';
@@ -16,16 +25,33 @@ import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { EncryptionService } from '../../../../shared/security/encryption';
 import type { SsoProvider } from '../../helpers/sso-state';
 import type { SsoProviderRegistry } from '../../sso/sso-provider-registry';
-import { buildSsoAuthorizationUrl } from '../../helpers/sso-authorize-url';
+import { buildEncryptedSsoState } from '../../helpers/sso-state';
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 
 export type StartSsoFlowParams = {
   tenantKey: string;
   provider: SsoProvider;
   requestId: string;
+  requestPublicOrigin: string | null;
   returnTo?: string;
   ip: string;
 };
+
+function normalizeOrigin(origin: string): string {
+  return origin.replace(/\/+$/g, '');
+}
+
+function buildCallbackUri(input: {
+  provider: SsoProvider;
+  requestPublicOrigin: string | null;
+  redirectBaseUrl: string;
+}): string {
+  if (input.requestPublicOrigin) {
+    return `${normalizeOrigin(input.requestPublicOrigin)}/api/auth/sso/${input.provider}/callback`;
+  }
+
+  return `${input.redirectBaseUrl.replace(/\/+$/, '')}/auth/sso/${input.provider}/callback`;
+}
 
 export async function executeStartSsoFlow(
   deps: {
@@ -38,7 +64,7 @@ export async function executeStartSsoFlow(
     };
   },
   params: StartSsoFlowParams,
-): Promise<{ redirectTo: string }> {
+): Promise<{ redirectTo: string; ssoState: string }> {
   const ipKey = deps.tokenHasher.hash(params.ip);
 
   // ── Rate limit — before any work (ER-19) ─────────────────────────────
@@ -47,15 +73,24 @@ export async function executeStartSsoFlow(
     ...AUTH_RATE_LIMITS.ssoStart.perIp,
   });
 
-  const redirectTo = buildSsoAuthorizationUrl({
+  const redirectUri = buildCallbackUri({
+    provider: params.provider,
+    requestPublicOrigin: params.requestPublicOrigin,
+    redirectBaseUrl: deps.sso.redirectBaseUrl,
+  });
+
+  const adapter = deps.sso.providerRegistry.getOrThrow(params.provider);
+
+  const { state: ssoState, nonce } = buildEncryptedSsoState({
+    encryptionService: deps.sso.stateEncryptionService,
     provider: params.provider,
     tenantKey: params.tenantKey,
     requestId: params.requestId,
+    redirectUri,
     returnTo: params.returnTo,
-    encryptionService: deps.sso.stateEncryptionService,
-    redirectBaseUrl: deps.sso.redirectBaseUrl,
-    providerRegistry: deps.sso.providerRegistry,
   });
 
-  return { redirectTo };
+  const redirectTo = adapter.buildAuthorizationUrl({ redirectUri, state: ssoState, nonce });
+
+  return { redirectTo, ssoState };
 }

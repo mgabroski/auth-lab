@@ -18,11 +18,15 @@ node_modules/
 dist/
 build/
 coverage/
+.next/
 
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Workspace uses Yarn only
+package-lock.json
 
 # =========================
 # Environment / Secrets
@@ -30,9 +34,18 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+
 backend/.env
 backend/.env.*
+!backend/.env.example
 
+frontend/.env.local
+frontend/.env.*
+!frontend/.env.example
+
+infra/.env
+infra/.env.*
+!infra/.env.example
 
 # =========================
 # OS / Editor junk

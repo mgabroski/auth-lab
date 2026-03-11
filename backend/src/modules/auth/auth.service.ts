@@ -105,9 +105,10 @@ export class AuthService {
     tenantKey: string;
     provider: SsoProvider;
     requestId: string;
+    requestPublicOrigin: string | null;
     returnTo?: string;
     ip: string;
-  }): Promise<{ redirectTo: string }> {
+  }): Promise<{ redirectTo: string; ssoState: string }> {
     return executeStartSsoFlow(
       {
         tokenHasher: this.deps.tokenHasher,

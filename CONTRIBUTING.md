@@ -1,155 +1,285 @@
 # CONTRIBUTING.md
 
----
+This repository is strict on structure, scope clarity, and documentation truthfulness.
 
-## Before you write a single line
-
-Read these four documents in order. All of them. Not just the sections that seem relevant.
-
-1. `ARCHITECTURE.md` — the platform architecture law and bounded context definitions
-2. `backend/docs/README.md` — the docs map for backend engineering
-3. `backend/docs/engineering-rules.md` — the implementation law every PR is checked against
-4. `backend/docs/module-skeleton.md` — the canonical structure every module must follow
-
-If you are generating a new module with an LLM, also read:
-
-- `backend/docs/prompts/module-generation.md` — the spec template and generation workflow
-- `backend/docs/prompts/implement.md` — the implementation session protocol
-- `backend/docs/prompts/review.md` — the adversarial review protocol
+Do not treat this as a generic “open a PR and figure it out later” codebase.
+The foundation is intentional, and future modules depend on that foundation staying clean.
 
 ---
 
-## The standards that are never optional
+## 1. Read these documents before changing code
 
-These apply to every PR, every module, every file, every commit.
+Read them in this order:
 
-**Module boundaries.** Every module's internal layers (`dal/`, `queries/`, `policies/`, `flows/`) are private. Other modules import only from `index.ts`. If you need something from another module and it is not exported, export it — do not reach in.
+1. `README.md`
+2. `docs/current-foundation-status.md`
+3. `ARCHITECTURE.md`
+4. `docs/decision-log.md`
+5. `backend/docs/README.md`
+6. `backend/docs/engineering-rules.md`
+7. `backend/docs/module-skeleton.md`
 
-**Transaction ownership.** Only flow files open `db.transaction()`. Services do not. Repos do not. If a service method owns rate limiting, a transaction, and audit writing, it is a flow that has not been extracted yet.
+If you are working on frontend code, also read:
 
-**Two-phase audit.** Success audits commit inside the transaction atomically with the data. Failure audits are written in the `catch` block using the bare `auditRepo` — never `.withDb(trx)`. Both must exist for every mutation flow.
+8. `frontend/src/shared/engineering-rules.md`
+9. `frontend/README.md`
 
-**Tenant isolation.** Every query on tenant-owned data includes a `tenant_id` WHERE clause. Cross-tenant access returns 404, not 403. Tenant identity comes from the URL subdomain — never from the request body or headers.
+If you are using an LLM to help implement a module, also read:
 
-**No raw PII in logs or audit metadata.** Hash first. `email → emailKey`, `ip → ipKey`, `token → tokenHash`. This is not optional for GDPR compliance.
+10. `backend/docs/prompts/module-generation.md`
+11. `backend/docs/prompts/implement.md`
+12. `backend/docs/prompts/review.md`
 
-**Outbox for all side effects.** Email sending and any external API call triggered by a mutation must go through the DB outbox. The outbox row is enqueued inside the same transaction as the triggering mutation.
+Do not skip `docs/current-foundation-status.md`.
+That file exists specifically to prevent contributors from confusing broader platform direction with shipped implementation.
 
 ---
 
-## Before opening a PR
+## 2. The rules that are never optional
 
-Run all three of these. All three must pass with zero errors or failures:
+### 2.1 Do not overclaim readiness
+
+If something is:
+
+- planned
+- partially wired
+- documented as next work
+- or represented only by a brief/spec
+
+do not document or describe it as fully implemented.
+
+### 2.2 Preserve the topology law
+
+This repo is built around a load-bearing topology:
+
+- browser → same-origin public host
+- proxy → frontend/backend
+- SSR → direct backend via `INTERNAL_API_URL`
+- tenant identity → host/subdomain
+- sessions → server-side cookies + Redis
+
+Do not introduce changes that bypass that model casually.
+
+### 2.3 Tenant identity never comes from payload
+
+Tenant must not come from:
+
+- request body
+- query parameter
+- frontend local storage
+- ad hoc client headers
+
+Tenant identity is routing-derived.
+
+### 2.4 Keep layer responsibilities clean
+
+At a minimum, preserve this shape:
+
+- route registration → wiring only
+- controller → HTTP parsing / response mapping
+- service → narrow module facade
+- flow / use case → business orchestration / transactions
+- DAL / queries → persistence logic
+
+Do not hide business orchestration inside route files or controllers.
+
+### 2.5 Keep docs aligned with code
+
+If you change:
+
+- architecture shape
+- topology assumptions
+- public contracts
+- module boundaries
+- engineering rules
+
+you must update the relevant docs in the same change.
+
+### 2.6 Small, explicit, reversible changes
+
+Prefer changes that are:
+
+- narrow in scope
+- easy to review
+- easy to revert
+- easy to verify against docs and tests
+
+---
+
+## 3. What this repo is today
+
+Before contributing, understand the current phase:
+
+- this repo already implements the topology and FE/BE communication foundation
+- this repo already implements the backend Auth + User Provisioning foundation
+- the frontend is still in foundation mode, not full product mode
+
+That means:
+
+- topology, session, tenant, and request-context assumptions are already real
+- many frontend product flows are still next-step work
+
+Contribute accordingly.
+
+---
+
+## 4. Before opening a PR
+
+Run the checks that actually exist today.
+
+### Root
+
+```bash
+yarn lint
+yarn fmt:check
+yarn verify
+```
+
+### Backend
 
 ```bash
 cd backend
-yarn lint
 yarn typecheck
 yarn test
 ```
 
-Then verify the PR fitness checklist in `backend/docs/engineering-rules.md` section 15. Work through every applicable item for your changed files. Do not mark a PR ready if you have not done this check.
-
----
-
-## Adding a new module
-
-1. Fill in the MODULE SPEC TEMPLATE in `backend/docs/prompts/module-generation.md` (Part 2). Every `[FILL]` field must have a precise answer before any code is written. Vague business rules produce wrong behavior.
-2. Open an implementation session with `backend/docs/prompts/implement.md` as the LLM system prompt.
-3. The LLM produces the full module. Engineering reviews and merges — not rewrites.
-4. After merge, the engineering review is the gate. Not CI alone.
-
----
-
-## Adding a new endpoint to an existing module
-
-1. Add the route to `<module>.routes.ts` — one line.
-2. Add the handler method to `<module>.controller.ts` — Zod parse + service call + reply.
-3. Add a facade method to `<module>.service.ts` — one line.
-4. Add a flow file to `flows/<use-case>/execute-<use-case>-flow.ts`.
-5. Add any new repo methods, query functions, or policies needed by the flow.
-6. Add the audit helper to `<module>.audit.ts` and add the action string to `KnownAuditAction` in `src/shared/audit/audit.types.ts`.
-7. Add tests: E2E (happy path + DB assertion + audit assertion + business rule failures), DAL, unit for each policy branch.
-
----
-
-## Adding a new audit event
-
-1. Write the typed helper in `<module>.audit.ts`:
-
-```typescript
-export function auditMyAction(
-  writer: AuditWriter,
-  data: { fieldA: string; fieldB: string },
-): Promise<void> {
-  return writer.append('mymodule.myaction', {
-    fieldA: data.fieldA,
-    fieldB: data.fieldB,
-  });
-}
-```
-
-2. Add the action string to `KnownAuditAction` in `src/shared/audit/audit.types.ts`.
-
-3. Call the helper from the flow — never call `writer.append()` directly in a flow file.
-
----
-
-## Adding a new migration
+### Frontend
 
 ```bash
-cd backend
-yarn db:make <description>       # scaffolds NNNN_<description>.ts
-# fill in up() and down()
-yarn db:migrate                   # apply
-yarn db:types                     # regenerate database.types.ts
+cd frontend
+yarn lint
+yarn typecheck
 ```
 
-Commit the migration file and the regenerated `database.types.ts` in the same PR. Never edit a migration that has been applied to any environment.
+Important:
+
+- root `yarn typecheck` now covers backend + frontend
+- root `yarn test` currently runs the backend suite
+- do not pretend broader gates exist if they do not
+
+If your change touches topology, also validate the full stack:
+
+```bash
+yarn stack
+yarn stack:test
+```
 
 ---
 
-## When documentation must be updated
+## 5. When full-stack topology validation is required
+
+Run the full stack and proxy conformance tests before merge if you changed:
+
+- `infra/`
+- proxy config
+- request context logic
+- session middleware
+- cookie behavior
+- SSO callback assumptions
+- anything relying on forwarded headers or host preservation
+
+Host-run mode is not enough for those changes.
+
+---
+
+## 6. Adding or changing backend behavior
+
+Use the existing repo shape.
+
+Typical path:
+
+1. route registration
+2. controller handler
+3. service facade
+4. flow / use case
+5. repo / query / policy additions
+6. tests
+7. doc updates if the behavior changes a contract or rule
+
+Do not collapse those concerns into one file just because the change looks “small.”
+
+---
+
+## 7. Adding or changing frontend behavior
+
+Frontend changes must preserve these rules:
+
+- browser calls backend through relative same-origin `/api/*`
+- SSR/server components may call backend directly through `INTERNAL_API_URL`
+- no direct browser hardcoding of backend origin
+- no client-side tenant selection logic
+- auth bootstrap should be built around backend truth (`/auth/me`, `/auth/config`), not UI guesses
+
+The frontend rules file is not optional reading.
+
+---
+
+## 8. When docs must be updated
 
 Update docs when you change:
 
-| What changed                                                     | Which docs to update                                                    |
-| ---------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Architecture shape, bounded context definitions, or module split | `ARCHITECTURE.md`                                                       |
-| An engineering rule, layer responsibility, or prohibited pattern | `backend/docs/engineering-rules.md` + relevant prompt files             |
-| The canonical module folder structure or file responsibility     | `backend/docs/module-skeleton.md` + `backend/docs/prompts/implement.md` |
-| A module's public surface (`index.ts` exports)                   | File header + any consuming module's comments                           |
-| A significant technical decision that should not drift silently  | Add an ADR to `backend/docs/adr/`                                       |
+| What changed                                          | Update these docs                          |
+| ----------------------------------------------------- | ------------------------------------------ |
+| Current delivered scope                               | `docs/current-foundation-status.md`        |
+| Broader architecture direction or locked topology law | `ARCHITECTURE.md`                          |
+| Non-obvious technical decisions                       | `docs/decision-log.md`                     |
+| Backend implementation rules                          | `backend/docs/engineering-rules.md`        |
+| Canonical backend module structure                    | `backend/docs/module-skeleton.md`          |
+| Frontend implementation rules                         | `frontend/src/shared/engineering-rules.md` |
+| Repo entrypoint / commands / current state framing    | `README.md`                                |
 
-When `engineering-rules.md` changes, also update `backend/docs/prompts/implement.md` and `backend/docs/prompts/review.md` to reflect the change. The three files are coupled — a rule that is in the rules file but not in the prompts will not be enforced in LLM-generated code.
-
----
-
-## ADRs
-
-Significant decisions that would otherwise drift silently belong in `backend/docs/adr/`. An ADR is required when:
-
-- An architectural boundary rule is being overridden (even temporarily)
-- A locked decision from `ARCHITECTURE.md` is being changed
-- A cross-module contract in `modules/_shared/` is being introduced or broken
-- A new infra primitive is being added to `shared/`
-
-Format: `backend/docs/adr/NNNN-<short-title>.md`. Use the template in `backend/docs/adr/README.md` (create it if it does not exist). Status field must be one of: `PROPOSED | ACCEPTED | SUPERSEDED | DEPRECATED`.
+If the code changed and the docs stayed silent, assume the change is incomplete until proven otherwise.
 
 ---
 
-## What a good PR looks like
+## 9. Using LLMs on this repo
 
-- **Small.** Does one thing. The PR title describes that one thing.
-- **Reversible.** Can be reverted in a single commit if needed.
-- **Tested.** Every mutation endpoint has an E2E test. Every policy has unit tests. Every repo write has a DAL test.
-- **Aligned.** Passes the PR fitness checklist in `engineering-rules.md` section 15.
-- **Documented.** If it changes an architectural boundary or cross-module contract, an ADR or doc update is included.
+LLM-assisted implementation is allowed and expected, but only under repo law.
 
-A PR that passes `yarn lint && yarn typecheck && yarn test` but violates a [HARD] rule in `engineering-rules.md` is not ready to merge. Tests verify behavior — they do not verify architecture.
+That means:
+
+- do not let the model invent architecture that contradicts the repo
+- do not let the model add files that break the documented structure casually
+- do not let the model overclaim what is implemented
+- always anchor the session in the current repo + relevant docs
+- review generated code against architecture and rule docs, not only against “it compiles”
+
+The prompt files in `backend/docs/prompts/` exist to reduce drift. Use them deliberately.
 
 ---
 
-## Known legacy violations
+## 10. What a good PR looks like
 
-`backend/docs/engineering-rules.md` may contain a small set of documented legacy violations during active cleanup. Do not add new violations. Do not treat an existing documented exception as precedent for new code.
+A good PR in this repo is:
+
+- **truthful** — no fake readiness claims
+- **scoped** — does one logical thing
+- **aligned** — respects topology and layer rules
+- **tested** — against the real checks that exist
+- **documented** — if it changes behavior, contract, or architecture
+- **reviewable** — another engineer can understand the change without reverse-engineering intent
+
+A passing test suite does not automatically mean the change is architecturally correct.
+
+---
+
+## 11. Do not use this repo as precedent for shortcuts
+
+If you find:
+
+- a temporary smoke-test page
+- a phase-specific simplification
+- an intentionally incomplete frontend surface
+
+do not use it as justification to introduce additional shortcuts.
+
+This repo is in a controlled foundation phase.
+Temporary structure must not become permanent entropy.
+
+---
+
+## 12. Default contribution mindset
+
+Contribute as if the next module depends on this foundation remaining stable.
+
+Because it does.

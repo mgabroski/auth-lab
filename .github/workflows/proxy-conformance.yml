@@ -1,0 +1,98 @@
+name: Proxy Conformance
+
+on:
+  push:
+    paths:
+      - 'infra/**'
+      - 'backend/src/shared/session/**'
+      - 'backend/src/shared/http/request-context.ts'
+      - 'backend/src/modules/auth/flows/sso/**'
+      - 'backend/src/modules/auth/helpers/sso-state*.ts'
+      - 'scripts/proxy-conformance.sh'
+      - 'scripts/stack.sh'
+  pull_request:
+    paths:
+      - 'infra/**'
+      - 'backend/src/shared/session/**'
+      - 'backend/src/shared/http/request-context.ts'
+      - 'backend/src/modules/auth/flows/sso/**'
+      - 'backend/src/modules/auth/helpers/sso-state*.ts'
+      - 'scripts/proxy-conformance.sh'
+      - 'scripts/stack.sh'
+  workflow_dispatch:
+
+jobs:
+  proxy-conformance:
+    name: PT-01..PT-08 Proxy Conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Write backend .env for CI
+        run: |
+          cat > backend/.env << 'ENVEOF'
+          NODE_ENV=development
+          PORT=3001
+          DATABASE_URL=postgres://auth_lab:auth_lab@localhost:5432/auth_lab
+          REDIS_URL=redis://localhost:6379
+          LOG_LEVEL=info
+          SERVICE_NAME=auth-lab-backend
+          BCRYPT_COST=12
+          SESSION_TTL_SECONDS=86400
+          MFA_ISSUER=Hubins
+          MFA_ENCRYPTION_KEY_BASE64=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+          MFA_HMAC_KEY_BASE64=8Emt6e4gn6r8rgRGSuYTVQ+D/3upFEckXRoMQYKJRJ8=
+          SSO_STATE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          SSO_REDIRECT_BASE_URL=http://goodwill-ca.lvh.me:3000/api
+          GOOGLE_CLIENT_ID=test-google-client-id
+          GOOGLE_CLIENT_SECRET=test-google-client-secret
+          MICROSOFT_CLIENT_ID=test-microsoft-client-id
+          MICROSOFT_CLIENT_SECRET=test-microsoft-client-secret
+          OUTBOX_ENC_DEFAULT_VERSION=v1
+          OUTBOX_ENC_KEY_V1=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+          OUTBOX_POLL_INTERVAL_MS=5000
+          OUTBOX_BATCH_SIZE=10
+          OUTBOX_MAX_ATTEMPTS=5
+          SEED_ON_START=true
+          SEED_TENANT_KEY=goodwill-ca
+          SEED_TENANT_NAME=GoodWill California
+          SEED_ADMIN_EMAIL=system_admin@example.com
+          SEED_INVITE_TTL_HOURS=168
+          ENVEOF
+
+      - name: Start full Docker topology stack
+        run: |
+          docker compose -f infra/docker-compose.yml up --build -d
+          echo "Stack started — waiting for health checks..."
+
+      - name: Wait for backend healthy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://goodwill-ca.lvh.me:3000/api/health > /dev/null 2>&1; then
+              echo "✅ Backend healthy after ${i}s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "❌ Backend did not become healthy in 120s"
+          docker compose -f infra/docker-compose.yml logs
+          exit 1
+
+      - name: Run proxy conformance tests
+        run: |
+          chmod +x scripts/proxy-conformance.sh
+          ./scripts/proxy-conformance.sh
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --tail=100
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "start:container": "tsx src/index.ts",
     "db:make": "tsx src/shared/db/make-migration.ts",
     "db:migrate": "tsx src/shared/db/migrate.ts",
     "db:types": "tsx src/shared/db/codegen.ts",

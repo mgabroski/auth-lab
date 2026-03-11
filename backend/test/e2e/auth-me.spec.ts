@@ -2,26 +2,33 @@
  * backend/test/e2e/auth-me.spec.ts
  *
  * WHY:
- * - Verifies GET /auth/me contract and nextAction derivation for frontend bootstrap.
- * - Covers cross-tenant session rejection and the locked nextAction precedence.
+ * - Verifies GET /auth/me as the authenticated frontend bootstrap endpoint.
+ * - Locks the response shape consumed by the future frontend auth/bootstrap layer.
+ * - Verifies backend-owned nextAction derivation.
+ * - Verifies session-tenant isolation at the bootstrap endpoint.
  *
  * RULES:
- * - Use buildTestApp() per test.
- * - Seed state directly via deps.db / deps.sessionStore.
- * - No beforeAll/afterAll; each test owns its own setup and close().
+ * - Build a fresh app per test.
+ * - Seed state directly with deps.db / deps.sessionStore.
+ * - Keep the assertions focused on contract truth, not implementation trivia.
  */
 
-import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
-import { buildTestApp } from '../helpers/build-test-app';
-import { SESSION_COOKIE_NAME } from '../../src/shared/session/session.types';
+import { describe, expect, it } from 'vitest';
+
+import type { MeResponse } from '../../src/modules/auth/auth.types';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
-import type { MeResponse } from '../../src/modules/auth/auth.types';
+import { SESSION_COOKIE_NAME } from '../../src/shared/session/session.types';
+import { buildTestApp } from '../helpers/build-test-app';
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
+}
+
+function hostForTenant(tenantKey: string): string {
+  return `${tenantKey}.hubins.com`;
 }
 
 function extractSidCookie(headers: Record<string, unknown>): string {
@@ -77,6 +84,7 @@ async function seedUserWithPassword(opts: {
     .executeTakeFirstOrThrow();
 
   const passwordHash = await opts.passwordHasher.hash(opts.password);
+
   await opts.db
     .insertInto('auth_identities')
     .values({
@@ -104,7 +112,7 @@ async function seedUserWithPassword(opts: {
 describe('GET /auth/me', () => {
   it('returns 401 with no session cookie', async () => {
     const { app, close } = await buildTestApp();
-    const host = `tenant-${randomUUID().slice(0, 8)}.hubins.com`;
+    const host = hostForTenant(`tenant-${randomUUID().slice(0, 8)}`);
 
     try {
       const res = await app.inject({
@@ -119,10 +127,10 @@ describe('GET /auth/me', () => {
     }
   });
 
-  it('returns 200 with correct shape after member login', async () => {
+  it('returns 200 with the authenticated bootstrap shape after member login', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = `${tenantKey}.hubins.com`;
+    const host = hostForTenant(tenantKey);
     const email = `member-${randomUUID().slice(0, 8)}@example.com`;
     const password = 'MemberPass123!';
 
@@ -186,12 +194,13 @@ describe('GET /auth/me', () => {
   it('returns nextAction NONE for MEMBER when MFA is not required', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = `${tenantKey}.hubins.com`;
+    const host = hostForTenant(tenantKey);
     const email = `member-none-${randomUUID().slice(0, 8)}@example.com`;
     const password = 'MemberPass123!';
 
     try {
       const tenant = await createTenant({ db: deps.db, tenantKey, memberMfaRequired: false });
+
       await seedUserWithPassword({
         db: deps.db,
         passwordHasher: deps.passwordHasher,
@@ -207,6 +216,7 @@ describe('GET /auth/me', () => {
         headers: { host },
         payload: { email, password },
       });
+
       const sid = extractSidCookie(loginRes.headers);
 
       const meRes = await app.inject({
@@ -225,12 +235,13 @@ describe('GET /auth/me', () => {
   it('returns nextAction MFA_SETUP_REQUIRED for ADMIN with no MFA secret', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = `${tenantKey}.hubins.com`;
+    const host = hostForTenant(tenantKey);
     const email = `admin-setup-${randomUUID().slice(0, 8)}@example.com`;
     const password = 'AdminPass123!';
 
     try {
       const tenant = await createTenant({ db: deps.db, tenantKey });
+
       await seedUserWithPassword({
         db: deps.db,
         passwordHasher: deps.passwordHasher,
@@ -246,6 +257,7 @@ describe('GET /auth/me', () => {
         headers: { host },
         payload: { email, password },
       });
+
       const sid = extractSidCookie(loginRes.headers);
 
       const meRes = await app.inject({
@@ -264,7 +276,7 @@ describe('GET /auth/me', () => {
   it('returns nextAction MFA_REQUIRED for ADMIN with verified MFA secret and session not yet verified', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = `${tenantKey}.hubins.com`;
+    const host = hostForTenant(tenantKey);
     const email = `admin-required-${randomUUID().slice(0, 8)}@example.com`;
     const password = 'AdminPass123!';
 
@@ -280,6 +292,7 @@ describe('GET /auth/me', () => {
       });
 
       const encryptedSecret = deps.encryptionService.encrypt('JBSWY3DPEHPK3PXP');
+
       await deps.db
         .insertInto('mfa_secrets')
         .values({
@@ -296,6 +309,7 @@ describe('GET /auth/me', () => {
         headers: { host },
         payload: { email, password },
       });
+
       const sid = extractSidCookie(loginRes.headers);
 
       const meRes = await app.inject({
@@ -305,6 +319,7 @@ describe('GET /auth/me', () => {
       });
 
       expect(meRes.statusCode).toBe(200);
+
       const body = readJson<MeResponse>(meRes);
       expect(body.session.mfaVerified).toBe(false);
       expect(body.nextAction).toBe('MFA_REQUIRED');
@@ -313,10 +328,10 @@ describe('GET /auth/me', () => {
     }
   });
 
-  it('returns nextAction EMAIL_VERIFICATION_REQUIRED for unverified session', async () => {
+  it('returns nextAction EMAIL_VERIFICATION_REQUIRED for an unverified session', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = `${tenantKey}.hubins.com`;
+    const host = hostForTenant(tenantKey);
     const email = `unverified-${randomUUID().slice(0, 8)}@example.com`;
 
     try {
@@ -368,6 +383,7 @@ describe('GET /auth/me', () => {
     try {
       const tenantA = await createTenant({ db: deps.db, tenantKey: tenantKeyA });
       await createTenant({ db: deps.db, tenantKey: tenantKeyB });
+
       await seedUserWithPassword({
         db: deps.db,
         passwordHasher: deps.passwordHasher,
@@ -380,16 +396,17 @@ describe('GET /auth/me', () => {
       const loginRes = await app.inject({
         method: 'POST',
         url: '/auth/login',
-        headers: { host: `${tenantKeyA}.hubins.com` },
+        headers: { host: hostForTenant(tenantKeyA) },
         payload: { email, password },
       });
+
       const sid = extractSidCookie(loginRes.headers);
 
       const meRes = await app.inject({
         method: 'GET',
         url: '/auth/me',
         headers: {
-          host: `${tenantKeyB}.hubins.com`,
+          host: hostForTenant(tenantKeyB),
           cookie: sid,
         },
       });

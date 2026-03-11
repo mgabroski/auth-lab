@@ -1,202 +1,388 @@
-# Insynctive — Auth Lab
+# Hubins — Auth Lab
 
-The first implemented backend module of the Insynctive platform. Auth Lab is the foundation service: multi-tenant authentication and user provisioning, built to production quality before any other module ships.
+Hubins Auth Lab is the foundation repository for the wider Hubins platform.
 
----
+This repo exists to do one thing first and do it well:
 
-## What this module does
+- lock the **topology**
+- lock the **frontend ↔ backend communication model**
+- lock the **tenant-aware request model**
+- lock the **session/cookie contract**
+- ship the first real module: **Auth + User Provisioning**
 
-- **Tenant resolution** — every request is scoped to a tenant resolved from the URL subdomain
-- **Invite provisioning** — admin creates invite → user accepts → registers
-- **Password registration** — invite-based, creates user + membership + auth identity
-- **Public signup** — self-service with email verification
-- **Email verification** — token-based, required for public signup only
-- **Password login** — server-side Redis sessions, bcrypt, rate-limited
-- **Password reset** — silent rate limit, one-time token, session destruction on complete
-- **MFA (TOTP)** — mandatory for admins, setup / verify / recovery, secrets encrypted at rest
-- **SSO** — Google + Microsoft OAuth2/OIDC, nonce/state AES-encrypted, subject drift protection
-- **Admin invite lifecycle** — create / resend / cancel / list with full audit trail
-- **Admin audit viewer** — paginated, tenant-scoped, filterable audit event log
-- **Durable email delivery** — DB outbox with claim-lease worker, no lock held during send
-- **Audit events** — append-only, two-phase (success inside tx, failure outside tx)
-- **Rate limiting** — every mutation endpoint
+It is intentionally broader in vision than what is implemented today, but it must always be explicit about what is already shipped versus what is still future work.
 
 ---
 
-## Stack
+## How to read this repo correctly
 
-| Layer            | Technology                      |
-| ---------------- | ------------------------------- |
-| Runtime          | Node.js + TypeScript (strict)   |
-| HTTP             | Fastify                         |
-| Database         | PostgreSQL + Kysely (typed SQL) |
-| Cache / sessions | Redis                           |
-| Validation       | Zod                             |
-| Logging          | Winston JSON (CloudWatch-ready) |
-| Error tracking   | Sentry (unhandled 500s only)    |
-| Testing          | Vitest                          |
-| Package manager  | Yarn 4 workspaces               |
-| Local infra      | Docker Compose                  |
+There are **two truths** that must be kept separate:
+
+### 1. The broader platform vision
+
+Hubins is intended to grow into a larger multi-tenant SaaS platform. That broader direction is described in `ARCHITECTURE.md`.
+
+### 2. The current shipped foundation
+
+Today, this repository concretely implements:
+
+- the topology foundation
+- FE/BE wiring
+- same-origin browser API model
+- SSR direct-to-backend model
+- tenant resolution via host/subdomain
+- session-aware request flow
+- Auth + User Provisioning foundation
+
+Read `docs/current-foundation-status.md` before making assumptions about what is already built.
 
 ---
 
-## Quick start
+## Current implemented scope
 
-### Prerequisites
+### Topology and FE/BE communication
 
-- Docker and Docker Compose
-- Node.js ≥ 20
-- Yarn 4 (`corepack enable`)
+- reverse-proxy-first topology
+- browser uses same-origin relative `/api/*`
+- in host-run mode, Next.js Route Handlers proxy browser `/api/*` calls to the backend
+- in full-stack / deployed topologies, the public reverse proxy routes `/api/*` to the backend
+- SSR uses `INTERNAL_API_URL` and forwards `Host`, `Cookie`, and `X-Forwarded-*`
+- backend trusts forwarded headers only because it sits behind the trusted proxy boundary
+- full local topology validation exists through the Docker stack and proxy conformance tests
 
-### Setup
+### Backend foundation
+
+- Fastify backend with explicit bootstrap / DI / route registration
+- shared request context
+- tenant resolution from subdomain / host
+- Redis-backed server-side sessions
+- health endpoint with real DB + Redis liveness checks
+- bounded-context module structure under `backend/src/modules`
+
+### Auth + User Provisioning
+
+- register
+- login
+- logout
+- `/auth/me`
+- `/auth/config`
+- forgot/reset password
+- public signup
+- email verification + resend verification
+- MFA setup / verify / recovery
+- Google + Microsoft SSO
+- invite-based provisioning flow
+- admin invite lifecycle
+- audit event viewing
+- outbox-backed email delivery
+
+### Frontend foundation
+
+- Next.js App Router shell
+- SSR fetch wrapper
+- browser fetch wrapper
+- host-run `/api/*` Route Handler proxy
+- topology smoke-test page proving SSR → backend path works
+- tenant-aware frontend host usage in local development
+
+---
+
+## What is intentionally not built yet
+
+This foundation is **not** yet a fully implemented product frontend.
+
+Not implemented yet:
+
+- real auth screens (login, signup, reset, invite acceptance, etc.)
+- frontend auth bootstrap state and route guards
+- full admin application shell
+- additional business modules beyond Auth + User Provisioning
+- broader Hubins platform workflows described in the long-term architecture vision
+
+That is intentional. The current phase is: **foundation first, then expand**.
+
+---
+
+## Tech stack
+
+| Layer            | Technology            |
+| ---------------- | --------------------- |
+| Runtime          | Node.js + TypeScript  |
+| Backend HTTP     | Fastify               |
+| Database         | PostgreSQL + Kysely   |
+| Cache / sessions | Redis                 |
+| Validation       | Zod                   |
+| Logging          | Winston               |
+| Error tracking   | Sentry                |
+| Frontend         | Next.js 15 App Router |
+| Local proxy      | Caddy                 |
+| Testing          | Vitest                |
+| Package manager  | Yarn 4 workspaces     |
+| Local infra      | Docker Compose        |
+
+---
+
+## Dev modes
+
+There are intentionally **two** local modes.
+
+### Mode 1 — host-run (daily development)
+
+Use this for normal feature work.
 
 ```bash
-# 1. Copy the example env file (run from repo root)
-cp backend/.env.example backend/.env
-
-# 2. Start local infrastructure — Postgres + Redis (run from repo root)
-yarn dev
-
-# 3. Run migrations and generate DB types (run from backend/)
-cd backend
-yarn db:migrate
-yarn db:types
-
-# 4. Start the backend in watch mode (run from backend/)
 yarn dev
 ```
 
-The server starts on `http://localhost:3000`. Health check: `GET http://localhost:3000/health`.
+What it does:
 
-On first start with `SEED_ON_START=true` in `.env`, the seed creates a tenant (`goodwill-ca` by default) and prints a one-time admin invite token to the logs.
+- starts Postgres + Redis in Docker
+- auto-creates `backend/.env` from `backend/.env.example` if needed
+- auto-creates `frontend/.env.local` from `frontend/.env.example` if needed
+- runs migrations
+- regenerates DB types
+- starts backend on `http://localhost:3001`
+- starts frontend on `http://goodwill-ca.localhost:3000`
+
+Use this browser URL for tenant-aware frontend behavior:
+
+```bash
+http://goodwill-ca.localhost:3000
+```
+
+Do **not** use plain `localhost:3000` when testing tenant-aware behavior.
+
+In host-run mode:
+
+- browser `/api/*` goes to Next.js first
+- the frontend Route Handler proxies those requests to the backend
+- SSR uses `INTERNAL_API_URL=http://localhost:3001`
 
 ---
 
-## Environment variables
+### Mode 2 — full Docker stack (topology validation)
 
-All variables are parsed and validated at startup via Zod. The server refuses to start if a required variable is missing or malformed.
+Use this when validating real proxy wiring.
 
-| Variable                     | Required | Default               | Description                                                          |
-| ---------------------------- | -------- | --------------------- | -------------------------------------------------------------------- |
-| `DATABASE_URL`               | ✅       | —                     | PostgreSQL connection string                                         |
-| `REDIS_URL`                  | ✅       | —                     | Redis connection string                                              |
-| `MFA_ENCRYPTION_KEY_BASE64`  | ✅       | —                     | AES-256-GCM key for TOTP secret encryption (base64)                  |
-| `MFA_HMAC_KEY_BASE64`        | ✅       | —                     | HMAC-SHA256 pepper for recovery code hashing (base64)                |
-| `SSO_STATE_ENCRYPTION_KEY`   | ✅       | —                     | AES-256-GCM key for SSO state payload encryption (base64)            |
-| `SSO_REDIRECT_BASE_URL`      | ✅       | —                     | Base URL for SSO callback redirects (e.g. `https://app.example.com`) |
-| `GOOGLE_CLIENT_ID`           | ✅       | —                     | Google OAuth2 client ID                                              |
-| `GOOGLE_CLIENT_SECRET`       | ✅       | —                     | Google OAuth2 client secret                                          |
-| `MICROSOFT_CLIENT_ID`        | ✅       | —                     | Microsoft OAuth2 client ID                                           |
-| `MICROSOFT_CLIENT_SECRET`    | ✅       | —                     | Microsoft OAuth2 client secret                                       |
-| `OUTBOX_ENC_DEFAULT_VERSION` | ✅       | `v1`                  | Active outbox encryption key version (must have a matching key)      |
-| `OUTBOX_ENC_KEY_V1`          | ✅       | —                     | AES-256-GCM key for outbox payload encryption, version 1 (base64)    |
-| `PORT`                       | —        | `3000`                | HTTP port                                                            |
-| `LOG_LEVEL`                  | —        | `info`                | Winston log level                                                    |
-| `SERVICE_NAME`               | —        | `auth-lab-backend`    | Included in every structured log line                                |
-| `BCRYPT_COST`                | —        | `12`                  | bcrypt work factor (10–15)                                           |
-| `SESSION_TTL_SECONDS`        | —        | `86400`               | Session lifetime (5 min – 7 days)                                    |
-| `MFA_ISSUER`                 | —        | `Hubins`              | Issuer name shown in authenticator apps                              |
-| `OUTBOX_POLL_INTERVAL_MS`    | —        | `5000`                | How often the outbox worker polls for pending messages               |
-| `OUTBOX_BATCH_SIZE`          | —        | `10`                  | Messages claimed per worker poll cycle                               |
-| `OUTBOX_MAX_ATTEMPTS`        | —        | `5`                   | Max delivery attempts before a message is dead-lettered              |
-| `OUTBOX_ENC_KEY_V2`          | —        | —                     | Optional second outbox key version (key rotation)                    |
-| `OUTBOX_ENC_KEY_V3`          | —        | —                     | Optional third outbox key version (key rotation)                     |
-| `SENTRY_DSN`                 | —        | —                     | Sentry DSN. Omit in dev/CI — Sentry stays uninitialised              |
-| `SEED_ON_START`              | —        | `false`               | Run idempotent dev seed on startup                                   |
-| `SEED_TENANT_KEY`            | —        | `goodwill-ca`         | Subdomain key for the seed tenant                                    |
-| `SEED_TENANT_NAME`           | —        | `GoodWill California` | Display name for the seed tenant                                     |
-| `SEED_ADMIN_EMAIL`           | —        | `admin@example.com`   | Email for the seed admin invite                                      |
+```bash
+yarn stack
+```
 
-See `backend/src/app/config.ts` for the complete Zod schema.
+Public entrypoint:
+
+```bash
+http://goodwill-ca.lvh.me:3000
+```
+
+Run proxy conformance tests:
+
+```bash
+yarn stack:test
+```
+
+Use full stack mode before merging changes that affect:
+
+- `infra/`
+- proxy behavior
+- request context
+- session/cookie policy
+- SSO callback behavior
+- host / forwarded-header assumptions
+
+See `infra/README.md` for details.
+
+---
+
+## Prerequisites
+
+- Docker
+- Node.js 20+
+- Corepack / Yarn 4
+
+```bash
+corepack enable
+```
+
+---
+
+## First-time setup
+
+```bash
+yarn dev
+```
+
+If the local env files do not exist yet, `scripts/dev.sh` creates them from the committed example templates:
+
+- `backend/.env.example` → `backend/.env`
+- `frontend/.env.example` → `frontend/.env.local`
+
+With `SEED_ON_START=true`, the seed creates the `goodwill-ca` tenant and logs a one-time admin invite token for bootstrapping.
+
+Useful health endpoints:
+
+- host-run backend: `http://localhost:3001/health`
+- full stack via proxy: `http://goodwill-ca.lvh.me:3000/api/health`
 
 ---
 
 ## Useful commands
 
+### Root
+
 ```bash
-# Infrastructure (run from repo root)
-yarn dev               # start Postgres + Redis in Docker
-yarn stop              # stop Docker containers
-yarn status            # show running container status
-yarn reset-db          # drop and recreate the local dev database
+yarn dev
+yarn stack
+yarn stack:down
+yarn stack:test
+yarn stop
+yarn status
+yarn reset-db
+yarn lint
+yarn lint:fix
+yarn fmt
+yarn fmt:check
+yarn verify
+```
 
-# Backend (run from backend/)
+### Important note about current root gates
+
+At this foundation stage:
+
+- `yarn typecheck` currently runs **backend + frontend** typecheck
+- `yarn test` currently runs the **backend** test suite
+
+That is truthful to the repo as it exists today:
+
+- `yarn typecheck` covers backend + frontend
+- `yarn test` still represents the backend suite
+- `yarn verify` is the root verification command for format + lint + typecheck + **frontend build** + backend tests
+
+### Backend
+
+```bash
 cd backend
-yarn dev               # start backend in watch mode
+yarn dev
+yarn typecheck
+yarn test
+yarn test:watch
+yarn db:migrate
+yarn db:make <description>
+yarn db:types
+```
 
-# Database (run from backend/)
-yarn db:migrate        # run pending migrations
-yarn db:make <name>    # scaffold a new migration file
-yarn db:types          # regenerate src/shared/db/database.types.ts from schema
+### Frontend
 
-# Code quality (run from repo root)
-yarn lint              # ESLint
-yarn lint:fix          # ESLint with auto-fix
-yarn typecheck         # tsc --noEmit
-yarn test              # all tests (unit + DAL + E2E)
-yarn test:watch        # tests in watch mode
-yarn fmt               # Prettier write
-yarn fmt:check         # Prettier check
+```bash
+cd frontend
+yarn dev
+yarn build
+yarn start
+yarn lint
+yarn lint:fix
+yarn typecheck
 ```
 
 ---
 
 ## Project structure
 
-```
+```text
 /
-├── ARCHITECTURE.md          ← architecture law — read this first
-├── CONTRIBUTING.md          ← how to contribute
-└── backend/
-    ├── src/
-    │   ├── app/             ← server bootstrap, DI, config, routes
-    │   ├── modules/         ← bounded context modules
-    │   │   ├── auth/        ← authentication + MFA + SSO
-    │   │   ├── invites/     ← invite provisioning + admin invite management
-    │   │   ├── memberships/ ← membership DAL and public surface
-    │   │   ├── tenants/     ← tenant resolution and policies
-    │   │   ├── users/       ← user DAL and public surface
-    │   │   ├── audit/       ← admin audit event viewer
-    │   │   └── _shared/     ← cross-module use cases (stable, locked contracts)
-    │   └── shared/          ← infrastructure primitives (DB, Redis, outbox, sessions, security)
-    ├── test/
-    │   ├── e2e/             ← endpoint tests using Fastify inject()
-    │   ├── dal/             ← DAL tests against real Postgres
-    │   └── unit/            ← pure unit tests (policies, encryption utilities)
-    └── docs/                ← engineering rules, module skeleton, LLM prompts
+├── README.md
+├── ARCHITECTURE.md
+├── CONTRIBUTING.md
+├── docs/
+│   ├── current-foundation-status.md
+│   └── decision-log.md
+├── backend/
+│   ├── src/
+│   │   ├── app/                 # bootstrap, config, DI, route registration
+│   │   ├── modules/             # bounded contexts
+│   │   └── shared/              # infrastructure primitives
+│   ├── test/
+│   └── docs/
+├── frontend/
+│   ├── src/app/                 # App Router pages/layouts + host-run api proxy
+│   └── src/shared/              # api clients, frontend rules
+├── infra/
+│   ├── caddy/
+│   ├── nginx/
+│   ├── docker-compose.yml
+│   └── docker-compose-infra.yml
+└── scripts/
+    ├── dev.sh
+    ├── stack.sh
+    ├── proxy-conformance.sh
+    ├── stop.sh
+    ├── status.sh
+    └── reset-db.sh
 ```
 
 ---
 
-## Documentation
+## Documentation order
 
-Start here, in this order:
+Read in this order:
 
-1. `ARCHITECTURE.md` — what Insynctive is, the bounded contexts, the architectural laws
-2. `backend/docs/README.md` — the docs map for backend engineering
-3. `backend/docs/engineering-rules.md` — the implementation law every PR is checked against
-4. `backend/docs/module-skeleton.md` — the canonical structure every module must follow
+1. `README.md`
+2. `docs/current-foundation-status.md`
+3. `ARCHITECTURE.md`
+4. `docs/decision-log.md`
+5. `backend/docs/README.md`
+6. `backend/docs/engineering-rules.md`
+7. `backend/docs/module-skeleton.md`
+8. `frontend/src/shared/engineering-rules.md`
+9. `infra/README.md`
+
+Why this order:
+
+- first understand the repo and current shipped scope
+- then understand the broader architecture direction
+- then move into backend/frontend implementation law
 
 ---
 
-## Tests
+## Testing philosophy
 
-Tests run against real infrastructure (Postgres + Redis). There are no mocks for the database layer.
+Tests are intended to validate behavior against real infrastructure, not mocks pretending to be infrastructure.
 
-```bash
-# Start infra first (run from repo root)
-yarn dev
+Backend tests cover:
 
-# Run all tests (run from backend/)
-cd backend && yarn test
-```
+- unit tests for pure logic
+- DAL tests against real Postgres
+- E2E tests through Fastify inject using real DB + Redis-backed app dependencies
 
-Test layers:
+The proxy conformance script validates the load-bearing topology assumptions that normal host-run development does not prove.
 
-| Layer | Location     | Uses                                                          |
-| ----- | ------------ | ------------------------------------------------------------- |
-| Unit  | `test/unit/` | Pure functions, no infra. Policies and encryption utilities.  |
-| DAL   | `test/dal/`  | Real Postgres, `resetDb()` between each test file.            |
-| E2E   | `test/e2e/`  | Real Postgres + Redis, `buildTestApp()` + Fastify `inject()`. |
+---
 
-The E2E tests do not start an HTTP server. They use Fastify's `inject()` method to make in-process HTTP calls, which is faster and deterministic.
+## Important topology rule
+
+In the full topology, the backend is treated as **internal-only behind the proxy**.
+
+That is why forwarded headers such as:
+
+- `X-Forwarded-Host`
+- `X-Forwarded-Proto`
+- `X-Forwarded-For`
+
+are meaningful and trusted inside the backend request context.
+
+This is not accidental. It is a locked architecture assumption of this foundation.
+
+---
+
+## Repo discipline
+
+This repository should never overclaim readiness.
+
+If a feature is:
+
+- planned
+- partially wired
+- documented as next work
+- or only represented by a brief/spec
+
+it must not be described as already fully implemented.
+
+Use `docs/current-foundation-status.md` to keep that line explicit as the system grows.

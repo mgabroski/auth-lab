@@ -1,6 +1,11 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
+const typedTsConfigs = tseslint.configs.recommendedTypeChecked.map((config) => ({
+  ...config,
+  files: ['**/*.{ts,tsx}'],
+}));
+
 export default [
   {
     ignores: [
@@ -8,21 +13,18 @@ export default [
       '**/build/**',
       '**/node_modules/**',
       '**/coverage/**',
+      '**/.next/**',
       '**/.yarn/**',
       '**/.pnp.*',
+      'frontend/next-env.d.ts',
     ],
   },
 
   js.configs.recommended,
+  ...typedTsConfigs,
 
-  ...tseslint.configs.recommendedTypeChecked.map((c) => ({
-    ...c,
-    files: ['**/*.{ts,tsx}'],
-  })),
-
-  // Main TS rules (strict for app code)
   {
-    files: ['**/*.{ts,tsx}'],
+    files: ['backend/**/*.{ts,tsx}'],
     languageOptions: {
       parserOptions: {
         project: ['./backend/tsconfig.eslint.json'],
@@ -30,11 +32,8 @@ export default [
       },
     },
     rules: {
-      // Practical baseline for server-side TS:
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-misused-promises': 'error',
-
-      // Allow unused vars that start with _
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
@@ -42,7 +41,24 @@ export default [
     },
   },
 
-  // DB tooling scripts: allow pragmatic typing (avoid wasting time on migration internals)
+  {
+    files: ['frontend/**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: {
+        project: ['./frontend/tsconfig.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
   {
     files: ['backend/src/shared/db/**/*.ts'],
     rules: {
@@ -53,7 +69,6 @@ export default [
     },
   },
 
-  // Migration files specifically: allow any (Kysely migration types often require flexibility)
   {
     files: ['backend/src/shared/db/migrations/**/*.ts'],
     rules: {

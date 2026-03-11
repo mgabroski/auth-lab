@@ -45,6 +45,7 @@ export function decryptAndValidateSsoState(params: {
   const requestId = getString(parsed, 'requestId');
   const issuedAt = getNumber(parsed, 'issuedAt');
   const expiresAt = getNumber(parsed, 'expiresAt');
+  const redirectUri = getString(parsed, 'redirectUri');
   const returnToRaw = parsed['returnTo'];
 
   if (provider !== params.provider) {
@@ -68,6 +69,9 @@ export function decryptAndValidateSsoState(params: {
   if (!requestId) {
     throw AuthErrors.ssoStateInvalid({ reason: 'requestId_missing' });
   }
+  if (!redirectUri) {
+    throw AuthErrors.ssoStateInvalid({ reason: 'redirectUri_missing' });
+  }
 
   const payload: SsoStatePayload = {
     provider: params.provider,
@@ -76,6 +80,7 @@ export function decryptAndValidateSsoState(params: {
     issuedAt,
     expiresAt,
     requestId,
+    redirectUri,
     ...(typeof returnToRaw === 'string' && returnToRaw.length ? { returnTo: returnToRaw } : {}),
   };
 

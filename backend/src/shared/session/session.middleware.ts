@@ -2,44 +2,69 @@
  * backend/src/shared/session/session.middleware.ts
  *
  * WHY:
- * - Reads session cookie on every request.
- * - If valid session exists, populates req.authContext.
- * - Enforces tenant safety: session.tenantKey must EXACTLY match request tenantKey.
+ * - Reads the configured session cookie on every request.
+ * - Resolves the server-side session from the session store.
+ * - Populates req.authContext when a valid session is present.
+ * - Enforces fail-closed tenant safety at the session boundary.
  *
  * RULES:
- * - Best-effort: missing/invalid/expired/wrong-tenant => treat as unauthenticated.
- * - No business logic (just session → authContext mapping).
+ * - Missing cookie => unauthenticated
+ * - Missing/expired session => unauthenticated
+ * - Session tenant mismatch => unauthenticated
+ * - No business logic belongs here
+ *
+ * IMPORTANT:
+ * - cookieName is injected by app bootstrap
+ * - dev uses `sid`
+ * - production uses `__Host-sid`
+ * - this must match what set-session-cookie.ts writes
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+
 import type { SessionStore } from './session.store';
-import { SESSION_COOKIE_NAME } from './session.types';
 
 function parseCookies(raw: string | undefined): Record<string, string> {
   if (!raw) return {};
 
   const cookies: Record<string, string> = {};
+
   for (const pair of raw.split(';')) {
     const eqIdx = pair.indexOf('=');
     if (eqIdx === -1) continue;
 
     const key = pair.substring(0, eqIdx).trim();
     const value = pair.substring(eqIdx + 1).trim();
-    if (key) cookies[key] = value;
+
+    if (key) {
+      cookies[key] = value;
+    }
   }
+
   return cookies;
 }
 
-export function registerSessionMiddleware(app: FastifyInstance, sessionStore: SessionStore): void {
+export function registerSessionMiddleware(
+  app: FastifyInstance,
+  sessionStore: SessionStore,
+  cookieName: string,
+): void {
   app.addHook('onRequest', async (req: FastifyRequest) => {
     const cookies = parseCookies(req.headers.cookie);
-    const sessionId = cookies[SESSION_COOKIE_NAME];
-    if (!sessionId) return;
+    const sessionId = cookies[cookieName];
+
+    if (!sessionId) {
+      return;
+    }
 
     const session = await sessionStore.get(sessionId);
-    if (!session) return;
+    if (!session) {
+      return;
+    }
 
     const requestTenantKey = req.requestContext?.tenantKey ?? null;
+
+    // Fail closed: a valid session from tenant A must never authenticate on tenant B.
     if (session.tenantKey !== requestTenantKey) {
       return;
     }
