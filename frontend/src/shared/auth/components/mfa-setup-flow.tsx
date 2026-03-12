@@ -1,0 +1,213 @@
+'use client';
+
+/**
+ * frontend/src/shared/auth/components/mfa-setup-flow.tsx
+ *
+ * WHY:
+ * - Implements the real MFA setup continuation flow using backend setup + verify-setup endpoints.
+ * - Shows the secret, authenticator URI, and recovery codes returned by the backend.
+ * - Keeps the page thin while the browser owns the interactive setup state.
+ */
+
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type FormEvent,
+} from 'react';
+import { useRouter } from 'next/navigation';
+import type { MfaSetupResponse } from '@/shared/auth/contracts';
+import { setupMfa, verifyMfaSetup } from '@/shared/auth/browser-api';
+import { AUTHENTICATED_APP_ENTRY_PATH, getPostAuthRedirectPath } from '@/shared/auth/redirects';
+import { AuthErrorBanner } from './auth-error-banner';
+import { AuthSuccessBanner } from './auth-success-banner';
+import {
+  AuthNote,
+  FormField,
+  FormStack,
+  SecondaryButton,
+  SubmitButton,
+  TextArea,
+  TextInput,
+} from './auth-form-ui';
+
+const recoveryCodeListStyle: CSSProperties = {
+  display: 'grid',
+  gap: '8px',
+  margin: 0,
+  paddingLeft: '18px',
+  color: '#334155',
+  fontSize: '14px',
+  lineHeight: 1.6,
+};
+
+type MfaSetupFlowProps = {
+  userEmail: string;
+};
+
+export function MfaSetupFlow({ userEmail }: MfaSetupFlowProps) {
+  const router = useRouter();
+  const setupRequestedRef = useRef(false);
+  const [setupData, setSetupData] = useState<MfaSetupResponse | null>(null);
+  const [setupPending, setSetupPending] = useState(false);
+  const [verifyPending, setVerifyPending] = useState(false);
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<unknown>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const requestSetup = async (): Promise<void> => {
+    setSetupPending(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    const result = await setupMfa();
+
+    if (!result.ok) {
+      setError(result.error);
+      setSetupPending(false);
+      return;
+    }
+
+    setSetupData(result.data);
+    setSetupPending(false);
+  };
+
+  const submitVerifySetup = async (): Promise<void> => {
+    setVerifyPending(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    const result = await verifyMfaSetup({ code });
+
+    if (!result.ok) {
+      setError(result.error);
+      setVerifyPending(false);
+      return;
+    }
+
+    setSuccessMessage('MFA setup completed. Redirecting to your workspace…');
+    router.replace(getPostAuthRedirectPath(result.data.nextAction, null));
+    router.refresh();
+  };
+
+  useEffect(() => {
+    if (setupRequestedRef.current) {
+      return;
+    }
+
+    setupRequestedRef.current = true;
+    void requestSetup();
+  }, []);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    void submitVerifySetup();
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <FormStack>
+        <AuthSuccessBanner title="MFA setup" message={successMessage} />
+        <AuthErrorBanner error={error} fallbackMessage="Unable to complete MFA setup." />
+
+        <AuthNote>
+          Configure your authenticator app for <strong>{userEmail}</strong>. The backend setup call
+          returns a fresh secret, an <code>otpauth://</code> URI, and one-time recovery codes.
+        </AuthNote>
+
+        {setupData ? (
+          <>
+            <FormField
+              label="Authenticator secret"
+              htmlFor="mfa-setup-secret"
+              hint="Enter this secret manually if your authenticator app cannot open the URI directly."
+            >
+              <TextInput id="mfa-setup-secret" value={setupData.secret} readOnly />
+            </FormField>
+
+            <FormField
+              label="Authenticator URI"
+              htmlFor="mfa-setup-uri"
+              hint="This is the exact backend-provided setup URI. It can be copied into apps that support manual otpauth import."
+            >
+              <TextArea id="mfa-setup-uri" value={setupData.qrCodeUri} readOnly />
+            </FormField>
+
+            <div>
+              <strong style={{ fontSize: '14px', color: '#0f172a' }}>Recovery codes</strong>
+              <p
+                style={{
+                  marginTop: '8px',
+                  marginBottom: '8px',
+                  fontSize: '14px',
+                  lineHeight: 1.6,
+                  color: '#475569',
+                }}
+              >
+                Save these codes now. Each code can be used once if you lose access to your
+                authenticator app.
+              </p>
+              <ol style={recoveryCodeListStyle}>
+                {setupData.recoveryCodes.map((recoveryCode) => (
+                  <li key={recoveryCode}>
+                    <code>{recoveryCode}</code>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </>
+        ) : (
+          <AuthNote>
+            {setupPending
+              ? 'Preparing your MFA secret and recovery codes…'
+              : 'The page is waiting for the backend to start MFA setup.'}
+          </AuthNote>
+        )}
+
+        <FormField
+          label="6-digit code"
+          htmlFor="mfa-setup-code"
+          hint="Open your authenticator app, enter the current 6-digit code, and submit it to POST /auth/mfa/verify-setup."
+        >
+          <TextInput
+            id="mfa-setup-code"
+            name="code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            disabled={setupPending || verifyPending || !setupData}
+            onChange={(event: ChangeEvent<HTMLInputElement>) => setCode(event.target.value)}
+            placeholder="123456"
+            required
+          />
+        </FormField>
+
+        <SubmitButton disabled={setupPending || verifyPending || !setupData}>
+          {verifyPending ? 'Verifying MFA setup…' : 'Finish MFA setup'}
+        </SubmitButton>
+
+        <SecondaryButton
+          disabled={setupPending || verifyPending}
+          onClick={() => {
+            void requestSetup();
+          }}
+        >
+          {setupPending ? 'Refreshing setup secret…' : 'Generate a new setup secret'}
+        </SecondaryButton>
+
+        <SecondaryButton
+          disabled={setupPending || verifyPending}
+          onClick={() => {
+            router.replace(AUTHENTICATED_APP_ENTRY_PATH);
+            router.refresh();
+          }}
+        >
+          Refresh auth state
+        </SecondaryButton>
+      </FormStack>
+    </form>
+  );
+}
