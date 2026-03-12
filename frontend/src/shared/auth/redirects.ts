@@ -17,10 +17,12 @@ import { isSafeReturnToPath } from './url-tokens';
 
 export const AUTH_PUBLIC_ENTRY_PATH = '/auth/login';
 export const AUTH_LOGIN_PATH = '/auth/login';
+export const AUTH_REGISTER_PATH = '/auth/register';
 export const AUTH_SIGNUP_PATH = '/auth/signup';
 export const AUTH_FORGOT_PASSWORD_PATH = '/auth/forgot-password';
 export const AUTH_RESET_PASSWORD_PATH = '/auth/reset-password';
 export const AUTH_TENANT_UNAVAILABLE_PATH = '/auth/unavailable';
+export const AUTH_ACCEPT_INVITE_PATH = '/accept-invite';
 export const AUTH_EMAIL_VERIFICATION_PATH = '/verify-email';
 export const AUTH_MFA_SETUP_PATH = '/auth/mfa/setup';
 export const AUTH_MFA_VERIFY_PATH = '/auth/mfa/verify';

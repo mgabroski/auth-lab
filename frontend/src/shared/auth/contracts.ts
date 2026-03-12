@@ -2,13 +2,14 @@
  * frontend/src/shared/auth/contracts.ts
  *
  * WHY:
- * - Central frontend contract layer for the backend Auth module.
+ * - Central frontend contract layer for the backend Auth + invite provisioning modules.
  * - Keeps route/page code grounded in actual backend request/response shapes.
  * - Prevents ad-hoc inline DTOs from drifting across the frontend.
  *
  * RULES:
  * - These types must mirror the current backend truth from:
  *   - backend/src/modules/auth/auth.types.ts
+ *   - backend/src/modules/invites/flows/execute-accept-invite-flow.ts
  *   - backend/docs/api/auth.md
  * - Do not invent frontend-only auth state here.
  * - Prefer exact string unions over broad `string` where backend behavior is locked.
@@ -23,6 +24,8 @@ export type AuthNextAction =
   | 'MFA_SETUP_REQUIRED'
   | 'MFA_REQUIRED'
   | 'EMAIL_VERIFICATION_REQUIRED';
+
+export type InviteAcceptNextAction = 'SET_PASSWORD' | 'SIGN_IN' | 'MFA_SETUP_REQUIRED';
 
 export type AuthResultStatus = 'AUTHENTICATED' | 'EMAIL_VERIFICATION_REQUIRED';
 
@@ -66,6 +69,15 @@ export type ConfigResponse = {
     publicSignupEnabled: boolean;
     allowedSso: PublicSsoProvider[];
   };
+};
+
+export type AcceptInviteRequest = {
+  token: string;
+};
+
+export type AcceptInviteResponse = {
+  status: 'ACCEPTED';
+  nextAction: InviteAcceptNextAction;
 };
 
 export type RegisterRequest = {

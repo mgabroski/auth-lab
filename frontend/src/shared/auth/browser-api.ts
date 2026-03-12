@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Centralizes browser-side auth requests around the locked same-origin `/api/*` rule.
- * - Gives upcoming auth forms a thin, reusable API layer instead of hand-written fetch logic.
+ * - Gives auth and invite/provisioning flows a thin, reusable API layer instead of hand-written fetch logic.
  * - Preserves backend-owned auth/session truth by returning real backend payloads and errors.
  *
  * RULES:
@@ -15,6 +15,8 @@
 import { apiFetch } from '@/shared/api-client';
 import { readApiError, type ApiHttpError } from './api-errors';
 import type {
+  AcceptInviteRequest,
+  AcceptInviteResponse,
   AuthResult,
   ConfigResponse,
   ForgotPasswordRequest,
@@ -89,6 +91,12 @@ export function getAuthConfig(): Promise<BrowserAuthResult<ConfigResponse>> {
 
 export function getAuthMe(): Promise<BrowserAuthResult<MeResponse>> {
   return jsonRequest<MeResponse>('/auth/me', 'GET');
+}
+
+export function acceptInvite(
+  input: AcceptInviteRequest,
+): Promise<BrowserAuthResult<AcceptInviteResponse>> {
+  return jsonRequest<AcceptInviteResponse>('/auth/invites/accept', 'POST', input);
 }
 
 export function login(input: LoginRequest): Promise<BrowserAuthResult<AuthResult>> {

@@ -4,6 +4,7 @@
  * WHY:
  * - Real public login screen for the current tenant.
  * - Uses SSR bootstrap for tenant-aware rendering and a client form for same-origin login.
+ * - Also serves invite-continuation sign-in after POST /auth/invites/accept returns SIGN_IN.
  */
 
 import { redirect } from 'next/navigation';
@@ -11,11 +12,13 @@ import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
 import { AuthCard } from '@/shared/auth/components/auth-card';
 import { AuthErrorBanner } from '@/shared/auth/components/auth-error-banner';
 import { AuthShell } from '@/shared/auth/components/auth-shell';
+import { AuthNote } from '@/shared/auth/components/auth-form-ui';
 import { LoginForm } from '@/shared/auth/components/login-form';
 import { getRouteStateRedirectPath } from '@/shared/auth/redirects';
 import {
   getReturnToPath,
   normalizeReturnToPath,
+  readQueryParam,
   type SearchParamsRecord,
 } from '@/shared/auth/url-tokens';
 
@@ -24,6 +27,18 @@ export const dynamic = 'force-dynamic';
 type PageProps = {
   searchParams: Promise<SearchParamsRecord>;
 };
+
+function getInviteContinuationNotice(inviteParam: string | null): string | null {
+  if (inviteParam === 'accepted') {
+    return 'Your invitation has been accepted. Sign in with your existing account to continue into this workspace.';
+  }
+
+  if (inviteParam === 'admin-mfa-setup') {
+    return 'Your invitation has been accepted. Sign in to continue. Because this invite grants admin access, MFA setup will be required after sign-in.';
+  }
+
+  return null;
+}
 
 export default async function LoginPage({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
@@ -49,6 +64,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
 
   const { tenant } = bootstrap.config;
   const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/dashboard');
+  const inviteNotice = getInviteContinuationNotice(readQueryParam(resolvedSearchParams, 'invite'));
 
   return (
     <AuthShell
@@ -60,6 +76,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
         title="Workspace access"
         description="Tenant availability, public signup visibility, and SSO options are all rendered from GET /auth/config for the current host-derived tenant."
       >
+        {inviteNotice ? <AuthNote>{inviteNotice}</AuthNote> : null}
         <LoginForm
           ssoProviders={tenant.allowedSso}
           publicSignupEnabled={tenant.publicSignupEnabled}
