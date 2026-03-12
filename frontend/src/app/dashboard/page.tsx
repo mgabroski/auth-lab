@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Preserves `/dashboard` as a compatibility route for older links and returnTo values.
- * - Hands off to the correct Phase 6 landing route (`/app` or `/admin`) using current backend truth.
+ * - Hands off to the correct current landing route (`/app` or `/admin`) using backend truth.
  */
 
 import { redirect } from 'next/navigation';

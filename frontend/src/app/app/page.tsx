@@ -47,8 +47,8 @@ export default async function MemberAppPage() {
         </h2>
         <p style={{ margin: 0, fontSize: '15px', lineHeight: 1.7, color: '#475569' }}>
           The backend has already resolved tenant, session, and continuation truth for this member
-          session. This page is intentionally minimal for Phase 6 so the frontend lands on a real,
-          protected route without starting unrelated product modules yet.
+          session. This page intentionally stays a narrow authenticated landing surface while
+          broader member-facing product modules remain outside the current frontend scope.
         </p>
       </div>
     </AuthenticatedShell>

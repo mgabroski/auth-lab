@@ -1,15 +1,9 @@
-# Frontend — Foundation Status and Guide
+# Frontend — Auth + User Provisioning Status and Guide
 
-This frontend is the **current UI foundation layer** of the Hubins Auth Lab repository.
+This frontend is the current **implemented Auth + User Provisioning surface** of the Hubins Auth-Lab repository.
 
-At the current repo phase, the frontend is intentionally focused on:
-
-- proving the topology and FE/BE wiring
-- establishing the correct frontend communication model
-- locking SSR vs browser API behavior
-- preparing the ground for the real auth/bootstrap implementation
-
-It is **not** yet the finished Auth + User Provisioning product UI.
+It is no longer only a topology/foundation shell.
+The repo now contains the real frontend routes and supporting wiring for the current auth and provisioning scope.
 
 Read this file together with:
 
@@ -21,47 +15,54 @@ Read this file together with:
 
 ---
 
-## 1. What the frontend already implements
+## 1. Current frontend status
 
-At the current phase, the frontend already provides:
+At the current repo phase, the frontend already implements:
 
-- Next.js App Router foundation
-- root app layout
-- SSR API wrapper
-- browser API wrapper
-- host-run `/api/*` Route Handler proxy
-- topology smoke-test page
-- tenant-aware browser usage through subdomain-based local access
-- frontend engineering rules for future implementation work
-
-This is not trivial scaffolding.
-These pieces are the required base for building the real auth UI correctly.
-
----
-
-## 2. What is intentionally not implemented yet
-
-The following are **not yet implemented** and should not be described as delivered:
-
+- topology-aware Next.js App Router setup
+- same-origin browser `/api/*` communication model
+- SSR direct-backend communication model
+- host-derived tenant handling
+- root bootstrap handoff from `/`
+- public auth entry routing
 - login screen
 - signup screen
-- forgot/reset password screens
-- invite acceptance screen
-- verify-email continuation screen
-- MFA setup / verify continuation screens
-- authenticated app shell
-- admin shell
-- frontend auth bootstrap state
-- route guards for public/authenticated/continuation states
+- invite registration flow
+- forgot-password screen
+- reset-password screen
+- accept-invite flow
+- verify-email continuation flow
+- MFA setup flow
+- MFA verify flow
+- SSO completion landing
+- authenticated member landing route
+- authenticated admin landing route
+- admin invite management UI
+- logout flow
+- legacy compatibility handoff from `/dashboard`
+- topology smoke-test page
 
-These are next-step frontend work.
-The current frontend is a foundation, not a complete product surface.
+This is the current implemented frontend module surface for Auth + User Provisioning.
 
 ---
 
-## 3. Why the frontend is built this way
+## 2. What the frontend does not claim yet
 
-The frontend follows the backend and topology constraints of this repo.
+The frontend should **not** currently be described as having:
+
+- a broader member product application beyond the authenticated landing route
+- a full admin dashboard beyond the current invite management surface
+- broader non-auth product modules
+- generalized product navigation outside the current auth/provisioning scope
+- every future management screen that may belong to later modules
+
+The frontend is functionally real for Auth + User Provisioning, but it is not yet the complete Hubins product UI.
+
+---
+
+## 3. Locked frontend rules
+
+These rules remain load-bearing and should not be casually changed.
 
 ### 3.1 Same-origin browser rule
 
@@ -71,52 +72,64 @@ Browser code must call backend APIs through same-origin relative paths:
 /api/*
 ```
 
-The browser must not hardcode direct backend origins.
+Browser code must not hardcode direct backend origins.
 
 ### 3.2 SSR is first-class
 
 Because the system uses:
 
 - tenant-aware routing
-- server-side sessions
-- cookie-based auth
+- cookie-based sessions
+- backend-owned auth truth
 
-SSR is part of the intended application flow, not an optional optimization.
+SSR is part of the intended application model, not an optional optimization.
 
-### 3.3 Backend bootstrap is authoritative
+### 3.3 Backend truth is authoritative
 
-The future frontend auth/bootstrap flow must be built around backend truth from:
+The frontend must continue to use backend truth from endpoints such as:
 
 - `GET /auth/config`
 - `GET /auth/me`
 
-The frontend must not independently invent tenant/auth continuation state when the backend already owns that truth.
+The frontend must not invent its own tenant state, auth state, or continuation state when the backend already owns that truth.
+
+### 3.4 Tenant identity is host-derived
+
+The frontend must treat tenant identity as coming from the request host/subdomain.
+
+It must not derive tenant identity from:
+
+- query params
+- local storage
+- arbitrary UI state
+- request body fields
 
 ---
 
 ## 4. Current frontend communication model
 
-## 4.1 Browser requests
+### 4.1 Browser requests
 
-Browser code should call the backend via same-origin paths such as:
+Browser code calls the backend through same-origin paths such as:
 
 ```text
 /api/auth/config
 /api/auth/me
 /api/auth/login
+/api/admin/invites
 ```
 
-How those requests reach the backend depends on the current local/runtime mode:
+How those requests reach the backend depends on the runtime mode:
 
 - **Host-run mode:** Next.js Route Handlers in `src/app/api/[...path]/route.ts` proxy `/api/*` to the backend while preserving host/cookie/forwarded-header context.
 - **Full-stack / deployed topology:** the public reverse proxy routes `/api/*` directly to the backend.
 
-The browser contract stays the same in both cases:
+The browser contract stays the same in both modes:
 
 - always use relative same-origin `/api/*`
 - never hardcode backend origins in browser code
 
-## 4.2 SSR requests
+### 4.2 SSR requests
 
 Server-side frontend code may call the backend directly through `INTERNAL_API_URL`.
 
@@ -134,31 +147,73 @@ This preserves:
 - session continuity
 - request fidelity
 
-## 4.3 Tenant identity
+---
 
-The frontend must treat tenant identity as host/subdomain-derived.
+## 5. Current route surface
 
-It must not invent tenant identity from:
+The current frontend route surface includes:
 
-- local storage
-- query params
-- UI state
-- request body fields
+### Public and continuation routes
 
-The host is the current tenant context.
+- `/`
+- `/auth`
+- `/auth/login`
+- `/auth/signup`
+- `/auth/register`
+- `/auth/forgot-password`
+- `/auth/reset-password`
+- `/accept-invite`
+- `/verify-email`
+- `/auth/mfa/setup`
+- `/auth/mfa/verify`
+- `/auth/sso/done`
+- `/auth/unavailable`
+- `/auth/continue/[action]`
+
+### Authenticated routes
+
+- `/app`
+- `/admin`
+- `/admin/invites`
+
+### Compatibility and validation routes
+
+- `/dashboard`
+- `/topology-check`
 
 ---
 
-## 5. Current important frontend files
-
-### `src/app/layout.tsx`
-
-Root application layout.
+## 6. Important current frontend files
 
 ### `src/app/page.tsx`
 
-Current topology smoke page.
-This file is intentionally simple and should be understood as a foundation proof page, not as the final app shell.
+Root bootstrap handoff page.
+This is the entry point that resolves route outcome from backend/bootstrap truth.
+
+### `src/app/auth/*`
+
+Public auth and continuation pages.
+These implement the main browser-facing auth and provisioning flows.
+
+### `src/app/app/page.tsx`
+
+Minimal authenticated member landing route.
+This exists after backend truth resolves the user as an authenticated member with no remaining continuation requirement.
+
+### `src/app/admin/page.tsx`
+
+Minimal authenticated admin landing route.
+This exists after backend truth resolves the user as an authenticated admin with no remaining continuation requirement.
+
+### `src/app/admin/invites/page.tsx`
+
+Admin invite management page.
+This is the current implemented admin-facing provisioning surface.
+
+### `src/app/dashboard/page.tsx`
+
+Legacy compatibility handoff route.
+It forwards to the correct modern landing route using backend truth.
 
 ### `src/app/api/[...path]/route.ts`
 
@@ -175,43 +230,48 @@ Used for same-origin browser communication with the backend.
 SSR/server-side API wrapper.
 Used for direct backend communication from server-side frontend code.
 
+### `src/shared/auth/*`
+
+Shared auth contracts, redirect logic, bootstrap logic, route-state handling, SSO helpers, and current reusable auth UI pieces.
+
 ### `src/shared/engineering-rules.md`
 
 Frontend implementation law.
-This file must be read before building the real auth/bootstrap UI layer.
+This should still be read before changing the auth/bootstrap surface.
 
 ---
 
-## 6. Backend endpoints the frontend foundation depends on
+## 7. Backend capabilities this frontend currently depends on
 
-The current frontend foundation is especially aligned with these backend endpoints:
+The current frontend implementation is especially grounded in these backend areas:
 
-### `GET /auth/config`
+- `GET /auth/config`
+- `GET /auth/me`
+- `POST /auth/login`
+- `POST /auth/signup`
+- `POST /auth/register`
+- `POST /auth/forgot-password`
+- `POST /auth/reset-password`
+- `POST /auth/verify-email`
+- `POST /auth/resend-verification`
+- `POST /auth/invites/accept`
+- `POST /auth/mfa/setup`
+- `POST /auth/mfa/verify-setup`
+- `POST /auth/mfa/verify`
+- `POST /auth/mfa/recover`
+- `POST /auth/logout`
+- `POST /admin/invites`
+- `GET /admin/invites`
+- `POST /admin/invites/:inviteId/resend`
+- `DELETE /admin/invites/:inviteId`
 
-Used for public/bootstrap UI truth such as:
-
-- tenant availability
-- whether public signup is enabled
-- which SSO providers should be shown
-
-### `GET /auth/me`
-
-Used for authenticated/bootstrap truth such as:
-
-- current user
-- current tenant
-- current membership role
-- current session continuation state
-- `nextAction`
-
-These are load-bearing frontend dependencies.
-Future frontend auth flows must be designed around them.
+These are real load-bearing dependencies for the current frontend module.
 
 ---
 
-## 7. Local development
+## 8. Local development
 
-## 7.1 Host-run mode
+### 8.1 Host-run mode
 
 This is the normal daily development mode.
 
@@ -239,14 +299,12 @@ http://goodwill-ca.localhost:3000
 
 Do **not** use plain `http://localhost:3000` when checking tenant-aware frontend behavior.
 
-Important host-run detail:
+Important host-run details:
 
 - browser `/api/*` is handled by the local Next Route Handler proxy
 - SSR uses `INTERNAL_API_URL=http://localhost:3001`
 
----
-
-## 7.2 Full stack mode
+### 8.2 Full-stack mode
 
 Use this when validating real proxy behavior.
 
@@ -275,11 +333,11 @@ If a frontend change affects:
 - SSR forwarding behavior
 - host/subdomain assumptions
 
-then full stack validation is required.
+then full-stack validation is required.
 
 ---
 
-## 8. Frontend commands
+## 9. Frontend commands
 
 From `frontend/`:
 
@@ -292,48 +350,49 @@ yarn lint:fix
 yarn typecheck
 ```
 
-At the current repo phase, there is **no separate frontend test suite documented as a locked repo gate yet**.
-Do not claim `yarn test` exists for the frontend unless that script is actually added.
+Do not claim a separate locked frontend test suite unless that script actually exists in the repo.
 
 ---
 
-## 9. Current frontend truth for reviewers and future implementers
+## 10. Practical smoke checks
+
+When reviewing frontend changes in this module, at minimum verify:
+
+- signed-out `/` resolves correctly
+- member login ends at `/app`
+- admin login ends at `/admin`
+- continuation routes follow backend `nextAction`
+- logout clears session and returns to public entry
+- browser network calls stay on same-origin `/api/*`
+- tenant behavior remains host-derived
+- `/dashboard` still acts as a compatibility handoff
+- admin invite management still works if the changed code touches that surface
+
+---
+
+## 11. Current truth for reviewers and future implementers
 
 This frontend should currently be reviewed as:
 
-- a strong topology-aware foundation
+- a real topology-aware auth and provisioning frontend
 - a real SSR/browser integration layer
-- a preparatory shell for auth/bootstrap UI work
+- a truthful implementation of the current Auth + User Provisioning scope
 
 It should **not** currently be reviewed as:
 
-- complete auth application
-- complete tenant admin UI
-- complete user provisioning UI
-- complete shell for broader Hubins modules
+- the full Hubins product frontend
+- a complete admin control plane
+- a complete member application beyond auth landing
+- a finished surface for future non-auth modules
 
-That distinction matters because the next implementation phase will build on this foundation.
-
----
-
-## 10. What should happen next
-
-The next frontend work should build on the current foundation in this order:
-
-1. use `/auth/config` and `/auth/me` as the bootstrap truth sources
-2. implement frontend auth/bootstrap state
-3. implement public/authenticated/continuation route handling
-4. implement real auth screens
-5. implement authenticated app shell and admin entry points
-
-The goal is to expand from the current foundation without violating the locked topology and backend contract.
+That distinction matters because future product modules should extend this frontend without breaking the locked topology and auth rules.
 
 ---
 
-## 11. Final rule
+## 12. Final rule
 
-This frontend README must remain truthful about one thing above all else:
+This README must remain truthful about one thing above all else:
 
-**the frontend foundation is real, but the real auth product UI is still next-step work**
+**the frontend Auth + User Provisioning module is implemented, but the broader Hubins product UI is still future work**
 
-If this file starts describing planned frontend behavior as already shipped, it has become misleading and must be corrected.
+If this file starts describing future product surfaces as already shipped, or starts describing the current frontend as only a foundation when real auth/provisioning UI is already present, it has become misleading and must be corrected.

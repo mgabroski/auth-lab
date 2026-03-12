@@ -6,28 +6,12 @@
  * - Only renders when backend bootstrap truth resolves to a fully-authenticated ADMIN session.
  */
 
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
 import { AuthenticatedShell } from '@/shared/auth/components/authenticated-shell';
-import { ADMIN_INVITES_PATH, getRouteStateRedirectPath } from '@/shared/auth/redirects';
+import { getRouteStateRedirectPath } from '@/shared/auth/redirects';
 
 export const dynamic = 'force-dynamic';
-
-const actionLinkStyle = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minHeight: '44px',
-  borderRadius: '12px',
-  border: '1px solid rgba(148, 163, 184, 0.3)',
-  backgroundColor: '#ffffff',
-  color: '#0f172a',
-  padding: '0 16px',
-  fontSize: '14px',
-  fontWeight: 700,
-  textDecoration: 'none',
-} as const;
 
 export default async function AdminPage() {
   const bootstrap = await loadAuthBootstrap();
@@ -61,15 +45,10 @@ export default async function AdminPage() {
         <h2 style={{ margin: 0, fontSize: '22px', lineHeight: 1.2 }}>Admin landing ready</h2>
         <p style={{ margin: 0, fontSize: '15px', lineHeight: 1.7, color: '#475569' }}>
           Admin users are separated from members at the route-state layer so the root gate lands
-          them in <code>/admin</code> instead of the member app. This page stays intentionally
-          minimal while still using the real backend session and exposing the first real admin
-          provisioning surface.
+          them in <code>/admin</code> instead of the member app. This page intentionally stays a
+          narrow authenticated entry surface so the repo remains honest about what admin tooling is
+          already wired and what still belongs to later frontend work.
         </p>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Link href={ADMIN_INVITES_PATH} style={actionLinkStyle}>
-            Manage invites
-          </Link>
-        </div>
       </div>
     </AuthenticatedShell>
   );
