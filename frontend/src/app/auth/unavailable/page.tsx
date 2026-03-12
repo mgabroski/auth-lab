@@ -3,12 +3,16 @@
  *
  * WHY:
  * - Dedicated route for unknown/inactive tenant bootstrap state.
- * - Mirrors backend anti-enumeration posture by rendering the same generic unavailable view.
+ * - Uses the shared tenant unavailable component so the copy stays anti-enumeration-safe.
  */
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
+import { AuthCard } from '@/shared/auth/components/auth-card';
+import { AuthErrorBanner } from '@/shared/auth/components/auth-error-banner';
+import { AuthShell } from '@/shared/auth/components/auth-shell';
+import { TenantUnavailableState } from '@/shared/auth/components/tenant-unavailable-state';
 import { getRouteStateRedirectPath, TOPOLOGY_CHECK_PATH } from '@/shared/auth/redirects';
 
 export const dynamic = 'force-dynamic';
@@ -18,16 +22,20 @@ export default async function TenantUnavailablePage() {
 
   if (!bootstrap.ok) {
     return (
-      <main>
-        <h1>Hubins — Tenant Unavailable</h1>
-        <p>The tenant unavailable page could not complete bootstrap.</p>
-        <p>
-          <strong>Error:</strong> {bootstrap.error.message}
-        </p>
-        <p>
-          Use <Link href={TOPOLOGY_CHECK_PATH}>Topology Check</Link> to verify the foundation.
-        </p>
-      </main>
+      <AuthShell
+        eyebrow="Hubins"
+        title="Tenant unavailable"
+        subtitle="The tenant unavailable route could not complete bootstrap."
+        footer={
+          <>
+            Use <Link href={TOPOLOGY_CHECK_PATH}>Topology Check</Link> to verify the foundation.
+          </>
+        }
+      >
+        <AuthCard tone="danger">
+          <AuthErrorBanner error={bootstrap.error} fallbackMessage="Unable to load tenant state." />
+        </AuthCard>
+      </AuthShell>
     );
   }
 
@@ -36,13 +44,12 @@ export default async function TenantUnavailablePage() {
   }
 
   return (
-    <main>
-      <h1>Hubins</h1>
-      <p>This tenant is unavailable.</p>
-      <p>
-        The backend returns the same public bootstrap shape for unknown and inactive tenants, and
-        this route intentionally preserves that behavior.
-      </p>
-    </main>
+    <AuthShell
+      eyebrow="Hubins"
+      title="Workspace unavailable"
+      subtitle="This state is intentionally generic to preserve backend anti-enumeration behavior."
+    >
+      <TenantUnavailableState />
+    </AuthShell>
   );
 }

@@ -2,17 +2,22 @@
  * frontend/src/app/auth/page.tsx
  *
  * WHY:
- * - Provides the public auth entry target for the new root gate.
- * - Intentionally remains a minimal Phase 1 placeholder, not the final auth UI.
+ * - Public auth/bootstrap entry route.
+ * - Uses the shared auth shell/card primitives so the next route pages can stay thin.
  *
  * RULES:
  * - Server Component only.
  * - Redirects away when backend truth says the user belongs in continuation or app flow.
+ * - This is still a validation wrapper, not the final real auth form screen.
  */
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
+import { AuthCard } from '@/shared/auth/components/auth-card';
+import { AuthErrorBanner } from '@/shared/auth/components/auth-error-banner';
+import { AuthShell } from '@/shared/auth/components/auth-shell';
+import { SsoButtons } from '@/shared/auth/components/sso-buttons';
 import {
   getRouteStateRedirectPath,
   TOPOLOGY_CHECK_PATH,
@@ -26,16 +31,23 @@ export default async function AuthEntryPage() {
 
   if (!bootstrap.ok) {
     return (
-      <main>
-        <h1>Hubins — Auth Entry</h1>
-        <p>Bootstrap failed while loading the public auth entry route.</p>
-        <p>
-          <strong>Error:</strong> {bootstrap.error.message}
-        </p>
-        <p>
-          Use <Link href={TOPOLOGY_CHECK_PATH}>Topology Check</Link> to verify SSR wiring.
-        </p>
-      </main>
+      <AuthShell
+        eyebrow="Hubins"
+        title="Auth bootstrap failed"
+        subtitle="The public auth entry could not load backend bootstrap truth for this request."
+        footer={
+          <>
+            Verify FE/BE wiring with <Link href={TOPOLOGY_CHECK_PATH}>Topology Check</Link>.
+          </>
+        }
+      >
+        <AuthCard tone="danger">
+          <AuthErrorBanner
+            error={bootstrap.error}
+            fallbackMessage="Unable to load auth bootstrap."
+          />
+        </AuthCard>
+      </AuthShell>
     );
   }
 
@@ -48,21 +60,35 @@ export default async function AuthEntryPage() {
   }
 
   const { tenant } = bootstrap.config;
+  const title = tenant.name ? `Sign in to ${tenant.name}` : 'Sign in to Hubins';
 
   return (
-    <main>
-      <h1>Hubins — Auth Entry</h1>
-      <p>This route now represents the public auth/bootstrap entry for the current tenant.</p>
+    <AuthShell
+      eyebrow="Hubins"
+      title={title}
+      subtitle="This Phase 2 wrapper validates the shared auth UI layer without hardcoding tenant or SSO truth in the page itself."
+      footer={
+        <>
+          Password, signup, reset, invite, and continuation forms land in the next route-page phase.
+        </>
+      }
+    >
+      <AuthCard
+        title="Workspace access"
+        description="Public auth/bootstrap state comes directly from GET /auth/config for the current host-derived tenant."
+      >
+        <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7, color: '#475569' }}>
+          Public signup is <strong>{tenant.publicSignupEnabled ? 'enabled' : 'disabled'}</strong>{' '}
+          for this workspace.
+        </p>
 
-      <h2>Resolved tenant</h2>
-      <pre>{JSON.stringify(tenant, null, 2)}</pre>
+        <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7, color: '#475569' }}>
+          Available SSO providers:{' '}
+          {tenant.allowedSso.length ? tenant.allowedSso.join(', ') : 'none'}.
+        </p>
 
-      <h2>Phase status</h2>
-      <p>
-        Phase 1 is complete when the root gate lands here for unauthenticated users and the resolved
-        tenant configuration matches backend truth.
-      </p>
-      <p>Real login/signup/reset/invite screens will replace this placeholder in the next phase.</p>
-    </main>
+        <SsoButtons providers={tenant.allowedSso} returnTo="/dashboard" />
+      </AuthCard>
+    </AuthShell>
   );
 }

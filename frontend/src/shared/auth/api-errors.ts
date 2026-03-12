@@ -2,14 +2,15 @@
  * frontend/src/shared/auth/api-errors.ts
  *
  * WHY:
- * - Normalizes backend error responses for SSR bootstrap/auth flows.
- * - Lets the frontend distinguish expected auth states (e.g. 401 on /auth/me)
- *   from true bootstrap failures.
+ * - Normalizes backend error responses for SSR bootstrap and browser auth flows.
+ * - Lets the frontend distinguish expected auth states from infrastructure failures.
+ * - Provides one shared way to extract a user-facing message for banners/forms.
  *
  * RULES:
  * - Grounded in backend shared error-handler shape:
  *   { error: { code: string; message: string } }
  * - Never assume every non-2xx response contains JSON.
+ * - Do not invent frontend-only error envelopes.
  */
 
 import type { BackendErrorResponse } from './contracts';
@@ -26,6 +27,10 @@ export class ApiHttpError extends Error {
     this.code = opts.code;
     this.body = opts.body;
   }
+}
+
+export function isApiHttpError(value: unknown): value is ApiHttpError {
+  return value instanceof ApiHttpError;
 }
 
 export function isBackendErrorResponse(value: unknown): value is BackendErrorResponse {
@@ -61,4 +66,23 @@ export async function readApiError(response: Response): Promise<ApiHttpError> {
     message: response.statusText || `HTTP ${response.status}`,
     body,
   });
+}
+
+export function getApiErrorMessage(
+  error: unknown,
+  fallbackMessage = 'Something went wrong. Please try again.',
+): string {
+  if (typeof error === 'string' && error.trim().length) {
+    return error;
+  }
+
+  if (isApiHttpError(error) && error.message.trim().length) {
+    return error.message;
+  }
+
+  if (error instanceof Error && error.message.trim().length) {
+    return error.message;
+  }
+
+  return fallbackMessage;
 }
