@@ -1,0 +1,71 @@
+/**
+ * frontend/src/app/auth/login/page.tsx
+ *
+ * WHY:
+ * - Real public login screen for the current tenant.
+ * - Uses SSR bootstrap for tenant-aware rendering and a client form for same-origin login.
+ */
+
+import { redirect } from 'next/navigation';
+import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
+import { AuthCard } from '@/shared/auth/components/auth-card';
+import { AuthErrorBanner } from '@/shared/auth/components/auth-error-banner';
+import { AuthShell } from '@/shared/auth/components/auth-shell';
+import { LoginForm } from '@/shared/auth/components/login-form';
+import { getRouteStateRedirectPath } from '@/shared/auth/redirects';
+import {
+  getReturnToPath,
+  normalizeReturnToPath,
+  type SearchParamsRecord,
+} from '@/shared/auth/url-tokens';
+
+export const dynamic = 'force-dynamic';
+
+type PageProps = {
+  searchParams: Promise<SearchParamsRecord>;
+};
+
+export default async function LoginPage({ searchParams }: PageProps) {
+  const resolvedSearchParams = await searchParams;
+  const bootstrap = await loadAuthBootstrap();
+
+  if (!bootstrap.ok) {
+    return (
+      <AuthShell
+        eyebrow="Hubins"
+        title="Sign in"
+        subtitle="The login page could not load backend bootstrap truth for this request."
+      >
+        <AuthCard tone="danger">
+          <AuthErrorBanner error={bootstrap.error} fallbackMessage="Unable to load login state." />
+        </AuthCard>
+      </AuthShell>
+    );
+  }
+
+  if (bootstrap.routeState.kind !== 'PUBLIC_ENTRY') {
+    redirect(getRouteStateRedirectPath(bootstrap.routeState));
+  }
+
+  const { tenant } = bootstrap.config;
+  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/dashboard');
+
+  return (
+    <AuthShell
+      eyebrow="Hubins"
+      title={tenant.name ? `Sign in to ${tenant.name}` : 'Sign in'}
+      subtitle="Use your workspace credentials or an allowed single sign-on provider."
+    >
+      <AuthCard
+        title="Workspace access"
+        description="Tenant availability, public signup visibility, and SSO options are all rendered from GET /auth/config for the current host-derived tenant."
+      >
+        <LoginForm
+          ssoProviders={tenant.allowedSso}
+          publicSignupEnabled={tenant.publicSignupEnabled}
+          returnTo={returnTo}
+        />
+      </AuthCard>
+    </AuthShell>
+  );
+}

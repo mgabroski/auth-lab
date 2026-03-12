@@ -3,22 +3,58 @@
  *
  * WHY:
  * - Keeps route-state → pathname mapping in one place.
- * - Makes root/auth/dashboard placeholder gates consistent until richer UI lands.
+ * - Makes root/auth/dashboard/public-entry flows consistent.
+ * - Centralizes post-auth redirects driven by backend `nextAction` truth.
  *
  * RULES:
  * - This file owns frontend route targets, not backend truth.
  * - Future route changes should update this file instead of scattering string literals.
  */
 
+import type { AuthNextAction } from './contracts';
 import type { AuthRouteState } from './route-state';
+import { isSafeReturnToPath } from './url-tokens';
 
-export const AUTH_PUBLIC_ENTRY_PATH = '/auth';
+export const AUTH_PUBLIC_ENTRY_PATH = '/auth/login';
+export const AUTH_LOGIN_PATH = '/auth/login';
+export const AUTH_SIGNUP_PATH = '/auth/signup';
+export const AUTH_FORGOT_PASSWORD_PATH = '/auth/forgot-password';
+export const AUTH_RESET_PASSWORD_PATH = '/auth/reset-password';
 export const AUTH_TENANT_UNAVAILABLE_PATH = '/auth/unavailable';
 export const AUTH_EMAIL_VERIFICATION_PATH = '/auth/continue/email-verification';
 export const AUTH_MFA_SETUP_PATH = '/auth/continue/mfa-setup';
 export const AUTH_MFA_VERIFY_PATH = '/auth/continue/mfa-verify';
+export const AUTH_SSO_DONE_PATH = '/auth/sso/done';
 export const AUTHENTICATED_APP_ENTRY_PATH = '/dashboard';
 export const TOPOLOGY_CHECK_PATH = '/topology-check';
+
+export function getPathForNextAction(nextAction: AuthNextAction): string {
+  switch (nextAction) {
+    case 'NONE':
+      return AUTHENTICATED_APP_ENTRY_PATH;
+    case 'EMAIL_VERIFICATION_REQUIRED':
+      return AUTH_EMAIL_VERIFICATION_PATH;
+    case 'MFA_SETUP_REQUIRED':
+      return AUTH_MFA_SETUP_PATH;
+    case 'MFA_REQUIRED':
+      return AUTH_MFA_VERIFY_PATH;
+    default: {
+      const exhaustiveCheck: never = nextAction;
+      throw new Error(`Unhandled auth nextAction: ${String(exhaustiveCheck)}`);
+    }
+  }
+}
+
+export function getPostAuthRedirectPath(
+  nextAction: AuthNextAction,
+  returnTo?: string | null,
+): string {
+  if (nextAction === 'NONE' && isSafeReturnToPath(returnTo)) {
+    return returnTo;
+  }
+
+  return getPathForNextAction(nextAction);
+}
 
 export function getRouteStateRedirectPath(state: AuthRouteState): string {
   switch (state.kind) {
