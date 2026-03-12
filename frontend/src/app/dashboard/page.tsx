@@ -2,12 +2,8 @@
  * frontend/src/app/dashboard/page.tsx
  *
  * WHY:
- * - Minimal authenticated landing route for the new root gate.
- * - Matches the backend/docs use of `/dashboard` as the safe post-auth in-app target.
- *
- * RULES:
- * - Server Component only.
- * - Redirects away unless backend truth says the session is fully continued.
+ * - Preserves `/dashboard` as a compatibility route for older links and returnTo values.
+ * - Hands off to the correct Phase 6 landing route (`/app` or `/admin`) using current backend truth.
  */
 
 import { redirect } from 'next/navigation';
@@ -22,8 +18,8 @@ export default async function DashboardPage() {
   if (!bootstrap.ok) {
     return (
       <main>
-        <h1>Hubins — Dashboard</h1>
-        <p>Bootstrap failed while loading the authenticated entry route.</p>
+        <h1>Hubins — Dashboard handoff</h1>
+        <p>Bootstrap failed while loading the legacy dashboard compatibility route.</p>
         <p>
           <strong>Error:</strong> {bootstrap.error.message}
         </p>
@@ -31,25 +27,5 @@ export default async function DashboardPage() {
     );
   }
 
-  if (bootstrap.routeState.kind !== 'AUTHENTICATED_APP') {
-    redirect(getRouteStateRedirectPath(bootstrap.routeState));
-  }
-
-  const authenticatedState = bootstrap.routeState;
-
-  return (
-    <main>
-      <h1>Hubins — Dashboard</h1>
-      <p>This is the Phase 1 authenticated entry placeholder.</p>
-
-      <h2>User</h2>
-      <pre>{JSON.stringify(authenticatedState.me.user, null, 2)}</pre>
-
-      <h2>Membership</h2>
-      <pre>{JSON.stringify(authenticatedState.me.membership, null, 2)}</pre>
-
-      <h2>Tenant</h2>
-      <pre>{JSON.stringify(authenticatedState.me.tenant, null, 2)}</pre>
-    </main>
-  );
+  redirect(getRouteStateRedirectPath(bootstrap.routeState));
 }

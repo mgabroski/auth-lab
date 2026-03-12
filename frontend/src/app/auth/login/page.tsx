@@ -63,7 +63,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
   }
 
   const { tenant } = bootstrap.config;
-  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/dashboard');
+  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/');
   const inviteNotice = getInviteContinuationNotice(readQueryParam(resolvedSearchParams, 'invite'));
 
   return (

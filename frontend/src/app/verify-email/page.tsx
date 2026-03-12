@@ -75,7 +75,7 @@ export default async function VerifyEmailPage({ searchParams }: PageProps) {
       subtitle="The backend owns whether verification is still required. This page only submits the token from the URL and reacts to current session truth."
       footer={
         hasAuthenticatedSession ? (
-          <Link href={AUTHENTICATED_APP_ENTRY_PATH}>Back to dashboard</Link>
+          <Link href={AUTHENTICATED_APP_ENTRY_PATH}>Back to workspace</Link>
         ) : (
           <Link href={AUTH_LOGIN_PATH}>Back to sign in</Link>
         )

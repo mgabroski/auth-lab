@@ -65,7 +65,7 @@ export default async function RegisterPage({ searchParams }: PageProps) {
   }
 
   const { tenant } = bootstrap.config;
-  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/dashboard');
+  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/');
   const acceptInviteHref = token
     ? `${AUTH_ACCEPT_INVITE_PATH}?token=${encodeURIComponent(token)}`
     : AUTH_ACCEPT_INVITE_PATH;

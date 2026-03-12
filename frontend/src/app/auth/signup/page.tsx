@@ -50,7 +50,7 @@ export default async function SignupPage({ searchParams }: PageProps) {
   }
 
   const { tenant } = bootstrap.config;
-  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/dashboard');
+  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/');
   const loginHref = `${AUTH_LOGIN_PATH}?returnTo=${encodeURIComponent(returnTo)}`;
 
   return (

@@ -4,6 +4,8 @@
  * WHY:
  * - Converts backend bootstrap truth into explicit frontend route categories.
  * - Keeps continuation/app-entry decisions centralized and easy to review.
+ * - Splits fully-authenticated state by membership role so the root gate can hand off
+ *   to the correct member or admin landing route.
  *
  * RULES:
  * - Route state must be derived from backend truth only (`/auth/config`, `/auth/me`).
@@ -25,8 +27,14 @@ export type TenantUnavailableRouteState = {
   me: null;
 };
 
-export type AuthenticatedAppRouteState = {
-  kind: 'AUTHENTICATED_APP';
+export type AuthenticatedMemberRouteState = {
+  kind: 'AUTHENTICATED_MEMBER';
+  config: ConfigResponse;
+  me: MeResponse;
+};
+
+export type AuthenticatedAdminRouteState = {
+  kind: 'AUTHENTICATED_ADMIN';
   config: ConfigResponse;
   me: MeResponse;
 };
@@ -52,7 +60,8 @@ export type MfaVerifyRouteState = {
 export type AuthRouteState =
   | PublicRouteState
   | TenantUnavailableRouteState
-  | AuthenticatedAppRouteState
+  | AuthenticatedMemberRouteState
+  | AuthenticatedAdminRouteState
   | EmailVerificationRouteState
   | MfaSetupRouteState
   | MfaVerifyRouteState;
@@ -99,11 +108,17 @@ export function resolveAuthRouteState(input: {
         me,
       };
     case 'NONE':
-      return {
-        kind: 'AUTHENTICATED_APP',
-        config,
-        me,
-      };
+      return me.membership.role === 'ADMIN'
+        ? {
+            kind: 'AUTHENTICATED_ADMIN',
+            config,
+            me,
+          }
+        : {
+            kind: 'AUTHENTICATED_MEMBER',
+            config,
+            me,
+          };
     default: {
       const exhaustiveCheck: never = me.nextAction;
       throw new Error(`Unhandled auth nextAction: ${String(exhaustiveCheck)}`);

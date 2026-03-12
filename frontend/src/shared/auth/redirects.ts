@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Keeps route-state → pathname mapping in one place.
- * - Makes root/auth/dashboard/public-entry flows consistent.
+ * - Makes root/auth/protected/public-entry flows consistent.
  * - Centralizes post-auth redirects driven by backend `nextAction` truth.
  *
  * RULES:
@@ -15,6 +15,7 @@ import type { AuthNextAction } from './contracts';
 import type { AuthRouteState } from './route-state';
 import { isSafeReturnToPath } from './url-tokens';
 
+export const ROOT_HANDOFF_PATH = '/';
 export const AUTH_PUBLIC_ENTRY_PATH = '/auth/login';
 export const AUTH_LOGIN_PATH = '/auth/login';
 export const AUTH_REGISTER_PATH = '/auth/register';
@@ -27,7 +28,10 @@ export const AUTH_EMAIL_VERIFICATION_PATH = '/verify-email';
 export const AUTH_MFA_SETUP_PATH = '/auth/mfa/setup';
 export const AUTH_MFA_VERIFY_PATH = '/auth/mfa/verify';
 export const AUTH_SSO_DONE_PATH = '/auth/sso/done';
-export const AUTHENTICATED_APP_ENTRY_PATH = '/dashboard';
+export const AUTHENTICATED_MEMBER_ENTRY_PATH = '/app';
+export const AUTHENTICATED_ADMIN_ENTRY_PATH = '/admin';
+export const AUTHENTICATED_APP_ENTRY_PATH = ROOT_HANDOFF_PATH;
+export const LEGACY_AUTHENTICATED_DASHBOARD_PATH = '/dashboard';
 export const TOPOLOGY_CHECK_PATH = '/topology-check';
 
 export function getPathForNextAction(nextAction: AuthNextAction): string {
@@ -83,8 +87,10 @@ export function getRouteStateRedirectPath(state: AuthRouteState): string {
       return AUTH_MFA_SETUP_PATH;
     case 'MFA_REQUIRED':
       return AUTH_MFA_VERIFY_PATH;
-    case 'AUTHENTICATED_APP':
-      return AUTHENTICATED_APP_ENTRY_PATH;
+    case 'AUTHENTICATED_MEMBER':
+      return AUTHENTICATED_MEMBER_ENTRY_PATH;
+    case 'AUTHENTICATED_ADMIN':
+      return AUTHENTICATED_ADMIN_ENTRY_PATH;
     default: {
       const exhaustiveCheck: never = state;
       throw new Error(`Unhandled auth route state: ${String(exhaustiveCheck)}`);
