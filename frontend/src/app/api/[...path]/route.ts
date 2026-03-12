@@ -43,13 +43,9 @@ const RESPONSE_HEADERS_TO_DROP = new Set([
 ]);
 
 type RouteContext = {
-  params:
-    | Promise<{
-        path: string[];
-      }>
-    | {
-        path: string[];
-      };
+  params: Promise<{
+    path: string[];
+  }>;
 };
 
 function backendBaseUrl(): string {
@@ -129,7 +125,7 @@ function buildDownstreamHeaders(upstream: Response): Headers {
 }
 
 async function proxy(request: NextRequest, context: RouteContext): Promise<Response> {
-  const { path } = await Promise.resolve(context.params);
+  const { path } = await context.params;
   const url = buildUpstreamUrl(request, path);
   const headers = buildUpstreamHeaders(request);
 
