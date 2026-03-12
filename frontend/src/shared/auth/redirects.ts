@@ -30,6 +30,7 @@ export const AUTH_MFA_VERIFY_PATH = '/auth/mfa/verify';
 export const AUTH_SSO_DONE_PATH = '/auth/sso/done';
 export const AUTHENTICATED_MEMBER_ENTRY_PATH = '/app';
 export const AUTHENTICATED_ADMIN_ENTRY_PATH = '/admin';
+export const ADMIN_INVITES_PATH = '/admin/invites';
 export const AUTHENTICATED_APP_ENTRY_PATH = ROOT_HANDOFF_PATH;
 export const LEGACY_AUTHENTICATED_DASHBOARD_PATH = '/dashboard';
 export const TOPOLOGY_CHECK_PATH = '/topology-check';

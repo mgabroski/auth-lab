@@ -18,9 +18,14 @@ import type {
   AcceptInviteRequest,
   AcceptInviteResponse,
   AuthResult,
+  CancelAdminInviteResponse,
   ConfigResponse,
+  CreateAdminInviteRequest,
+  CreateAdminInviteResponse,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
+  ListAdminInvitesRequest,
+  ListAdminInvitesResponse,
   LoginRequest,
   LogoutResponse,
   MeResponse,
@@ -29,6 +34,7 @@ import type {
   MfaSetupResponse,
   MfaVerifyResponse,
   RegisterRequest,
+  ResendAdminInviteResponse,
   ResendVerificationResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
@@ -76,7 +82,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<Browser
 
 function jsonRequest<T>(
   path: string,
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'DELETE',
   body?: JsonBody,
 ): Promise<BrowserAuthResult<T>> {
   return requestJson<T>(path, {
@@ -155,4 +161,45 @@ export function recoverMfa(
 
 export function logout(): Promise<BrowserAuthResult<LogoutResponse>> {
   return jsonRequest<LogoutResponse>('/auth/logout', 'POST');
+}
+
+export function createAdminInvite(
+  input: CreateAdminInviteRequest,
+): Promise<BrowserAuthResult<CreateAdminInviteResponse>> {
+  return jsonRequest<CreateAdminInviteResponse>('/admin/invites', 'POST', input);
+}
+
+export function listAdminInvites(
+  input: ListAdminInvitesRequest,
+): Promise<BrowserAuthResult<ListAdminInvitesResponse>> {
+  const params = new URLSearchParams();
+
+  if (input.limit !== undefined) {
+    params.set('limit', String(input.limit));
+  }
+
+  if (input.offset !== undefined) {
+    params.set('offset', String(input.offset));
+  }
+
+  if (input.status !== undefined) {
+    params.set('status', input.status);
+  }
+
+  const query = params.toString();
+  const path = query ? `/admin/invites?${query}` : '/admin/invites';
+
+  return jsonRequest<ListAdminInvitesResponse>(path, 'GET');
+}
+
+export function resendAdminInvite(
+  inviteId: string,
+): Promise<BrowserAuthResult<ResendAdminInviteResponse>> {
+  return jsonRequest<ResendAdminInviteResponse>(`/admin/invites/${inviteId}/resend`, 'POST');
+}
+
+export function cancelAdminInvite(
+  inviteId: string,
+): Promise<BrowserAuthResult<CancelAdminInviteResponse>> {
+  return jsonRequest<CancelAdminInviteResponse>(`/admin/invites/${inviteId}`, 'DELETE');
 }

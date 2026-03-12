@@ -10,6 +10,7 @@
  * - These types must mirror the current backend truth from:
  *   - backend/src/modules/auth/auth.types.ts
  *   - backend/src/modules/invites/flows/execute-accept-invite-flow.ts
+ *   - backend/src/modules/invites/admin/admin-invite.controller.ts
  *   - backend/docs/api/auth.md
  * - Do not invent frontend-only auth state here.
  * - Prefer exact string unions over broad `string` where backend behavior is locked.
@@ -18,6 +19,8 @@
 export type AuthProvider = 'password' | 'google' | 'microsoft';
 export type PublicSsoProvider = Exclude<AuthProvider, 'password'>;
 export type MembershipRole = 'ADMIN' | 'MEMBER';
+export type InviteRole = MembershipRole;
+export type InviteStatus = 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
 
 export type AuthNextAction =
   | 'NONE'
@@ -69,6 +72,18 @@ export type ConfigResponse = {
     publicSignupEnabled: boolean;
     allowedSso: PublicSsoProvider[];
   };
+};
+
+export type InviteSummary = {
+  id: string;
+  tenantId: string;
+  email: string;
+  role: InviteRole;
+  status: InviteStatus;
+  expiresAt: string;
+  usedAt: string | null;
+  createdAt: string;
+  createdByUserId: string | null;
 };
 
 export type AcceptInviteRequest = {
@@ -148,6 +163,36 @@ export type MfaVerifyResponse = {
 
 export type LogoutResponse = {
   message: 'Logged out.';
+};
+
+export type CreateAdminInviteRequest = {
+  email: string;
+  role: InviteRole;
+};
+
+export type CreateAdminInviteResponse = {
+  invite: InviteSummary;
+};
+
+export type ListAdminInvitesRequest = {
+  limit?: number;
+  offset?: number;
+  status?: InviteStatus;
+};
+
+export type ListAdminInvitesResponse = {
+  invites: InviteSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type ResendAdminInviteResponse = {
+  invite: InviteSummary;
+};
+
+export type CancelAdminInviteResponse = {
+  status: 'CANCELLED';
 };
 
 export type BackendErrorResponse = {
