@@ -14,6 +14,11 @@
  * - Added findPendingInviteByTenantAndEmailSql for duplicate-invite guard (PR1).
  * - Added findInviteByIdAndTenantSql for resend/cancel lookup (PR2).
  * - Added findInvitesByTenantSql + countInvitesByTenantSql for paginated list (PR2).
+ *
+ * PHASE 1B UPDATE:
+ * - Added findLatestInviteByTenantAndEmailSql so auth flows can resolve the
+ *   current invite-state input for a tenant-entry decision without relying on a
+ *   token-specific route.
  */
 
 import type { Selectable } from 'kysely';
@@ -48,6 +53,25 @@ export async function findPendingInviteByTenantAndEmailSql(
     .where('tenant_id', '=', params.tenantId)
     .where('email', '=', params.email)
     .where('status', '=', 'PENDING')
+    .orderBy('created_at', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+}
+
+/**
+ * Returns the most-recently-created invite for (tenantId, email), regardless of
+ * terminal status. Used by auth-entry policy resolution so runtime flows can
+ * distinguish VALID vs EXPIRED vs ONE_TIME_USED invite state.
+ */
+export async function findLatestInviteByTenantAndEmailSql(
+  db: DbExecutor,
+  params: { tenantId: string; email: string },
+): Promise<InviteRow | undefined> {
+  return db
+    .selectFrom('invites')
+    .selectAll()
+    .where('tenant_id', '=', params.tenantId)
+    .where('email', '=', params.email)
     .orderBy('created_at', 'desc')
     .limit(1)
     .executeTakeFirst();

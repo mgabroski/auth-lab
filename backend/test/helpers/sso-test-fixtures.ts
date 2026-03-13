@@ -13,6 +13,8 @@ export async function createSsoTenant(opts: {
   allowedSso?: string[];
   allowedEmailDomains?: string[];
   memberMfaRequired?: boolean;
+  publicSignupEnabled?: boolean;
+  adminInviteRequired?: boolean;
 }) {
   return opts.db
     .insertInto('tenants')
@@ -20,7 +22,8 @@ export async function createSsoTenant(opts: {
       key: opts.tenantKey,
       name: `Test Tenant ${opts.tenantKey}`,
       is_active: true,
-      public_signup_enabled: false,
+      public_signup_enabled: opts.publicSignupEnabled ?? false,
+      admin_invite_required: opts.adminInviteRequired ?? false,
       member_mfa_required: opts.memberMfaRequired ?? false,
       allowed_email_domains: opts.allowedEmailDomains?.length
         ? sql`${JSON.stringify(opts.allowedEmailDomains)}::jsonb`
@@ -66,6 +69,34 @@ export async function createUserWithMembership(opts: {
     .executeTakeFirstOrThrow();
 
   return { user, membership };
+}
+
+/**
+ * Creates an invite row for SSO / signup policy-path tests.
+ */
+export async function createInvite(opts: {
+  db: DbExecutor;
+  tenantId: string;
+  email: string;
+  role: 'ADMIN' | 'MEMBER';
+  status?: 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
+  expiresAt?: Date;
+  usedAt?: Date | null;
+}) {
+  return opts.db
+    .insertInto('invites')
+    .values({
+      tenant_id: opts.tenantId,
+      email: opts.email.toLowerCase(),
+      role: opts.role,
+      status: opts.status ?? 'PENDING',
+      token_hash: `token-${Math.random().toString(36).slice(2)}`,
+      expires_at: opts.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      used_at: opts.usedAt ?? null,
+      created_by_user_id: null,
+    })
+    .returning(['id', 'status', 'role'])
+    .executeTakeFirstOrThrow();
 }
 
 /**

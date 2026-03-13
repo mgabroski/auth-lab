@@ -15,6 +15,10 @@
  * - Added rowToInviteSummary helper (shared by all query functions) — PR1.
  * - Added getInviteByIdAndTenant (resend/cancel lookup) — PR2.
  * - Added listInvitesByTenant (paginated list endpoint) — PR2.
+ *
+ * PHASE 1B UPDATE:
+ * - Added getLatestInviteByTenantAndEmail so auth flows can resolve the latest
+ *   invite state for a (tenant, email) policy decision without needing a raw token.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -24,6 +28,7 @@ import {
   findInviteByIdAndTenantSql,
   findInvitesByTenantSql,
   countInvitesByTenantSql,
+  findLatestInviteByTenantAndEmailSql,
 } from '../dal/invite.query-sql';
 import type { Invite, InviteRole, InviteStatus, InviteSummary } from '../invite.types';
 
@@ -104,6 +109,31 @@ export async function getPendingInviteByTenantAndEmail(
   const row = await findPendingInviteByTenantAndEmailSql(db, params);
   if (!row) return undefined;
   return rowToInviteSummary(row);
+}
+
+/**
+ * Returns the most-recently-created invite for (tenantId, email), regardless of
+ * terminal status. Used by auth-entry policy resolution.
+ */
+export async function getLatestInviteByTenantAndEmail(
+  db: DbExecutor,
+  params: { tenantId: string; email: string },
+): Promise<Invite | undefined> {
+  const row = await findLatestInviteByTenantAndEmailSql(db, params);
+  if (!row) return undefined;
+
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    email: row.email,
+    role: parseInviteRole(row.role),
+    status: parseInviteStatus(row.status),
+    tokenHash: row.token_hash,
+    expiresAt: row.expires_at,
+    usedAt: row.used_at ?? null,
+    createdAt: row.created_at,
+    createdByUserId: row.created_by_user_id ?? null,
+  };
 }
 
 /**

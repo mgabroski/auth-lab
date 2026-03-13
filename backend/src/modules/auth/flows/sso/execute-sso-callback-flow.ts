@@ -3,10 +3,13 @@
  *
  * WHY:
  * - Brick 10: SSO login callback orchestration (Google in PR2; Microsoft in PR3).
+ * - Phase 1B wires the approved tenant-entry policy into runtime callback
+ *   behavior so SSO cannot bypass public-signup / invite rules or create orphan
+ *   user rows on blocked entry paths.
  *
  * RULES:
  * - No HTTP concerns here.
- * - No raw SQL: use queries/repos.
+ * - No raw SQL: use queries/repos/policies.
  * - Transaction opened here.
  * - Success audit inside tx; failure audit outside tx.
  */
@@ -25,12 +28,10 @@ import { AppError } from '../../../../shared/http/errors';
 import { resolveTenantForAuth, Tenant } from '../../../tenants';
 import { isEmailDomainAllowed } from '../../../tenants';
 
-import { findOrCreateUser } from '../../../users';
-import { getMembershipByTenantAndUser } from '../../../memberships';
-
 import type { MembershipRepo } from '../../../memberships';
 import type { UserRepo } from '../../../users';
 import type { AuthRepo } from '../../dal/auth.repo';
+import { InviteRepo } from '../../../invites/dal/invite.repo';
 
 import { AuthErrors } from '../../auth.errors';
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
@@ -40,14 +41,19 @@ import type { SsoProvider } from '../../helpers/sso-state';
 import { findSsoIdentityByUserAndProvider } from '../../queries/auth.queries';
 import {
   auditMembershipActivated,
+  auditMembershipCreated,
   auditSsoLoginFailed,
   auditSsoLoginSuccess,
+  auditUserCreated,
 } from '../../auth.audit';
+import { auditInviteAccepted } from '../../../invites/invite.audit';
 
 import { hasVerifiedMfaSecret } from '../../helpers/has-verified-mfa-secret';
 import { isMfaRequiredForLogin } from '../../policies/mfa-required.policy';
 
 import { createAuthSession } from '../../helpers/create-auth-session';
+import { resolveTenantEntryAuthDecision } from '../../helpers/resolve-tenant-entry-auth-decision';
+import { provisionUserToTenant } from '../../../_shared/use-cases/provision-user-to-tenant.usecase';
 
 export type SsoCallbackParams = {
   tenantKey: string | null;
@@ -134,18 +140,9 @@ export async function executeSsoCallbackFlow(
 
   let txResult: TxResult;
 
-  const failureAuditCtx: {
-    tenantId: string | null;
-    userId: string | null;
-    membershipId: string | null;
-  } = {
-    tenantId: null,
-    userId: null,
-    membershipId: null,
-  };
-
   try {
     txResult = await deps.db.transaction().execute(async (trx): Promise<TxResult> => {
+      const now = new Date();
       const audit = new AuditWriter(deps.auditRepo.withDb(trx), {
         requestId: params.requestId,
         ip: params.ip,
@@ -153,7 +150,6 @@ export async function executeSsoCallbackFlow(
       });
 
       const tenant = await resolveTenantForAuth(trx, params.tenantKey);
-      failureAuditCtx.tenantId = tenant.id;
 
       if (!tenant.allowedSso.includes(params.provider)) {
         throw new SsoDeniedError({
@@ -170,7 +166,7 @@ export async function executeSsoCallbackFlow(
         encryptedState: params.state,
         provider: params.provider,
         tenantKey: tenant.key,
-        now: new Date(),
+        now,
       });
 
       // WHY: Use the redirectUri embedded in the encrypted state, not the
@@ -189,60 +185,177 @@ export async function executeSsoCallbackFlow(
       const identity = await adapter.validateAndExtractIdentity({
         idToken: tokens.idToken,
         expectedNonce: statePayload.nonce,
-        now: new Date(),
+        now,
       });
 
-      if (!isEmailDomainAllowed(tenant, identity.email)) {
+      const normalizedEmail = identity.email.toLowerCase();
+      const emailKey = deps.tokenHasher.hash(normalizedEmail);
+
+      if (!isEmailDomainAllowed(tenant, normalizedEmail)) {
         throw new SsoDeniedError({
           appError: AuthErrors.noAccess(),
           audit: {
             ctx: toFailureAuditContext({ tenantId: tenant.id }),
-            payload: { provider: params.provider, reason: 'email_domain_not_allowed' },
+            payload: { provider: params.provider, reason: 'email_domain_not_allowed', emailKey },
           },
         });
       }
 
-      const emailKey = deps.tokenHasher.hash(identity.email);
-
-      const { user } = await findOrCreateUser({
-        trx,
-        userRepo: deps.userRepo.withDb(trx),
-        email: identity.email,
-        name: identity.name ?? null,
-        now: new Date(),
+      const resolvedEntry = await resolveTenantEntryAuthDecision({
+        db: trx,
+        tenant,
+        email: normalizedEmail,
+        now,
       });
 
-      failureAuditCtx.userId = user.id;
+      const userRepo = deps.userRepo.withDb(trx);
+      const membershipRepo = deps.membershipRepo.withDb(trx);
+      const authRepo = deps.authRepo.withDb(trx);
+      const inviteRepo = new InviteRepo(trx);
 
-      const membership = await getMembershipByTenantAndUser(trx, {
-        tenantId: tenant.id,
-        userId: user.id,
-      });
+      let user = resolvedEntry.user;
+      let membership = resolvedEntry.membership;
+      let inviteAcceptedInThisFlow = false;
 
-      if (!membership) {
-        throw new SsoDeniedError({
-          appError: AuthErrors.noAccess(),
-          audit: {
-            ctx: toFailureAuditContext({ tenantId: tenant.id, userId: user.id }),
-            payload: { provider: params.provider, reason: 'membership_missing', emailKey },
-          },
-        });
-      }
+      switch (resolvedEntry.decision.code) {
+        case 'PUBLIC_SIGNUP_BLOCKED':
+        case 'INVITE_REQUIRED':
+          throw new SsoDeniedError({
+            appError: AuthErrors.signupDisabled(),
+            audit: {
+              ctx: toFailureAuditContext({
+                tenantId: tenant.id,
+                userId: resolvedEntry.user?.id,
+                membershipId: resolvedEntry.membership?.id,
+              }),
+              payload: { provider: params.provider, reason: 'signup_disabled', emailKey },
+            },
+          });
 
-      failureAuditCtx.membershipId = membership.id;
+        case 'INVITED_EXPIRED':
+          throw new SsoDeniedError({
+            appError: AuthErrors.invitationExpired(),
+            audit: {
+              ctx: toFailureAuditContext({
+                tenantId: tenant.id,
+                userId: resolvedEntry.user?.id,
+                membershipId: resolvedEntry.membership?.id,
+              }),
+              payload: { provider: params.provider, reason: 'invite_expired', emailKey },
+            },
+          });
 
-      if (membership.status === 'SUSPENDED') {
-        throw new SsoDeniedError({
-          appError: AuthErrors.noAccess(),
-          audit: {
-            ctx: toFailureAuditContext({
-              tenantId: tenant.id,
-              userId: user.id,
+        case 'SUSPENDED_MEMBERSHIP':
+          throw new SsoDeniedError({
+            appError: AuthErrors.accountSuspended(),
+            audit: {
+              ctx: toFailureAuditContext({
+                tenantId: tenant.id,
+                userId: resolvedEntry.user?.id,
+                membershipId: resolvedEntry.membership?.id,
+              }),
+              payload: { provider: params.provider, reason: 'membership_suspended', emailKey },
+            },
+          });
+
+        case 'ACTIVE_MEMBERSHIP':
+          if (!user || !membership) {
+            throw AppError.internal('Active membership decision missing resolved entities.');
+          }
+          break;
+
+        case 'PUBLIC_SIGNUP_ALLOWED':
+        case 'INVITED_VALID':
+        case 'INVITED_PENDING_ACTIVATION': {
+          const role =
+            resolvedEntry.membership?.role ??
+            resolvedEntry.invite?.role ??
+            (resolvedEntry.decision.code === 'PUBLIC_SIGNUP_ALLOWED' ? 'MEMBER' : null);
+
+          if (!role) {
+            throw AppError.internal('Invite-driven SSO activation missing role context.');
+          }
+
+          if (resolvedEntry.decision.code === 'INVITED_VALID' && resolvedEntry.invite) {
+            const accepted = await inviteRepo.markAccepted({
+              inviteId: resolvedEntry.invite.id,
+              usedAt: now,
+            });
+
+            if (!accepted) {
+              throw new SsoDeniedError({
+                appError: AuthErrors.noAccess(),
+                audit: {
+                  ctx: toFailureAuditContext({
+                    tenantId: tenant.id,
+                    userId: resolvedEntry.user?.id,
+                    membershipId: resolvedEntry.membership?.id,
+                  }),
+                  payload: { provider: params.provider, reason: 'invite_state_changed', emailKey },
+                },
+              });
+            }
+
+            inviteAcceptedInThisFlow = true;
+          }
+
+          const provisionResult = await provisionUserToTenant({
+            trx,
+            userRepo,
+            membershipRepo,
+            email: normalizedEmail,
+            name: identity.name ?? null,
+            tenantId: tenant.id,
+            role,
+            now,
+          });
+
+          user = provisionResult.user;
+          membership = provisionResult.membership;
+
+          const fullAudit = audit.withContext({
+            tenantId: tenant.id,
+            userId: user.id,
+            membershipId: membership.id,
+          });
+
+          if (inviteAcceptedInThisFlow && resolvedEntry.invite) {
+            await auditInviteAccepted(fullAudit, {
+              ...resolvedEntry.invite,
+              status: 'ACCEPTED',
+              usedAt: now,
+            });
+          }
+
+          if (provisionResult.userCreated) {
+            await auditUserCreated(fullAudit, { userId: user.id });
+          }
+          if (provisionResult.membershipCreated) {
+            await auditMembershipCreated(fullAudit, {
               membershipId: membership.id,
-            }),
-            payload: { provider: params.provider, reason: 'membership_suspended', emailKey },
-          },
-        });
+              userId: user.id,
+              role: membership.role,
+            });
+          }
+          if (provisionResult.membershipActivated) {
+            await auditMembershipActivated(fullAudit, {
+              membershipId: membership.id,
+              userId: user.id,
+              role: membership.role,
+            });
+          }
+          break;
+        }
+
+        default: {
+          const _exhaustive: never = resolvedEntry.decision.code;
+          void _exhaustive;
+          throw new Error('Unhandled SSO tenant-entry policy.');
+        }
+      }
+
+      if (!user || !membership) {
+        throw AppError.internal('SSO callback completed without resolved user/membership.');
       }
 
       const existingIdentity = await findSsoIdentityByUserAndProvider(trx, {
@@ -265,31 +378,11 @@ export async function executeSsoCallbackFlow(
           });
         }
       } else {
-        await deps.authRepo.withDb(trx).insertSsoIdentity({
+        await authRepo.insertSsoIdentity({
           userId: user.id,
           provider: params.provider,
           providerSubject: identity.sub,
         });
-      }
-
-      if (membership.status === 'INVITED') {
-        await deps.membershipRepo.withDb(trx).activateMembership({
-          membershipId: membership.id,
-          acceptedAt: new Date(),
-        });
-
-        await auditMembershipActivated(
-          audit.withContext({
-            tenantId: tenant.id,
-            userId: user.id,
-            membershipId: membership.id,
-          }),
-          {
-            membershipId: membership.id,
-            userId: user.id,
-            role: membership.role,
-          },
-        );
       }
 
       await auditSsoLoginSuccess(
@@ -311,7 +404,7 @@ export async function executeSsoCallbackFlow(
         membership: {
           id: membership.id,
           role: membership.role,
-          status: membership.status === 'INVITED' ? 'ACTIVE' : membership.status,
+          status: membership.status,
         },
         tenant,
       };

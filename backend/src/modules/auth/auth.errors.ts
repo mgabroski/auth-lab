@@ -12,6 +12,10 @@
  * BRICK 11 UPDATE:
  * - Added public signup errors: signupDisabled, emailAlreadyMember,
  *   emailInvitePending, verificationTokenInvalid.
+ *
+ * PHASE 1B UPDATE:
+ * - Added invitationExpired so runtime auth flows can keep expired invited-entry
+ *   state distinct from valid invited-entry state.
  */
 
 import { AppError, type AppErrorMeta } from '../../shared/http/errors';
@@ -115,6 +119,14 @@ export const AuthErrors = {
    */
   emailInvitePending(meta?: AppErrorMeta) {
     return AppError.conflict('You have a pending invitation. Please check your email.', meta);
+  },
+
+  /**
+   * The workspace has invite-only state for this email, but the invite is no
+   * longer usable because it expired. Kept distinct from emailInvitePending.
+   */
+  invitationExpired(meta?: AppErrorMeta) {
+    return AppError.conflict('This invitation link has expired. Contact your admin.', meta);
   },
 
   /**

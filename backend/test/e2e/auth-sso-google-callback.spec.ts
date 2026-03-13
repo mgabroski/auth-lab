@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { buildTestApp } from '../helpers/build-test-app';
 import {
   buildFakeIdToken,
+  createInvite,
   createSsoTenant,
   createUserWithMembership,
   getSsoStateFromStart,
@@ -252,6 +253,267 @@ describe('GET /auth/sso/google/callback', () => {
       });
 
       expect(res.statusCode).toBe(403);
+    } finally {
+      await close();
+    }
+  });
+
+  it('success: public-signup-allowed new SSO user → creates ACTIVE membership without orphaning policy flow', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `signup-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['google'],
+        publicSignupEnabled: true,
+      });
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`,
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
+
+      const user = await deps.db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email)
+        .executeTakeFirst();
+      expect(user).toBeTruthy();
+
+      const membership = await deps.db
+        .selectFrom('memberships')
+        .select(['status', 'tenant_id'])
+        .where('user_id', '=', user!.id)
+        .executeTakeFirst();
+      expect(membership).toEqual({ status: 'ACTIVE', tenant_id: tenant.id });
+    } finally {
+      await close();
+    }
+  });
+
+  it('403 when no membership and self-signup path is blocked, and does not create an orphan user row', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `blocked-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['google'],
+        publicSignupEnabled: false,
+        adminInviteRequired: true,
+      });
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`,
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Sign up is disabled. You need an invitation to join.',
+        },
+      });
+
+      const users = await deps.db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email)
+        .execute();
+      expect(users).toHaveLength(0);
+    } finally {
+      await close();
+    }
+  });
+
+  it('success: valid invite + SSO callback → consumes invite and activates tenant access', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `invite-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['google'],
+        publicSignupEnabled: false,
+        adminInviteRequired: true,
+      });
+
+      const invite = await createInvite({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'ADMIN',
+      });
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`,
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain(
+        '/auth/sso/done?nextAction=MFA_SETUP_REQUIRED',
+      );
+
+      const inviteRow = await deps.db
+        .selectFrom('invites')
+        .select(['status', 'used_at'])
+        .where('id', '=', invite.id)
+        .executeTakeFirstOrThrow();
+      expect(inviteRow.status).toBe('ACCEPTED');
+      expect(inviteRow.used_at).not.toBeNull();
+
+      const user = await deps.db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+
+      const membership = await deps.db
+        .selectFrom('memberships')
+        .select(['status', 'role'])
+        .where('user_id', '=', user.id)
+        .where('tenant_id', '=', tenant.id)
+        .executeTakeFirstOrThrow();
+      expect(membership).toEqual({ status: 'ACTIVE', role: 'ADMIN' });
+    } finally {
+      await close();
+    }
+  });
+
+  it('409 when invite state is expired, and the blocked callback path does not create an orphan user row', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `expired-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['google'],
+        publicSignupEnabled: false,
+        adminInviteRequired: true,
+      });
+
+      await createInvite({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`,
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({
+        error: {
+          code: 'CONFLICT',
+          message: 'This invitation link has expired. Contact your admin.',
+        },
+      });
+
+      const users = await deps.db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email)
+        .execute();
+      expect(users).toHaveLength(0);
     } finally {
       await close();
     }

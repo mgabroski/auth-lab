@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import { buildTestApp } from '../helpers/build-test-app';
 import { getLatestOutboxPayloadForUser } from '../helpers/outbox-test-helpers';
+import { createInvite } from '../helpers/sso-test-fixtures';
 import type { DbExecutor } from '../../src/shared/db/db';
 /**
  * E2E tests for POST /auth/signup (Brick 11).
@@ -17,6 +18,7 @@ async function createTenant(opts: {
   db: DbExecutor;
   tenantKey: string;
   publicSignupEnabled?: boolean;
+  adminInviteRequired?: boolean;
 }) {
   return opts.db
     .insertInto('tenants')
@@ -25,6 +27,7 @@ async function createTenant(opts: {
       name: `Tenant ${opts.tenantKey}`,
       is_active: true,
       public_signup_enabled: opts.publicSignupEnabled ?? true,
+      admin_invite_required: opts.adminInviteRequired ?? false,
       member_mfa_required: false,
       allowed_email_domains: sql`'[]'::jsonb`,
     })
@@ -97,6 +100,107 @@ describe('POST /auth/signup', () => {
         type: 'email.verify',
       });
       expect(outboxPayload).toBeTruthy();
+    } finally {
+      await close();
+    }
+  });
+
+  it('admin invite required blocks password signup even when public signup is on', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db } = deps;
+
+    const tenantKey = `tenant-${randomUUID()}`;
+    const email = `invite-only-${randomUUID()}@example.com`;
+
+    try {
+      await createTenant({
+        db,
+        tenantKey,
+        publicSignupEnabled: true,
+        adminInviteRequired: true,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/signup',
+        headers: { host: `${tenantKey}.hubins.com` },
+        body: { email, password: 'Password123!', name: 'Test User' },
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Sign up is disabled. You need an invitation to join.',
+        },
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it('valid invite state blocks public signup and keeps the invite path distinct', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db } = deps;
+
+    const tenantKey = `tenant-${randomUUID()}`;
+    const email = `pending-${randomUUID()}@example.com`;
+
+    try {
+      const tenant = await createTenant({ db, tenantKey, publicSignupEnabled: true });
+      await createInvite({ db, tenantId: tenant.id, email, role: 'MEMBER' });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/signup',
+        headers: { host: `${tenantKey}.hubins.com` },
+        body: { email, password: 'Password123!', name: 'Test User' },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({
+        error: {
+          code: 'CONFLICT',
+          message: 'You have a pending invitation. Please check your email.',
+        },
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it('expired invite state is distinct from valid invite state and returns the expired invite message', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db } = deps;
+
+    const tenantKey = `tenant-${randomUUID()}`;
+    const email = `expired-${randomUUID()}@example.com`;
+
+    try {
+      const tenant = await createTenant({ db, tenantKey, publicSignupEnabled: true });
+      await createInvite({
+        db,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/signup',
+        headers: { host: `${tenantKey}.hubins.com` },
+        body: { email, password: 'Password123!', name: 'Test User' },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({
+        error: {
+          code: 'CONFLICT',
+          message: 'This invitation link has expired. Contact your admin.',
+        },
+      });
     } finally {
       await close();
     }

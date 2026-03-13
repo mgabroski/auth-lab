@@ -10,5 +10,8 @@
  * - Internal flows, policies, dal, and admin subfolder are not exported.
  */
 
-export { getInviteByTenantAndTokenHash } from './queries/invite.queries';
+export {
+  getInviteByTenantAndTokenHash,
+  getLatestInviteByTenantAndEmail,
+} from './queries/invite.queries';
 export type { Invite, InviteRole, InviteStatus } from './invite.types';

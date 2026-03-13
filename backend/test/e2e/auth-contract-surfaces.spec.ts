@@ -338,6 +338,7 @@ describe('Login lockout message (X6 regression)', () => {
     const email = `lockout-${randomUUID().slice(0, 8)}@example.com`;
     const password = 'CorrectPassword123!';
     const wrongPassword = 'WrongPassword!';
+    const remoteAddress = `10.0.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`;
 
     try {
       const tenant = await createTenant({
@@ -377,6 +378,7 @@ describe('Login lockout message (X6 regression)', () => {
           url: '/auth/login',
           headers: { host },
           payload: { email, password: wrongPassword },
+          remoteAddress,
         });
         expect(res.statusCode).toBe(401);
       }
@@ -386,6 +388,7 @@ describe('Login lockout message (X6 regression)', () => {
         url: '/auth/login',
         headers: { host },
         payload: { email, password: wrongPassword },
+        remoteAddress,
       });
 
       expect(lastRes.statusCode).toBe(429);
@@ -404,6 +407,7 @@ describe('MFA verify-setup rate limit (X2 regression)', () => {
     const tenantKey = `rl-mfa-${randomUUID().slice(0, 8)}`;
     const email = `rl-mfa-${randomUUID().slice(0, 8)}@example.com`;
     const password = 'Password123!';
+    const remoteAddress = `10.1.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 200)}`;
 
     try {
       const tenant = await createTenant({
@@ -442,6 +446,7 @@ describe('MFA verify-setup rate limit (X2 regression)', () => {
         url: '/auth/login',
         headers: { host },
         payload: { email, password },
+        remoteAddress,
       });
       expect(loginRes.statusCode).toBe(200);
       const cookie = extractCookie(loginRes);

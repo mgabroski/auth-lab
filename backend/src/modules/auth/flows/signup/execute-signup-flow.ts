@@ -44,8 +44,6 @@ import type { EmailVerificationRepo } from '../../dal/email-verification.repo';
 import type { AuthResult } from '../../auth.types';
 
 import { resolveTenantForAuth, assertEmailDomainAllowed } from '../../../tenants';
-import { getUserByEmail } from '../../../users';
-import { getMembershipByTenantAndUser } from '../../../memberships';
 import { provisionUserToTenant } from '../../../_shared/use-cases/provision-user-to-tenant.usecase';
 import { ensurePasswordIdentity } from '../../helpers/ensure-password-identity';
 import { createAuthSession } from '../../helpers/create-auth-session';
@@ -63,6 +61,7 @@ import {
 
 import { generateSecureToken } from '../../../../shared/security/token';
 import { AUTH_RATE_LIMITS, EMAIL_VERIFICATION_TTL_SECONDS } from '../../auth.constants';
+import { resolveTenantEntryAuthDecision } from '../../helpers/resolve-tenant-entry-auth-decision';
 import { emailDomain } from '../../../../shared/utils/email-domain';
 
 // Outbox (PR2)
@@ -146,29 +145,39 @@ export async function executeSignupFlow(
     // ── A. Resolve tenant ────────────────────────────────────────────────────
     const tenant = await resolveTenantForAuth(trx, params.tenantKey);
 
-    // ── B. Enforce tenant signup settings ────────────────────────────────────
-    if (!tenant.publicSignupEnabled) {
-      throw AuthErrors.signupDisabled();
-    }
+    // ── B. Enforce tenant entry policy for password-signup ───────────────────
     assertEmailDomainAllowed(tenant, email);
 
-    // ── C. Check existing user + membership state ────────────────────────────
-    const existingUser = await getUserByEmail(trx, email);
+    const resolvedEntry = await resolveTenantEntryAuthDecision({
+      db: trx,
+      tenant,
+      email,
+      now,
+    });
 
-    if (existingUser) {
-      const existingMembership = await getMembershipByTenantAndUser(trx, {
-        tenantId: tenant.id,
-        userId: existingUser.id,
-      });
-
-      if (existingMembership) {
-        if (existingMembership.status === 'SUSPENDED') throw AuthErrors.accountSuspended();
-        if (existingMembership.status === 'INVITED') throw AuthErrors.emailInvitePending();
-        if (existingMembership.status === 'ACTIVE') throw AuthErrors.emailAlreadyMember();
+    switch (resolvedEntry.decision.code) {
+      case 'PUBLIC_SIGNUP_ALLOWED':
+        break;
+      case 'PUBLIC_SIGNUP_BLOCKED':
+      case 'INVITE_REQUIRED':
+        throw AuthErrors.signupDisabled();
+      case 'ACTIVE_MEMBERSHIP':
+        throw AuthErrors.emailAlreadyMember();
+      case 'SUSPENDED_MEMBERSHIP':
+        throw AuthErrors.accountSuspended();
+      case 'INVITED_VALID':
+      case 'INVITED_PENDING_ACTIVATION':
+        throw AuthErrors.emailInvitePending();
+      case 'INVITED_EXPIRED':
+        throw AuthErrors.invitationExpired();
+      default: {
+        const _exhaustive: never = resolvedEntry.decision.code;
+        void _exhaustive;
+        throw new Error('Unhandled signup tenant-entry policy.');
       }
     }
 
-    // ── D. Provision user + membership ───────────────────────────────────────
+    // ── C. Provision user + membership ───────────────────────────────────────
     const provisionResult = await provisionUserToTenant({
       trx,
       userRepo,
@@ -183,7 +192,7 @@ export async function executeSignupFlow(
 
     const { user, membership } = provisionResult;
 
-    // ── E. Create password identity (only when needed) ────────────────────────
+    // ── D. Create password identity (only when needed) ────────────────────────
     const alreadyHasPasswordIdentity = await hasAuthIdentity(trx, {
       userId: user.id,
       provider: 'password',
@@ -199,7 +208,7 @@ export async function executeSignupFlow(
       });
     }
 
-    // ── F. Email verification token + Outbox enqueue (only for unverified) ───
+    // ── E. Email verification token + Outbox enqueue (only for unverified) ───
     let verificationEnqueued = false;
 
     if (!user.emailVerified) {
@@ -231,7 +240,7 @@ export async function executeSignupFlow(
       verificationEnqueued = true;
     }
 
-    // ── G. Audit (inside tx) ──────────────────────────────────────────────────
+    // ── F. Audit (inside tx) ──────────────────────────────────────────────────
     const fullAudit = baseAudit
       .withContext({ tenantId: tenant.id })
       .withContext({ userId: user.id, membershipId: membership.id });
