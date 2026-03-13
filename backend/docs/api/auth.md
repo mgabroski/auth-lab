@@ -699,8 +699,19 @@ Rejected examples:
 
 ### Success behavior
 
-- sets short-lived `sso-state` cookie
-- responds with `302` redirect to the provider authorization URL
+- if `:provider` is enabled for the current tenant, sets short-lived `sso-state` cookie and responds with `302` redirect to the provider authorization URL
+- if `:provider` is disabled by tenant policy, returns `403` and does **not** set the SSO state cookie or start the provider redirect
+
+### Denied response example
+
+```ts
+{
+  error: {
+    code: 'FORBIDDEN';
+    message: 'This sign-in method is not enabled for this workspace.';
+  }
+}
+```
 
 ### Notes
 

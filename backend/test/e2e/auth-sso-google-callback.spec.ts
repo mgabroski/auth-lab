@@ -187,11 +187,8 @@ describe('GET /auth/sso/google/callback', () => {
 
     try {
       const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['microsoft'] });
-      const { state, cookieHeader } = await getSsoStateFromStart({
-        app,
-        host,
-        provider: 'google',
-      });
+      const state = 'provider-not-allowed-google';
+      const cookieHeader = `sso-state=${state}`;
 
       const res = await app.inject({
         method: 'GET',

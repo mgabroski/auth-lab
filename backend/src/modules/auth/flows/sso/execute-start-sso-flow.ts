@@ -23,10 +23,13 @@
 import type { TokenHasher } from '../../../../shared/security/token-hasher';
 import type { RateLimiter } from '../../../../shared/security/rate-limit';
 import type { EncryptionService } from '../../../../shared/security/encryption';
+import type { DbExecutor } from '../../../../shared/db/db';
 import type { SsoProvider } from '../../helpers/sso-state';
 import type { SsoProviderRegistry } from '../../sso/sso-provider-registry';
 import { buildEncryptedSsoState } from '../../helpers/sso-state';
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
+import { resolveTenantForAuth } from '../../../tenants';
+import { AuthErrors } from '../../auth.errors';
 
 export type StartSsoFlowParams = {
   tenantKey: string;
@@ -55,6 +58,7 @@ function buildCallbackUri(input: {
 
 export async function executeStartSsoFlow(
   deps: {
+    db: DbExecutor;
     tokenHasher: TokenHasher;
     rateLimiter: RateLimiter;
     sso: {
@@ -72,6 +76,12 @@ export async function executeStartSsoFlow(
     key: `sso-start:ip:${ipKey}`,
     ...AUTH_RATE_LIMITS.ssoStart.perIp,
   });
+
+  const tenant = await resolveTenantForAuth(deps.db, params.tenantKey);
+
+  if (!tenant.allowedSso.includes(params.provider)) {
+    throw AuthErrors.ssoProviderNotAllowed();
+  }
 
   const redirectUri = buildCallbackUri({
     provider: params.provider,

@@ -111,6 +111,7 @@ export class AuthService {
   }): Promise<{ redirectTo: string; ssoState: string }> {
     return executeStartSsoFlow(
       {
+        db: this.deps.db,
         tokenHasher: this.deps.tokenHasher,
         rateLimiter: this.deps.rateLimiter,
         sso: this.deps.sso,
