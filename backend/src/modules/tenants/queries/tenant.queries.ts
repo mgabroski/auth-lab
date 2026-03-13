@@ -13,6 +13,9 @@
  * BRICK 12 UPDATE:
  * - Added getTenantById for admin flows that have tenantId from session
  *   and need to load tenant details (allowedEmailDomains, isActive, etc.).
+ *
+ * PHASE 1A UPDATE:
+ * - Hydrates adminInviteRequired as an explicit tenant policy input.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -61,6 +64,7 @@ function rowToTenant(row: Awaited<ReturnType<typeof findTenantByKeySql>>): Tenan
 
     isActive: row.is_active,
     publicSignupEnabled: row.public_signup_enabled,
+    adminInviteRequired: row.admin_invite_required,
     memberMfaRequired: row.member_mfa_required,
     allowedEmailDomains: parseAllowedEmailDomains(row.allowed_email_domains),
     allowedSso: parseAllowedSso(row.allowed_sso),

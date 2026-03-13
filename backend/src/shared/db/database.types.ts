@@ -125,6 +125,7 @@ export interface PasswordResetTokens {
 }
 
 export interface Tenants {
+  admin_invite_required: Generated<boolean>;
   allowed_email_domains: Generated<Json>;
   allowed_sso: Generated<string[]>;
   created_at: Generated<Timestamp>;
