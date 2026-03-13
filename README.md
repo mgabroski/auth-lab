@@ -32,7 +32,7 @@ Today, this repository concretely implements:
 - SSR direct-to-backend model
 - tenant resolution via host/subdomain
 - session-aware request flow
-- Auth + User Provisioning foundation
+- Auth + User Provisioning backend + frontend surface for the current module scope
 
 Read `docs/current-foundation-status.md` before making assumptions about what is already built.
 
@@ -76,11 +76,15 @@ Read `docs/current-foundation-status.md` before making assumptions about what is
 - audit event viewing
 - outbox-backed email delivery
 
-### Frontend foundation
+### Frontend Auth + User Provisioning surface
 
-- Next.js App Router shell
-- SSR fetch wrapper
-- browser fetch wrapper
+- Next.js App Router frontend for the current auth/provisioning slice
+- root bootstrap handoff and public auth entry routing
+- login, signup, invite registration, forgot-password, and reset-password screens
+- accept-invite, verify-email, MFA setup, MFA verify, and SSO completion flows
+- authenticated member landing, authenticated admin landing, and admin invite management UI
+- logout flow and legacy dashboard compatibility handoff
+- SSR fetch wrapper + browser fetch wrapper
 - host-run `/api/*` Route Handler proxy
 - topology smoke-test page proving SSR → backend path works
 - tenant-aware frontend host usage in local development
@@ -89,17 +93,19 @@ Read `docs/current-foundation-status.md` before making assumptions about what is
 
 ## What is intentionally not built yet
 
-This foundation is **not** yet a fully implemented product frontend.
+This repository now includes the **real Auth + User Provisioning frontend surface** for the current module scope.
 
-Not implemented yet:
+What is still intentionally not built yet:
 
-- real auth screens (login, signup, reset, invite acceptance, etc.)
-- frontend auth bootstrap state and route guards
-- full admin application shell
+- broader member product modules beyond the authenticated auth/provisioning landing surface
+- broader admin product modules beyond the current invite-management surface
 - additional business modules beyond Auth + User Provisioning
 - broader Hubins platform workflows described in the long-term architecture vision
+- later confidence/test hardening work that is tracked separately from the already-shipped auth/provisioning UI surface
 
-That is intentional. The current phase is: **foundation first, then expand**.
+That is intentional. The current phase is:
+
+**lock the foundation, ship the auth/provisioning slice, then expand into broader product modules and later hardening phases.**
 
 ---
 

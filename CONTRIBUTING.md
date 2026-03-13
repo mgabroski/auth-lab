@@ -111,13 +111,15 @@ Prefer changes that are:
 Before contributing, understand the current phase:
 
 - this repo already implements the topology and FE/BE communication foundation
-- this repo already implements the backend Auth + User Provisioning foundation
-- the frontend is still in foundation mode, not full product mode
+- this repo already implements the backend Auth + User Provisioning surface
+- this repo already implements the frontend Auth + User Provisioning route/UI surface for the current module scope
+- the broader Hubins product is still future work beyond the current auth/provisioning slice
 
 That means:
 
 - topology, session, tenant, and request-context assumptions are already real
-- many frontend product flows are still next-step work
+- the auth/provisioning UI is real and must be treated as shipped scope
+- broader product expansion and later confidence hardening are still next-step work
 
 Contribute accordingly.
 

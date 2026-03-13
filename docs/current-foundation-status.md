@@ -1,115 +1,111 @@
-# Hubins Auth-Lab — Current Foundation and Frontend Module Status
+# Hubins Auth-Lab — Current Foundation Status
 
 ## Purpose
 
-This document is the truthful snapshot of what currently exists in the repository.
+This document is the repo's practical truth snapshot.
 
-It exists to prevent drift between:
+It exists to keep four things aligned:
 
-- what the repo actually implements
-- what contributors think is implemented
-- what future prompts and reviews assume is implemented
+- what the repository actually implements now
+- what the active documentation claims
+- what future implementation sessions assume
+- what is intentionally deferred to later hardening phases
 
-This file should be updated whenever the practical status of the foundation or frontend Auth + User Provisioning module changes in a meaningful way.
+If another active document disagrees with this file about shipped scope, this file wins until the lower document is repaired.
 
 ---
 
 ## 1. High-level status
 
-The repository is past pure foundation stage.
+The repository is no longer only a topology or backend-foundation sandbox.
 
-The platform topology and wiring foundation are implemented, and the frontend Auth + User Provisioning module is fully implemented for its intended scope.
+Today the repo contains all of the following as real implemented surfaces:
 
-That means the repo should no longer be described as only:
+- the locked single-origin topology and FE/BE wiring
+- the backend Auth + User Provisioning module
+- the frontend Auth + User Provisioning route and UI surface for the current module scope
+- the current admin invite-management surface
 
-- infra planning
-- topology planning
-- backend-only auth groundwork
-- frontend shell/foundation only
-
-Those descriptions are now incomplete.
+That does **not** mean the broader Hubins product UI is finished.
+It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
 
 ---
 
-## 2. What is implemented at foundation level
+## 2. What is implemented now
 
-The following core foundation areas are implemented and load-bearing:
+### 2.1 Repository and infrastructure foundation
 
-### Repository and infrastructure foundation
+The following are real and load-bearing:
 
 - monorepo/workspace structure
-- frontend application
 - backend application
+- frontend application
 - Docker-based local infrastructure
-- Postgres and Redis integration for local/dev topology
-- local development commands for host-run and stack-run workflows
+- Postgres + Redis integration
+- host-run and full-stack local workflows
+- proxy conformance tooling for topology validation
 
-### Topology foundation
+### 2.2 Topology and session foundation
 
-- single public-origin frontend model
+The following are real and load-bearing:
+
+- single public-origin browser model
 - same-origin browser API model using `/api/*`
-- SSR direct-backend model using internal backend connectivity
-- tenant-aware request handling
-- host-derived tenant identity model
+- SSR direct-backend model using forwarded request context
+- host-derived tenant identity
 - proxy-compatible routing model
-- compatibility between local host-run mode and full-stack/proxy-aware mode
-
-### Auth/backend truth foundation
-
-- backend-owned session truth
+- tenant-bound server-side sessions
 - backend-owned continuation truth through `nextAction`
-- backend config endpoint for tenant auth state
-- backend `me` endpoint for authenticated session/bootstrap truth
-- invite and provisioning backend surface
-- password auth backend surface
-- MFA backend surface
-- SSO callback/backend handling surface
 
-These are not speculative anymore. They are part of the current implemented system shape.
+### 2.3 Backend Auth + User Provisioning surface
 
----
+The backend currently implements:
 
-## 3. What is implemented in the frontend Auth + User Provisioning module
+- `GET /auth/config`
+- `GET /auth/me`
+- register
+- login
+- logout
+- public signup
+- invite acceptance
+- forgot/reset password
+- email verification + resend verification
+- MFA setup / verify / recovery
+- Google + Microsoft SSO start/callback
+- admin invite create/list/resend/cancel
+- admin audit event listing
+- outbox-backed email delivery for auth/provisioning flows
 
-The current frontend includes the real route and UI surface for the Auth + User Provisioning scope.
+### 2.4 Frontend Auth + User Provisioning surface
 
-### Implemented frontend route surface
+The frontend currently implements the real route/UI surface for the current auth/provisioning scope.
 
-#### Public/bootstrap routes
+#### Public and continuation routes
 
 - `/`
 - `/auth`
-- `/auth/unavailable`
-- `/topology-check`
-
-#### Public auth routes
-
 - `/auth/login`
 - `/auth/signup`
 - `/auth/register`
 - `/auth/forgot-password`
 - `/auth/reset-password`
-
-#### Invite and continuation routes
-
 - `/accept-invite`
 - `/verify-email`
 - `/auth/mfa/setup`
 - `/auth/mfa/verify`
 - `/auth/sso/done`
+- `/auth/unavailable`
 - `/auth/continue/[action]`
+- `/topology-check`
 
 #### Authenticated routes
 
 - `/app`
 - `/admin`
 - `/admin/invites`
+- `/dashboard` (compatibility handoff)
 
-#### Compatibility route
-
-- `/dashboard`
-
-### Implemented frontend auth/provisioning capabilities
+#### Implemented frontend capabilities
 
 - root bootstrap handoff
 - public auth entry routing
@@ -118,7 +114,7 @@ The current frontend includes the real route and UI surface for the Auth + User 
 - invite registration flow
 - forgot-password flow
 - reset-password flow
-- invite acceptance flow
+- accept-invite flow
 - verify-email continuation flow
 - MFA setup flow
 - MFA verify flow
@@ -129,154 +125,173 @@ The current frontend includes the real route and UI surface for the Auth + User 
 - logout flow
 - legacy dashboard compatibility handoff
 
-This means the frontend Auth + User Provisioning module is complete for its intended scope.
+This means the frontend is **not** accurately described as "foundation only" anymore.
 
 ---
 
-## 4. Scope boundary for this completed module
+## 3. Scope boundary for the implemented module
 
-This repo snapshot should not be described as containing the full Hubins product frontend.
+The current repo should be described like this:
 
-That does not mean this module is incomplete.
-It means the Hubins product contains other future modules that are separate from Auth + User Provisioning.
+> The topology/foundation layer is implemented, and the Auth + User Provisioning slice is implemented across backend and frontend for its current scope.
 
-The following areas are intentionally outside the scope of this completed module:
+The repo should **not** be described like either of these:
 
-- broader member product modules beyond the authenticated landing surface
-- full admin control-plane/product dashboard beyond current invite management
-- non-auth product modules
-- broader product navigation across future modules
-- future management screens unrelated to current auth/provisioning needs
+> The repo is still only backend/auth groundwork with no real frontend auth surface.
 
-This distinction matters.
-
-The Auth + User Provisioning frontend module is complete.
-Broader Hubins product UI belongs to separate future modules.
-
----
-
-## 5. Current frontend truth that reviewers must respect
-
-When reviewing or extending this repository, contributors should assume the following are already true:
-
-### 5.1 Browser-side API rule
-
-Browser code must use same-origin relative requests:
-
-```text
-/api/*
-```
-
-Browser code must not hardcode backend origins.
-
-### 5.2 SSR rule
-
-SSR/server-side frontend code may call the backend directly using the internal backend URL.
-
-When it does so, it must preserve the forwarded request identity context required for:
-
-- tenant resolution
-- cookie continuity
-- request fidelity
-
-### 5.3 Tenant rule
-
-Tenant identity is host-derived.
-
-It must not be moved into:
-
-- query params
-- local storage
-- arbitrary frontend state
-- request bodies as a replacement for host-derived truth
-
-### 5.4 Session and continuation rule
-
-The backend owns:
-
-- session truth
-- continuation truth
-- `nextAction`
-
-The frontend must consume that truth, not replace it with frontend-only decision logic.
-
----
-
-## 6. Current practical repo status
-
-A truthful current summary is:
-
-> The topology/foundation layer is implemented, and the frontend Auth + User Provisioning module is fully implemented for its intended scope.
-
-A misleading summary would be any statement that says either:
-
-> The repo is still only foundation-level with no real frontend auth UI.
-
-or:
+or
 
 > The full Hubins product frontend is already implemented.
 
-Both are false.
+Both are incorrect.
+
+What remains outside this completed module scope:
+
+- broader member product modules beyond the authenticated landing surface
+- broader admin product modules beyond current invite management
+- non-auth business modules
+- broader product navigation across future modules
+- future management screens unrelated to the current auth/provisioning slice
 
 ---
 
-## 7. Current known boundaries
+## 4. Canonical documentation-home decision
 
-The following boundaries should remain explicit:
+The repo's documentation home is **scope-split, not single-folder-only**.
 
-### Complete for current scope
+### 4.1 Repo-wide truth and decision documents
 
-- topology-aware frontend/backend integration model
-- auth/provisioning route-state model
-- real frontend auth/provisioning screens
-- continuation flows
-- authenticated landing handoff
-- admin invite management surface
-- logout flow
+These live at repo root and under `/docs`:
 
-### Separate future module work
+- `README.md`
+- `ARCHITECTURE.md`
+- `docs/current-foundation-status.md`
+- `docs/decision-log.md`
+- `docs/implementation-session-charter.md`
 
-- broader post-auth product experience
-- additional admin modules beyond invite management
-- non-auth domain modules
-- future UX/system surfaces outside auth/provisioning
+These documents define repo-wide truth, architecture framing, and session discipline.
 
----
+### 4.2 Backend law and contract documents
 
-## 8. How to use this document in future prompts and reviews
+These live under `backend/docs/`.
 
-When creating future implementation or review prompts:
+Use that folder for:
 
-- treat topology as already locked and implemented
-- treat same-origin browser `/api/*` behavior as already locked
-- treat SSR direct-backend behavior as already locked
-- treat the frontend Auth + User Provisioning module as complete for its intended scope
-- do not ask future prompts to rebuild already completed auth/provisioning foundation work
+- backend implementation law
+- backend module structure law
+- backend API contract documents
+- backend module guides
+- backend prompt artifacts
 
-Future prompts should build on this state, not regress the repository narrative backward.
+### 4.3 Frontend scope documents
 
----
+Frontend guidance remains close to the frontend code surface:
 
-## 9. Truthfulness rule
+- `frontend/README.md`
+- `frontend/src/shared/engineering-rules.md`
 
-This file is a status document, not a roadmap.
+### 4.4 What this decision means in practice
 
-It must describe:
+Do **not** invent a second parallel home for the same truth.
 
-- what exists now
-- what is outside this module’s scope now
-- what belongs to separate future modules now
+When updating docs:
 
-It must not:
+- update repo-wide truth in root `/docs`
+- update backend-specific law/contracts in `backend/docs`
+- update frontend-specific usage/law where the frontend already keeps it
 
-- advertise future work as already complete
-- describe already-implemented frontend auth/provisioning surfaces as if they do not exist
-- blur the boundary between current module completion and future module work
+Historical uploaded sources that are **not** in the repo are reference material only until they are explicitly adopted into the repository.
 
 ---
 
-## 10. Current one-paragraph status statement
+## 5. Active authority chain for implementation sessions
 
-Use the following paragraph when a concise repo status summary is needed:
+For the current repo phase, the working truth chain is:
 
-> Hubins Auth-Lab currently has its topology and foundation layer implemented, and the frontend Auth + User Provisioning module is fully implemented for its intended scope, including bootstrap, public auth, invite and continuation flows, authenticated member and admin landing routes, admin invite management, and logout. Any broader Hubins product UI belongs to separate future modules and is outside the scope of this completed module.
+1. `Hubins User Provisioning.pdf` for locked business behavior and vocabulary
+2. `hubins-topology-plan.docx` for locked topology and routing/session constraints
+3. repo-root truth documents (`README.md`, `ARCHITECTURE.md`, this file, `docs/decision-log.md`)
+4. repo engineering-law documents actually present in the codebase
+5. `backend/docs/api/*.md`
+6. adopted scope-specific guides such as `frontend/README.md`
+7. derived execution prompts that remain aligned to the above
+
+If a lower document disagrees with a higher one, the lower document must be corrected or retired.
+
+---
+
+## 6. Known limitations and intentionally deferred items
+
+### 6.1 Deferred beyond the current implemented slice
+
+The provisioning PDF explicitly names later capabilities that are **not** current shipped scope, including:
+
+- HRIS import flow and admin controls
+- SCIM
+- SAML SSO
+- suspend-users management surface beyond current foundations
+- groups and teams
+- session-control/device-management features
+- enhanced MFA methods beyond the current TOTP/recovery implementation
+
+These are not documentation omissions.
+They are intentionally deferred beyond the current shipped slice.
+
+### 6.2 Phase 3 confidence hardening still pending
+
+The current auth/provisioning feature surface exists, but later hardening work is still deferred, including:
+
+- broader frontend confidence/test hardening
+- additional contract-regression confidence where required
+- any non-doc cleanup explicitly scheduled for later phases
+
+### 6.3 `allowed_email_domains` JSONB tradeoff
+
+The repo currently stores tenant `allowed_email_domains` as a JSONB array.
+
+#### Why this is acceptable today
+
+It is acceptable in the current phase because:
+
+- the policy input is small and tenant-scoped
+- current access checks only need tenant-local reads
+- it keeps the Phase 1 schema simple while the domain-management surface is still small
+
+#### What this makes harder tomorrow
+
+This choice makes future work harder if the domain-management surface grows, especially:
+
+- querying tenants by domain
+- indexing/reporting across domains
+- building richer tenant-admin domain management workflows
+- attaching first-class metadata or audit semantics to individual allowed domains
+
+#### Named trigger for re-evaluation
+
+Re-evaluate this immediately when the following trigger is hit:
+
+**`DOMAIN_POLICY_NORMALIZATION_TRIGGER`**
+
+This trigger is considered hit when **any** of the following become true:
+
+- tenant admins need a real CRUD/API surface for allowed domains
+- the system needs cross-tenant querying/reporting by email domain
+- JSONB lookups become a measurable correctness or performance constraint
+
+When that trigger is hit, promote allowed domains from JSONB storage to a first-class relational model.
+
+---
+
+## 7. Historical source hygiene
+
+The uploaded historical source `hubins-auth-lab-guide.md` exists and was reviewed, but it is **not** part of the repo and is stale in at least one material way (for example, it still describes migration `0004_users_add_name.ts` as needing implementation even though the repo already contains the implemented migration).
+
+Treat it as historical context only, not as current repo truth.
+
+---
+
+## 8. Truthful one-paragraph summary
+
+A truthful summary of the repo today is:
+
+> Hubins Auth-Lab now ships the locked topology, the backend Auth + User Provisioning surface, and the frontend Auth + User Provisioning route/UI surface for the current module scope; broader product modules and later confidence hardening remain future work.

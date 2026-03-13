@@ -57,17 +57,18 @@ Today this repository concretely implements:
 - tenant resolution via subdomain / host
 - Redis-backed server-side session model
 - backend bootstrap / DI / route registration foundation
-- Auth + User Provisioning foundation
+- backend Auth + User Provisioning surface
+- frontend Auth + User Provisioning route/UI surface for the current module scope
 
-### Foundation that is intentionally not complete yet
+### Broader product work that is intentionally not complete yet
 
-- full auth UI flows on the frontend
-- route guards / frontend auth bootstrap state
-- full admin frontend shell
-- broader product modules beyond Auth + User Provisioning
+- broader member product modules beyond the current auth/provisioning landing surface
+- broader admin product modules beyond the current invite-management surface
+- non-auth business modules beyond Auth + User Provisioning
+- later confidence/test hardening phases for the already-shipped auth/provisioning slice
 
 So this repo is not “the whole Hubins platform.”
-It is the **foundation slice** that must be correct before the rest of Hubins expands.
+It is the **foundation plus Auth + User Provisioning slice** that must be correct before the rest of Hubins expands.
 
 ---
 

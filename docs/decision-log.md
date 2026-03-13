@@ -301,3 +301,44 @@ Tenant-aware behavior must follow the current host.
 - tenant ID in request body
 - tenant selection in query string
 - tenant stored as client-auth state independent of host
+
+## ADR-009 — Documentation home is scope-split, not single-folder-only
+
+**Date:** 2026-03  
+**Status:** Accepted
+
+### Context
+
+The repository now has three kinds of active documentation:
+
+- repo-wide truth and architecture documents
+- backend law / contract documents
+- frontend scope documents that intentionally live close to the frontend surface
+
+Without an explicit rule, future work can create drift by duplicating truth across new folders or by moving backend/frontend docs away from the code they describe.
+
+### Decision
+
+Use a **scope-split documentation home**:
+
+- repo-wide truth lives at repo root and under `/docs`
+- backend law/contracts live under `backend/docs/`
+- frontend implementation guidance stays close to the frontend surface (`frontend/README.md` and `frontend/src/shared/engineering-rules.md`)
+
+### Why
+
+- keeps repo-wide truth easy to find
+- keeps backend contracts and law close to backend code
+- keeps frontend guidance close to the frontend implementation surface
+- avoids inventing a second parallel home for the same truth
+
+### Consequences
+
+When updating docs:
+
+- change repo-wide status/architecture/decision documents in root `/docs`
+- change backend-specific law/contracts in `backend/docs/`
+- change frontend-specific guidance where the frontend already keeps it
+
+A new document should not be added until its scope is clear.
+If the same fact would need to live in two homes, one of those homes is wrong.

@@ -55,12 +55,15 @@ This guide must remain truthful about current scope.
 
 It does **not** claim that the repo already has:
 
-- full frontend auth screens
-- full frontend route guards/bootstrap state
-- full tenant-admin UX for every auth configuration branch
+- the full broader Hubins product UI beyond the current auth/provisioning slice
+- every future tenant-admin management surface that later modules may add
 - every future Hubins identity/provisioning feature that broader platform docs may discuss
+- later confidence/test hardening work that belongs to later phases
 
-If a behavior is planned but not yet implemented, it must not be described here as current backend capability.
+The frontend auth/provisioning surface **is** real now for the current slice.
+What remains unshipped is the broader product beyond that slice.
+
+If a behavior is planned but not yet implemented, it must not be described here as current capability.
 
 ---
 

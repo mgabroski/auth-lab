@@ -47,12 +47,14 @@ It exists to reduce drift between backend code, backend rules, and backend-assis
 | 5   | `backend/docs/README.md`                          | Backend docs entrypoint and backend doc hierarchy               | Backend contributors                          |
 | 6   | `backend/docs/engineering-rules.md`               | Backend implementation law                                      | Every backend engineer on every PR            |
 | 7   | `backend/docs/module-skeleton.md`                 | Canonical backend module structure and file responsibilities    | Anyone adding or reshaping a backend module   |
-| 8   | `backend/docs/api/auth.md`                        | Current auth API contract used by the frontend foundation       | Engineers touching auth API behavior          |
-| 9   | `backend/docs/modules/auth-user-provisioning.md`  | Business/configuration behavior for the current backend module  | Engineers, PMs, QA                            |
-| 10  | `backend/docs/adr/README.md`                      | How ADRs are written and when one is required                   | Engineers changing architecture or boundaries |
-| 11  | `backend/docs/prompts/module-generation.md`       | Prompt for generating a new backend module from a business spec | Tech lead / PM / LLM session owner            |
-| 12  | `backend/docs/prompts/implement.md`               | Prompt for implementation sessions                              | Engineer + LLM                                |
-| 13  | `backend/docs/prompts/review.md`                  | Prompt for adversarial backend review sessions                  | Engineer + LLM                                |
+| 8   | `backend/docs/api/auth.md`                        | Current auth API contract for bootstrap + auth endpoints        | Engineers touching auth API behavior          |
+| 9   | `backend/docs/api/invites.md`                     | Current invite-acceptance API contract                          | Engineers touching invite acceptance          |
+| 10  | `backend/docs/api/admin.md`                       | Current admin invite + audit API contract                       | Engineers touching admin provisioning         |
+| 11  | `backend/docs/modules/auth-user-provisioning.md`  | Business/configuration behavior for the current backend module  | Engineers, PMs, QA                            |
+| 12  | `backend/docs/adr/README.md`                      | How ADRs are written and when one is required                   | Engineers changing architecture or boundaries |
+| 13  | `backend/docs/prompts/module-generation.md`       | Prompt for generating a new backend module from a business spec | Tech lead / PM / LLM session owner            |
+| 14  | `backend/docs/prompts/implement.md`               | Prompt for implementation sessions                              | Engineer + LLM                                |
+| 15  | `backend/docs/prompts/review.md`                  | Prompt for adversarial backend review sessions                  | Engineer + LLM                                |
 
 ---
 
@@ -112,6 +114,8 @@ These define how backend work must be done.
 These define concrete backend surfaces consumed or depended on by other parts of the system.
 
 - `api/auth.md`
+- `api/invites.md`
+- `api/admin.md`
 
 ### 3. Module docs
 
@@ -251,8 +255,8 @@ That means these docs should assume:
 
 But they must also stay honest that:
 
-- the frontend is still in foundation mode
-- broader product modules are not all implemented yet
-- some repo-wide quality gates are still being tightened
+- the frontend auth/provisioning surface is now real for the current module scope
+- the broader Hubins product is not fully implemented yet
+- some repo-wide quality gates and later hardening work are still being tightened
 
-The backend docs should help future work build correctly on the current foundation — not hide what is still next-step work.
+The backend docs should help future work build correctly on the current foundation and current shipped auth/provisioning slice — not hide what is already real or what is still future work.
