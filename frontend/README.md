@@ -348,9 +348,17 @@ yarn start
 yarn lint
 yarn lint:fix
 yarn typecheck
+yarn test
+yarn test:unit
+yarn test:e2e
 ```
 
-Do not claim a separate locked frontend test suite unless that script actually exists in the repo.
+The frontend now ships dedicated test commands for the current auth/provisioning slice:
+
+- `yarn test:unit` for route-state, bootstrap, and browser API discipline
+- `yarn test:e2e` for the frontend auth-flow browser journeys
+
+Do not claim a broader frontend test surface than what those scripts actually cover.
 
 ---
 
@@ -391,8 +399,4 @@ That distinction matters because future product modules should extend this front
 
 ## 12. Final rule
 
-This README must remain truthful about one thing above all else:
-
-**the frontend Auth + User Provisioning module is implemented, but the broader Hubins product UI is still future work**
-
-If this file starts describing future product surfaces as already shipped, or starts describing the current frontend as only a foundation when real auth/provisioning UI is already present, it has become misleading and must be corrected.
+If code, docs, prompts, or review notes describe this frontend as either _less implemented_ or _more implemented_ than it really is, repair the description before using it as planning truth.

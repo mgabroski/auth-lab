@@ -4,21 +4,27 @@
  * frontend/src/shared/auth/components/login-form.tsx
  *
  * WHY:
- * - Real password login form for the Phase 3 public auth entry flow.
+ * - Real password login form for the public auth entry flow.
  * - Uses the shared browser auth client so browser requests stay same-origin.
- * - Redirects strictly from backend `nextAction` truth.
+ * - Redirects strictly from backend auth truth.
+ * - For fully authenticated users (nextAction NONE), routes directly to the
+ *   final role landing to avoid a flaky extra handoff through `/`.
  */
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
+
 import { login } from '@/shared/auth/browser-api';
-import type { PublicSsoProvider } from '@/shared/auth/contracts';
+import type { AuthResult, PublicSsoProvider } from '@/shared/auth/contracts';
 import {
   AUTH_FORGOT_PASSWORD_PATH,
   AUTH_SIGNUP_PATH,
+  AUTHENTICATED_ADMIN_ENTRY_PATH,
+  AUTHENTICATED_APP_ENTRY_PATH,
   getPostAuthRedirectPath,
 } from '@/shared/auth/redirects';
+
 import { AuthErrorBanner } from './auth-error-banner';
 import {
   AuthInlineLink,
@@ -38,6 +44,20 @@ type LoginFormProps = {
   returnTo?: string | null;
 };
 
+function getLoginSuccessRedirect(result: AuthResult, returnTo?: string | null): string {
+  if (result.nextAction !== 'NONE') {
+    return getPostAuthRedirectPath(result.nextAction, returnTo);
+  }
+
+  if (returnTo) {
+    return returnTo;
+  }
+
+  return result.membership.role === 'ADMIN'
+    ? AUTHENTICATED_ADMIN_ENTRY_PATH
+    : AUTHENTICATED_APP_ENTRY_PATH;
+}
+
 export function LoginForm({ ssoProviders, publicSignupEnabled, returnTo }: LoginFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -48,24 +68,29 @@ export function LoginForm({ ssoProviders, publicSignupEnabled, returnTo }: Login
   const forgotHref = returnTo
     ? `${AUTH_FORGOT_PASSWORD_PATH}?returnTo=${encodeURIComponent(returnTo)}`
     : AUTH_FORGOT_PASSWORD_PATH;
+
   const signupHref = returnTo
     ? `${AUTH_SIGNUP_PATH}?returnTo=${encodeURIComponent(returnTo)}`
     : AUTH_SIGNUP_PATH;
 
   const submitLogin = async (): Promise<void> => {
-    setPending(true);
-    setError(null);
+    try {
+      setPending(true);
+      setError(null);
 
-    const result = await login({ email, password });
+      const result = await login({ email, password });
 
-    if (!result.ok) {
-      setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        setPending(false);
+        return;
+      }
+
+      router.replace(getLoginSuccessRedirect(result.data, returnTo));
+    } catch (caughtError) {
+      setError(caughtError);
       setPending(false);
-      return;
     }
-
-    router.replace(getPostAuthRedirectPath(result.data.nextAction, returnTo));
-    router.refresh();
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {

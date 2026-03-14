@@ -33,19 +33,23 @@ export function SignupForm({ returnTo }: SignupFormProps) {
     : AUTH_LOGIN_PATH;
 
   const submitSignup = async (): Promise<void> => {
-    setPending(true);
-    setError(null);
+    try {
+      setPending(true);
+      setError(null);
 
-    const result = await signup({ name, email, password });
+      const result = await signup({ name, email, password });
 
-    if (!result.ok) {
-      setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        setPending(false);
+        return;
+      }
+
+      router.replace(getPostAuthRedirectPath(result.data.nextAction, returnTo));
+    } catch (caughtError) {
+      setError(caughtError);
       setPending(false);
-      return;
     }
-
-    router.replace(getPostAuthRedirectPath(result.data.nextAction, returnTo));
-    router.refresh();
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {

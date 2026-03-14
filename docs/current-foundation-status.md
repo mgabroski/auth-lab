@@ -237,15 +237,37 @@ The provisioning PDF explicitly names later capabilities that are **not** curren
 These are not documentation omissions.
 They are intentionally deferred beyond the current shipped slice.
 
-### 6.2 Phase 3 confidence hardening still pending
+### 6.2 Current confidence and regression protection status
 
-The current auth/provisioning feature surface exists, but later hardening work is still deferred, including:
+Phase 3 added the current regression/confidence surface for the shipped auth/provisioning slice, including:
 
-- broader frontend confidence/test hardening
-- additional contract-regression confidence where required
-- any non-doc cleanup explicitly scheduled for later phases
+- backend nextAction contract coverage across login, signup, register, and `/auth/me` agreement
+- continuation-flow contract coverage for invite acceptance outcomes (`SET_PASSWORD`, `SIGN_IN`, `MFA_SETUP_REQUIRED`)
+- frontend unit coverage for route-state resolution, SSR bootstrap sequencing, and same-origin browser API discipline
+- frontend auth-flow E2E coverage for member login/logout, admin MFA continuation, and signup-to-verify-email routing
+- outbox worker lifecycle coverage for send, retry scheduling, non-retryable dead-lettering, and max-attempt dead-lettering
 
-### 6.3 `allowed_email_domains` JSONB tradeoff
+This improves confidence for the current shipped slice, but it does **not** mean all future hardening work is finished. Phase 4 still owns any broader cleanup, optional expansion, and non-scope redesign work.
+
+### 6.3 Outbox observability / dead-letter visibility classification
+
+Current outbox observability is **backend-internal / operator-visible only**.
+
+What exists today:
+
+- structured worker/event logs for claim, send, retry, dead-letter, and lost-claim paths
+- durable outbox row state in `outbox_messages` (`status`, `attempts`, `last_error`, lease fields, availability timestamps)
+- lifecycle regression tests that now prove those states and transitions
+
+What does **not** exist today:
+
+- a dedicated admin/product UI for outbox health
+- a first-class dead-letter review dashboard
+- documented alerting/paging automation tied to outbox dead-letter volume or stuck retries
+
+Treat this as a truthful classification of current visibility, not as a hidden defect in shipped auth behavior.
+
+### 6.4 `allowed_email_domains` JSONB tradeoff
 
 The repo currently stores tenant `allowed_email_domains` as a JSONB array.
 

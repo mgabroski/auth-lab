@@ -58,38 +58,47 @@ export function MfaSetupFlow({ userEmail }: MfaSetupFlowProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const requestSetup = async (): Promise<void> => {
-    setSetupPending(true);
-    setError(null);
-    setSuccessMessage(null);
+    try {
+      setSetupPending(true);
+      setError(null);
+      setSuccessMessage(null);
 
-    const result = await setupMfa();
+      const result = await setupMfa();
 
-    if (!result.ok) {
-      setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        setSetupPending(false);
+        return;
+      }
+
+      setSetupData(result.data);
       setSetupPending(false);
-      return;
+    } catch (caughtError) {
+      setError(caughtError);
+      setSetupPending(false);
     }
-
-    setSetupData(result.data);
-    setSetupPending(false);
   };
 
   const submitVerifySetup = async (): Promise<void> => {
-    setVerifyPending(true);
-    setError(null);
-    setSuccessMessage(null);
+    try {
+      setVerifyPending(true);
+      setError(null);
+      setSuccessMessage(null);
 
-    const result = await verifyMfaSetup({ code });
+      const result = await verifyMfaSetup({ code });
 
-    if (!result.ok) {
-      setError(result.error);
+      if (!result.ok) {
+        setError(result.error);
+        setVerifyPending(false);
+        return;
+      }
+
+      setSuccessMessage('MFA setup completed. Redirecting to your workspace…');
+      router.replace(getPostAuthRedirectPath(result.data.nextAction, null));
+    } catch (caughtError) {
+      setError(caughtError);
       setVerifyPending(false);
-      return;
     }
-
-    setSuccessMessage('MFA setup completed. Redirecting to your workspace…');
-    router.replace(getPostAuthRedirectPath(result.data.nextAction, null));
-    router.refresh();
   };
 
   useEffect(() => {
@@ -202,7 +211,6 @@ export function MfaSetupFlow({ userEmail }: MfaSetupFlowProps) {
           disabled={setupPending || verifyPending}
           onClick={() => {
             router.replace(AUTHENTICATED_APP_ENTRY_PATH);
-            router.refresh();
           }}
         >
           Refresh auth state

@@ -40,25 +40,23 @@ export function LogoutButton() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleLogout = async (): Promise<void> => {
-    setPending(true);
-    setErrorMessage(null);
+    try {
+      setPending(true);
+      setErrorMessage(null);
 
-    const result = await logout();
+      const result = await logout();
 
-    if (result.ok) {
-      router.replace(ROOT_HANDOFF_PATH);
-      router.refresh();
-      return;
+      if (result.ok || result.status === 401) {
+        router.replace(ROOT_HANDOFF_PATH);
+        return;
+      }
+
+      setErrorMessage(getApiErrorMessage(result.error, 'Unable to log out right now.'));
+      setPending(false);
+    } catch (caughtError) {
+      setErrorMessage(getApiErrorMessage(caughtError, 'Unable to log out right now.'));
+      setPending(false);
     }
-
-    if (result.status === 401) {
-      router.replace(ROOT_HANDOFF_PATH);
-      router.refresh();
-      return;
-    }
-
-    setErrorMessage(getApiErrorMessage(result.error, 'Unable to log out right now.'));
-    setPending(false);
   };
 
   return (
