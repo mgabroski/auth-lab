@@ -5,3 +5,8 @@
 **/node_modules/**
 **/coverage/**
 **/*.log
+**/.next/**
+**/.vitest/**
+**/test-results/**
+**/playwright-report/**
+**/blob-report/**

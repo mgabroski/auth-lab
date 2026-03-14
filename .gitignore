@@ -63,6 +63,12 @@ Thumbs.db
 # =========================
 .vitest/
 coverage/
+test-results/
+playwright-report/
+blob-report/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 
 # =========================
 # Docker / Infra
