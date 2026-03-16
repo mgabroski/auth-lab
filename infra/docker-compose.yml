@@ -22,6 +22,22 @@
 # - INTERNAL_API_URL lets Next.js SSR call backend directly (container-to-container).
 #   Client-side calls always use relative /api/* through the proxy.
 #
+# ── KEY SEGREGATION NOTE ─────────────────────────────────────────────────────
+# Each cryptographic purpose uses a DISTINCT key below.
+# DEV-ONLY values are committed here for local development convenience.
+#
+# !! NEVER COPY THESE VALUES TO PRODUCTION !!
+#
+# Before any deployment, generate fresh keys for each purpose:
+#   MFA encryption key:    openssl rand -base64 32
+#   MFA HMAC key:         openssl rand -base64 32
+#   SSO state key:         openssl rand -base64 32
+#   Outbox encryption key: openssl rand -base64 32
+#
+# Using the same key for multiple purposes (e.g., MFA and outbox) reduces
+# the blast radius of a key compromise to a single subsystem rather than all.
+# ─────────────────────────────────────────────────────────────────────────────
+#
 # HOW TO START (full stack):
 #   docker compose -f infra/docker-compose.yml up --build
 #
@@ -91,20 +107,48 @@ services:
       - SEED_INVITE_TTL_HOURS=168
       - SESSION_TTL_SECONDS=86400
       - MFA_ISSUER=Hubins
-      # DEV ONLY — example keys, safe to commit for local dev
+
+      # ── Encryption keys — DEV ONLY, distinct per purpose ─────────────────
+      # Each key is independently generated to enforce key segregation.
+      # Sharing keys across purposes (e.g., MFA + outbox) is prohibited even
+      # in dev: it creates false confidence that production will use distinct keys.
+      #
+      # NEVER USE THESE VALUES IN PRODUCTION.
+      # Generate production keys with: openssl rand -base64 32
+
+      # AES-256-GCM key for TOTP secret encryption at rest
+      # Purpose: encrypts mfa_secrets.encrypted_secret
       - MFA_ENCRYPTION_KEY_BASE64=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+
+      # HMAC-SHA256 key for MFA recovery code hashing
+      # Purpose: hashes mfa_recovery_codes.code_hash
       - MFA_HMAC_KEY_BASE64=8Emt6e4gn6r8rgRGSuYTVQ+D/3upFEckXRoMQYKJRJ8=
+
+      # AES-256-GCM key for SSO state encryption
+      # Purpose: encrypts/decrypts sso-state cookie payload
+      # All-zeros key is intentional for dev: SSO state is short-lived and
+      # non-sensitive in a local environment. Use a real key in production.
       - SSO_STATE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+
       # Fallback only: startSso prefers the real request public origin.
-      # Keep this as a controlled fallback for environments where host/proto
-      # forwarding is unavailable or intentionally overridden.
       - SSO_REDIRECT_BASE_URL=http://goodwill-ca.lvh.me:3000/api
       - GOOGLE_CLIENT_ID=test-google-client-id
       - GOOGLE_CLIENT_SECRET=test-google-client-secret
       - MICROSOFT_CLIENT_ID=test-microsoft-client-id
       - MICROSOFT_CLIENT_SECRET=test-microsoft-client-secret
+
+      # AES-256-GCM key for outbox payload encryption
+      # Purpose: encrypts outbox_messages.payload fields (token, toEmail)
+      # DISTINCT from MFA_ENCRYPTION_KEY_BASE64 by design.
       - OUTBOX_ENC_DEFAULT_VERSION=v1
-      - OUTBOX_ENC_KEY_V1=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+      - OUTBOX_ENC_KEY_V1=Kj3mN8vP2qR5sT7wX1yZ4aB6cD9eF0gH3iJ5kL7mN9=
+
+      # Email delivery
+      # EMAIL_PROVIDER=noop is correct for local dev stack.
+      # For local integration testing with real email, set EMAIL_PROVIDER=smtp
+      # and configure SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_FROM.
+      - EMAIL_PROVIDER=noop
+
     networks: [hubins_net]
     # No ports: — internal only; all traffic through proxy
     depends_on:

@@ -85,7 +85,7 @@ Required for validating topology behavior that host-run mode does not prove:
 
 ### Consequence
 
-A change can be “good enough for host-run” and still be unsafe for topology.
+A change can be "good enough for host-run" and still be unsafe for topology.
 That is why topology-affecting changes must be validated in the full stack too.
 
 ---
@@ -342,3 +342,73 @@ When updating docs:
 
 A new document should not be added until its scope is clear.
 If the same fact would need to live in two homes, one of those homes is wrong.
+
+---
+
+## ADR-010 — MFA secrets are global per user, not per tenant
+
+**Date:** 2026-03  
+**Status:** Accepted
+
+### Context
+
+The auth system is multi-tenant. Users can belong to multiple tenants simultaneously. MFA (TOTP) setup requires generating and storing an encrypted TOTP secret and a set of hashed recovery codes.
+
+We needed to decide whether MFA secrets should be scoped per-user globally or per-membership (per user + per tenant).
+
+### Decision
+
+MFA secrets are **global per user** (`UNIQUE(user_id)` on `mfa_secrets`).
+
+A user has one TOTP secret across the entire platform. If they set up MFA while logged into `acme.hubins.com`, that same verified secret is used when they log into `techstart.hubins.com`.
+
+### Why
+
+#### Identity model is global
+
+A user is a global entity identified by email. Auth identities (password, Google, Microsoft) are already global — a user has one password, not one per tenant. TOTP identity follows the same model.
+
+#### UX coherence
+
+Requiring users to set up a new authenticator app entry for each tenant they join would be confusing and impractical for users who belong to multiple tenants.
+
+#### Simplicity and correctness
+
+Per-tenant MFA would require each tenant's login flow to check for a tenant-scoped secret, and recovery flows would need tenant-scoped recovery code sets. This adds complexity with no security benefit — the TOTP secret authenticates the user's _identity_, not their membership in a specific tenant.
+
+### Multi-tenant consequences
+
+#### MFA requirement is per-tenant, secret is global
+
+`isMfaRequiredForLogin` checks `membership.role` and `tenant.memberMfaRequired` — both are per-tenant. The enforcement decision (must verify MFA?) is tenant-scoped. The credential (the TOTP secret) is global.
+
+This means:
+
+- A user who is ADMIN in tenant A and MEMBER in tenant B uses the same TOTP secret in both tenants.
+- When logging into tenant A (admin, MFA required), they verify their TOTP code.
+- When logging into tenant B (member, MFA not required), the same secret exists but is not required.
+- The session `mfaVerified` flag is set per-login based on whether the specific login flow required and completed MFA verification.
+
+#### Setup requirement is triggered per-login, not globally
+
+If a user has not yet set up MFA (`hasVerifiedMfaSecret = false`) and logs into a tenant where MFA is required for their role, `nextAction` will be `MFA_SETUP_REQUIRED` for that login session. This works correctly regardless of whether they have completed MFA setup for other tenants, because the global secret is either present and verified or it is not.
+
+### Rejected alternatives
+
+#### Per-membership MFA secrets
+
+Rejected because it requires duplicate authenticator entries, complicates the recovery flow, and provides no meaningful security improvement over global secrets. The TOTP secret authenticates the user's identity, not their role in a specific workspace.
+
+#### Per-tenant MFA secret with tenant-selection at setup time
+
+Also rejected. The UX overhead of choosing "which tenant is this authenticator entry for" is unjustifiable given that the user's physical identity (and therefore their authenticator app) is the same across tenants.
+
+### Named re-evaluation trigger
+
+Re-evaluate this decision when any of the following becomes true:
+
+**`MFA_PER_TENANT_TRIGGER`**
+
+- a regulatory or compliance requirement mandates tenant-isolated MFA credentials
+- a tenant requires the ability to independently revoke a user's MFA secret without affecting their access to other tenants
+- user research shows the global MFA model creates a meaningful UX problem for multi-tenant users
