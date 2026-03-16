@@ -30,6 +30,9 @@ function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigRe
       name: 'Acme',
       isActive: true,
       publicSignupEnabled: true,
+      // signupAllowed is now a required field (publicSignupEnabled && !adminInviteRequired).
+      // Default to true in tests — override explicitly when testing the blocked-signup case.
+      signupAllowed: true,
       allowedSso: ['google'],
       ...overrides,
     },
@@ -128,7 +131,14 @@ describe('loadAuthBootstrap', () => {
 
   it('skips /auth/me when /auth/config says the tenant is unavailable', async () => {
     ssrFetchMock.mockResolvedValueOnce(
-      jsonResponse(makeConfig({ isActive: false, publicSignupEnabled: false, allowedSso: [] })),
+      jsonResponse(
+        makeConfig({
+          isActive: false,
+          publicSignupEnabled: false,
+          signupAllowed: false,
+          allowedSso: [],
+        }),
+      ),
     );
 
     const result = await loadAuthBootstrap();

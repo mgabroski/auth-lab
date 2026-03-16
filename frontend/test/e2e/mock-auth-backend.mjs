@@ -88,6 +88,9 @@ function activeConfig() {
       name: 'Acme',
       isActive: true,
       publicSignupEnabled: true,
+      // signupAllowed mirrors the backend-computed value: publicSignupEnabled && !adminInviteRequired.
+      // The mock always uses a tenant where admin invite is not required, so signupAllowed = true.
+      signupAllowed: true,
       allowedSso: ['google'],
     },
   };

@@ -8,8 +8,16 @@
  *
  * RULES:
  * - Worker start/stop is done in build-app (lifecycle), not in DI.
- * - EmailAdapter must be idempotent; NoopEmailAdapter is used in dev/test now.
+ * - EmailAdapter selection is driven by config.email.provider.
+ * - NoopEmailAdapter is rejected at startup when NODE_ENV=production.
+ *   This is the production guard: if someone deploys without configuring
+ *   EMAIL_PROVIDER=smtp, the process crashes immediately with a clear error
+ *   rather than silently swallowing all email delivery.
  * - Avoid `any` and unsafe casts; validate + narrow config at boundaries.
+ *
+ * 9/10 HARDENING:
+ * - Added SmtpEmailAdapter wiring based on config.email.provider.
+ * - Added production guard: NoopEmailAdapter is not allowed when nodeEnv=production.
  */
 
 import type { AppConfig } from './config';
@@ -44,6 +52,7 @@ import {
 } from '../shared/outbox/outbox-encryption';
 import type { EmailAdapter } from '../shared/outbox/email.adapter';
 import { NoopEmailAdapter } from '../shared/outbox/noop-email.adapter';
+import { SmtpEmailAdapter } from '../shared/outbox/smtp-email.adapter';
 
 import { createTenantModule } from '../modules/tenants/tenant.module';
 import type { TenantModule } from '../modules/tenants/tenant.module';
@@ -135,6 +144,44 @@ function buildOutboxEncryptionConfig(config: AppConfig): OutboxEncryptionConfig 
   };
 }
 
+/**
+ * Builds the email adapter based on config.email.provider.
+ *
+ * PRODUCTION GUARD:
+ * NoopEmailAdapter in production would silently swallow every invite,
+ * password reset, and verification email. The process fails immediately
+ * with a clear error rather than allowing a silent production misconfiguration.
+ */
+function buildEmailAdapter(
+  config: AppConfig,
+  deps: { logger: Logger; tokenHasher: TokenHasher },
+): EmailAdapter {
+  if (config.email.provider === 'smtp') {
+    if (!config.email.smtp) {
+      throw new Error(
+        'Config: EMAIL_PROVIDER=smtp requires SMTP_HOST and SMTP_FROM to be configured',
+      );
+    }
+
+    return new SmtpEmailAdapter(config.email.smtp, deps);
+  }
+
+  // NoopEmailAdapter — acceptable in development and test environments.
+  // NEVER acceptable in production.
+  if (config.nodeEnv === 'production') {
+    throw new Error(
+      [
+        'PRODUCTION STARTUP GUARD: EMAIL_PROVIDER=noop is not allowed in production.',
+        'Set EMAIL_PROVIDER=smtp and configure SMTP_HOST, SMTP_FROM, and SMTP_PORT.',
+        'If you are using AWS SES, set SMTP_HOST=email-smtp.<region>.amazonaws.com',
+        'and SMTP_USER/SMTP_PASS to your SES SMTP credentials.',
+      ].join('\n'),
+    );
+  }
+
+  return new NoopEmailAdapter(deps);
+}
+
 export async function buildDeps(
   config: AppConfig,
   overrides: BuildDepsOverrides = {},
@@ -172,7 +219,9 @@ export async function buildDeps(
 
   const outboxRepo = new OutboxRepo(db);
   const outboxEncryption = new OutboxEncryption(buildOutboxEncryptionConfig(config));
-  const emailAdapter: EmailAdapter = new NoopEmailAdapter({ logger, tokenHasher });
+
+  // Build email adapter with production guard.
+  const emailAdapter = buildEmailAdapter(config, { logger, tokenHasher });
 
   const tenants = createTenantModule({ db });
 

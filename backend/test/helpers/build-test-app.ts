@@ -22,6 +22,8 @@ function requireEnv(name: string): string {
  * - Seed is OFF by default.
  * - Uses DATABASE_URL + REDIS_URL from your dev/test infra containers.
  * - Provides safe defaults for Outbox config so tests don't require OUTBOX_* env vars.
+ * - email.provider is always 'noop' in tests — the production guard in di.ts
+ *   only rejects noop when nodeEnv='production', so this is safe here.
  */
 export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
   // resetDb() guard requires this. Keep it local to tests.
@@ -59,7 +61,7 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
       microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET ?? 'test-microsoft-client-secret',
     },
 
-    // ✅ Outbox (Step 2) — give tests safe defaults so DI never sees undefined config.outbox
+    // Outbox — safe defaults so tests don't require OUTBOX_* env vars.
     outbox: {
       pollIntervalMs: 5_000,
       batchSize: 10,
@@ -69,6 +71,18 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
         // 32-byte key, base64-encoded (zeros) — safe for tests only
         v1: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
       },
+    },
+
+    // Sentry is never initialised in tests.
+    sentryDsn: undefined,
+
+    // Email — always noop in tests.
+    // The production guard in di.ts rejects noop only when nodeEnv='production'.
+    // In test mode this is the correct setting: no real emails are sent,
+    // and the outbox worker does not start (enforced in build-app.ts).
+    email: {
+      provider: 'noop',
+      smtp: null,
     },
 
     seed: {
@@ -100,6 +114,10 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
         ...baseConfig.outbox.encKeysByVersion,
         ...(overrides.outbox?.encKeysByVersion ?? {}),
       },
+    },
+    email: {
+      ...baseConfig.email,
+      ...(overrides.email ?? {}),
     },
     seed: {
       ...baseConfig.seed,

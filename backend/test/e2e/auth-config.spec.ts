@@ -10,6 +10,10 @@
  * - Build a fresh app per test.
  * - Seed tenants directly with deps.db.
  * - No session cookie is required for this endpoint.
+ *
+ * signupAllowed is now part of the config response.
+ * signupAllowed = publicSignupEnabled && !adminInviteRequired.
+ * Tests that assert on the full config shape include it explicitly.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -33,6 +37,7 @@ async function createTenant(opts: {
   tenantKey: string;
   isActive?: boolean;
   publicSignupEnabled?: boolean;
+  adminInviteRequired?: boolean;
   memberMfaRequired?: boolean;
   allowedSso?: Array<'google' | 'microsoft'>;
   allowedEmailDomains?: string[];
@@ -44,6 +49,7 @@ async function createTenant(opts: {
       name: `Tenant ${opts.tenantKey}`,
       is_active: opts.isActive ?? true,
       public_signup_enabled: opts.publicSignupEnabled ?? false,
+      admin_invite_required: opts.adminInviteRequired ?? false,
       member_mfa_required: opts.memberMfaRequired ?? false,
       allowed_email_domains: opts.allowedEmailDomains?.length
         ? sql`${JSON.stringify(opts.allowedEmailDomains)}::jsonb`
@@ -72,6 +78,7 @@ describe('GET /auth/config', () => {
           name: '',
           isActive: false,
           publicSignupEnabled: false,
+          signupAllowed: false,
           allowedSso: [],
         },
       });
@@ -106,6 +113,8 @@ describe('GET /auth/config', () => {
       });
 
       expect(inactiveRes.statusCode).toBe(200);
+      // Both unknown and inactive tenants must return byte-identical shapes.
+      // signupAllowed is part of that shape and must be false in both.
       expect(readJson<ConfigResponse>(inactiveRes)).toEqual(readJson<ConfigResponse>(unknownRes));
     } finally {
       await close();
@@ -191,6 +200,63 @@ describe('GET /auth/config', () => {
 
       expect(res.statusCode).toBe(200);
       expect(readJson<ConfigResponse>(res).tenant.publicSignupEnabled).toBe(false);
+    } finally {
+      await close();
+    }
+  });
+
+  it('signupAllowed is true when publicSignupEnabled and adminInviteRequired is false', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const tenantKey = `signup-on-${randomUUID().slice(0, 8)}`;
+
+    try {
+      await createTenant({
+        db: deps.db,
+        tenantKey,
+        publicSignupEnabled: true,
+        adminInviteRequired: false,
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/auth/config',
+        headers: { host: hostForTenant(tenantKey) },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = readJson<ConfigResponse>(res);
+      expect(body.tenant.publicSignupEnabled).toBe(true);
+      expect(body.tenant.signupAllowed).toBe(true);
+    } finally {
+      await close();
+    }
+  });
+
+  it('signupAllowed is false when publicSignupEnabled but adminInviteRequired is true', async () => {
+    // This is the core case that motivated adding signupAllowed:
+    // a tenant can have publicSignupEnabled=true but still block signup via adminInviteRequired.
+    // The frontend must use signupAllowed, not publicSignupEnabled, to gate signup UI.
+    const { app, deps, close } = await buildTestApp();
+    const tenantKey = `invite-only-${randomUUID().slice(0, 8)}`;
+
+    try {
+      await createTenant({
+        db: deps.db,
+        tenantKey,
+        publicSignupEnabled: true,
+        adminInviteRequired: true,
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/auth/config',
+        headers: { host: hostForTenant(tenantKey) },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = readJson<ConfigResponse>(res);
+      expect(body.tenant.publicSignupEnabled).toBe(true);
+      expect(body.tenant.signupAllowed).toBe(false);
     } finally {
       await close();
     }

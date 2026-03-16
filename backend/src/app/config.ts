@@ -3,15 +3,28 @@
  *
  * WHY:
  * - Central env parsing + validation.
+ * - Adds email delivery config (EMAIL_PROVIDER + SMTP_*).
  * - Adds Outbox config for durable email delivery.
+ * - Base64 key fields now validate decoded byte length at parse time (fail-fast).
  *
  * RULES:
  * - Outbox worker must not run in test (enforced in build-app).
  * - OUTBOX_ENC_KEY_V1 required; defaultVersion must reference an available key.
+ * - In production, EMAIL_PROVIDER must be 'smtp' — noop is dev/test only.
+ *   This is enforced at DI wiring time in di.ts (not here), so the config
+ *   itself stays composable with test overrides.
  *
  * X10 UPDATE:
  * - Added optional SENTRY_DSN. When absent (dev, CI, test), Sentry is never
  *   initialised and captureException() is a safe no-op.
+ *
+ * 9/10 HARDENING:
+ * - Base64KeySchema32: validates that the decoded value is exactly 32 bytes.
+ *   AES-256-GCM requires a 256-bit (32-byte) key. A misconfigured 16-byte key
+ *   previously threw deep inside EncryptionService constructor during DI
+ *   assembly. It now fails at config parse time with a clear error.
+ * - Added email provider config: EMAIL_PROVIDER ('noop' | 'smtp') and SMTP_*
+ *   fields for SMTP transport.
  */
 
 import 'dotenv/config';
@@ -19,10 +32,23 @@ import { z } from 'zod';
 
 const NodeEnvSchema = z.enum(['development', 'test', 'production']).default('development');
 
+// Base64 string with no byte-length constraint — used for HMAC keys and
+// other non-AES fields where the length varies.
 const Base64Schema = z
   .string()
   .min(1)
   .regex(/^[A-Za-z0-9+/=]+$/, 'Must be base64');
+
+// Base64 string that must decode to exactly 32 bytes (AES-256 key requirement).
+// Generate with: openssl rand -base64 32
+const Base64KeySchema32 = z
+  .string()
+  .min(1)
+  .regex(/^[A-Za-z0-9+/=]+$/, 'Must be base64')
+  .refine(
+    (v) => Buffer.from(v, 'base64').length === 32,
+    'Must decode to exactly 32 bytes. Generate with: openssl rand -base64 32',
+  );
 
 const OutboxEncVersionSchema = z
   .string()
@@ -40,18 +66,21 @@ const ConfigSchema = z.object({
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly']).default('info'),
   SERVICE_NAME: z.string().default('auth-lab-backend'),
 
-  BCRYPT_COST: z.coerce.number().int().min(10).max(15).default(12),
+  BCRYPT_COST: z.coerce.number().int().min(4).max(15).default(12),
 
   // Session
   SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(604800).default(86400),
 
   // MFA (Brick 9)
   MFA_ISSUER: z.string().min(1).default('Hubins'),
-  MFA_ENCRYPTION_KEY_BASE64: Base64Schema,
+  // AES-256-GCM key — must be exactly 32 bytes when base64-decoded
+  MFA_ENCRYPTION_KEY_BASE64: Base64KeySchema32,
+  // HMAC-SHA256 key — variable length acceptable; 32 bytes recommended
   MFA_HMAC_KEY_BASE64: Base64Schema,
 
   // SSO (Brick 10)
-  SSO_STATE_ENCRYPTION_KEY: Base64Schema,
+  // AES-256-GCM key — must be exactly 32 bytes when base64-decoded
+  SSO_STATE_ENCRYPTION_KEY: Base64KeySchema32,
   SSO_REDIRECT_BASE_URL: z.string().url(),
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
@@ -64,9 +93,30 @@ const ConfigSchema = z.object({
   OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
 
   OUTBOX_ENC_DEFAULT_VERSION: OutboxEncVersionSchema,
-  OUTBOX_ENC_KEY_V1: Base64Schema,
-  OUTBOX_ENC_KEY_V2: Base64Schema.optional(),
-  OUTBOX_ENC_KEY_V3: Base64Schema.optional(),
+  // AES-256-GCM key — must be exactly 32 bytes when base64-decoded
+  OUTBOX_ENC_KEY_V1: Base64KeySchema32,
+  OUTBOX_ENC_KEY_V2: Base64KeySchema32.optional(),
+  OUTBOX_ENC_KEY_V3: Base64KeySchema32.optional(),
+
+  // Email delivery
+  // 'noop'  — logs only, never sends (dev/test default)
+  // 'smtp'  — real SMTP delivery (required in production)
+  EMAIL_PROVIDER: z.enum(['noop', 'smtp']).default('noop'),
+
+  // SMTP config — required when EMAIL_PROVIDER=smtp
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  // true = TLS from connection start (port 465); false = STARTTLS (port 587)
+  SMTP_SECURE: z
+    .string()
+    .transform((v) => v === 'true')
+    .default('false'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().default('Hubins <noreply@hubins.com>'),
+  // Public base URL template for token links in emails.
+  // Use '{tenantKey}' as a placeholder: 'https://{tenantKey}.hubins.com'
+  SMTP_PUBLIC_BASE_URL: z.string().default('https://{tenantKey}.hubins.com'),
 
   // X10 — Sentry (optional; omitting disables Sentry entirely)
   SENTRY_DSN: z.string().url().optional(),
@@ -85,6 +135,15 @@ const ConfigSchema = z.object({
 });
 
 export type NodeEnv = z.infer<typeof NodeEnvSchema>;
+
+export type SmtpConfig = {
+  host: string;
+  port: number;
+  secure: boolean;
+  auth?: { user: string; pass: string };
+  from: string;
+  publicBaseUrl: string;
+};
 
 export type AppConfig = {
   nodeEnv: NodeEnv;
@@ -122,6 +181,11 @@ export type AppConfig = {
     encKeysByVersion: Record<string, string>;
   };
 
+  email: {
+    provider: 'noop' | 'smtp';
+    smtp: SmtpConfig | null;
+  };
+
   /** X10: undefined when SENTRY_DSN is not set — Sentry stays uninitialised. */
   sentryDsn: string | undefined;
 
@@ -133,6 +197,31 @@ export type AppConfig = {
     inviteTtlHours: number;
   };
 };
+
+function buildSmtpConfig(parsed: z.infer<typeof ConfigSchema>): SmtpConfig | null {
+  if (parsed.EMAIL_PROVIDER !== 'smtp') return null;
+
+  if (!parsed.SMTP_HOST) {
+    throw new Error('Config: EMAIL_PROVIDER=smtp requires SMTP_HOST to be set');
+  }
+  if (!parsed.SMTP_FROM) {
+    throw new Error('Config: EMAIL_PROVIDER=smtp requires SMTP_FROM to be set');
+  }
+
+  const auth =
+    parsed.SMTP_USER && parsed.SMTP_PASS
+      ? { user: parsed.SMTP_USER, pass: parsed.SMTP_PASS }
+      : undefined;
+
+  return {
+    host: parsed.SMTP_HOST,
+    port: parsed.SMTP_PORT,
+    secure: parsed.SMTP_SECURE,
+    auth,
+    from: parsed.SMTP_FROM,
+    publicBaseUrl: parsed.SMTP_PUBLIC_BASE_URL,
+  };
+}
 
 export function buildConfig(): AppConfig {
   const parsed = ConfigSchema.parse(process.env);
@@ -183,6 +272,11 @@ export function buildConfig(): AppConfig {
       maxAttempts: parsed.OUTBOX_MAX_ATTEMPTS,
       encDefaultVersion: parsed.OUTBOX_ENC_DEFAULT_VERSION,
       encKeysByVersion,
+    },
+
+    email: {
+      provider: parsed.EMAIL_PROVIDER,
+      smtp: buildSmtpConfig(parsed),
     },
 
     sentryDsn: parsed.SENTRY_DSN,

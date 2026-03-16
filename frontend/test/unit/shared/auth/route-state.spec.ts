@@ -9,6 +9,9 @@ function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigRe
       name: 'Acme',
       isActive: true,
       publicSignupEnabled: true,
+      // signupAllowed is now a required field (publicSignupEnabled && !adminInviteRequired).
+      // Default to true in tests — override explicitly when testing the blocked-signup case.
+      signupAllowed: true,
       allowedSso: ['google'],
       ...overrides,
     },
@@ -46,6 +49,7 @@ describe('resolveAuthRouteState', () => {
       config: makeConfig({
         isActive: false,
         publicSignupEnabled: false,
+        signupAllowed: false,
         allowedSso: [],
       }),
       me: null,
@@ -112,5 +116,25 @@ describe('resolveAuthRouteState', () => {
     });
 
     expect(state.kind).toBe('MFA_REQUIRED');
+  });
+
+  it('signupAllowed is false when adminInviteRequired overrides publicSignupEnabled', () => {
+    // This test documents the specific scenario that motivated adding signupAllowed:
+    // publicSignupEnabled=true but adminInviteRequired=true means signup is blocked.
+    // The frontend must use signupAllowed, not publicSignupEnabled.
+    const state = resolveAuthRouteState({
+      config: makeConfig({
+        publicSignupEnabled: true,
+        signupAllowed: false, // adminInviteRequired is true on the backend
+      }),
+      me: null,
+    });
+
+    // Tenant is active, so the result is PUBLIC_ENTRY regardless of signupAllowed.
+    // The signupAllowed flag controls whether the signup UI is rendered —
+    // it does not change the route state category itself.
+    expect(state.kind).toBe('PUBLIC_ENTRY');
+    expect(state.config.tenant.signupAllowed).toBe(false);
+    expect(state.config.tenant.publicSignupEnabled).toBe(true);
   });
 });

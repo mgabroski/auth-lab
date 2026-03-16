@@ -4,6 +4,13 @@
  * WHY:
  * - Public signup screen for tenants that enable self-service registration.
  * - Still respects SSR bootstrap truth before rendering any form UI.
+ *
+ * SIGNUP GATING:
+ * - Uses tenant.signupAllowed (not publicSignupEnabled) to decide whether to
+ *   render the form. signupAllowed = publicSignupEnabled && !adminInviteRequired.
+ * - A tenant can have publicSignupEnabled=true but still block signup via
+ *   adminInviteRequired=true. Using publicSignupEnabled alone would show a
+ *   form that the backend immediately rejects with 403.
  */
 
 import Link from 'next/link';
@@ -63,7 +70,7 @@ export default async function SignupPage({ searchParams }: PageProps) {
         title="Public signup"
         description="Signup availability is driven by GET /auth/config. The frontend does not guess or hardcode tenant policy."
       >
-        {tenant.publicSignupEnabled ? (
+        {tenant.signupAllowed ? (
           <SignupForm returnTo={returnTo} />
         ) : (
           <AuthNote>

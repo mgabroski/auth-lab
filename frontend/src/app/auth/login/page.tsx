@@ -5,6 +5,12 @@
  * - Real public login screen for the current tenant.
  * - Uses SSR bootstrap for tenant-aware rendering and a client form for same-origin login.
  * - Also serves invite-continuation sign-in after POST /auth/invites/accept returns SIGN_IN.
+ *
+ * SIGNUP LINK GATING:
+ * - Passes tenant.signupAllowed (not publicSignupEnabled) to <LoginForm>.
+ *   signupAllowed = publicSignupEnabled && !adminInviteRequired.
+ *   Using publicSignupEnabled alone would show a "Create account" link that
+ *   the backend would reject when adminInviteRequired=true.
  */
 
 import { redirect } from 'next/navigation';
@@ -79,7 +85,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
         {inviteNotice ? <AuthNote>{inviteNotice}</AuthNote> : null}
         <LoginForm
           ssoProviders={tenant.allowedSso}
-          publicSignupEnabled={tenant.publicSignupEnabled}
+          publicSignupEnabled={tenant.signupAllowed}
           returnTo={returnTo}
         />
       </AuthCard>

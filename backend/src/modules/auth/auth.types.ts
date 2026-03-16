@@ -19,6 +19,14 @@
  * STAGE 1 UPDATE:
  * - Added MeResponse for GET /auth/me.
  * - Added ConfigResponse for GET /auth/config.
+ *
+ * 9/10 HARDENING:
+ * - Added signupAllowed to ConfigResponse.
+ *   Derived from: publicSignupEnabled && !adminInviteRequired.
+ *   This exposes the correct frontend-visible signup policy in a single boolean
+ *   rather than requiring the frontend to re-implement the combination rule.
+ *   Without this, a tenant with publicSignupEnabled=true and adminInviteRequired=true
+ *   causes the frontend to show a signup path that the backend immediately rejects.
  */
 
 export type AuthProvider = 'password' | 'google' | 'microsoft';
@@ -117,12 +125,22 @@ export type MeResponse = {
 /**
  * Response shape for GET /auth/config.
  * Public-safe only. Never contains allowedEmailDomains or memberMfaRequired.
+ *
+ * signupAllowed: derived from publicSignupEnabled && !adminInviteRequired.
+ * The frontend must use signupAllowed to decide whether to render signup entry
+ * points — NOT publicSignupEnabled alone. When adminInviteRequired=true, the
+ * backend blocks public signup even when publicSignupEnabled=true.
  */
 export type ConfigResponse = {
   tenant: {
     name: string;
     isActive: boolean;
     publicSignupEnabled: boolean;
+    /**
+     * Convenience boolean: true when public signup is both enabled and not
+     * blocked by adminInviteRequired. Use this to gate all frontend signup UI.
+     */
+    signupAllowed: boolean;
     allowedSso: ('google' | 'microsoft')[];
   };
 };

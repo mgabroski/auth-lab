@@ -14,6 +14,11 @@
  *   - backend/docs/api/auth.md
  * - Do not invent frontend-only auth state here.
  * - Prefer exact string unions over broad `string` where backend behavior is locked.
+ *
+ * 9/10 HARDENING:
+ * - Added signupAllowed to ConfigResponse to match backend auth.types.ts.
+ *   Frontend code must use signupAllowed (not publicSignupEnabled) to decide
+ *   whether to render signup entry points. See backend auth.types.ts for rationale.
  */
 
 export type AuthProvider = 'password' | 'google' | 'microsoft';
@@ -70,6 +75,14 @@ export type ConfigResponse = {
     name: string;
     isActive: boolean;
     publicSignupEnabled: boolean;
+    /**
+     * Use this field — not publicSignupEnabled — to decide whether to show
+     * signup UI. signupAllowed = publicSignupEnabled && !adminInviteRequired.
+     * A tenant can have publicSignupEnabled=true but still block public signup
+     * via adminInviteRequired=true. The backend returns the correct computed
+     * value here so the frontend does not need to re-implement the rule.
+     */
+    signupAllowed: boolean;
     allowedSso: PublicSsoProvider[];
   };
 };

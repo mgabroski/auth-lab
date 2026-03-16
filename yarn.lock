@@ -12,6 +12,7 @@ __metadata:
     "@sentry/node": "npm:^10.42.0"
     "@types/bcrypt": "npm:^6.0.0"
     "@types/node": "npm:^20.11.30"
+    "@types/nodemailer": "npm:^6.4.17"
     "@types/pg": "npm:^8.11.10"
     bcrypt: "npm:^6.0.0"
     dotenv: "npm:^16.4.5"
@@ -19,6 +20,7 @@ __metadata:
     jose: "npm:^6.1.3"
     kysely: "npm:^0.27.4"
     kysely-codegen: "npm:^0.16.0"
+    nodemailer: "npm:^6.9.15"
     otpauth: "npm:^9.5.0"
     pg: "npm:^8.13.1"
     redis: "npm:^5.10.0"
@@ -1774,6 +1776,15 @@ __metadata:
   dependencies:
     undici-types: "npm:~6.21.0"
   checksum: 10c0/8420353aee776ae5c1e9720058949909a0e908fa2af85501e9db2645bb9f9acd7d767890f8aaee34d375e6f8b5f550a9a169e908d2d8cf7d5daf63dce64092a0
+  languageName: node
+  linkType: hard
+
+"@types/nodemailer@npm:^6.4.17":
+  version: 6.4.23
+  resolution: "@types/nodemailer@npm:6.4.23"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 10c0/86a456eb387d685d7713d56576147315fff03b0868fbde1b12291ab11df4df5c07c87010bd31ce10da16dfdad5d21ecc7d2ea4487e42706795f612865e1c564e
   languageName: node
   linkType: hard
 
@@ -4227,6 +4238,13 @@ __metadata:
   bin:
     node-gyp: bin/node-gyp.js
   checksum: 10c0/3ed046746a5a7d90950cd8b0547332b06598443f31fe213ef4332a7174c7b7d259e1704835feda79b87d3f02e59d7791842aac60642ede4396ab25fdf0f8f759
+  languageName: node
+  linkType: hard
+
+"nodemailer@npm:^6.9.15":
+  version: 6.10.1
+  resolution: "nodemailer@npm:6.10.1"
+  checksum: 10c0/e81fde258ea4f4e5646e9e3eebe89294d007939999d2d1a8c96c5488fa00bf659e46cf76fccb2697e9aa6ef9807a1ed47ff2aef6ad30b795e3849b6997066d16
   languageName: node
   linkType: hard
 
