@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { buildTestApp } from '../helpers/build-test-app';
 import type { AppDeps } from '../../src/app/di';
-import { SESSION_COOKIE_NAME } from '../../src/shared/session/session.types';
+import { getSessionCookieName } from '../../src/shared/session/session.types';
 
 // ── Response schemas (Zod) ──────────────────────────────────────────────────
 
@@ -30,6 +30,8 @@ const ListAuditEventsResponseSchema = z.object({
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+
+const sessionCookieName = getSessionCookieName(false);
 
 function tenantKey(): string {
   return `t-${randomUUID().slice(0, 10)}`;
@@ -87,7 +89,7 @@ async function createAdminCookie(opts: {
   });
 
   return {
-    cookie: `${SESSION_COOKIE_NAME}=${sessionId}`,
+    cookie: `${sessionCookieName}=${sessionId}`,
     userId: user.id,
     membershipId: membership.id,
   };

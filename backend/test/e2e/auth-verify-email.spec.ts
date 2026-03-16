@@ -5,7 +5,7 @@ import { buildTestApp } from '../helpers/build-test-app';
 import { getLatestOutboxPayloadForUser } from '../helpers/outbox-test-helpers';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { OutboxEncryption } from '../../src/shared/outbox/outbox-encryption';
-import { SESSION_COOKIE_NAME } from '../../src/shared/session/session.types';
+import { getSessionCookieName } from '../../src/shared/session/session.types';
 
 /**
  * E2E tests for POST /auth/verify-email.
@@ -34,6 +34,9 @@ import { SESSION_COOKIE_NAME } from '../../src/shared/session/session.types';
 type VerifyEmailResponse = { status: 'VERIFIED' };
 type ErrorResponseBody = { error: { message: string; code?: string } };
 
+const sessionCookieName = getSessionCookieName(false);
+const supportedSessionCookieNames = new Set([sessionCookieName, getSessionCookieName(true)]);
+
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
 }
@@ -48,7 +51,7 @@ function extractSessionId(cookieHeader: string): string {
   // cookieHeader example: "sid=<uuid>; Path=/; HttpOnly; SameSite=Strict"
   const first = cookieHeader.split(';')[0];
   const [name, value] = first.split('=');
-  if (name !== SESSION_COOKIE_NAME || !value) {
+  if (!supportedSessionCookieNames.has(name) || !value) {
     throw new Error(`Unexpected cookie header: ${cookieHeader}`);
   }
   return value;

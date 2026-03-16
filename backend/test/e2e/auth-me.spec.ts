@@ -20,8 +20,10 @@ import { describe, expect, it } from 'vitest';
 import type { MeResponse } from '../../src/modules/auth/auth.types';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
-import { SESSION_COOKIE_NAME } from '../../src/shared/session/session.types';
+import { getSessionCookieName } from '../../src/shared/session/session.types';
 import { buildTestApp } from '../helpers/build-test-app';
+
+const sessionCookieName = getSessionCookieName(false);
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
@@ -362,7 +364,7 @@ describe('GET /auth/me', () => {
         url: '/auth/me',
         headers: {
           host,
-          cookie: `${SESSION_COOKIE_NAME}=${sessionId}`,
+          cookie: `${sessionCookieName}=${sessionId}`,
         },
       });
 

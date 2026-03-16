@@ -6,8 +6,8 @@ import { getLatestOutboxPayloadForUser } from '../helpers/outbox-test-helpers';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { OutboxEncryption } from '../../src/shared/outbox/outbox-encryption';
 import {
-  SESSION_COOKIE_NAME,
   SESSION_USER_INDEX_PREFIX,
+  getSessionCookieName,
 } from '../../src/shared/session/session.types';
 
 /**
@@ -25,6 +25,9 @@ type ErrorBody = {
   };
 };
 
+const sessionCookieName = getSessionCookieName(false);
+const supportedSessionCookieNames = new Set([sessionCookieName, getSessionCookieName(true)]);
+
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
 }
@@ -38,7 +41,7 @@ function extractCookie(res: { headers: Record<string, unknown> }): string {
 function extractSessionId(cookieHeader: string): string {
   const first = cookieHeader.split(';')[0];
   const [name, value] = first.split('=');
-  if (name !== SESSION_COOKIE_NAME || !value) {
+  if (!supportedSessionCookieNames.has(name) || !value) {
     throw new Error(`Unexpected cookie header: ${cookieHeader}`);
   }
   return value;
@@ -126,7 +129,7 @@ describe('Auth contract surfaces (regression suite)', () => {
       const res = await app.inject({
         method: 'GET',
         url: '/admin/audit-events',
-        headers: { host, cookie: `${SESSION_COOKIE_NAME}=${sessionId}` },
+        headers: { host, cookie: `${sessionCookieName}=${sessionId}` },
       });
 
       expect(res.statusCode).toBe(403);
@@ -541,7 +544,7 @@ describe('TOTP replay prevention (A3 regression)', () => {
         emailVerified: true,
         createdAt: new Date().toISOString(),
       });
-      const cookie = `${SESSION_COOKIE_NAME}=${sessionId}`;
+      const cookie = `${sessionCookieName}=${sessionId}`;
       const host = `${tenantKey}.localhost:3000`;
 
       const validCode = cryptoHelpers.generateTotpCode(plaintextSecret);
@@ -564,7 +567,7 @@ describe('TOTP replay prevention (A3 regression)', () => {
         emailVerified: true,
         createdAt: new Date().toISOString(),
       });
-      const cookieB = `${SESSION_COOKIE_NAME}=${sessionIdB}`;
+      const cookieB = `${sessionCookieName}=${sessionIdB}`;
 
       const second = await app.inject({
         method: 'POST',

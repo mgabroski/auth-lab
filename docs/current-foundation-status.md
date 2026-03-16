@@ -267,7 +267,16 @@ What does **not** exist today:
 
 Treat this as a truthful classification of current visibility, not as a hidden defect in shipped auth behavior.
 
-### 6.4 `allowed_email_domains` JSONB tradeoff
+### 6.4 Phase 4 tracked-debt closures
+
+Phase 4 retired two intentionally temporary compatibility exports that no longer had live callers in the production code path:
+
+- backend `SESSION_COOKIE_NAME` compatibility export removed in favor of `getSessionCookieName(isProduction)`
+- backend `MfaNextAction` alias removed in favor of the canonical `AuthNextAction` contract
+
+These were low-risk cleanup items only. They do **not** change shipped auth behavior or the external HTTP/API contract.
+
+### 6.5 `allowed_email_domains` JSONB tradeoff
 
 The repo currently stores tenant `allowed_email_domains` as a JSONB array.
 

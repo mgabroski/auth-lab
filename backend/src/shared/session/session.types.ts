@@ -50,12 +50,6 @@ export function getSessionCookieName(isProduction: boolean): string {
   return isProduction ? SESSION_COOKIE_PROD_NAME : SESSION_COOKIE_DEV_NAME;
 }
 
-/**
- * @deprecated Use getSessionCookieName(isProduction) instead.
- * Kept for backward compatibility with existing tests that reference SESSION_COOKIE_NAME.
- */
-export const SESSION_COOKIE_NAME = SESSION_COOKIE_DEV_NAME;
-
 /** SSO state cookie name (dev). SameSite=Lax — required for OAuth redirect pass-through. */
 export const SSO_STATE_COOKIE_DEV_NAME = 'sso-state';
 

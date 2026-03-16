@@ -13,7 +13,7 @@
  * - Passes null through for name — never coerces to empty string.
  *
  * BRICK 11 UPDATE:
- * - Updated nextAction type from MfaNextAction to AuthNextAction (superset).
+ * - nextAction uses AuthNextAction so all auth continuations share one contract.
  */
 
 import type { AuthResult, AuthNextAction } from '../auth.types';

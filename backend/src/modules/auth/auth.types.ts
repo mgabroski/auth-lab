@@ -12,10 +12,8 @@
  * - Never include raw passwords, hashes, or tokens in response types.
  *
  * BRICK 11 UPDATE:
- * - MfaNextAction renamed to AuthNextAction (broader: covers email + MFA).
+ * - Added AuthNextAction (covers email + MFA continuation decisions).
  * - Added 'EMAIL_VERIFICATION_REQUIRED' to AuthNextAction (Decision 3).
- * - MfaNextAction kept as a type alias for backward compatibility during the
- *   transition — remove once all callers have migrated.
  * - Added EmailVerificationToken domain type.
  *
  * STAGE 1 UPDATE:
@@ -73,12 +71,6 @@ export type AuthNextAction =
   | 'MFA_SETUP_REQUIRED'
   | 'MFA_REQUIRED'
   | 'EMAIL_VERIFICATION_REQUIRED';
-
-/**
- * @deprecated Use AuthNextAction. Kept as alias for callers that have not yet
- * migrated. Will be removed in a follow-up cleanup.
- */
-export type MfaNextAction = AuthNextAction;
 
 export type AuthResult = {
   // FIX: signup can legitimately return EMAIL_VERIFICATION_REQUIRED
