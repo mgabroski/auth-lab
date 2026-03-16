@@ -49,7 +49,7 @@ You must be:
 - strict about topology/session/tenant rules
 - explicit about unknowns
 - conservative about adding layers that are not needed
-- unwilling to mark a module “ready to implement” if the spec is still vague in important places
+- unwilling to mark a module "ready to implement" if the spec is still vague in important places
 
 ---
 
@@ -59,7 +59,7 @@ Use this prompt when the user provides one or more of the following:
 
 - a business PDF/spec for a new backend module
 - a feature brief that requires backend support
-- a request to “design the backend module structure” before implementation
+- a request to "design the backend module structure" before implementation
 - a request to convert product logic into backend issues/files/steps
 - a request to decide how a new capability fits into the existing repo
 
@@ -83,6 +83,7 @@ Before generating a module plan, make sure the session has:
 - `docs/current-foundation-status.md`
 - `ARCHITECTURE.md`
 - `docs/decision-log.md`
+- `docs/security-model.md`
 - `backend/docs/engineering-rules.md`
 - `backend/docs/module-skeleton.md`
 - this prompt
@@ -191,7 +192,7 @@ Do not jump straight to code.
 
 ---
 
-## STEP 0 — Ground in the repo before reading the spec as “truth”
+## STEP 0 — Ground in the repo before reading the spec as "truth"
 
 Before interpreting the new module request, read and summarize:
 
@@ -199,9 +200,10 @@ Before interpreting the new module request, read and summarize:
 2. `docs/current-foundation-status.md`
 3. `ARCHITECTURE.md`
 4. `docs/decision-log.md`
-5. `backend/docs/engineering-rules.md`
-6. `backend/docs/module-skeleton.md`
-7. relevant existing modules adjacent to the requested behavior
+5. `docs/security-model.md`
+6. `backend/docs/engineering-rules.md`
+7. `backend/docs/module-skeleton.md`
+8. relevant existing modules adjacent to the requested behavior
 
 Then output:
 
@@ -416,7 +418,7 @@ Use the real repo testing philosophy:
 - HTTP + middleware + request/session contract → E2E
 - topology-sensitive behavior → full-stack/proxy validation if applicable
 
-Do not leave testing as “to be added later.”
+Do not leave testing as "to be added later."
 
 ---
 
@@ -541,7 +543,7 @@ Do not:
 - force every module to use every possible layer
 - ignore tenant/session/topology implications
 - hide ambiguity behind architecture jargon
-- mark the module “ready” when key business rules are still missing
+- mark the module "ready" when key business rules are still missing
 - overclaim what the current repo already has
 
 ---

@@ -11,9 +11,10 @@ The backend docs must always be read inside the wider repo authority chain:
 2. `docs/current-foundation-status.md`
 3. `ARCHITECTURE.md`
 4. `docs/decision-log.md`
-5. `backend/docs/README.md`
-6. `backend/docs/engineering-rules.md`
-7. `backend/docs/module-skeleton.md`
+5. `docs/security-model.md`
+6. `backend/docs/README.md`
+7. `backend/docs/engineering-rules.md`
+8. `backend/docs/module-skeleton.md`
 
 If this folder ever implies something broader than the current shipped repo truth, the repo-level documents win.
 
@@ -38,23 +39,33 @@ It exists to reduce drift between backend code, backend rules, and backend-assis
 
 ## Read documents in this order
 
-| #   | File                                              | What it is                                                      | Who should read it                            |
-| --- | ------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
-| 1   | `README.md` _(repo root)_                         | Repo entrypoint and current scope framing                       | Everyone                                      |
-| 2   | `docs/current-foundation-status.md` _(repo root)_ | Exact current shipped truth for this repo version               | Everyone                                      |
-| 3   | `ARCHITECTURE.md` _(repo root)_                   | Broader system direction and locked architecture law            | Everyone                                      |
-| 4   | `docs/decision-log.md` _(repo root)_              | Non-obvious architecture decisions and consequences             | Everyone making architectural changes         |
-| 5   | `backend/docs/README.md`                          | Backend docs entrypoint and backend doc hierarchy               | Backend contributors                          |
-| 6   | `backend/docs/engineering-rules.md`               | Backend implementation law                                      | Every backend engineer on every PR            |
-| 7   | `backend/docs/module-skeleton.md`                 | Canonical backend module structure and file responsibilities    | Anyone adding or reshaping a backend module   |
-| 8   | `backend/docs/api/auth.md`                        | Current auth API contract for bootstrap + auth endpoints        | Engineers touching auth API behavior          |
-| 9   | `backend/docs/api/invites.md`                     | Current invite-acceptance API contract                          | Engineers touching invite acceptance          |
-| 10  | `backend/docs/api/admin.md`                       | Current admin invite + audit API contract                       | Engineers touching admin provisioning         |
-| 11  | `backend/docs/modules/auth-user-provisioning.md`  | Business/configuration behavior for the current backend module  | Engineers, PMs, QA                            |
-| 12  | `backend/docs/adr/README.md`                      | How ADRs are written and when one is required                   | Engineers changing architecture or boundaries |
-| 13  | `backend/docs/prompts/module-generation.md`       | Prompt for generating a new backend module from a business spec | Tech lead / PM / LLM session owner            |
-| 14  | `backend/docs/prompts/implement.md`               | Prompt for implementation sessions                              | Engineer + LLM                                |
-| 15  | `backend/docs/prompts/review.md`                  | Prompt for adversarial backend review sessions                  | Engineer + LLM                                |
+| #   | File                                              | What it is                                                     | Who should read it                                  |
+| --- | ------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------- |
+| 1   | `README.md` _(repo root)_                         | Repo entrypoint and current scope framing                      | Everyone                                            |
+| 2   | `docs/current-foundation-status.md` _(repo root)_ | Exact current shipped truth for this repo version              | Everyone                                            |
+| 3   | `ARCHITECTURE.md` _(repo root)_                   | Broader system direction and locked architecture law           | Everyone                                            |
+| 4   | `docs/decision-log.md` _(repo root)_              | Non-obvious architecture decisions and consequences            | Everyone making architectural changes               |
+| 5   | `docs/security-model.md` _(repo root)_            | Tenant isolation, cookies, tokens, crypto, rate limits         | Everyone — mandatory for security-sensitive modules |
+| 6   | `backend/docs/README.md`                          | Backend docs entrypoint and backend doc hierarchy              | Backend contributors                                |
+| 7   | `backend/docs/engineering-rules.md`               | Backend implementation law                                     | Every backend engineer on every PR                  |
+| 8   | `backend/docs/module-skeleton.md`                 | Canonical backend module structure and file responsibilities   | Anyone adding or reshaping a backend module         |
+| 9   | `backend/docs/api/auth.md`                        | Current auth API contract for bootstrap + auth endpoints       | Engineers touching auth API behavior                |
+| 10  | `backend/docs/api/invites.md`                     | Current invite-acceptance API contract                         | Engineers touching invite acceptance                |
+| 11  | `backend/docs/api/admin.md`                       | Current admin invite + audit API contract                      | Engineers touching admin provisioning               |
+| 12  | `backend/docs/modules/auth-user-provisioning.md`  | Business/configuration behavior for the current backend module | Engineers, PMs, QA                                  |
+| 13  | `backend/docs/adr/README.md`                      | How ADRs are written and when one is required                  | Engineers changing architecture or boundaries       |
+| 14  | `backend/docs/prompts/module-generation.md`       | Prompt for generating a new backend-only module from a spec    | Tech lead / PM / LLM session owner                  |
+| 15  | `backend/docs/prompts/implement.md`               | Prompt for implementation sessions                             | Engineer + LLM                                      |
+| 16  | `backend/docs/prompts/review.md`                  | Prompt for adversarial backend review sessions                 | Engineer + LLM                                      |
+| 17  | `backend/docs/prompts/refactor.md`                | Prompt for safe backend refactor sessions                      | Engineer + LLM                                      |
+
+For **full-stack modules** spanning backend + frontend + docs, also load:
+
+| File                                          | What it is                          |
+| --------------------------------------------- | ----------------------------------- |
+| `docs/prompts/module-generation-fullstack.md` | Full-stack module generation prompt |
+| `frontend/docs/module-skeleton.md`            | Canonical frontend module structure |
+| `frontend/src/shared/engineering-rules.md`    | Frontend implementation law         |
 
 ---
 
@@ -70,6 +81,8 @@ docs/current-foundation-status.md
 ARCHITECTURE.md
   ↓
 docs/decision-log.md
+  ↓
+docs/security-model.md
   ↓
 backend/docs/engineering-rules.md
   ↓
@@ -88,6 +101,7 @@ backend/docs/adr/*.md
 - `docs/current-foundation-status.md` decides what is actually implemented now.
 - `ARCHITECTURE.md` decides broader system shape and locked architecture rules.
 - `docs/decision-log.md` explains non-obvious decisions already taken.
+- `docs/security-model.md` defines tenant isolation, cookie contract, crypto primitives, rate limits, and anti-enumeration rules. Mandatory for any module touching auth, access control, or sensitive data.
 - `engineering-rules.md` defines how backend code must be written.
 - `module-skeleton.md` defines how backend modules must be shaped.
 - API/module docs describe the current behavior of specific surfaces.
@@ -127,9 +141,10 @@ These explain the behavior and scope of an implemented backend module.
 
 These are execution artifacts for LLM-assisted work.
 
-- `prompts/module-generation.md`
-- `prompts/implement.md`
-- `prompts/review.md`
+- `prompts/module-generation.md` — backend-only module generation
+- `prompts/implement.md` — implementation sessions
+- `prompts/review.md` — adversarial review sessions
+- `prompts/refactor.md` — safe refactor sessions
 
 ### 5. Decision docs
 
@@ -159,11 +174,14 @@ If `engineering-rules.md` or `module-skeleton.md` changes and the prompts are no
 
 ### Prompt responsibilities
 
-| File                           | Loaded when                                | Purpose                                                                                 |
-| ------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------- |
-| `prompts/module-generation.md` | Starting a new module from a business spec | Converts a business spec into a repo-aligned module generation plan                     |
-| `prompts/implement.md`         | Running an implementation session          | Forces the implementation to follow the repo’s structure, laws, and output expectations |
-| `prompts/review.md`            | Running a review session                   | Forces review against architecture, law, topology, boundaries, and docs                 |
+| File                           | Loaded when                        | Purpose                                                                                 |
+| ------------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------- |
+| `prompts/module-generation.md` | Starting a new backend-only module | Converts a business spec into a backend module generation plan                          |
+| `prompts/implement.md`         | Running an implementation session  | Forces the implementation to follow the repo's structure, laws, and output expectations |
+| `prompts/review.md`            | Running a review session           | Forces review against architecture, law, topology, boundaries, and docs                 |
+| `prompts/refactor.md`          | Running a refactor session         | Enforces one-batch-one-intent, test gates, and locked behavior preservation             |
+
+For full-stack modules, also load `docs/prompts/module-generation-fullstack.md`.
 
 ---
 
@@ -176,7 +194,7 @@ Use an ADR when:
 - a backend architectural boundary changes
 - a shared primitive is added or changed in a way other modules will depend on
 - a topology-sensitive backend assumption changes
-- a cross-module contract becomes important enough that “tribal memory” is unsafe
+- a cross-module contract becomes important enough that "tribal memory" is unsafe
 - a backend law is intentionally overridden or revised in a meaningful way
 
 ADR files are not required for every PR.

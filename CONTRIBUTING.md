@@ -2,7 +2,7 @@
 
 This repository is strict on structure, scope clarity, and documentation truthfulness.
 
-Do not treat this as a generic “open a PR and figure it out later” codebase.
+Do not treat this as a generic "open a PR and figure it out later" codebase.
 The foundation is intentional, and future modules depend on that foundation staying clean.
 
 ---
@@ -15,20 +15,34 @@ Read them in this order:
 2. `docs/current-foundation-status.md`
 3. `ARCHITECTURE.md`
 4. `docs/decision-log.md`
-5. `backend/docs/README.md`
-6. `backend/docs/engineering-rules.md`
-7. `backend/docs/module-skeleton.md`
+5. `docs/security-model.md`
+6. `backend/docs/README.md`
+7. `backend/docs/engineering-rules.md`
+8. `backend/docs/module-skeleton.md`
 
 If you are working on frontend code, also read:
 
-8. `frontend/src/shared/engineering-rules.md`
-9. `frontend/README.md`
+9. `frontend/src/shared/engineering-rules.md`
+10. `frontend/docs/module-skeleton.md`
+11. `frontend/README.md`
 
 If you are using an LLM to help implement a module, also read:
 
-10. `backend/docs/prompts/module-generation.md`
-11. `backend/docs/prompts/implement.md`
-12. `backend/docs/prompts/review.md`
+For **backend-only** modules:
+
+12. `backend/docs/prompts/module-generation.md`
+13. `backend/docs/prompts/implement.md`
+14. `backend/docs/prompts/review.md`
+
+For **full-stack** modules (backend + frontend + docs):
+
+12. `docs/prompts/module-generation-fullstack.md`
+13. `backend/docs/prompts/implement.md`
+14. `backend/docs/prompts/review.md`
+
+When **refactoring** existing backend code:
+
+- `backend/docs/prompts/refactor.md`
 
 Do not skip `docs/current-foundation-status.md`.
 That file exists specifically to prevent contributors from confusing broader platform direction with shipped implementation.
@@ -134,7 +148,8 @@ Run the checks that actually exist today.
 ```bash
 yarn lint
 yarn fmt:check
-yarn verify
+yarn typecheck
+yarn test
 ```
 
 ### Backend
@@ -151,12 +166,14 @@ yarn test
 cd frontend
 yarn lint
 yarn typecheck
+yarn test:unit
 ```
 
 Important:
 
-- root `yarn typecheck` now covers backend + frontend
-- root `yarn test` currently runs the backend suite
+- root `yarn typecheck` covers backend + frontend
+- root `yarn test` runs both backend and frontend unit/E2E test suites
+- frontend E2E (`yarn test:e2e`) runs Playwright against a local Next.js dev server — it requires the dev server to start, so allow extra time
 - do not pretend broader gates exist if they do not
 
 If your change touches topology, also validate the full stack:
@@ -186,7 +203,7 @@ Host-run mode is not enough for those changes.
 
 ## 6. Adding or changing backend behavior
 
-Use the existing repo shape.
+Use the existing repo shape as defined in `backend/docs/module-skeleton.md`.
 
 Typical path:
 
@@ -198,21 +215,22 @@ Typical path:
 6. tests
 7. doc updates if the behavior changes a contract or rule
 
-Do not collapse those concerns into one file just because the change looks “small.”
+Do not collapse those concerns into one file just because the change looks "small."
 
 ---
 
 ## 7. Adding or changing frontend behavior
 
-Frontend changes must preserve these rules:
+Frontend changes must follow `frontend/docs/module-skeleton.md` and preserve these rules:
 
 - browser calls backend through relative same-origin `/api/*`
-- SSR/server components may call backend directly through `INTERNAL_API_URL`
+- SSR/server components call backend directly through `INTERNAL_API_URL` with forwarded headers
 - no direct browser hardcoding of backend origin
 - no client-side tenant selection logic
-- auth bootstrap should be built around backend truth (`/auth/me`, `/auth/config`), not UI guesses
+- access gating happens in server pages via `loadAuthBootstrap()`, not in client components
+- auth bootstrap is built around backend truth (`/auth/me`, `/auth/config`), not UI guesses
 
-The frontend rules file is not optional reading.
+Both `frontend/src/shared/engineering-rules.md` and `frontend/docs/module-skeleton.md` are required reading for frontend work.
 
 ---
 
@@ -220,15 +238,19 @@ The frontend rules file is not optional reading.
 
 Update docs when you change:
 
-| What changed                                          | Update these docs                          |
-| ----------------------------------------------------- | ------------------------------------------ |
-| Current delivered scope                               | `docs/current-foundation-status.md`        |
-| Broader architecture direction or locked topology law | `ARCHITECTURE.md`                          |
-| Non-obvious technical decisions                       | `docs/decision-log.md`                     |
-| Backend implementation rules                          | `backend/docs/engineering-rules.md`        |
-| Canonical backend module structure                    | `backend/docs/module-skeleton.md`          |
-| Frontend implementation rules                         | `frontend/src/shared/engineering-rules.md` |
-| Repo entrypoint / commands / current state framing    | `README.md`                                |
+| What changed                                                    | Update these docs                          |
+| --------------------------------------------------------------- | ------------------------------------------ |
+| Current delivered scope                                         | `docs/current-foundation-status.md`        |
+| Broader architecture direction or locked topology law           | `ARCHITECTURE.md`                          |
+| Non-obvious technical decisions                                 | `docs/decision-log.md`                     |
+| Security model, crypto primitives, rate limits, isolation rules | `docs/security-model.md`                   |
+| Backend implementation rules                                    | `backend/docs/engineering-rules.md`        |
+| Canonical backend module structure                              | `backend/docs/module-skeleton.md`          |
+| Frontend implementation rules                                   | `frontend/src/shared/engineering-rules.md` |
+| Canonical frontend module structure                             | `frontend/docs/module-skeleton.md`         |
+| Repo entrypoint / commands / current state framing              | `README.md`                                |
+| New or changed backend API endpoint                             | `backend/docs/api/<domain>.md`             |
+| New operational failure mode                                    | `docs/ops/runbooks.md`                     |
 
 If the code changed and the docs stayed silent, assume the change is incomplete until proven otherwise.
 
@@ -244,9 +266,19 @@ That means:
 - do not let the model add files that break the documented structure casually
 - do not let the model overclaim what is implemented
 - always anchor the session in the current repo + relevant docs
-- review generated code against architecture and rule docs, not only against “it compiles”
+- review generated code against architecture and rule docs, not only against "it compiles"
 
-The prompt files in `backend/docs/prompts/` exist to reduce drift. Use them deliberately.
+### Which prompt to load
+
+| Work type                              | Primary prompt                                |
+| -------------------------------------- | --------------------------------------------- |
+| Backend-only new module                | `backend/docs/prompts/module-generation.md`   |
+| Full-stack new module (BE + FE + docs) | `docs/prompts/module-generation-fullstack.md` |
+| Backend implementation session         | `backend/docs/prompts/implement.md`           |
+| Backend refactor session               | `backend/docs/prompts/refactor.md`            |
+| Backend review session                 | `backend/docs/prompts/review.md`              |
+
+Always also load `docs/security-model.md` for any module touching access control, tenant isolation, or sensitive data.
 
 ---
 

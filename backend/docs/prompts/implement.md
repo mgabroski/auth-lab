@@ -72,6 +72,7 @@ Before producing implementation output, confirm the session has the required inp
 - `docs/current-foundation-status.md`
 - `ARCHITECTURE.md`
 - `docs/decision-log.md`
+- `docs/security-model.md`
 - `backend/docs/engineering-rules.md`
 - `backend/docs/module-skeleton.md`
 - this prompt
@@ -165,12 +166,13 @@ Before writing implementation output, read and ground yourself in:
 2. `docs/current-foundation-status.md`
 3. `ARCHITECTURE.md`
 4. `docs/decision-log.md`
-5. `backend/docs/engineering-rules.md`
-6. `backend/docs/module-skeleton.md`
-7. the specific target module files or adjacent module files relevant to the change
-8. any API/module docs that the change may affect
+5. `docs/security-model.md`
+6. `backend/docs/engineering-rules.md`
+7. `backend/docs/module-skeleton.md`
+8. the specific target module files or adjacent module files relevant to the change
+9. any API/module docs that the change may affect
 
-If the session is for a new module, also read: 9. `backend/docs/prompts/module-generation.md` 10. the filled module spec
+If the session is for a new module, also read: 10. `backend/docs/prompts/module-generation.md` 11. the filled module spec
 
 Before writing code, output a short grounding summary in this format:
 
@@ -472,6 +474,7 @@ FINAL IMPLEMENTATION SELF-CHECK
 [ ] respects topology law
 [ ] respects tenant law
 [ ] respects session law
+[ ] respects security model (docs/security-model.md)
 [ ] layer placement is correct
 [ ] transaction ownership is correct
 [ ] side effects are ordered correctly

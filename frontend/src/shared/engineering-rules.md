@@ -410,3 +410,80 @@ That usually means:
 
 The current frontend foundation is meant to make the real auth UI safer to build.
 Keep it that way.
+
+---
+
+## 13. Module structure rules
+
+### FER-36 [ARCH] New frontend modules follow the canonical module skeleton
+
+Every new frontend module must follow the structure defined in `frontend/docs/module-skeleton.md`.
+
+The skeleton defines:
+
+- where server pages live (`frontend/src/app/<module>/`)
+- where shared logic lives (`frontend/src/shared/<module>/`)
+- what each file type is responsible for
+- which concerns are server-only vs client-only
+
+Do not invent a different structure for a new module without first updating the skeleton.
+
+### FER-37 [HARD] Server pages own access gating. Client components do not.
+
+Every authenticated route must call `loadAuthBootstrap()` in the server page and redirect if access is not allowed.
+
+Client components must never gate access based on auth state they derive themselves.
+A client component may display conditional UI based on props passed from the server page, but it must not own the redirect decision.
+
+### FER-38 [HARD] Client components use browser-api.ts. Server pages use ssrFetch.
+
+The execution environment determines the API layer:
+
+- `browser-api.ts` → client components → same-origin `/api/*`
+- `ssrFetch` → server pages/components → `INTERNAL_API_URL` with forwarded headers
+
+Mixing these is always wrong. A client component that calls `ssrFetch` will fail at runtime.
+
+### FER-39 contracts.ts must mirror backend shapes, not invent frontend shapes
+
+`contracts.ts` in a frontend module must define TypeScript types that mirror actual backend response shapes.
+
+Types must reference the backend source file they mirror (in a comment).
+Do not add computed fields, defaults, or transformed shapes to `contracts.ts`.
+
+---
+
+## 14. Documentation coupling rules
+
+These rules define when frontend documentation must be updated. They are as binding as the code rules above.
+
+### FER-40 [ARCH] New routes must update docs/current-foundation-status.md
+
+When a new frontend route or module surface ships and is real (not planned, not partially wired — actually shipped), `docs/current-foundation-status.md` must be updated in the same PR.
+
+### FER-41 [ARCH] Changed frontend behavior must update frontend/README.md
+
+When the frontend's implemented surface changes materially — new routes, removed routes, changed bootstrap behavior — `frontend/README.md` must reflect the new reality in the same PR.
+
+### FER-42 New frontend API consumption must align with backend/docs/api/<domain>.md
+
+When a frontend module begins consuming a backend domain's API, the corresponding `backend/docs/api/<domain>.md` must be accurate and up to date.
+
+If a frontend change reveals a drift between the API doc and actual backend behavior, fix the API doc in the same PR.
+
+### FER-43 New frontend modules require at least one E2E test
+
+Every new frontend module with interactive flows must ship with at least one Playwright E2E test file in `frontend/test/e2e/`.
+
+The E2E test must cover the happy path through the full browser → Next.js → mock backend flow.
+
+If the module introduces new API routes, `frontend/test/e2e/mock-auth-backend.mjs` must be updated to handle them.
+
+### FER-44 [ARCH] Frontend engineering rule changes must be propagated to module-generation prompts
+
+If this file changes in a way that affects how new modules should be structured or reviewed, the relevant LLM prompts must be updated in the same PR:
+
+- `docs/prompts/module-generation-fullstack.md`
+- `frontend/docs/module-skeleton.md`
+
+A rule change that silently obsoletes a prompt is a documentation defect.
