@@ -15,6 +15,13 @@
  * - It performs lightweight checks against DB and Redis.
  * - 200 means the app can currently reach its critical dependencies.
  * - 503 means the process is up but the app should not receive traffic.
+ *
+ * 9/10 HARDENING:
+ * - tenantKey and requestId are now gated behind nodeEnv !== 'production'.
+ *   In production, health endpoints may be reachable from wider network scope
+ *   than intended. Exposing per-request tenant routing state in the health
+ *   response body is unnecessary information disclosure.
+ *   In dev/test, they remain visible for debugging convenience.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -47,13 +54,19 @@ export function registerRoutes(
 
     const healthy = Object.values(checks).every(Boolean);
 
+    const isProduction = config.nodeEnv === 'production';
+
     return reply.status(healthy ? 200 : 503).send({
       ok: healthy,
       env: config.nodeEnv,
       service: config.serviceName,
-      requestId: req.requestContext.requestId,
-      tenantKey: req.requestContext.tenantKey,
       checks,
+      // Debug context: omitted in production to avoid unnecessary information
+      // disclosure in environments where /health may be more broadly reachable.
+      ...(!isProduction && {
+        requestId: req.requestContext.requestId,
+        tenantKey: req.requestContext.tenantKey,
+      }),
     });
   });
 

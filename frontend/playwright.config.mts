@@ -25,6 +25,7 @@ export default defineConfig({
       command: 'node ./test/e2e/mock-auth-backend.mjs',
       port: backendPort,
       timeout: 15_000,
+      // Mock backend is cheap to start; safe to reuse locally.
       reuseExistingServer: !process.env.CI,
     },
     {
@@ -36,7 +37,19 @@ export default defineConfig({
       },
       port: frontendPort,
       timeout: 120_000,
-      reuseExistingServer: !process.env.CI,
+      // WHY false (not !process.env.CI):
+      //
+      // The Next.js dev server must always be started fresh by Playwright
+      // so that INTERNAL_API_URL is guaranteed to point to the mock backend
+      // on port 3101. If a stale server from a previous test run (or from
+      // `yarn dev` on this port) is reused, it may use a different
+      // INTERNAL_API_URL or none at all. That causes every browser-side
+      // API call routed through the /api/[...path] Route Handler to go to
+      // the wrong backend, silently failing all login/signup/auth flows.
+      //
+      // The Next.js startup time (typically 20-30s cold, <5s warm rebuild)
+      // is acceptable given the correctness guarantee.
+      reuseExistingServer: false,
     },
   ],
 });

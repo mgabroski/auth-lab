@@ -201,10 +201,21 @@ None.
     name: string;
     isActive: boolean;
     publicSignupEnabled: boolean;
+    signupAllowed: boolean;
     allowedSso: ('google' | 'microsoft')[];
   };
 }
 ```
+
+### `signupAllowed` vs `publicSignupEnabled`
+
+**Always use `signupAllowed` to gate signup UI — never `publicSignupEnabled` alone.**
+
+`signupAllowed` is derived as: `publicSignupEnabled && !adminInviteRequired`.
+
+A tenant can have `publicSignupEnabled: true` and still block public signup via `adminInviteRequired: true`. In that state, `signupAllowed` is `false` and the backend will reject any public signup attempt with `403`. If the frontend renders signup UI based on `publicSignupEnabled` alone, it will show a signup path that immediately fails.
+
+`publicSignupEnabled` is preserved in the response for informational purposes (e.g., "signup would be available if admin invite was not required").
 
 ### Important anti-enumeration behavior
 
@@ -221,6 +232,7 @@ this endpoint returns the same unavailable shape:
     name: '';
     isActive: false;
     publicSignupEnabled: false;
+    signupAllowed: false;
     allowedSso: [];
   }
 }
@@ -232,15 +244,16 @@ This endpoint must not expose tenant-sensitive settings such as:
 
 - `allowedEmailDomains`
 - `memberMfaRequired`
+- `adminInviteRequired` (exposed only through the derived `signupAllowed`)
 - other internal tenant policy details not needed for public bootstrap
 
 ### Why it exists
 
 This endpoint is intended for frontend bootstrap before authentication, for example:
 
-- whether signup should be shown
-- which SSO providers should be shown
-- whether the tenant is effectively available
+- whether signup should be shown (`signupAllowed`)
+- which SSO providers should be shown (`allowedSso`)
+- whether the tenant is effectively available (`isActive`)
 
 ---
 
@@ -317,7 +330,7 @@ The returned `nextAction` may require the frontend to continue into:
 - MFA setup
 - MFA verification
 
-The frontend should not assume login means “go directly to app shell.”
+The frontend should not assume login means "go directly to app shell."
 
 ---
 
@@ -325,7 +338,7 @@ The frontend should not assume login means “go directly to app shell.”
 
 ### Purpose
 
-Self-service registration for tenants where public signup is enabled.
+Self-service registration for tenants where public signup is enabled and not blocked by admin invite requirement.
 
 ### Auth requirement
 
@@ -356,6 +369,9 @@ Signup may legitimately return:
 - `nextAction: 'EMAIL_VERIFICATION_REQUIRED'`
 
 That is expected and should drive continuation UX.
+
+The backend checks both `publicSignupEnabled` and `adminInviteRequired` before allowing signup.
+Use `signupAllowed` from `GET /auth/config` to gate the signup UI on the frontend.
 
 ---
 
@@ -505,12 +521,27 @@ This endpoint is **not** gated by `requireEmailVerified`, because it is part of 
 
 ## 8. MFA endpoints
 
-All MFA endpoints currently require an authenticated session with:
+### Session guard summary
 
-- valid session
-- `emailVerified: true`
+All MFA endpoints require a valid authenticated session. The table below shows which additional guards are enforced:
 
-That gate is deliberate.
+| Endpoint                         | Session required | `emailVerified: true` required | `mfaVerified: true` required | Notes                                                                                                                 |
+| -------------------------------- | ---------------- | ------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/mfa/setup`           | ✅               | ✅                             | ❌                           | User must verify email before setting up MFA                                                                          |
+| `POST /auth/mfa/verify-setup`    | ✅               | ✅                             | ❌                           | User must verify email before completing MFA setup                                                                    |
+| `POST /auth/mfa/verify`          | ✅               | ✅                             | ❌                           | This IS the MFA completion step; mfaVerified is false on entry                                                        |
+| `POST /auth/mfa/recover`         | ✅               | ✅                             | ❌                           | This IS the MFA recovery step; mfaVerified is false on entry                                                          |
+| `POST /auth/logout`              | ✅               | ❌                             | ❌                           | Deliberately NOT gated — trapping unverified users from logging out creates a support burden with no security benefit |
+| `POST /auth/verify-email`        | ✅               | ❌                             | ❌                           | Deliberately NOT gated — this IS the verification flow                                                                |
+| `POST /auth/resend-verification` | ✅               | ❌                             | ❌                           | Deliberately NOT gated — part of the verification flow                                                                |
+
+### Why `emailVerified` is required for all MFA endpoints
+
+MFA setup and verification are post-signup operations that happen after a user has an authenticated session. If MFA endpoints were accessible without email verification, an attacker who obtained a session for an unverified email could configure MFA recovery codes that outlive any verification failure.
+
+The deliberate gate order is: verify email first, then set up MFA. This is enforced in the controller via `requireSession({ requireEmailVerified: true })`.
+
+---
 
 ## 8.1 `POST /auth/mfa/setup`
 
@@ -520,7 +551,7 @@ Start MFA setup for the authenticated user.
 
 ### Auth requirement
 
-Requires authenticated session and email-verified state.
+Requires authenticated session and `emailVerified: true`.
 
 ### Request body
 
@@ -552,7 +583,7 @@ Verify the initial MFA setup code and elevate the current session into MFA-verif
 
 ### Auth requirement
 
-Requires authenticated session and email-verified state.
+Requires authenticated session and `emailVerified: true`.
 
 ### Request body
 
@@ -588,7 +619,7 @@ Verify MFA for a session that still requires MFA completion.
 
 ### Auth requirement
 
-Requires authenticated session and email-verified state.
+Requires authenticated session and `emailVerified: true`.
 
 ### Request body
 
@@ -623,7 +654,7 @@ Recover access using a recovery code and elevate the current session into MFA-ve
 
 ### Auth requirement
 
-Requires authenticated session and email-verified state.
+Requires authenticated session and `emailVerified: true`.
 
 ### Request body
 
@@ -819,7 +850,7 @@ Endpoints requiring a session return `401` when the session is missing or invali
 
 ## 11.3 Anti-enumeration behaviors
 
-The following are intentionally privacy-preserving and should not be “simplified” casually:
+The following are intentionally privacy-preserving and should not be "simplified" casually:
 
 - `GET /auth/config` returns the same unavailable shape for unknown and inactive tenants
 - `POST /auth/forgot-password` always returns generic success
@@ -838,7 +869,7 @@ If you are building frontend auth/bootstrap behavior, these are the most importa
 Use it to determine:
 
 - tenant availability
-- whether signup is visible
+- whether signup is visible — use **`signupAllowed`**, not `publicSignupEnabled`
 - which SSO buttons to show
 
 ### Use `/auth/me` after a session exists

@@ -8,6 +8,9 @@
  * RULES:
  * - Use AppError as the transport primitive.
  * - Never include passwords, tokens, or hashes in meta.
+ * - Error message copy must match the Hubins provisioning spec exactly.
+ *   The spec (Hubins_User_Provisioning.pdf, Part 4) is the authoritative
+ *   source of truth for user-facing error copy.
  *
  * BRICK 11 UPDATE:
  * - Added public signup errors: signupDisabled, emailAlreadyMember,
@@ -16,6 +19,17 @@
  * PHASE 1B UPDATE:
  * - Added invitationExpired so runtime auth flows can keep expired invited-entry
  *   state distinct from valid invited-entry state.
+ *
+ * 9/10 HARDENING — spec copy parity:
+ * - accountSuspended: added "Contact support." suffix (spec: "Your account has
+ *   been suspended. Contact support.")
+ * - noAccess: added "Contact your admin." suffix (spec: "You don't have access
+ *   to this workspace. Contact your admin.")
+ * - ssoOnlyUser: changed to provider-specific messages. The spec says
+ *   "Please sign in with Google" or "Please sign in with Microsoft" depending
+ *   on the user's SSO provider. A single generic message is not spec-compliant.
+ *   The provider is passed as an optional parameter; the generic fallback is
+ *   preserved for callers that do not know the specific provider.
  */
 
 import { AppError, type AppErrorMeta } from '../../shared/http/errors';
@@ -41,23 +55,42 @@ export const AuthErrors = {
     return AppError.validationError('Email does not match the invite.', meta);
   },
 
-  /** User has SSO identity but no password — tried password login. */
-  ssoOnlyUser(meta?: AppErrorMeta) {
-    return AppError.conflict('Please sign in with your SSO provider (Google/Microsoft).', meta);
+  /**
+   * User has SSO identity but no password — tried password login.
+   *
+   * provider param: when known, produce the spec-compliant provider-specific
+   * message ("Please sign in with Google" / "Please sign in with Microsoft").
+   * Without a provider, fall back to the generic message.
+   */
+  ssoOnlyUser(provider?: 'google' | 'microsoft', meta?: AppErrorMeta) {
+    const message =
+      provider === 'google'
+        ? 'Please sign in with Google.'
+        : provider === 'microsoft'
+          ? 'Please sign in with Microsoft.'
+          : 'Please sign in with your SSO provider.';
+
+    return AppError.conflict(message, meta);
   },
 
-  /** Account suspended. */
+  /**
+   * Account suspended.
+   * Spec: "Your account has been suspended. Contact support."
+   */
   accountSuspended(meta?: AppErrorMeta) {
-    return AppError.forbidden('Your account has been suspended.', meta);
+    return AppError.forbidden('Your account has been suspended. Contact support.', meta);
   },
 
   inviteNotYetAccepted(meta?: AppErrorMeta) {
     return AppError.forbidden('Please accept your invite before signing in.', meta);
   },
 
-  /** No membership for this tenant. */
+  /**
+   * No membership for this tenant.
+   * Spec: "You don't have access to this workspace. Contact your admin."
+   */
   noAccess(meta?: AppErrorMeta) {
-    return AppError.forbidden("You don't have access to this workspace.", meta);
+    return AppError.forbidden("You don't have access to this workspace. Contact your admin.", meta);
   },
 
   /**
@@ -100,7 +133,7 @@ export const AuthErrors = {
   // Public Signup (Brick 11)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /** Tenant has public_signup_enabled = false. */
+  /** Tenant has public_signup_enabled = false or admin_invite_required = true. */
   signupDisabled(meta?: AppErrorMeta) {
     return AppError.forbidden('Sign up is disabled. You need an invitation to join.', meta);
   },

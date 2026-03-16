@@ -67,7 +67,7 @@ Today this repository concretely implements:
 - non-auth business modules beyond Auth + User Provisioning
 - later confidence/test hardening phases for the already-shipped auth/provisioning slice
 
-So this repo is not “the whole Hubins platform.”
+So this repo is not "the whole Hubins platform."
 It is the **foundation plus Auth + User Provisioning slice** that must be correct before the rest of Hubins expands.
 
 ---
@@ -298,27 +298,37 @@ This layer must not become a dumping ground for business logic.
 
 The frontend is a Next.js App Router application.
 
-### What is already established
+### What is currently implemented
 
-- root app shell
-- SSR fetch layer
-- browser fetch layer
-- topology smoke page
+The following are real and shipped as part of the Auth + User Provisioning slice:
+
+- root app shell and layout
+- SSR fetch layer (`ssr-api-client.ts`) with forwarded request context
+- browser fetch layer (`api-client.ts`) using same-origin `/api/*`
+- auth bootstrap (`bootstrap.server.ts`) calling `/auth/config` then `/auth/me`
+- route-state resolution (`route-state.ts`) driven entirely by backend `nextAction` truth
 - frontend engineering rules file
+- topology smoke page (`/topology-check`)
+- full auth/provisioning UI route surface — login, signup, register, forgot/reset password, email verification, MFA setup, MFA verify, SSO completion, invite acceptance
+- admin shell and invite management UI
+- logout flow
 
-### What the frontend is expected to become next
+### What the frontend preserves as law
 
-- auth bootstrap based on `/auth/me` and `/auth/config`
-- public/authenticated/continuation route handling
-- login/signup/invite/reset screens
-- admin shell entry points
-- tenant-aware UI behavior without client-side tenant guessing
+The frontend must maintain these topology rules:
 
-The frontend must preserve the same topology law as the backend:
-
-- same-origin browser calls
-- SSR direct backend calls only from server-side code
+- same-origin browser calls through `/api/*`
+- SSR calls backend directly through `INTERNAL_API_URL` with forwarded host/cookie headers
 - no direct browser-to-backend URL coupling
+- no client-side tenant identity derivation — tenant comes from the current host
+- route continuation is driven by backend `nextAction` — the frontend does not independently re-derive continuation logic
+
+### What is not yet implemented
+
+- broader member product modules beyond the authenticated landing surface
+- broader admin product modules beyond current invite management
+- non-auth business modules
+- broader product navigation across future modules
 
 ---
 
