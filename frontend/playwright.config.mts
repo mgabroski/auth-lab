@@ -9,7 +9,31 @@ export default defineConfig({
   expect: {
     timeout: 10_000,
   },
-  fullyParallel: true,
+  // WHY workers: 1:
+  //
+  // All three E2E tests share a single Next.js dev server on port 3100.
+  // Next.js dev mode is not designed for concurrent SSR load — running tests
+  // in parallel causes request context collisions in next/headers (cookies(),
+  // headers()) because AsyncLocalStorage context can bleed between concurrent
+  // requests in the dev server. The symptom is: a test's SSR page calls
+  // ssrFetch('/auth/me') but reads an empty cookie store because the incoming
+  // Cookie header from the browser request was associated with a different
+  // concurrent request's context. The affected request returns 401, the page
+  // redirects to /auth/login, and the test fails intermittently.
+  //
+  // The member login test is most affected because it has no continuation step
+  // (no MFA setup page, no verify-email page) — it navigates directly from
+  // login to /app, which is the tightest timing window.
+  //
+  // workers: 1 serializes tests so only one runs at a time. This eliminates
+  // the concurrency issue at the cost of slightly longer total test runtime
+  // (~45s vs ~22s). That is an acceptable tradeoff for a dev-mode E2E suite.
+  //
+  // In a production CI environment running against a real compiled Next.js
+  // server (next build && next start), fullyParallel: true would be safe
+  // because the production server handles concurrent requests correctly.
+  workers: 1,
+  fullyParallel: false,
   use: {
     baseURL: `http://acme.localhost:${frontendPort}`,
     trace: 'retain-on-failure',
@@ -25,7 +49,7 @@ export default defineConfig({
       command: 'node ./test/e2e/mock-auth-backend.mjs',
       port: backendPort,
       timeout: 15_000,
-      // Mock backend is cheap to start; safe to reuse locally.
+      // Mock backend is stateless-per-session and cheap to start.
       reuseExistingServer: !process.env.CI,
     },
     {
@@ -37,18 +61,10 @@ export default defineConfig({
       },
       port: frontendPort,
       timeout: 120_000,
-      // WHY false (not !process.env.CI):
-      //
-      // The Next.js dev server must always be started fresh by Playwright
-      // so that INTERNAL_API_URL is guaranteed to point to the mock backend
-      // on port 3101. If a stale server from a previous test run (or from
-      // `yarn dev` on this port) is reused, it may use a different
-      // INTERNAL_API_URL or none at all. That causes every browser-side
-      // API call routed through the /api/[...path] Route Handler to go to
-      // the wrong backend, silently failing all login/signup/auth flows.
-      //
-      // The Next.js startup time (typically 20-30s cold, <5s warm rebuild)
-      // is acceptable given the correctness guarantee.
+      // WHY false: the Next.js dev server must always start fresh so that
+      // INTERNAL_API_URL is guaranteed to point to the mock backend on port
+      // 3101. A stale server from a previous run may have a dead or different
+      // INTERNAL_API_URL, silently breaking all auth flow proxying.
       reuseExistingServer: false,
     },
   ],
