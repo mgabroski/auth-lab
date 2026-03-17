@@ -1,26 +1,27 @@
 /**
  * backend/src/shared/db/seed/dev-seed.ts
  *
- * DEV-ONLY seed bootstrap.
+ * DEV-ONLY canonical auth seed bootstrap.
  *
- * Creates:
- * - a tenant (if missing)
- * - an initial admin invite (if missing)
+ * Creates or ensures:
+ * - a canonical admin-bootstrap tenant with public signup disabled
+ * - an initial admin invite for onboarding proof
+ * - a canonical public-signup-enabled tenant
+ * - a canonical member login persona with password auth
  *
  * Idempotent: safe to run on every start.
  *
  * IMPORTANT:
  * - Stores only token_hash in DB
- * - Prints raw token ONLY to logs (dev convenience)
- *
- * Invite status must match DB CHECK constraint:
- *   PENDING | ACCEPTED | CANCELLED | EXPIRED
+ * - Prints raw invite token ONLY to logs (local dev convenience)
+ * - Never runs in production
  */
 
 import { randomUUID } from 'node:crypto';
 
 import type { DbExecutor } from '../db';
 import type { TokenHasher } from '../../security/token-hasher';
+import type { PasswordHasher } from '../../security/password-hasher';
 import { logger } from '../../logger/logger';
 
 type DevSeedOptions = {
@@ -30,69 +31,82 @@ type DevSeedOptions = {
   inviteTtlHours: number;
 };
 
+type TenantSeedShape = {
+  key: string;
+  name: string;
+  publicSignupEnabled: boolean;
+  memberMfaRequired: boolean;
+};
+
+type MemberSeedShape = {
+  tenantId: string;
+  tenantKey: string;
+  email: string;
+  name: string;
+  password: string;
+};
+
 function addHours(date: Date, hours: number): Date {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
 
-export async function runDevSeed(opts: {
-  db: DbExecutor;
-  tokenHasher: TokenHasher;
-  options: DevSeedOptions;
-}): Promise<void> {
-  const { db, tokenHasher, options } = opts;
-
-  const flow = 'seed.dev';
-
-  // 1) Ensure tenant exists
-  const existingTenant = await db
+async function ensureTenant(
+  db: DbExecutor,
+  tenant: TenantSeedShape,
+): Promise<{ id: string; key: string }> {
+  const existing = await db
     .selectFrom('tenants')
     .select(['id', 'key', 'name'])
-    .where('key', '=', options.tenantKey)
+    .where('key', '=', tenant.key)
     .executeTakeFirst();
 
-  let tenantId: string;
-
-  if (!existingTenant) {
-    const inserted = await db
-      .insertInto('tenants')
-      .values({
-        key: options.tenantKey,
-        name: options.tenantName,
-        is_active: true,
-
-        // sensible defaults for dev
-        public_signup_enabled: false,
-        member_mfa_required: false,
-
-        // Brick 10: enable both providers in dev/test tenants used by our suite
-        allowed_sso: ['google', 'microsoft'],
-
-        // allowed_email_domains has a DB default ('[]'::jsonb) — don't override
-      })
-      .returning(['id'])
-      .executeTakeFirstOrThrow();
-
-    tenantId = inserted.id;
-
-    logger.info('seed.tenant.created', {
-      flow,
-      tenantKey: options.tenantKey,
-      tenantId,
-      tenantName: options.tenantName,
-    });
-  } else {
-    tenantId = existingTenant.id;
-
+  if (existing) {
     logger.info('seed.tenant.exists', {
-      flow,
-      tenantKey: options.tenantKey,
-      tenantId,
-      tenantName: existingTenant.name,
+      flow: 'seed.dev',
+      tenantKey: tenant.key,
+      tenantId: existing.id,
+      tenantName: existing.name,
+      publicSignupEnabled: tenant.publicSignupEnabled,
     });
+
+    return { id: existing.id, key: existing.key };
   }
 
-  // 2) Ensure initial admin invite exists
-  const email = options.adminEmail.toLowerCase();
+  const inserted = await db
+    .insertInto('tenants')
+    .values({
+      key: tenant.key,
+      name: tenant.name,
+      is_active: true,
+      public_signup_enabled: tenant.publicSignupEnabled,
+      member_mfa_required: tenant.memberMfaRequired,
+      allowed_sso: ['google', 'microsoft'],
+    })
+    .returning(['id', 'key'])
+    .executeTakeFirstOrThrow();
+
+  logger.info('seed.tenant.created', {
+    flow: 'seed.dev',
+    tenantKey: tenant.key,
+    tenantId: inserted.id,
+    tenantName: tenant.name,
+    publicSignupEnabled: tenant.publicSignupEnabled,
+  });
+
+  return inserted;
+}
+
+async function ensureAdminInvite(opts: {
+  db: DbExecutor;
+  tokenHasher: TokenHasher;
+  tenantId: string;
+  tenantKey: string;
+  adminEmail: string;
+  inviteTtlHours: number;
+}): Promise<void> {
+  const { db, tokenHasher, tenantId, tenantKey, adminEmail, inviteTtlHours } = opts;
+  const flow = 'seed.dev';
+  const email = adminEmail.toLowerCase();
 
   const existingInvite = await db
     .selectFrom('invites')
@@ -105,7 +119,7 @@ export async function runDevSeed(opts: {
   if (existingInvite) {
     logger.info('seed.invite.exists', {
       flow,
-      tenantKey: options.tenantKey,
+      tenantKey,
       tenantId,
       inviteId: existingInvite.id,
       email: existingInvite.email,
@@ -118,9 +132,7 @@ export async function runDevSeed(opts: {
 
   const rawToken = randomUUID().replace(/-/g, '');
   const tokenHash = tokenHasher.hash(rawToken);
-
-  const now = new Date();
-  const expiresAt = addHours(now, options.inviteTtlHours);
+  const expiresAt = addHours(new Date(), inviteTtlHours);
 
   const created = await db
     .insertInto('invites')
@@ -128,10 +140,7 @@ export async function runDevSeed(opts: {
       tenant_id: tenantId,
       email,
       role: 'ADMIN',
-
-      // IMPORTANT: must match invites_status_check constraint
       status: 'PENDING',
-
       token_hash: tokenHash,
       expires_at: expiresAt,
       created_by_user_id: null,
@@ -142,15 +151,184 @@ export async function runDevSeed(opts: {
 
   logger.info('seed.invite.created', {
     flow,
-    tenantKey: options.tenantKey,
+    tenantKey,
     tenantId,
     inviteId: created.id,
     email,
     role: 'ADMIN',
     status: 'PENDING',
     expiresAt,
-
-    // DEV ONLY (do NOT do this in prod)
     rawInviteToken: rawToken,
+  });
+}
+
+async function ensureMemberPersona(opts: {
+  db: DbExecutor;
+  passwordHasher: PasswordHasher;
+  member: MemberSeedShape;
+}): Promise<void> {
+  const { db, passwordHasher, member } = opts;
+  const flow = 'seed.dev';
+  const email = member.email.toLowerCase();
+
+  let user = await db
+    .selectFrom('users')
+    .select(['id', 'email', 'name', 'email_verified'])
+    .where('email', '=', email)
+    .executeTakeFirst();
+
+  if (!user) {
+    user = await db
+      .insertInto('users')
+      .values({
+        email,
+        name: member.name,
+        email_verified: true,
+      })
+      .returning(['id', 'email', 'name', 'email_verified'])
+      .executeTakeFirstOrThrow();
+
+    logger.info('seed.user.created', {
+      flow,
+      tenantKey: member.tenantKey,
+      userId: user.id,
+      email,
+      name: member.name,
+    });
+  } else {
+    logger.info('seed.user.exists', {
+      flow,
+      tenantKey: member.tenantKey,
+      userId: user.id,
+      email,
+      name: user.name,
+      emailVerified: user.email_verified,
+    });
+  }
+
+  const identity = await db
+    .selectFrom('auth_identities')
+    .select(['id'])
+    .where('user_id', '=', user.id)
+    .where('provider', '=', 'password')
+    .executeTakeFirst();
+
+  if (!identity) {
+    const passwordHash = await passwordHasher.hash(member.password);
+
+    await db
+      .insertInto('auth_identities')
+      .values({
+        user_id: user.id,
+        provider: 'password',
+        provider_subject: null,
+        password_hash: passwordHash,
+      })
+      .executeTakeFirstOrThrow();
+
+    logger.info('seed.password_identity.created', {
+      flow,
+      tenantKey: member.tenantKey,
+      userId: user.id,
+      email,
+    });
+  } else {
+    logger.info('seed.password_identity.exists', {
+      flow,
+      tenantKey: member.tenantKey,
+      userId: user.id,
+      email,
+    });
+  }
+
+  const existingMembership = await db
+    .selectFrom('memberships')
+    .select(['id', 'status', 'role'])
+    .where('tenant_id', '=', member.tenantId)
+    .where('user_id', '=', user.id)
+    .executeTakeFirst();
+
+  if (!existingMembership) {
+    const acceptedAt = new Date();
+
+    const createdMembership = await db
+      .insertInto('memberships')
+      .values({
+        tenant_id: member.tenantId,
+        user_id: user.id,
+        role: 'MEMBER',
+        status: 'ACTIVE',
+        invited_at: acceptedAt,
+        accepted_at: acceptedAt,
+        suspended_at: null,
+      })
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
+
+    logger.info('seed.membership.created', {
+      flow,
+      tenantKey: member.tenantKey,
+      membershipId: createdMembership.id,
+      userId: user.id,
+      email,
+      role: 'MEMBER',
+      status: 'ACTIVE',
+    });
+
+    return;
+  }
+
+  logger.info('seed.membership.exists', {
+    flow,
+    tenantKey: member.tenantKey,
+    membershipId: existingMembership.id,
+    userId: user.id,
+    email,
+    role: existingMembership.role,
+    status: existingMembership.status,
+  });
+}
+
+export async function runDevSeed(opts: {
+  db: DbExecutor;
+  tokenHasher: TokenHasher;
+  passwordHasher: PasswordHasher;
+  options: DevSeedOptions;
+}): Promise<void> {
+  const { db, tokenHasher, passwordHasher, options } = opts;
+
+  const bootstrapTenant = await ensureTenant(db, {
+    key: options.tenantKey,
+    name: options.tenantName,
+    publicSignupEnabled: false,
+    memberMfaRequired: false,
+  });
+
+  await ensureAdminInvite({
+    db,
+    tokenHasher,
+    tenantId: bootstrapTenant.id,
+    tenantKey: bootstrapTenant.key,
+    adminEmail: options.adminEmail,
+    inviteTtlHours: options.inviteTtlHours,
+  });
+
+  const publicSignupTenant = await ensureTenant(db, {
+    key: 'goodwill-open',
+    name: 'GoodWill Open Signup',
+    publicSignupEnabled: true,
+    memberMfaRequired: false,
+  });
+
+  await ensureMemberPersona({
+    db,
+    passwordHasher,
+    member: {
+      tenantId: publicSignupTenant.id,
+      tenantKey: publicSignupTenant.key,
+      email: 'member@example.com',
+      name: 'Seeded Member',
+      password: 'Password123!',
+    },
   });
 }

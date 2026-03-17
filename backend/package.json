@@ -10,7 +10,8 @@
     "db:types": "tsx src/shared/db/codegen.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
-    "test:watch": "vitest --config vitest.config.ts"
+    "test:watch": "vitest --config vitest.config.ts",
+    "db:seed:dev": "tsx src/shared/db/seed/run-dev-seed.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.42.0",

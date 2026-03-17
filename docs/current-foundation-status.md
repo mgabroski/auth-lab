@@ -25,6 +25,7 @@ Today the repo contains all of the following as real implemented surfaces:
 - the backend Auth + User Provisioning module
 - the frontend Auth + User Provisioning route and UI surface for the current module scope
 - the current admin invite-management surface
+- a repeatable local auth test environment contract with committed env examples and a canonical dev seed entry point
 
 That does **not** mean the broader Hubins product UI is finished.
 It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
@@ -44,6 +45,8 @@ The following are real and load-bearing:
 - Postgres + Redis integration
 - host-run and full-stack local workflows
 - proxy conformance tooling for topology validation
+- committed local env templates for backend/frontend host-run mode
+- canonical local dev seed fixtures for auth/provisioning testing
 
 ### 2.2 Topology and session foundation
 
@@ -75,6 +78,7 @@ The backend currently implements:
 - admin invite create/list/resend/cancel
 - admin audit event listing
 - outbox-backed email delivery for auth/provisioning flows
+- canonical local dev seed fixtures through `yarn workspace @auth-lab/backend db:seed:dev`
 
 ### 2.4 Frontend Auth + User Provisioning surface
 
@@ -159,17 +163,20 @@ What remains outside this completed module scope:
 
 The repo's documentation home is **scope-split, not single-folder-only**.
 
-### 4.1 Repo-wide truth and decision documents
+### 4.1 Repo-wide truth and operational documents
 
 These live at repo root and under `/docs`:
 
 - `README.md`
 - `ARCHITECTURE.md`
 - `docs/current-foundation-status.md`
+- `docs/developer-guide.md`
 - `docs/decision-log.md`
 - `docs/implementation-session-charter.md`
+- `docs/security-model.md`
+- `docs/ops/runbooks.md`
 
-These documents define repo-wide truth, architecture framing, and session discipline.
+These documents define repo-wide truth, architecture framing, operational setup/reset guidance, and session discipline.
 
 ### 4.2 Backend law and contract documents
 
@@ -196,7 +203,7 @@ Do **not** invent a second parallel home for the same truth.
 
 When updating docs:
 
-- update repo-wide truth in root `/docs`
+- update repo-wide truth and operational setup/reset guidance in root `/docs`
 - update backend-specific law/contracts in `backend/docs`
 - update frontend-specific usage/law where the frontend already keeps it
 
@@ -210,11 +217,12 @@ For the current repo phase, the working truth chain is:
 
 1. `Hubins User Provisioning.pdf` for locked business behavior and vocabulary
 2. `hubins-topology-plan.docx` for locked topology and routing/session constraints
-3. repo-root truth documents (`README.md`, `ARCHITECTURE.md`, this file, `docs/decision-log.md`)
-4. repo engineering-law documents actually present in the codebase
-5. `backend/docs/api/*.md`
-6. adopted scope-specific guides such as `frontend/README.md`
-7. derived execution prompts that remain aligned to the above
+3. repo-root truth documents (`README.md`, `ARCHITECTURE.md`, this file, `docs/decision-log.md`, `docs/security-model.md`)
+4. `docs/developer-guide.md` for truthful local environment, reset, seed, persona, and test-running guidance
+5. repo engineering-law documents actually present in the codebase
+6. `backend/docs/api/*.md`
+7. adopted scope-specific guides such as `frontend/README.md`
+8. derived execution prompts that remain aligned to the above
 
 If a lower document disagrees with a higher one, the lower document must be corrected or retired.
 
@@ -261,104 +269,22 @@ What exists today:
 
 What does **not** exist today:
 
-- a dedicated admin/product UI for outbox health
-- a first-class dead-letter review dashboard
-- documented alerting/paging automation tied to outbox dead-letter volume or stuck retries
+- admin-facing outbox viewer UI
+- admin-facing dead-letter retry controls
+- non-technical operator tooling for outbox inspection
 
-Treat this as a truthful classification of current visibility, not as a hidden defect in shipped auth behavior.
-
-### 6.4 Phase 4 tracked-debt closures
-
-Phase 4 retired two intentionally temporary compatibility exports that no longer had live callers in the production code path:
-
-- backend `SESSION_COOKIE_NAME` compatibility export removed in favor of `getSessionCookieName(isProduction)`
-- backend `MfaNextAction` alias removed in favor of the canonical `AuthNextAction` contract
-
-These were low-risk cleanup items only. They do **not** change shipped auth behavior or the external HTTP/API contract.
-
-### 6.5 `allowed_email_domains` JSONB tradeoff
-
-The repo currently stores tenant `allowed_email_domains` as a JSONB array.
-
-#### Why this is acceptable today
-
-It is acceptable in the current phase because:
-
-- the policy input is small and tenant-scoped
-- current access checks only need tenant-local reads
-- it keeps the Phase 1 schema simple while the domain-management surface is still small
-
-#### What this makes harder tomorrow
-
-This choice makes future work harder if the domain-management surface grows, especially:
-
-- querying tenants by domain
-- indexing/reporting across domains
-- building richer tenant-admin domain management workflows
-- attaching first-class metadata or audit semantics to individual allowed domains
-
-#### Named trigger for re-evaluation
-
-Re-evaluate this immediately when the following trigger is hit:
-
-**`DOMAIN_POLICY_NORMALIZATION_TRIGGER`**
-
-This trigger is considered hit when **any** of the following become true:
-
-- tenant admins need a real CRUD/API surface for allowed domains
-- the system needs cross-tenant querying/reporting by email domain
-- JSONB lookups become a measurable correctness or performance constraint
-
-When that trigger is hit, promote allowed domains from JSONB storage to a first-class relational model.
-
-### 6.6 Phase 0 auth-closure locks now in force
-
-Phase 0 closed the roadmap's remaining auth-closure decision gaps before proof testing begins.
-
-The following are now locked and must be treated as current repo truth:
-
-- `LOCK-1` is captured in `docs/decision-log.md`: the first fully onboarded admin will eventually receive a one-time `FIRST_TIME_SETUP` continuation to `/admin/settings`; this is a future implementation lock, not a currently shipped auth gate
-- `LOCK-2` is captured in `docs/decision-log.md`: the MFA TOTP QR label policy is `Hubins` + verified user email, not `userId`
-- `LOCK-3` is captured in `docs/decision-log.md`: bootstrap/invite delivery is environment-specific, with stdout token convenience allowed only in local development
-- `LOCK-4` is captured in `docs/decision-log.md`: expired invite is invalid for SSO activation when it is the user's only tenant-entry basis
-- `LOCK-5` is captured in `docs/decision-log.md`: SSO does not bypass app-level MFA; it must continue into MFA setup or MFA verification when required
-
-### 6.7 MFA proof-testing hygiene after the QR-label correction
-
-The QR-label correction in Phase 0 changes the expected authenticator-app entry label from `userId` to verified email.
-
-Because of that, existing local/dev environments with MFA seeds generated before the correction may contain stale authenticator entries that do **not** represent the current intended behavior.
-
-Treat those stale seeds as invalid for real MFA proof.
-
-Before Phase 5 real MFA testing, reset or reseed any affected dev/test persona so that:
-
-- the authenticator enrollment is generated after the label correction
-- the visible entry shows issuer `Hubins`
-- the visible label shows the verified user email
-
-### 6.8 Closed policy clarification for expired-invite SSO behavior
-
-Any remaining code comment, test description, or temporary note that treats expired-invite-via-SSO activation as an unresolved human decision is stale.
-
-Current repo truth is:
-
-- expired invite does **not** become valid merely because the user authenticated through Google or Microsoft
-- admin resend / recreate is the recovery path
-- users who already have `ACTIVE` membership are unaffected by this rule
+That remains intentionally outside the current module scope.
 
 ---
 
-## 7. Historical source hygiene
+## 7. Truthful current environment statement
 
-The uploaded historical source `hubins-auth-lab-guide.md` exists and was reviewed, but it is **not** part of the repo and is stale in at least one material way (for example, it still describes migration `0004_users_add_name.ts` as needing implementation even though the repo already contains the implemented migration).
+As of this repo state:
 
-Treat it as historical context only, not as current repo truth.
+- local host-run mode is the primary daily development path
+- local full-stack Docker mode is the topology-validation path
+- the repo now contains committed env examples for host-run setup
+- the repo now contains a canonical dev seed command and canonical local auth fixtures
+- shared staging/QA and production expectations are documented, but their full operator/bootstrap proof belongs to later roadmap phases
 
----
-
-## 8. Truthful one-paragraph summary
-
-A truthful summary of the repo today is:
-
-> Hubins Auth-Lab now ships the locked topology, the backend Auth + User Provisioning surface, and the frontend Auth + User Provisioning route/UI surface for the current module scope; broader product modules and later confidence hardening remain future work.
+Any document claiming shared staging/QA or production bootstrap is already fully proven in this repo is overstating the current reality.

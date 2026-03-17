@@ -41,6 +41,7 @@ export async function buildApp(config: AppConfig, overrides: BuildDepsOverrides 
       await runDevSeed({
         db: deps.db,
         tokenHasher: deps.tokenHasher,
+        passwordHasher: deps.passwordHasher,
         options: {
           tenantKey: config.seed.tenantKey,
           tenantName: config.seed.tenantName,

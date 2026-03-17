@@ -32,7 +32,8 @@
     "test:watch": "yarn test:watch:backend",
     "test:watch:backend": "yarn workspace @auth-lab/backend test:watch",
     "verify": "yarn fmt:check && yarn lint && yarn typecheck && yarn build:frontend && yarn test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "seed:dev": "yarn workspace @auth-lab/backend db:seed:dev"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
