@@ -13,6 +13,7 @@ import type { InviteRole } from '../../src/modules/invites/invite.types';
  * - E2E tests must verify real side-effects in Postgres:
  *   - invite accepted
  *   - audit event appended
+ *   - terminal invite states stay invalid for accept attempts
  *
  * RULES:
  * - No debug endpoints.
@@ -67,6 +68,7 @@ async function createInvite(opts: {
   status?: 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
   expiresAt: Date;
   tokenRaw: string;
+  usedAt?: Date | null;
 }): Promise<{ id: string; tenantId: string; status: string; tokenHash: string }> {
   const tokenHash = opts.tokenHasher.hash(opts.tokenRaw);
 
@@ -79,7 +81,7 @@ async function createInvite(opts: {
       status: opts.status ?? 'PENDING',
       token_hash: tokenHash,
       expires_at: opts.expiresAt,
-      used_at: null,
+      used_at: opts.usedAt ?? null,
       created_by_user_id: null,
     })
     .returning(['id', 'tenant_id', 'status', 'token_hash'])
@@ -213,6 +215,70 @@ describe('POST /auth/invites/accept', () => {
 
       expect(inviteRow.used_at).toBeNull();
       expect(inviteRow.status).toBe('PENDING');
+
+      const auditRows = await db
+        .selectFrom('audit_events')
+        .select(['id'])
+        .where('tenant_id', '=', tenant.id)
+        .where('action', '=', 'invite.accepted')
+        .execute();
+
+      expect(auditRows).toHaveLength(0);
+    } finally {
+      await close();
+    }
+  });
+
+  it('rejects a cancelled invite and keeps it in its terminal state', async () => {
+    const { app, deps, close } = await buildTestApp();
+
+    const { db, tokenHasher } = deps;
+
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`;
+    const email = `cancelled-${randomUUID().slice(0, 8)}@example.com`;
+    const cancelledAt = new Date(Date.now() - 30 * 1000);
+
+    try {
+      const tenant = await createTenant({
+        db,
+        tenantKey,
+        tenantName: `Tenant ${tenantKey}`,
+        isActive: true,
+      });
+
+      const invite = await createInvite({
+        db,
+        tokenHasher,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        status: 'CANCELLED',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        tokenRaw,
+        usedAt: cancelledAt,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/invites/accept',
+        headers: { host },
+        payload: { token: tokenRaw },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toContain('Invite is not valid');
+
+      const inviteRow = await db
+        .selectFrom('invites')
+        .select(['id', 'status', 'used_at'])
+        .where('id', '=', invite.id)
+        .executeTakeFirstOrThrow();
+
+      expect(inviteRow.status).toBe('CANCELLED');
+      expect(inviteRow.used_at?.getTime()).toBe(cancelledAt.getTime());
 
       const auditRows = await db
         .selectFrom('audit_events')

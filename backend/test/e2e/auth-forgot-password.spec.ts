@@ -257,7 +257,6 @@ describe('POST /auth/forgot-password', () => {
         .selectFrom('audit_events')
         .selectAll()
         .where('action', '=', 'auth.password_reset.requested')
-        .where('created_at', '>=', requestStart)
         .execute();
 
       const matching = audits.filter(

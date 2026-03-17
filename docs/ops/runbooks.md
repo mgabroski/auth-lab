@@ -100,7 +100,7 @@ This section covers invite, verify-email, reset-password, and other outbox-backe
 
 - **Local:** SMTP should point at Mailpit
 - **Staging:** SMTP should point at a sandbox provider, not a real production mailbox provider
-- **Production:** out of scope for this phase and should follow a separate controlled rollout
+- **Production:** use the approved provider/configuration for controlled rollout only
 
 ---
 
@@ -291,6 +291,196 @@ Check, in order:
 
 ---
 
+## Phase 3 tenant bootstrap and invite onboarding proof
+
+These procedures are the operational source of truth for proving the invite bootstrap chain end to end.
+
+### A. Local bootstrap proof (Mailpit + real browser)
+
+#### Goal
+
+Prove the full bootstrap path works in local development through:
+
+- invite creation
+- invite delivery
+- browser navigation to the invite link
+- invite acceptance
+- invite-driven registration
+- authenticated session creation
+- continuation into MFA setup for the first admin bootstrap path
+
+#### Preconditions
+
+- Postgres, Redis, backend, and frontend are running
+- backend outbox worker is running
+- Mailpit is reachable at `http://localhost:8025`
+- local SMTP points at Mailpit
+- tenant hostnames are used (for example `goodwill-ca.localhost:3000`)
+
+#### Local bootstrap proof checklist
+
+1. Reset to a clean state
+
+```bash
+docker compose -f infra/docker-compose.yml down -v
+docker compose -f infra/docker-compose.yml up -d --build
+```
+
+2. Confirm Mailpit is empty before the proof starts
+   - open `http://localhost:8025`
+   - delete any old messages if needed
+
+3. Start the stack or confirm it is already healthy
+4. Confirm the bootstrap invite email arrives for `system_admin@example.com`
+5. Open the invite link from Mailpit in a real browser tab
+6. Confirm `/accept-invite?token=...` loads on the tenant host
+7. Allow the page to submit the real `POST /auth/invites/accept` request
+8. Confirm the flow continues to `/auth/register?token=...`
+9. Complete registration using the invited email address
+10. Submit the form and confirm the backend creates the authenticated session
+11. Confirm the browser lands on `/auth/mfa/setup`
+12. Confirm the authenticated session is present and MFA is not yet verified
+
+#### What counts as a pass
+
+All of the following must be true:
+
+- the invite came from the outbox + SMTP path, not a copied raw token
+- the browser used the email link directly
+- invite acceptance succeeded on the tenant host
+- registration succeeded with the accepted invite token
+- the backend set the session cookie
+- `/auth/me` truth for that new admin session resolves to `MFA_SETUP_REQUIRED`
+- the user reaches the MFA setup entry point successfully
+
+#### If the proof fails mid-flow
+
+Check, in order:
+
+1. Was the invite email actually the newest message for the correct tenant?
+2. Did the invite link host match the target tenant host?
+3. Did `POST /auth/invites/accept` return 200 or a terminal-state 409?
+4. Did `POST /auth/register` return 201 and set a session cookie?
+5. Does `GET /auth/me` on the same tenant host show the expected nextAction?
+6. Are backend logs showing a tenant mismatch, outbox failure, or session creation failure?
+
+---
+
+### B. Shared QA / staging bootstrap proof
+
+#### Goal
+
+Prove that a shared environment can bootstrap a tenant through the real operator path, with real SMTP sandbox delivery and no raw token logging.
+
+#### Rule
+
+In shared QA/staging, the operator flow must **not** depend on raw invite tokens appearing in logs.
+The only accepted delivery contract is:
+
+1. operator runs explicit tenant bootstrap command
+2. command queues the bootstrap invite into the outbox
+3. running backend worker delivers the invite via SMTP
+4. operator/tester uses the email link in a real browser
+
+#### Bootstrap command
+
+Run the explicit backend command from the repo root (or the backend workspace) using the target environment's real config/secrets:
+
+```bash
+yarn bootstrap:tenant --tenant-key <tenant-key> --tenant-name "<tenant-name>" --admin-email <admin-email> --invite-ttl-hours 168
+```
+
+Equivalent backend-workspace form:
+
+```bash
+yarn workspace @auth-lab/backend db:bootstrap:tenant --tenant-key <tenant-key> --tenant-name "<tenant-name>" --admin-email <admin-email> --invite-ttl-hours 168
+```
+
+#### Shared QA / staging checklist
+
+1. Confirm backend is already running with the outbox worker active
+2. Confirm SMTP points at the approved sandbox provider for that environment
+3. Run the explicit bootstrap command for the target tenant/admin email
+4. Confirm a new `invite.created` outbox row exists for that tenant/email
+5. Confirm the invite email arrives in the sandbox inbox
+6. Open the invite link in a real browser on the target environment host
+7. Complete invite acceptance
+8. Continue into invite registration
+9. Complete registration
+10. Confirm authenticated session creation
+11. Confirm MFA setup entry point is reached for the new admin path
+
+#### What counts as a pass
+
+All of the following must be true:
+
+- the bootstrap command completed without emitting a raw invite token
+- the invite was delivered through the real outbox + SMTP path
+- the browser onboarding chain completed on the real environment host
+- the backend created the session normally
+- the post-registration nextAction was `MFA_SETUP_REQUIRED` for the new admin bootstrap user
+
+---
+
+### C. Production-style operator bootstrap rule
+
+Production bootstrap remains an operator flow until a later self-serve onboarding model exists.
+
+That means:
+
+- do **not** enable automatic startup seeding as the production contract
+- use the explicit bootstrap command with approved environment config
+- allow the normal outbox worker to deliver the invite email
+- never log or copy raw invite tokens as the operator mechanism
+- follow the same browser validation pattern as staging, using the production hostname and approved mail delivery setup
+
+---
+
+## Invite lifecycle behaviors during bootstrap
+
+These are the expected operator-visible outcomes for terminal invite states.
+
+### Invite replay / already accepted
+
+**Symptom:** the same invite link is opened again after successful acceptance.
+
+**Expected behavior:**
+
+- `POST /auth/invites/accept` returns `409`
+- backend message is `Invite already accepted`
+- UI should guide the user toward continuing registration (same token) or signing in, depending on where they are in the onboarding chain
+
+### Invite expiry
+
+**Symptom:** the invite link is opened after its expiry window.
+
+**Expected behavior:**
+
+- `POST /auth/invites/accept` returns `409`
+- backend message indicates the invite expired
+- operator/admin must resend or recreate the invite
+
+### Invite cancellation / revocation
+
+**Symptom:** an admin cancelled the invite before it was used.
+
+**Expected behavior:**
+
+- `POST /auth/invites/accept` returns `409`
+- backend message indicates the invite is no longer valid
+- operator/admin must resend or recreate the invite
+
+### Operator response rule
+
+Do **not** attempt to mutate database rows manually to rescue a terminal invite.
+
+For replay/expired/cancelled states, use the supported admin/operator path:
+
+- resend invite when available
+- otherwise create a fresh invite/tenant bootstrap action
+
+---
+
 ## SMTP classification investigation guide
 
 ### Symptom: mail stays pending/retries forever
@@ -367,6 +557,7 @@ When investigating auth/email incidents, prioritize logs that answer these quest
 4. Did the poller attempt delivery?
 5. What exact SMTP/provider response came back?
 6. How was the failure classified?
+7. Was the bootstrap action local-dev convenience mode or operator mode?
 
 If logs do not make those questions answerable, capture that gap and improve observability after the incident.
 
@@ -381,6 +572,7 @@ Escalate when:
 - SMTP classification appears wrong for a real provider response
 - staging sandbox proof cannot be completed due to networking or secret-management blockers
 - the system can only be made to work by violating the locked topology
+- operator bootstrap requires raw token access to proceed
 
 ---
 
@@ -394,5 +586,6 @@ During incidents or proof work:
 - do not move tenant truth into the frontend
 - do not replace host-derived tenant identity with manual toggles
 - do not swap sandbox/local delivery for production delivery shortcuts
+- do not treat raw invite token logging as the staging or production bootstrap contract
 
 Repair within the locked system model.

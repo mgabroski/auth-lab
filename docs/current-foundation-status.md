@@ -25,7 +25,9 @@ Today the repo contains all of the following as real implemented surfaces:
 - the backend Auth + User Provisioning module
 - the frontend Auth + User Provisioning route and UI surface for the current module scope
 - the current admin invite-management surface
-- a repeatable local auth test environment contract with committed env examples, Mailpit-based local email capture, and a canonical dev seed entry point
+- a repeatable local auth test environment contract with committed Mailpit-based local email capture and a canonical dev seed entry point
+- an explicit operator-safe tenant bootstrap command that queues the first admin invite through the real outbox + SMTP path without raw token logging
+- a documented manual bootstrap proof runbook for invite onboarding through session creation and MFA continuation
 
 That does **not** mean the broader Hubins product UI is finished.
 It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
@@ -45,7 +47,6 @@ The following are real and load-bearing:
 - host-run development path using local backend + local frontend + infrastructure services
 - Postgres and Redis infrastructure
 - Mailpit local email capture for non-production-safe email proof
-- committed backend and frontend `.env.example` files for host-run setup
 
 ### 2.2 Locked topology and request model
 
@@ -74,6 +75,8 @@ The backend currently implements the Auth + User Provisioning module foundation,
 - SSO initiation/callback surfaces currently present for Google and Microsoft under the existing locked topology
 - outbox-backed email sending through the backend SMTP adapter
 - SMTP classification behavior for retryable vs permanent provider failures
+- a local dev seed that prepares bootstrap invite proof fixtures
+- an explicit tenant-bootstrap CLI for shared QA/staging/production-style operator bootstrap
 
 ### 2.4 Frontend auth/provisioning implementation
 
@@ -81,6 +84,8 @@ The frontend currently contains the real UI surface for the implemented Auth + U
 
 - public auth entry routes
 - continuation/bootstrap handling
+- invite-email landing at `/accept-invite`
+- invite-driven registration at `/auth/register`
 - role-aware authenticated landing behavior
 - current invite-management/admin UI surface already shipped in prior phases
 - logout behavior wired to backend-owned session truth
@@ -96,6 +101,16 @@ The repository now supports a repeatable local non-production email proof contra
 - invite / verify-email / reset-password flows can be visually verified through Mailpit
 - tenant-based link construction can be verified using local hostnames
 
+### 2.6 Current operator bootstrap contract
+
+The repository now supports an explicit operator bootstrap flow for non-local environments:
+
+- tenant bootstrap is an explicit command, not an automatic production startup side effect
+- the bootstrap command creates or ensures the target tenant and a pending ADMIN invite only
+- the bootstrap invite is queued into the outbox and delivered by the normal SMTP worker path
+- raw invite tokens are not logged in operator mode
+- the exact operator/browser validation sequence lives in `docs/ops/runbooks.md`
+
 ---
 
 ## 3. What Phase 2 added
@@ -105,7 +120,6 @@ Phase 2 added proof-oriented email delivery infrastructure and documentation, no
 Specifically it added:
 
 - Mailpit wiring in infra compose files
-- committed backend/frontend environment examples
 - canonical seed-driven invite email proof support
 - local proof instructions for invite, verify-email, and password-reset mail arrival
 - staging sandbox SMTP proof guidance in `docs/ops/runbooks.md`
@@ -123,9 +137,31 @@ Phase 2 did **not** change:
 
 ---
 
-## 4. Canonical local dev/test assumptions
+## 4. What Phase 3 added
 
-### 4.1 Hostnames matter
+Phase 3 added bootstrap proof closure and operator-safe bootstrap behavior.
+
+Specifically it added:
+
+- a shared tenant-bootstrap helper separating local-dev convenience seeding from operator bootstrap
+- a backend bootstrap command for staging/QA/production-style operator use
+- local proof coverage for seed invite -> accept -> register -> authenticated session -> MFA continuation
+- documented bootstrap/operator procedures in `docs/ops/runbooks.md`
+- explicit runbook coverage for invite replay, expiry, and cancellation handling during onboarding
+
+Phase 3 did **not** change:
+
+- first-admin `/admin/settings` routing
+- public signup proof scope
+- password-reset proof scope
+- real browser CI scope
+- Google or Microsoft provider-live proof scope
+
+---
+
+## 5. Canonical local dev/test assumptions
+
+### 5.1 Hostnames matter
 
 Tenant-aware behavior must be tested using tenant hosts, not plain `localhost`, whenever host-derived tenant identity is part of the flow.
 
@@ -135,7 +171,7 @@ Current practical hosts:
 - host-run backend public-base-url pattern: `http://{tenantKey}.localhost:3000`
 - full-stack proxy path may use the committed proxy host contract in infra/docs
 
-### 4.2 Email is now part of the real local contract
+### 5.2 Email is now part of the real local contract
 
 Email-dependent auth flows are no longer “pretend only” in local development.
 
@@ -148,7 +184,7 @@ For local development, the repo expects:
 This is intentionally convenience-first and **not production-safe**.
 It exists only for local proof, developer feedback loops, and repeatable auth-flow verification.
 
-### 4.3 Staging email remains sandboxed
+### 5.3 Staging email remains sandboxed
 
 The intended non-production staging behavior is sandbox SMTP delivery, not real end-user delivery.
 
@@ -159,22 +195,34 @@ That choice exists to:
 - validate SMTP config shape with real credentials
 - validate permanent-failure behavior without using real production mail delivery
 
+### 5.4 Production-style bootstrap is explicit
+
+Production-style tenant bootstrap is now treated as an explicit operator action.
+
+That means:
+
+- do **not** rely on `SEED_ON_START` in production-like environments
+- use the explicit bootstrap command with tenant/admin parameters
+- let the running backend worker deliver the invite via the real outbox + SMTP path
+- validate the browser onboarding chain using the operator/bootstrap runbook
+
 ---
 
-## 5. What is intentionally deferred or out of scope here
+## 6. What is intentionally deferred or out of scope here
 
 This file is not claiming completion of every future hardening concern.
 The following remain outside the scope of this status snapshot unless separately marked shipped:
 
 - production email-provider rollout
-- real browser E2E coverage for all auth flows
+- real browser E2E coverage for all auth flows in CI
 - broader non-auth Hubins product surfaces
 - future settings/account-management modules not already shipped
 - later operational hardening beyond the current documented runbooks and checks
+- first-admin `/admin/settings` landing completion
 
 ---
 
-## 6. Active truth-chain rule
+## 7. Active truth-chain rule
 
 For current work on this repo, the practical truth chain is:
 
@@ -187,30 +235,33 @@ If a lower artifact contradicts the repo or this file, repair the lower artifact
 
 ---
 
-## 7. Quick reality checklist
+## 8. Quick reality checklist
 
 As of the current foundation state, all of the following should be true:
 
-- backend starts with committed example env adapted to local machine values
-- frontend starts with committed example env
-- infra can run Postgres + Redis + Mailpit
+- backend starts with valid local or environment-specific config
+- frontend starts with its current local config
+- infra can run Postgres + Redis + Mailpit for local proof
 - local invite email can be captured in Mailpit
 - local verify-email can be captured in Mailpit
 - local forgot-password/reset email can be captured in Mailpit
 - generated email links target the tenant-aware frontend host shape
+- operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token
+- invite acceptance can continue into registration, authenticated session creation, and MFA setup entry for a first admin bootstrap path
 - current docs point to `/docs` as the repo truth home
 
 If one of these statements stops being true, this file must be updated or the repo must be repaired.
 
 ---
 
-## 8. Current foundation score intent
+## 9. Current foundation score intent
 
 The repository should now be understood as:
 
 - beyond topology-only
 - beyond backend-foundation-only
 - functionally implemented for the current Auth + User Provisioning slice
+- supported by local and operator bootstrap proof procedures
 - still subject to further hardening, operational proof expansion, and broader product work
 
 That is the correct practical reading of the repo at this point.

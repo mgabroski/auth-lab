@@ -17,14 +17,13 @@
  * - Never runs in production
  */
 
-import { randomUUID } from 'node:crypto';
-
 import type { DbExecutor } from '../db';
 import type { TokenHasher } from '../../security/token-hasher';
 import type { PasswordHasher } from '../../security/password-hasher';
 import { logger } from '../../logger/logger';
 import type { OutboxRepo } from '../../outbox/outbox.repo';
 import type { OutboxEncryption } from '../../outbox/outbox-encryption';
+import { runTenantBootstrap } from './bootstrap-tenant';
 
 type DevSeedOptions = {
   tenantKey: string;
@@ -47,10 +46,6 @@ type MemberSeedShape = {
   name: string;
   password: string;
 };
-
-function addHours(date: Date, hours: number): Date {
-  return new Date(date.getTime() + hours * 60 * 60 * 1000);
-}
 
 async function ensureTenant(
   db: DbExecutor,
@@ -96,102 +91,6 @@ async function ensureTenant(
   });
 
   return inserted;
-}
-
-async function ensureAdminInvite(opts: {
-  db: DbExecutor;
-  tokenHasher: TokenHasher;
-  tenantId: string;
-  tenantKey: string;
-  adminEmail: string;
-  inviteTtlHours: number;
-  outboxRepo?: OutboxRepo;
-  outboxEncryption?: OutboxEncryption;
-}): Promise<void> {
-  const {
-    db,
-    tokenHasher,
-    tenantId,
-    tenantKey,
-    adminEmail,
-    inviteTtlHours,
-    outboxRepo,
-    outboxEncryption,
-  } = opts;
-  const flow = 'seed.dev';
-  const email = adminEmail.toLowerCase();
-
-  const existingInvite = await db
-    .selectFrom('invites')
-    .select(['id', 'email', 'status', 'expires_at', 'used_at'])
-    .where('tenant_id', '=', tenantId)
-    .where('email', '=', email)
-    .where('role', '=', 'ADMIN')
-    .executeTakeFirst();
-
-  if (existingInvite) {
-    logger.info('seed.invite.exists', {
-      flow,
-      tenantKey,
-      tenantId,
-      inviteId: existingInvite.id,
-      email: existingInvite.email,
-      status: existingInvite.status,
-      expiresAt: existingInvite.expires_at,
-      usedAt: existingInvite.used_at,
-    });
-    return;
-  }
-
-  const rawToken = randomUUID().replace(/-/g, '');
-  const tokenHash = tokenHasher.hash(rawToken);
-  const expiresAt = addHours(new Date(), inviteTtlHours);
-
-  const created = await db.transaction().execute(async (trx) => {
-    const inserted = await trx
-      .insertInto('invites')
-      .values({
-        tenant_id: tenantId,
-        email,
-        role: 'ADMIN',
-        status: 'PENDING',
-        token_hash: tokenHash,
-        expires_at: expiresAt,
-        created_by_user_id: null,
-        used_at: null,
-      })
-      .returning(['id'])
-      .executeTakeFirstOrThrow();
-
-    if (outboxRepo && outboxEncryption) {
-      await outboxRepo.enqueueWithinTx(trx, {
-        type: 'invite.created',
-        payload: outboxEncryption.encryptPayload({
-          token: rawToken,
-          toEmail: email,
-          tenantKey,
-          inviteId: inserted.id,
-          role: 'ADMIN',
-        }),
-        idempotencyKey: `seed.invite.created:${tenantId}:${email}`,
-      });
-    }
-
-    return inserted;
-  });
-
-  logger.info('seed.invite.created', {
-    flow,
-    tenantKey,
-    tenantId,
-    inviteId: created.id,
-    email,
-    role: 'ADMIN',
-    status: 'PENDING',
-    expiresAt,
-    rawInviteToken: rawToken,
-    outboxQueued: Boolean(outboxRepo && outboxEncryption),
-  });
 }
 
 async function ensureMemberPersona(opts: {
@@ -331,22 +230,19 @@ export async function runDevSeed(opts: {
 }): Promise<void> {
   const { db, tokenHasher, passwordHasher, outboxRepo, outboxEncryption, options } = opts;
 
-  const bootstrapTenant = await ensureTenant(db, {
-    key: options.tenantKey,
-    name: options.tenantName,
-    publicSignupEnabled: false,
-    memberMfaRequired: false,
-  });
-
-  await ensureAdminInvite({
+  await runTenantBootstrap({
     db,
     tokenHasher,
-    tenantId: bootstrapTenant.id,
-    tenantKey: bootstrapTenant.key,
-    adminEmail: options.adminEmail,
-    inviteTtlHours: options.inviteTtlHours,
     outboxRepo,
     outboxEncryption,
+    options: {
+      tenantKey: options.tenantKey,
+      tenantName: options.tenantName,
+      adminEmail: options.adminEmail,
+      inviteTtlHours: options.inviteTtlHours,
+      emitRawInviteTokenToLogs: true,
+      logInfo: (entry) => logger.info(entry),
+    },
   });
 
   const publicSignupTenant = await ensureTenant(db, {
