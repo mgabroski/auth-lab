@@ -29,6 +29,8 @@ Today the repo contains all of the following as real implemented surfaces:
 - an explicit operator-safe tenant bootstrap command that queues the first admin invite through the real outbox + SMTP path without raw token logging
 - a documented manual bootstrap proof runbook for invite onboarding through session creation and MFA continuation
 - a documented Phase 4 runbook for public signup, email verification, resend verification, and password recovery proof
+- a real MFA setup page that now renders a scannable QR from the backend `otpauth://` URI plus issuer/account preview for manual Phase 5 proof
+- a documented Phase 5 runbook for real authenticator-app setup, MFA login verification, and recovery-code single-use proof
 
 That does **not** mean the broader Hubins product UI is finished.
 It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
@@ -91,6 +93,7 @@ The frontend currently contains the real UI surface for the implemented Auth + U
 - current invite-management/admin UI surface already shipped in prior phases
 - logout behavior wired to backend-owned session truth
 - real browser-facing verify-email and reset-password continuation pages for email-delivered links
+- a real MFA setup page that can render a scannable QR from the backend `qrCodeUri`
 
 ### 2.5 Current local developer contract
 
@@ -103,6 +106,7 @@ The repository now supports a repeatable local non-production email proof contra
 - invite / verify-email / reset-password flows can be visually verified through Mailpit
 - resend verification and reset-token failure behavior can be manually proven through the documented browser runbook
 - tenant-based link construction can be verified using local hostnames
+- MFA setup can be prepared with a visible QR code and expected issuer/account presentation before the real-device proof step
 
 ### 2.6 Current operator bootstrap contract
 
@@ -179,11 +183,25 @@ Phase 4 did **not** change:
 - Phase 8 real-stack browser CI scope
 - broader non-auth Hubins product scope
 
+## 6. What Phase 5 added
+
+Phase 5 adds the repository surfaces and proof procedure needed for real MFA validation.
+
+Specifically it adds:
+
+- a scannable QR on the real MFA setup page generated from the backend-provided `qrCodeUri`
+- explicit issuer/account preview on the setup page so the expected authenticator-app presentation is visible before scan
+- stronger recovery-code test coverage proving single-use enforcement across a fresh login session, not only within an already-elevated session
+- a dedicated Phase 5 proof runbook in `docs/ops/runbooks.md` covering real authenticator enrollment, login verification, and recovery-code reuse rejection
+
+Phase 5 does **not** automatically turn mocked/unit coverage into real-device proof by itself.
+The final authenticator-app scan and reuse evidence remain a manual runbook execution step in the target environment.
+
 ---
 
-## 6. Canonical local dev/test assumptions
+## 7. Canonical local dev/test assumptions
 
-### 6.1 Hostnames matter
+### 7.1 Hostnames matter
 
 Tenant-aware behavior must be tested using tenant hosts, not plain `localhost`, whenever host-derived tenant identity is part of the flow.
 
@@ -193,7 +211,7 @@ Current practical hosts:
 - host-run backend public-base-url pattern: `http://{tenantKey}.localhost:3000`
 - full-stack proxy path may use the committed proxy host contract in infra/docs
 
-### 6.2 Email is now part of the real local contract
+### 7.2 Email is now part of the real local contract
 
 Email-dependent auth flows are no longer “pretend only” in local development.
 
@@ -206,7 +224,7 @@ For local development, the repo expects:
 This is intentionally convenience-first and **not production-safe**.
 It exists only for local proof, developer feedback loops, and repeatable auth-flow verification.
 
-### 6.3 Staging email remains sandboxed
+### 7.3 Staging email remains sandboxed
 
 The intended non-production staging behavior is sandbox SMTP delivery, not real end-user delivery.
 
@@ -217,7 +235,7 @@ That choice exists to:
 - validate SMTP config shape with real credentials
 - validate permanent-failure behavior without using real production mail delivery
 
-### 6.4 Production-style bootstrap is explicit
+### 7.4 Production-style bootstrap is explicit
 
 Production-style tenant bootstrap is now treated as an explicit operator action.
 
@@ -230,7 +248,7 @@ That means:
 
 ---
 
-## 7. What is intentionally deferred or out of scope here
+## 8. What is intentionally deferred or out of scope here
 
 This file is not claiming completion of every future hardening concern.
 The following remain outside the scope of this status snapshot unless separately marked shipped:
@@ -244,20 +262,20 @@ The following remain outside the scope of this status snapshot unless separately
 
 ---
 
-## 8. Active truth-chain rule
+## 9. Active truth-chain rule
 
-For current work on this repo, the practical truth chain is:
+The current truth-chain is:
 
-1. repository implementation
-2. this status file
-3. active operational/developer docs
-4. older prompts or historical planning docs
+1. repository code
+2. active `/docs` truth/status documents
+3. route/API/module docs
+4. historical planning material
 
-If a lower artifact contradicts the repo or this file, repair the lower artifact instead of inventing new interpretation.
+If an older planning document implies a behavior that the repository no longer follows, the code plus current `/docs` truth documents win.
 
 ---
 
-## 9. Quick reality checklist
+## 10. Quick reality checklist
 
 As of the current foundation state, all of the following should be true:
 
@@ -269,6 +287,8 @@ As of the current foundation state, all of the following should be true:
 - local forgot-password/reset email can be captured in Mailpit
 - public signup + verification can be manually proven through the documented browser runbook
 - forgot-password + reset-password can be manually proven through the documented browser runbook
+- MFA setup page can render a real scannable QR from the backend `otpauth://` URI
+- Phase 5 real-device MFA proof can be executed through the documented runbook
 - generated email links target the tenant-aware frontend host shape
 - operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token
 - invite acceptance can continue into registration, authenticated session creation, and MFA setup entry for a first admin bootstrap path
@@ -278,7 +298,7 @@ If one of these statements stops being true, this file must be updated or the re
 
 ---
 
-## 10. Current foundation score intent
+## 11. Current foundation score intent
 
 The repository should now be understood as:
 

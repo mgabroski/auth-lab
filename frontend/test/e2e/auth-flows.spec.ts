@@ -80,6 +80,10 @@ test.describe('frontend auth flows', () => {
     await expect(
       page.getByRole('heading', { name: /set up multi-factor authentication/i }),
     ).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Authenticator QR code' })).toBeVisible();
+    await expect(page.getByText(/expected app entry/i)).toBeVisible();
+    await expect(page.getByText(/issuer:/i)).toBeVisible();
+    await expect(page.getByText(/account label:/i)).toBeVisible();
     await expect(page.getByLabel('Authenticator secret')).toHaveValue('ABCDEF123456');
 
     await page.getByLabel('6-digit code').fill('123456');

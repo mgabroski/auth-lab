@@ -162,6 +162,96 @@ describe('POST /auth/mfa/recover', () => {
     }
   });
 
+  it('consumed recovery code cannot be reused after a fresh login session', async () => {
+    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
+    const tenantKey = `tenant-${randomUUID()}`;
+    const email = `admin-${randomUUID()}@example.com`;
+    const password = 'password123';
+    const recoveryCode = 'RecoveryCode123456';
+
+    try {
+      await reset();
+      const tenant = await createTenant({ db: deps.db, tenantKey });
+
+      const plainSecret = cryptoHelpers.generateTotpSecret();
+      const encryptedSecret = cryptoHelpers.encryptSecret(plainSecret);
+      const codeHash = cryptoHelpers.hashRecoveryCode(recoveryCode);
+
+      const seeded = await seedAdminWithMfaAndRecovery({
+        db: deps.db,
+        passwordHasher: deps.passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        mfaSecretEncrypted: encryptedSecret,
+        recoveryCodeHash: codeHash,
+      });
+
+      const firstLogin = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { host: `${tenantKey}.hubins.com` },
+        body: { email, password },
+      });
+
+      expect(firstLogin.statusCode).toBe(200);
+      const firstCookieHeader = firstLogin.headers['set-cookie'];
+      expect(firstCookieHeader).toBeTruthy();
+      const firstPreMfaCookie = Array.isArray(firstCookieHeader)
+        ? firstCookieHeader[0]
+        : (firstCookieHeader as string);
+
+      const firstRecover = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/recover',
+        headers: {
+          host: `${tenantKey}.hubins.com`,
+          cookie: firstPreMfaCookie,
+        },
+        body: { recoveryCode },
+      });
+
+      expect(firstRecover.statusCode).toBe(200);
+
+      const storedCode = await deps.db
+        .selectFrom('mfa_recovery_codes')
+        .select(['used_at'])
+        .where('user_id', '=', seeded.userId)
+        .where('code_hash', '=', codeHash)
+        .executeTakeFirstOrThrow();
+
+      expect(storedCode.used_at).not.toBeNull();
+
+      const secondLogin = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { host: `${tenantKey}.hubins.com` },
+        body: { email, password },
+      });
+
+      expect(secondLogin.statusCode).toBe(200);
+      const secondCookieHeader = secondLogin.headers['set-cookie'];
+      expect(secondCookieHeader).toBeTruthy();
+      const secondPreMfaCookie = Array.isArray(secondCookieHeader)
+        ? secondCookieHeader[0]
+        : (secondCookieHeader as string);
+
+      const secondRecover = await app.inject({
+        method: 'POST',
+        url: '/auth/mfa/recover',
+        headers: {
+          host: `${tenantKey}.hubins.com`,
+          cookie: secondPreMfaCookie,
+        },
+        body: { recoveryCode },
+      });
+
+      expect(secondRecover.statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('rejects invalid recovery code', async () => {
     const { app, deps, cryptoHelpers, reset } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
