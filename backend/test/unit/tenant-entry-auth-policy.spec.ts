@@ -128,7 +128,7 @@ describe('decideTenantEntryAuthPolicy', () => {
     expect(isNextActionAllowedForDecision(decision, 'EMAIL_VERIFICATION_REQUIRED')).toBe(false);
   });
 
-  it('classifies expired invited entry distinctly and flags the unresolved expired-invite + SSO activation question', () => {
+  it('classifies expired invited entry distinctly as blocked once expired-invite SSO activation is closed', () => {
     const input = buildTenantEntryPolicyInput({
       tenant: makeTenant({ publicSignupEnabled: false, adminInviteRequired: true }),
       invite: makeInvite({ status: 'PENDING', expiresAt: new Date('2026-01-02T00:00:00.000Z') }),
@@ -141,7 +141,6 @@ describe('decideTenantEntryAuthPolicy', () => {
     expect(decision.entryPath).toBe('BLOCKED');
     expect(decision.isEntryAllowed).toBe(false);
     expect(decision.allowedNextActions).toEqual([]);
-    expect(decision.flags.expiredInviteSsoActivationRequiresHumanDecision).toBe(true);
   });
 
   it('classifies existing ACTIVE membership as existing-member auth and allows the full login nextAction family', () => {
@@ -201,6 +200,5 @@ describe('decideTenantEntryAuthPolicy', () => {
     expect(decision.entryPath).toBe('INVITED_ENTRY');
     expect(decision.isEntryAllowed).toBe(true);
     expect(decision.allowedNextActions).toEqual(['NONE', 'MFA_SETUP_REQUIRED', 'MFA_REQUIRED']);
-    expect(decision.flags.expiredInviteSsoActivationRequiresHumanDecision).toBe(false);
   });
 });

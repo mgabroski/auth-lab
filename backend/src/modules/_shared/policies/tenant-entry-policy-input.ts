@@ -11,8 +11,8 @@
  * RULES:
  * - Pure only: no DB, no HTTP, no side effects.
  * - Preserve state detail instead of silently deciding policy.
- * - Do NOT decide the unresolved rule: expired invite + SSO later activation.
- *   This file only normalizes inputs so a later phase can enforce that rule.
+ * - Normalize invite + membership state so callers can apply the locked
+ *   expired-invite semantics consistently across signup and SSO paths.
  *
  * DESIGN NOTES:
  * - Current Auth-Lab behavior does NOT pre-create memberships on admin invite.

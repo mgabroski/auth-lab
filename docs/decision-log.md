@@ -16,7 +16,7 @@ Format:
 
 ## ADR-001 — Next.js App Router over Vite SPA
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -48,7 +48,7 @@ A SPA can work, but for this topology it would push too much session/bootstrap l
 
 ## ADR-002 — Two dev modes: host-run for daily work, full stack for topology validation
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -92,7 +92,7 @@ That is why topology-affecting changes must be validated in the full stack too.
 
 ## ADR-003 — SSO redirect URI embedded in encrypted state
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -120,7 +120,7 @@ That centralizes the callback origin too aggressively and becomes fragile in a m
 
 ## ADR-004 — SSO state cookie CSRF binding
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -153,7 +153,7 @@ The OAuth provider redirects back to our callback URL as a top-level cross-site 
 
 ## ADR-005 — Caddy manages `X-Forwarded-For` chain by default
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -180,7 +180,7 @@ It is too easy to accidentally destroy the chain that the backend expects when `
 
 ## ADR-006 — Topology-first foundation before broader module expansion
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -225,7 +225,7 @@ That creates false confidence and causes drift in both implementation and planni
 
 ## ADR-007 — Browser uses same-origin `/api/*`, SSR uses direct backend access
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -273,7 +273,7 @@ Rejected because SSR already has direct backend reachability and should preserve
 
 ## ADR-008 — Tenant identity is derived from routing, not client-selected state
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -304,7 +304,7 @@ Tenant-aware behavior must follow the current host.
 
 ## ADR-009 — Documentation home is scope-split, not single-folder-only
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -347,7 +347,7 @@ If the same fact would need to live in two homes, one of those homes is wrong.
 
 ## ADR-010 — MFA secrets are global per user, not per tenant
 
-**Date:** 2026-03  
+**Date:** 2026-03
 **Status:** Accepted
 
 ### Context
@@ -374,7 +374,7 @@ Requiring users to set up a new authenticator app entry for each tenant they joi
 
 #### Simplicity and correctness
 
-Per-tenant MFA would require each tenant's login flow to check for a tenant-scoped secret, and recovery flows would need tenant-scoped recovery code sets. This adds complexity with no security benefit — the TOTP secret authenticates the user's _identity_, not their membership in a specific tenant.
+Per-tenant MFA would require each tenant's login flow to check for a tenant-scoped secret, and recovery flows would need tenant-scoped recovery code sets. This adds complexity with no security benefit — the TOTP secret authenticates the user's identity, not their membership in a specific tenant.
 
 ### Multi-tenant consequences
 
@@ -412,3 +412,225 @@ Re-evaluate this decision when any of the following becomes true:
 - a regulatory or compliance requirement mandates tenant-isolated MFA credentials
 - a tenant requires the ability to independently revoke a user's MFA secret without affecting their access to other tenants
 - user research shows the global MFA model creates a meaningful UX problem for multi-tenant users
+
+---
+
+## ADR-011 — First-admin onboarding emits a one-time `FIRST_TIME_SETUP` nextAction
+
+**Date:** 2026-03
+**Status:** Accepted
+
+### Context
+
+The roadmap locks a future first-admin experience for tenant setup. Without an explicit rule, future implementation could incorrectly treat first-admin setup as either:
+
+- a permanent route gate
+- an admin-wide redirect for every admin
+- or a redirect that fires before onboarding is actually complete
+
+That would create drift in both UX and continuation semantics.
+
+### Decision
+
+The first fully onboarded admin in a tenant receives a **one-time** post-onboarding redirect via a dedicated `FIRST_TIME_SETUP` nextAction.
+
+### Definition of "first admin"
+
+The "first admin" is the first `ADMIN` membership in a tenant that becomes **fully onboarded**.
+
+### Definition of "fully onboarded"
+
+A membership is fully onboarded only when all required steps in the current auth chain are complete:
+
+- invite accepted
+- identity created if needed
+- email verified if required
+- MFA completed if required
+- authenticated session established
+
+### Behavior
+
+- the first fully onboarded admin receives a one-time redirect to `/admin/settings`
+- this is **not** a persistent auth gate
+- later logins for that same admin go to `/admin`
+- any other admin who is not that first fully onboarded admin goes directly to `/admin`
+
+### Consequences
+
+- a dedicated `FIRST_TIME_SETUP` nextAction is required when this behavior is implemented
+- that nextAction must be emitted only after the user has an authenticated session and has satisfied any required email-verification / MFA continuation
+- future Phase 9 work must implement this as a post-onboarding continuation, not as a standing authorization rule
+
+### Rejected alternatives
+
+#### Permanent redirect gate
+
+Rejected because settings completion is onboarding assistance, not a permanent access-control rule.
+
+#### Redirect before email verification or MFA completion
+
+Rejected because the user would not yet be fully onboarded, and the redirect would violate the current continuation contract.
+
+---
+
+## ADR-012 — MFA QR code label uses verified email, not `userId`
+
+**Date:** 2026-03
+**Status:** Accepted
+
+### Context
+
+The TOTP QR label is part of the real authenticator-app enrollment surface. The previous behavior used `userId` as the label, which makes the authenticator entry opaque to the user and does not match the intended product behavior.
+
+### Decision
+
+Use:
+
+- issuer: `Hubins`
+- label: the user's **verified email address**
+
+The previous `userId` label is treated as an oversight, not as intentional privacy behavior.
+
+### Why
+
+- users recognize their own verified email immediately in authenticator apps
+- the label now matches the product-facing identity model
+- this is the correct basis for real MFA proof testing
+
+### Consequences
+
+- real MFA proof testing must use the verified-email label behavior
+- previously generated dev MFA seeds may still display the old label and should not be treated as proof of the corrected behavior
+- environments with stale pre-correction MFA seeds may need reset / reseed before real authenticator-app validation
+
+### Rejected alternative
+
+#### Continue using `userId`
+
+Rejected because it weakens usability and does not reflect the intended user-facing identity for authenticator enrollment.
+
+---
+
+## ADR-013 — Seed/bootstrap invite delivery is environment-specific
+
+**Date:** 2026-03
+**Status:** Accepted
+
+### Context
+
+The current stage still relies on operator/bootstrap tenant creation rather than a public self-serve production onboarding flow. The roadmap needed an explicit environment-specific contract for how invite/bootstrap delivery works so that local convenience does not silently become the staging or production rule.
+
+### Decision
+
+Use an environment-specific bootstrap delivery contract.
+
+### Local dev
+
+- raw invite token may be logged to stdout for developer convenience
+- local email capture may also be used when SMTP is enabled
+- raw token logging is acceptable **only** in local development
+
+### Shared staging / QA
+
+- seed/bootstrap must queue an outbox message
+- invite delivery must go through the real outbox + SMTP path
+- raw token logging is **not** the operational contract in shared staging / QA
+
+### Production
+
+- seed-style bootstrap is accepted as the operator mechanism for tenant creation at this stage
+- this is not a public self-serve onboarding flow
+- raw token logging must never occur in production
+- the production bootstrap runbook must describe the exact operator sequence
+
+### Consequences
+
+- staging / QA proof phases must validate real outbox-backed invite delivery
+- production bootstrap remains an operator flow until a later public onboarding model is introduced
+- local developer convenience does not change the staging or production contract
+
+---
+
+## ADR-014 — Expired invites are invalid for SSO activation
+
+**Date:** 2026-03
+**Status:** Accepted
+
+### Context
+
+The roadmap identified an open human-decision flag around whether Google or Microsoft SSO could activate a membership whose only tenant-entry basis was an expired invite.
+
+Leaving that ambiguous would create a bypass around invite expiration and produce inconsistent membership activation behavior across login methods.
+
+### Decision
+
+Expired invites are **invalid** for SSO activation.
+
+If a user's only tenant-entry basis is an expired invite, neither Google SSO nor Microsoft SSO may activate that membership.
+
+### Recovery path
+
+Admin must resend or recreate the invite.
+
+### What this does not change
+
+This rule does **not** affect users who already have an `ACTIVE` membership. It only prevents SSO from reviving an expired invite-based entry path.
+
+### Why
+
+- invite expiration must mean the same thing across password and SSO entry paths
+- SSO must not become a bypass around invite lifecycle policy
+- membership activation remains consistent regardless of authentication method
+
+### Consequences
+
+- tenant-entry policy must reject expired-invite-only SSO activation
+- tests and code comments must reflect this as a closed decision, not an unresolved question
+
+### Rejected alternative
+
+#### Allow SSO to activate expired invites
+
+Rejected because it would silently weaken the invite lifecycle contract and create a loophole around admin-controlled onboarding.
+
+---
+
+## ADR-015 — SSO does not bypass app-level MFA
+
+**Date:** 2026-03
+**Status:** Accepted
+
+### Context
+
+SSO proves identity with the upstream provider, but the application still owns its own session state, membership rules, and MFA enforcement decisions.
+
+Without an explicit rule, future flows could incorrectly treat SSO as a reason to skip app-level MFA continuation.
+
+### Decision
+
+SSO authentication does **not** bypass app-level MFA.
+
+If the authenticated user is subject to MFA:
+
+- and MFA is not configured yet, SSO login must continue into MFA setup
+- and MFA is already configured, SSO login must continue into MFA verification when required
+
+Recovery-code behavior remains valid after SSO login exactly as it does after password login.
+
+### Why
+
+- the app, not the upstream identity provider, owns app-level continuation requirements
+- MFA policy must stay consistent across password and SSO entry paths
+- recovery behavior should not differ by login mechanism
+
+### Consequences
+
+- Google and Microsoft callback flows must preserve the same MFA continuation semantics as password login
+- future proof testing for SSO must validate MFA continuation explicitly
+- recovery-code support remains part of the same app-level MFA contract after SSO
+
+### Rejected alternative
+
+#### Treat SSO as sufficient to skip app-level MFA
+
+Rejected because it would create inconsistent enforcement and weaken the application's own continuation / step-up policy.

@@ -38,11 +38,13 @@ import { AuditWriter } from '../../../../shared/audit/audit.writer';
 import type { AuditRepo } from '../../../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../../../shared/db/db';
 
+import { AppError } from '../../../../shared/http/errors';
 import type { TotpService } from '../../../../shared/security/totp';
 import type { EncryptionService } from '../../../../shared/security/encryption';
 import type { KeyedHasher } from '../../../../shared/security/keyed-hasher';
 
 import type { MfaRepo } from '../../dal/mfa.repo';
+import { getUserById } from '../../../users';
 import { getMfaSecretForUser } from '../../queries/mfa.queries';
 
 import { auditMfaSetupStarted } from '../../auth.audit';
@@ -126,8 +128,11 @@ export async function setupMfaFlow(params: {
   const codeHashes = recoveryCodes.map((code) => deps.mfaKeyedHasher.hash(code));
 
   // QR URI is pure computation (no DB) — computed outside tx.
-  // R-07: QR label is userId (no cross-module user lookup).
-  const qrCodeUri = deps.totpService.buildUri(plaintextSecret, input.userId);
+  const user = await getUserById(deps.db, input.userId);
+  if (!user) throw AppError.unauthorized('Session expired. Please sign in again.');
+
+  // LOCK-2: Authenticator label must be the verified user email, not userId.
+  const qrCodeUri = deps.totpService.buildUri(plaintextSecret, user.email);
 
   // ── Atomic transaction: all-or-nothing DB writes (X3) ────────────────────
   // Two-phase audit rule: success audit (auditMfaSetupStarted) goes INSIDE

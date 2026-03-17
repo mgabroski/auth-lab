@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { buildTestApp } from '../helpers/build-test-app';
 import {
   buildFakeIdToken,
+  createInvite,
   createSsoTenant,
   createUserWithMembership,
   getSsoStateFromStart,
@@ -186,6 +187,74 @@ describe('GET /auth/sso/microsoft/callback', () => {
         .executeTakeFirstOrThrow();
 
       expect(membership.status).toBe('ACTIVE');
+    } finally {
+      await close();
+    }
+  });
+
+  it('409 when invite state is expired, and the blocked callback path does not create an orphan user row', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `expired-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['microsoft'],
+        publicSignupEnabled: false,
+        adminInviteRequired: true,
+      });
+
+      await createInvite({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        status: 'PENDING',
+        expiresAt: new Date(Date.now() - 60_000),
+      });
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'microsoft',
+      });
+      const tid = `tenant-${randomUUID().slice(0, 8)}`;
+
+      sso.microsoftAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          tid,
+          iss: msIssuer(tid),
+          aud: MICROSOFT_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `ms-sub-${randomUUID()}`,
+          preferred_username: email,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/microsoft/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({
+        error: {
+          code: 'CONFLICT',
+          message: 'This invitation link has expired. Contact your admin.',
+        },
+      });
+
+      const users = await deps.db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email)
+        .execute();
+      expect(users).toHaveLength(0);
     } finally {
       await close();
     }

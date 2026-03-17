@@ -311,6 +311,42 @@ This trigger is considered hit when **any** of the following become true:
 
 When that trigger is hit, promote allowed domains from JSONB storage to a first-class relational model.
 
+### 6.6 Phase 0 auth-closure locks now in force
+
+Phase 0 closed the roadmap's remaining auth-closure decision gaps before proof testing begins.
+
+The following are now locked and must be treated as current repo truth:
+
+- `LOCK-1` is captured in `docs/decision-log.md`: the first fully onboarded admin will eventually receive a one-time `FIRST_TIME_SETUP` continuation to `/admin/settings`; this is a future implementation lock, not a currently shipped auth gate
+- `LOCK-2` is captured in `docs/decision-log.md`: the MFA TOTP QR label policy is `Hubins` + verified user email, not `userId`
+- `LOCK-3` is captured in `docs/decision-log.md`: bootstrap/invite delivery is environment-specific, with stdout token convenience allowed only in local development
+- `LOCK-4` is captured in `docs/decision-log.md`: expired invite is invalid for SSO activation when it is the user's only tenant-entry basis
+- `LOCK-5` is captured in `docs/decision-log.md`: SSO does not bypass app-level MFA; it must continue into MFA setup or MFA verification when required
+
+### 6.7 MFA proof-testing hygiene after the QR-label correction
+
+The QR-label correction in Phase 0 changes the expected authenticator-app entry label from `userId` to verified email.
+
+Because of that, existing local/dev environments with MFA seeds generated before the correction may contain stale authenticator entries that do **not** represent the current intended behavior.
+
+Treat those stale seeds as invalid for real MFA proof.
+
+Before Phase 5 real MFA testing, reset or reseed any affected dev/test persona so that:
+
+- the authenticator enrollment is generated after the label correction
+- the visible entry shows issuer `Hubins`
+- the visible label shows the verified user email
+
+### 6.8 Closed policy clarification for expired-invite SSO behavior
+
+Any remaining code comment, test description, or temporary note that treats expired-invite-via-SSO activation as an unresolved human decision is stale.
+
+Current repo truth is:
+
+- expired invite does **not** become valid merely because the user authenticated through Google or Microsoft
+- admin resend / recreate is the recovery path
+- users who already have `ACTIVE` membership are unaffected by this rule
+
 ---
 
 ## 7. Historical source hygiene

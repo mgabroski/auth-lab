@@ -115,7 +115,7 @@ describe('POST /auth/mfa/setup and /auth/mfa/verify-setup', () => {
       await reset();
       const tenant = await createTenant({ db: deps.db, tenantKey });
 
-      await seedUserWithPassword({
+      const seeded = await seedUserWithPassword({
         db: deps.db,
         passwordHasher: deps.passwordHasher,
         tenantId: tenant.id,
@@ -141,6 +141,9 @@ describe('POST /auth/mfa/setup and /auth/mfa/verify-setup', () => {
       expect(body.secret.length).toBeGreaterThan(0);
       expect(typeof body.qrCodeUri).toBe('string');
       expect(body.qrCodeUri.length).toBeGreaterThan(0);
+      expect(decodeURIComponent(body.qrCodeUri)).toContain('issuer=Hubins');
+      expect(decodeURIComponent(body.qrCodeUri)).toContain(email);
+      expect(decodeURIComponent(body.qrCodeUri)).not.toContain(seeded.userId);
       expect(Array.isArray(body.recoveryCodes)).toBe(true);
       expect(body.recoveryCodes.length).toBeGreaterThan(0);
     } finally {

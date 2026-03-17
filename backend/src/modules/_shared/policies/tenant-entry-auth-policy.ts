@@ -11,8 +11,8 @@
  * RULES:
  * - Pure only: no DB, no HTTP, no side effects.
  * - Encodes entry semantics, not runtime enforcement wiring.
- * - Keeps expired invited state explicit and flags the unresolved
- *   expired-invite + SSO-activation question for later human decision.
+ * - Keeps expired invited state explicit as a blocked entry.
+ * - LOCK-4: expired invites never activate through SSO.
  * - Defines allowed / forbidden nextAction families by entry path so later
  *   phases can wire decisions without duplicating the matrix.
  *
@@ -80,15 +80,11 @@ export type AuthEntryPolicyDecision = {
   isEntryAllowed: boolean;
   allowedNextActions: AuthNextAction[];
   forbiddenNextActions: AuthNextAction[];
-  flags: {
-    expiredInviteSsoActivationRequiresHumanDecision: boolean;
-  };
 };
 
 function buildDecision(params: {
   code: AuthEntryDecisionCode;
   entryPath: AuthEntryPath;
-  expiredInviteSsoActivationRequiresHumanDecision?: boolean;
 }): AuthEntryPolicyDecision {
   const allowedNextActions = [...ALLOWED_NEXT_ACTIONS_BY_ENTRY_PATH[params.entryPath]];
   const forbiddenNextActions = ALL_AUTH_ENTRY_NEXT_ACTIONS.filter(
@@ -101,10 +97,6 @@ function buildDecision(params: {
     isEntryAllowed: params.entryPath !== 'BLOCKED',
     allowedNextActions,
     forbiddenNextActions,
-    flags: {
-      expiredInviteSsoActivationRequiresHumanDecision:
-        params.expiredInviteSsoActivationRequiresHumanDecision ?? false,
-    },
   };
 }
 
@@ -140,7 +132,6 @@ export function decideTenantEntryAuthPolicy(
     return buildDecision({
       code: 'INVITED_EXPIRED',
       entryPath: 'BLOCKED',
-      expiredInviteSsoActivationRequiresHumanDecision: true,
     });
   }
 
