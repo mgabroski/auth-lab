@@ -28,6 +28,7 @@ Today the repo contains all of the following as real implemented surfaces:
 - a repeatable local auth test environment contract with committed Mailpit-based local email capture and a canonical dev seed entry point
 - an explicit operator-safe tenant bootstrap command that queues the first admin invite through the real outbox + SMTP path without raw token logging
 - a documented manual bootstrap proof runbook for invite onboarding through session creation and MFA continuation
+- a documented Phase 4 runbook for public signup, email verification, resend verification, and password recovery proof
 
 That does **not** mean the broader Hubins product UI is finished.
 It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
@@ -89,6 +90,7 @@ The frontend currently contains the real UI surface for the implemented Auth + U
 - role-aware authenticated landing behavior
 - current invite-management/admin UI surface already shipped in prior phases
 - logout behavior wired to backend-owned session truth
+- real browser-facing verify-email and reset-password continuation pages for email-delivered links
 
 ### 2.5 Current local developer contract
 
@@ -99,6 +101,7 @@ The repository now supports a repeatable local non-production email proof contra
 - frontend host-run mode can be used against backend host-run mode
 - canonical seed data can enqueue a bootstrap invite email
 - invite / verify-email / reset-password flows can be visually verified through Mailpit
+- resend verification and reset-token failure behavior can be manually proven through the documented browser runbook
 - tenant-based link construction can be verified using local hostnames
 
 ### 2.6 Current operator bootstrap contract
@@ -157,11 +160,30 @@ Phase 3 did **not** change:
 - real browser CI scope
 - Google or Microsoft provider-live proof scope
 
+## 5. What Phase 4 added
+
+Phase 4 added public signup, email-verification, and password-recovery proof closure.
+
+Specifically it added:
+
+- a real frontend reset-password page that can consume email-delivered reset links in the browser
+- mock-backed browser E2E coverage for signup verification, resend verification, blocked signup, forgot-password, reset-password, expired reset-token behavior, and reused reset-token behavior
+- documented local proof procedures in `docs/ops/runbooks.md` for public signup + verification and forgot-password + reset-password
+- explicit status truth that these flows are now proven at the repository/browser-proof level without claiming the later Phase 8 real-stack CI work is already done
+
+Phase 4 did **not** change:
+
+- MFA provider-live proof scope
+- Google or Microsoft provider-live proof scope
+- first-admin `/admin/settings` landing scope
+- Phase 8 real-stack browser CI scope
+- broader non-auth Hubins product scope
+
 ---
 
-## 5. Canonical local dev/test assumptions
+## 6. Canonical local dev/test assumptions
 
-### 5.1 Hostnames matter
+### 6.1 Hostnames matter
 
 Tenant-aware behavior must be tested using tenant hosts, not plain `localhost`, whenever host-derived tenant identity is part of the flow.
 
@@ -171,7 +193,7 @@ Current practical hosts:
 - host-run backend public-base-url pattern: `http://{tenantKey}.localhost:3000`
 - full-stack proxy path may use the committed proxy host contract in infra/docs
 
-### 5.2 Email is now part of the real local contract
+### 6.2 Email is now part of the real local contract
 
 Email-dependent auth flows are no longer “pretend only” in local development.
 
@@ -184,7 +206,7 @@ For local development, the repo expects:
 This is intentionally convenience-first and **not production-safe**.
 It exists only for local proof, developer feedback loops, and repeatable auth-flow verification.
 
-### 5.3 Staging email remains sandboxed
+### 6.3 Staging email remains sandboxed
 
 The intended non-production staging behavior is sandbox SMTP delivery, not real end-user delivery.
 
@@ -195,7 +217,7 @@ That choice exists to:
 - validate SMTP config shape with real credentials
 - validate permanent-failure behavior without using real production mail delivery
 
-### 5.4 Production-style bootstrap is explicit
+### 6.4 Production-style bootstrap is explicit
 
 Production-style tenant bootstrap is now treated as an explicit operator action.
 
@@ -208,7 +230,7 @@ That means:
 
 ---
 
-## 6. What is intentionally deferred or out of scope here
+## 7. What is intentionally deferred or out of scope here
 
 This file is not claiming completion of every future hardening concern.
 The following remain outside the scope of this status snapshot unless separately marked shipped:
@@ -222,7 +244,7 @@ The following remain outside the scope of this status snapshot unless separately
 
 ---
 
-## 7. Active truth-chain rule
+## 8. Active truth-chain rule
 
 For current work on this repo, the practical truth chain is:
 
@@ -235,7 +257,7 @@ If a lower artifact contradicts the repo or this file, repair the lower artifact
 
 ---
 
-## 8. Quick reality checklist
+## 9. Quick reality checklist
 
 As of the current foundation state, all of the following should be true:
 
@@ -245,6 +267,8 @@ As of the current foundation state, all of the following should be true:
 - local invite email can be captured in Mailpit
 - local verify-email can be captured in Mailpit
 - local forgot-password/reset email can be captured in Mailpit
+- public signup + verification can be manually proven through the documented browser runbook
+- forgot-password + reset-password can be manually proven through the documented browser runbook
 - generated email links target the tenant-aware frontend host shape
 - operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token
 - invite acceptance can continue into registration, authenticated session creation, and MFA setup entry for a first admin bootstrap path
@@ -254,7 +278,7 @@ If one of these statements stops being true, this file must be updated or the re
 
 ---
 
-## 9. Current foundation score intent
+## 10. Current foundation score intent
 
 The repository should now be understood as:
 
