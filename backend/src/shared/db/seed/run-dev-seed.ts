@@ -29,6 +29,8 @@ async function main(): Promise<void> {
       db: deps.db,
       tokenHasher: deps.tokenHasher,
       passwordHasher: deps.passwordHasher,
+      outboxRepo: deps.outboxRepo,
+      outboxEncryption: deps.outboxEncryption,
       options: {
         tenantKey: config.seed.tenantKey,
         tenantName: config.seed.tenantName,

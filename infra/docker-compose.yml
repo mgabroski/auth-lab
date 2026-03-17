@@ -7,6 +7,8 @@
 #   the host. All traffic flows through the reverse proxy.
 # - Postgres + Redis expose ports to the host (DEV ONLY) for local tooling
 #   (DBeaver, redis-cli, migrations from host-based scripts).
+# - Mailpit also exposes DEV-ONLY ports so engineers can inspect captured mail
+#   in a browser and optionally point host-run backend SMTP at localhost:1025.
 #
 # TOPOLOGY:
 #   Browser → proxy:3000 → frontend:3000 (/* and /_next/*)
@@ -16,8 +18,9 @@
 #   goodwill-ca.lvh.me:3000 → proxy preserves Host → backend reads tenantKey
 #
 # RULES:
-# - Only `proxy` gets a `ports:` mapping.
+# - Only `proxy` is public application traffic.
 # - Frontend + backend have NO ports: entries (internal only).
+# - Mailpit/Postgres/Redis expose DEV-ONLY tooling ports.
 # - All services share hubins_net bridge network.
 # - INTERNAL_API_URL lets Next.js SSR call backend directly (container-to-container).
 #   Client-side calls always use relative /api/* through the proxy.
@@ -143,11 +146,15 @@ services:
       - OUTBOX_ENC_DEFAULT_VERSION=v1
       - OUTBOX_ENC_KEY_V1=Kj3mN8vP2qR5sT7wX1yZ4aB6cD9eF0gH3iJ5kL7mN9=
 
-      # Email delivery
-      # EMAIL_PROVIDER=noop is correct for local dev stack.
-      # For local integration testing with real email, set EMAIL_PROVIDER=smtp
-      # and configure SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS/SMTP_FROM.
-      - EMAIL_PROVIDER=noop
+      # Email delivery — local capture by default (Phase 2)
+      # Safe for local development because Mailpit traps messages instead of
+      # delivering them to real recipients.
+      - EMAIL_PROVIDER=smtp
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_SECURE=false
+      - SMTP_FROM=Hubins <noreply@hubins.local>
+      - SMTP_PUBLIC_BASE_URL=http://{tenantKey}.lvh.me:3000
 
     networks: [hubins_net]
     # No ports: — internal only; all traffic through proxy
@@ -156,6 +163,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/health || exit 1']
       interval: 10s
@@ -199,6 +208,17 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  # ── Mailpit (DEV-ONLY local email capture) ──────────────────────────────
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: auth-lab-mailpit
+    ports:
+      # DEV ONLY: host access for browser inbox inspection + host-run SMTP
+      - '8025:8025'
+      - '1025:1025'
+    networks: [hubins_net]
+    restart: unless-stopped
 
 volumes:
   hubins_pg:

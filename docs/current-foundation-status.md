@@ -25,7 +25,7 @@ Today the repo contains all of the following as real implemented surfaces:
 - the backend Auth + User Provisioning module
 - the frontend Auth + User Provisioning route and UI surface for the current module scope
 - the current admin invite-management surface
-- a repeatable local auth test environment contract with committed env examples and a canonical dev seed entry point
+- a repeatable local auth test environment contract with committed env examples, Mailpit-based local email capture, and a canonical dev seed entry point
 
 That does **not** mean the broader Hubins product UI is finished.
 It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
@@ -41,250 +41,176 @@ The following are real and load-bearing:
 - monorepo/workspace structure
 - backend application
 - frontend application
-- Docker-based local infrastructure
-- Postgres + Redis integration
-- host-run and full-stack local workflows
-- proxy conformance tooling for topology validation
-- committed local env templates for backend/frontend host-run mode
-- canonical local dev seed fixtures for auth/provisioning testing
+- proxy/container topology for full-stack local testing
+- host-run development path using local backend + local frontend + infrastructure services
+- Postgres and Redis infrastructure
+- Mailpit local email capture for non-production-safe email proof
+- committed backend and frontend `.env.example` files for host-run setup
 
-### 2.2 Topology and session foundation
+### 2.2 Locked topology and request model
 
-The following are real and load-bearing:
+The topology decisions remain unchanged:
 
-- single public-origin browser model
-- same-origin browser API model using `/api/*`
-- SSR direct-backend model using forwarded request context
-- host-derived tenant identity
-- proxy-compatible routing model
-- tenant-bound server-side sessions
-- backend-owned continuation truth through `nextAction`
+- one public origin
+- browser requests use same-origin `/api/*`
+- SSR/server-side frontend access goes directly to backend via internal base URL and forwarded headers
+- backend owns session/auth truth
+- tenant identity is derived from host
+- session cookies remain backend-owned and host-scoped
+- SSO state handling remains separate from session-cookie handling
 
-### 2.3 Backend Auth + User Provisioning surface
+### 2.3 Backend auth/provisioning implementation
 
-The backend currently implements:
+The backend currently implements the Auth + User Provisioning module foundation, including:
 
-- `GET /auth/config`
-- `GET /auth/me`
-- register
 - login
 - logout
-- public signup
-- invite acceptance
-- forgot/reset password
-- email verification + resend verification
-- MFA setup / verify / recovery
-- Google + Microsoft SSO start/callback
-- admin invite create/list/resend/cancel
-- admin audit event listing
-- outbox-backed email delivery for auth/provisioning flows
-- canonical local dev seed fixtures through `yarn workspace @auth-lab/backend db:seed:dev`
+- current-user/session bootstrap surface
+- forgot-password / reset-password flow
+- verify-email flow
+- invite creation and acceptance flow
+- role-aware continuation / next-action contract
+- MFA setup / verify / recovery support already present in the module scope
+- SSO initiation/callback surfaces currently present for Google and Microsoft under the existing locked topology
+- outbox-backed email sending through the backend SMTP adapter
+- SMTP classification behavior for retryable vs permanent provider failures
 
-### 2.4 Frontend Auth + User Provisioning surface
+### 2.4 Frontend auth/provisioning implementation
 
-The frontend currently implements the real route/UI surface for the current auth/provisioning scope.
+The frontend currently contains the real UI surface for the implemented Auth + User Provisioning module scope, including:
 
-#### Public and continuation routes
+- public auth entry routes
+- continuation/bootstrap handling
+- role-aware authenticated landing behavior
+- current invite-management/admin UI surface already shipped in prior phases
+- logout behavior wired to backend-owned session truth
 
-- `/`
-- `/auth`
-- `/auth/login`
-- `/auth/signup`
-- `/auth/register`
-- `/auth/forgot-password`
-- `/auth/reset-password`
-- `/accept-invite`
-- `/verify-email`
-- `/auth/mfa/setup`
-- `/auth/mfa/verify`
-- `/auth/sso/done`
-- `/auth/unavailable`
-- `/auth/continue/[action]`
-- `/topology-check`
+### 2.5 Current local developer contract
 
-#### Authenticated routes
+The repository now supports a repeatable local non-production email proof contract:
 
-- `/app`
-- `/admin`
-- `/admin/invites`
-- `/dashboard` (compatibility handoff)
-
-#### Implemented frontend capabilities
-
-- root bootstrap handoff
-- public auth entry routing
-- login flow
-- public signup flow
-- invite registration flow
-- forgot-password flow
-- reset-password flow
-- accept-invite flow
-- verify-email continuation flow
-- MFA setup flow
-- MFA verify flow
-- SSO completion landing
-- authenticated member landing
-- authenticated admin landing
-- admin invite management UI
-- logout flow
-- legacy dashboard compatibility handoff
-
-This means the frontend is **not** accurately described as "foundation only" anymore.
+- Mailpit runs locally as the default SMTP sink
+- backend host-run mode can send real SMTP messages to Mailpit
+- frontend host-run mode can be used against backend host-run mode
+- canonical seed data can enqueue a bootstrap invite email
+- invite / verify-email / reset-password flows can be visually verified through Mailpit
+- tenant-based link construction can be verified using local hostnames
 
 ---
 
-## 3. Scope boundary for the implemented module
+## 3. What Phase 2 added
 
-The current repo should be described like this:
+Phase 2 added proof-oriented email delivery infrastructure and documentation, not a topology rewrite.
 
-> The topology/foundation layer is implemented, and the Auth + User Provisioning slice is implemented across backend and frontend for its current scope.
+Specifically it added:
 
-The repo should **not** be described like either of these:
+- Mailpit wiring in infra compose files
+- committed backend/frontend environment examples
+- canonical seed-driven invite email proof support
+- local proof instructions for invite, verify-email, and password-reset mail arrival
+- staging sandbox SMTP proof guidance in `docs/ops/runbooks.md`
+- status/doc truth updates so the repository contract matches actual shipped local behavior
 
-> The repo is still only backend/auth groundwork with no real frontend auth surface.
+Phase 2 did **not** change:
 
-or
-
-> The full Hubins product frontend is already implemented.
-
-Both are incorrect.
-
-What remains outside this completed module scope:
-
-- broader member product modules beyond the authenticated landing surface
-- broader admin product modules beyond current invite management
-- non-auth business modules
-- broader product navigation across future modules
-- future management screens unrelated to the current auth/provisioning slice
-
----
-
-## 4. Canonical documentation-home decision
-
-The repo's documentation home is **scope-split, not single-folder-only**.
-
-### 4.1 Repo-wide truth and operational documents
-
-These live at repo root and under `/docs`:
-
-- `README.md`
-- `ARCHITECTURE.md`
-- `docs/current-foundation-status.md`
-- `docs/developer-guide.md`
-- `docs/decision-log.md`
-- `docs/implementation-session-charter.md`
-- `docs/security-model.md`
-- `docs/ops/runbooks.md`
-
-These documents define repo-wide truth, architecture framing, operational setup/reset guidance, and session discipline.
-
-### 4.2 Backend law and contract documents
-
-These live under `backend/docs/`.
-
-Use that folder for:
-
-- backend implementation law
-- backend module structure law
-- backend API contract documents
-- backend module guides
-- backend prompt artifacts
-
-### 4.3 Frontend scope documents
-
-Frontend guidance remains close to the frontend code surface:
-
-- `frontend/README.md`
-- `frontend/src/shared/engineering-rules.md`
-
-### 4.4 What this decision means in practice
-
-Do **not** invent a second parallel home for the same truth.
-
-When updating docs:
-
-- update repo-wide truth and operational setup/reset guidance in root `/docs`
-- update backend-specific law/contracts in `backend/docs`
-- update frontend-specific usage/law where the frontend already keeps it
-
-Historical uploaded sources that are **not** in the repo are reference material only until they are explicitly adopted into the repository.
+- browser-to-backend request topology
+- SSR/backend forwarding model
+- tenant identity derivation
+- auth/session ownership
+- invite lifecycle semantics
+- SSO architecture
+- MFA architecture
 
 ---
 
-## 5. Active authority chain for implementation sessions
+## 4. Canonical local dev/test assumptions
 
-For the current repo phase, the working truth chain is:
+### 4.1 Hostnames matter
 
-1. `Hubins User Provisioning.pdf` for locked business behavior and vocabulary
-2. `hubins-topology-plan.docx` for locked topology and routing/session constraints
-3. repo-root truth documents (`README.md`, `ARCHITECTURE.md`, this file, `docs/decision-log.md`, `docs/security-model.md`)
-4. `docs/developer-guide.md` for truthful local environment, reset, seed, persona, and test-running guidance
-5. repo engineering-law documents actually present in the codebase
-6. `backend/docs/api/*.md`
-7. adopted scope-specific guides such as `frontend/README.md`
-8. derived execution prompts that remain aligned to the above
+Tenant-aware behavior must be tested using tenant hosts, not plain `localhost`, whenever host-derived tenant identity is part of the flow.
 
-If a lower document disagrees with a higher one, the lower document must be corrected or retired.
+Current practical hosts:
 
----
+- host-run frontend: `http://goodwill-ca.localhost:3000`
+- host-run backend public-base-url pattern: `http://{tenantKey}.localhost:3000`
+- full-stack proxy path may use the committed proxy host contract in infra/docs
 
-## 6. Known limitations and intentionally deferred items
+### 4.2 Email is now part of the real local contract
 
-### 6.1 Deferred beyond the current implemented slice
+Email-dependent auth flows are no longer “pretend only” in local development.
 
-The provisioning PDF explicitly names later capabilities that are **not** current shipped scope, including:
+For local development, the repo expects:
 
-- HRIS import flow and admin controls
-- SCIM
-- SAML SSO
-- suspend-users management surface beyond current foundations
-- groups and teams
-- session-control/device-management features
-- enhanced MFA methods beyond the current TOTP/recovery implementation
+- `EMAIL_PROVIDER=smtp`
+- SMTP directed to Mailpit
+- Mailpit UI/API available locally
 
-These are not documentation omissions.
-They are intentionally deferred beyond the current shipped slice.
+This is intentionally convenience-first and **not production-safe**.
+It exists only for local proof, developer feedback loops, and repeatable auth-flow verification.
 
-### 6.2 Current confidence and regression protection status
+### 4.3 Staging email remains sandboxed
 
-Phase 3 added the current regression/confidence surface for the shipped auth/provisioning slice, including:
+The intended non-production staging behavior is sandbox SMTP delivery, not real end-user delivery.
 
-- backend nextAction contract coverage across login, signup, register, and `/auth/me` agreement
-- continuation-flow contract coverage for invite acceptance outcomes (`SET_PASSWORD`, `SIGN_IN`, `MFA_SETUP_REQUIRED`)
-- frontend unit coverage for route-state resolution, SSR bootstrap sequencing, and same-origin browser API discipline
-- frontend auth-flow E2E coverage for member login/logout, admin MFA continuation, and signup-to-verify-email routing
-- outbox worker lifecycle coverage for send, retry scheduling, non-retryable dead-lettering, and max-attempt dead-lettering
+The documented staging provider choice for this phase is Mailtrap Email Sandbox.
+That choice exists to:
 
-This improves confidence for the current shipped slice, but it does **not** mean all future hardening work is finished. Phase 4 still owns any broader cleanup, optional expansion, and non-scope redesign work.
-
-### 6.3 Outbox observability / dead-letter visibility classification
-
-Current outbox observability is **backend-internal / operator-visible only**.
-
-What exists today:
-
-- structured worker/event logs for claim, send, retry, dead-letter, and lost-claim paths
-- durable outbox row state in `outbox_messages` (`status`, `attempts`, `last_error`, lease fields, availability timestamps)
-- lifecycle regression tests that now prove those states and transitions
-
-What does **not** exist today:
-
-- admin-facing outbox viewer UI
-- admin-facing dead-letter retry controls
-- non-technical operator tooling for outbox inspection
-
-That remains intentionally outside the current module scope.
+- prove email arrival outside local
+- validate SMTP config shape with real credentials
+- validate permanent-failure behavior without using real production mail delivery
 
 ---
 
-## 7. Truthful current environment statement
+## 5. What is intentionally deferred or out of scope here
 
-As of this repo state:
+This file is not claiming completion of every future hardening concern.
+The following remain outside the scope of this status snapshot unless separately marked shipped:
 
-- local host-run mode is the primary daily development path
-- local full-stack Docker mode is the topology-validation path
-- the repo now contains committed env examples for host-run setup
-- the repo now contains a canonical dev seed command and canonical local auth fixtures
-- shared staging/QA and production expectations are documented, but their full operator/bootstrap proof belongs to later roadmap phases
+- production email-provider rollout
+- real browser E2E coverage for all auth flows
+- broader non-auth Hubins product surfaces
+- future settings/account-management modules not already shipped
+- later operational hardening beyond the current documented runbooks and checks
 
-Any document claiming shared staging/QA or production bootstrap is already fully proven in this repo is overstating the current reality.
+---
+
+## 6. Active truth-chain rule
+
+For current work on this repo, the practical truth chain is:
+
+1. repository implementation
+2. this status file
+3. active operational/developer docs
+4. older prompts or historical planning docs
+
+If a lower artifact contradicts the repo or this file, repair the lower artifact instead of inventing new interpretation.
+
+---
+
+## 7. Quick reality checklist
+
+As of the current foundation state, all of the following should be true:
+
+- backend starts with committed example env adapted to local machine values
+- frontend starts with committed example env
+- infra can run Postgres + Redis + Mailpit
+- local invite email can be captured in Mailpit
+- local verify-email can be captured in Mailpit
+- local forgot-password/reset email can be captured in Mailpit
+- generated email links target the tenant-aware frontend host shape
+- current docs point to `/docs` as the repo truth home
+
+If one of these statements stops being true, this file must be updated or the repo must be repaired.
+
+---
+
+## 8. Current foundation score intent
+
+The repository should now be understood as:
+
+- beyond topology-only
+- beyond backend-foundation-only
+- functionally implemented for the current Auth + User Provisioning slice
+- still subject to further hardening, operational proof expansion, and broader product work
+
+That is the correct practical reading of the repo at this point.

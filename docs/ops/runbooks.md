@@ -46,321 +46,353 @@ The process itself is unhealthy (crash, OOM, port not binding). Check process ma
   "ok": true,
   "env": "production",
   "service": "auth-lab-backend",
-  "checks": { "db": true, "redis": true }
+  "checks": {
+    "db": true,
+    "redis": true
+  }
 }
 ```
 
-In production, `requestId` and `tenantKey` are intentionally omitted.
+---
 
-### Postgres
+## Authentication and Session Issues
 
-Postgres is required for all backend write and most read paths.
+### Symptom: users cannot stay logged in or are bounced back to login
 
-**Symptoms of Postgres failure:**
+**Likely causes:**
 
-- `GET /health` returns `checks.db: false`
-- All write endpoints return 500
-- Logs show `ECONNREFUSED` or `connection refused` for the DB URL
+- cookie domain/path/secure mismatch
+- proxy not forwarding cookies correctly
+- frontend/browser request path bypassing same-origin `/api/*`
+- backend session store outage or Redis connectivity problem
+- host-derived tenant mismatch because the wrong host is being used
 
-**Investigation:**
+**Investigation steps:**
 
-1. Check if the Postgres process is running: `pg_isready -U auth_lab -d auth_lab`
-2. Check connection pool exhaustion in logs (`too many clients`)
-3. Check disk space — Postgres will reject writes if the data volume is full
+1. Confirm browser requests go to the frontend origin and use `/api/*`
+2. Confirm proxy/SSR forwarding preserves `Host`, `Cookie`, and `X-Forwarded-*`
+3. Check backend logs for session creation/lookup failures
+4. Check Redis connectivity via `/health`
+5. Reproduce using the exact tenant host that triggered the issue
 
-### Redis
+**Do not do this during incident response:**
 
-Redis is required for sessions, rate limiting, and the outbox worker claim lease.
-
-**Symptoms of Redis failure:**
-
-- `GET /health` returns `checks.redis: false`
-- Login/session endpoints fail
-- Rate limits stop enforcing (since `RateLimiter` fails open on Redis errors at the application level, depending on error handling)
-- Outbox worker cannot claim messages
-
-**Investigation:**
-
-1. Check Redis process: `redis-cli ping` should return `PONG`
-2. Check memory usage: `redis-cli INFO memory` — look for `used_memory` near `maxmemory`
-3. Check eviction policy: if keys are being evicted, session data may be lost
+- do not hot-patch the app into direct browser-to-backend mode
+- do not bypass host-derived tenant behavior with ad hoc overrides
 
 ---
 
-## Outbox and Email Delivery
+## Outbox / Email Delivery
 
-### Outbox message status reference
+### Symptom: emails are not being delivered
 
-| Status    | Meaning                                  |
-| --------- | ---------------------------------------- |
-| `pending` | Waiting to be claimed by a worker        |
-| `sent`    | Successfully delivered                   |
-| `dead`    | Permanently failed — will not be retried |
+This section covers invite, verify-email, reset-password, and other outbox-backed SMTP mail.
 
-### The outbox worker is not running
+#### Quick triage
 
-**Symptom:** Outbox messages accumulate in `pending` status. Users report not receiving emails. No `outbox.claimed` log lines for several minutes.
+1. Confirm the triggering action actually enqueued an outbox message
+2. Confirm the outbox poller is running
+3. Confirm SMTP credentials/config are correct for the current environment
+4. Inspect provider response classification in backend logs
+5. Confirm whether the failure is retryable or permanent
 
-**Investigation:**
+#### Key local vs staging expectations
 
-1. Confirm the backend process is running and healthy
-2. Check worker startup logs for `outbox.worker.started` — if absent, the worker never started
-3. Check if `NODE_ENV=test` was accidentally set in production — the worker does not start in test mode
-4. Check if `EMAIL_PROVIDER=noop` is set — the worker runs but the adapter logs `email.noop.sent` and delivers nothing
+- **Local:** SMTP should point at Mailpit
+- **Staging:** SMTP should point at a sandbox provider, not a real production mailbox provider
+- **Production:** out of scope for this phase and should follow a separate controlled rollout
 
-**Resolution:**
+---
 
-- If `NODE_ENV=test`: correct the environment variable and restart
-- If `EMAIL_PROVIDER=noop`: set `EMAIL_PROVIDER=smtp` and configure SMTP credentials, then restart
-- If worker crashed: check for unhandled errors in logs around `outbox.tick.failed`
+## Phase 2 email delivery proof procedures
 
-### Outbox messages are accumulating (worker running but messages not sending)
+These procedures are the operational source of truth for the email-delivery proof added in Phase 2.
 
-**Symptom:** `outbox.claimed` log lines exist but messages move to `dead` status. Users report not receiving emails.
+### A. Local email capture proof
 
-**Investigation:**
+#### Goal
 
-1. Look for `outbox.dead_lettered` log lines — they include `lastError` which identifies the failure cause
-2. Common causes:
-   - `decrypt_failed:...` — the encryption key is missing or wrong for the message's version prefix
-   - SMTP connection errors — check SMTP host, port, credentials, and firewall
-   - `NonRetryableEmailError` — permanent SMTP rejection (5xx), check `lastError` for the provider message
+Prove that email-dependent auth flows send through real SMTP locally and arrive in a local capture inbox, with correct tenant-based links.
 
-**Resolution by error type:**
+#### Local provider choice
 
-`decrypt_failed`:
+Use **Mailpit** as the local SMTP sink and message viewer.
 
-- The message was encrypted with a key version that is no longer configured
-- Check `OUTBOX_ENC_DEFAULT_VERSION` and `OUTBOX_ENC_KEY_V*` environment variables
-- See ADR-002 in `docs/decision-log.md` for the key rotation procedure
+#### Required local config
 
-SMTP `5xx` rejection:
+Backend should be configured with values equivalent to:
 
-- Check if the recipient address is valid
-- Check if the sending domain is verified with the SMTP provider
-- Check sender `SMTP_FROM` for format errors
-
-SMTP connection errors:
-
-- Verify `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE` settings
-- Check if the SMTP provider requires specific IP allowlisting
-- Test the connection manually: `curl -v smtp://SMTP_HOST:SMTP_PORT`
-
-### Dead-lettered messages
-
-Messages with `status = 'dead'` will not be retried automatically.
-
-**To inspect dead-lettered messages:**
-
-```sql
-SELECT id, type, attempts, last_error, created_at
-FROM outbox_messages
-WHERE status = 'dead'
-ORDER BY created_at DESC
-LIMIT 20;
+```env
+EMAIL_PROVIDER=smtp
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_SECURE=false
+SMTP_FROM=Hubins <noreply@hubins.local>
+SMTP_PUBLIC_BASE_URL=http://{tenantKey}.localhost:3000
 ```
 
-**To manually resend a dead-lettered message** (use with caution — idempotency key prevents duplicate delivery if the original was already sent):
+#### Start local infra
 
-```sql
-UPDATE outbox_messages
-SET status = 'pending', attempts = 0, available_at = now(), last_error = null
-WHERE id = '<message-id>';
+Infra-only mode:
+
+```bash
+docker compose -f infra/docker-compose-infra.yml up -d
 ```
 
-Only do this after confirming the original message was never delivered and the root cause has been fixed.
+Full stack mode:
 
-### Outbox backlog growing faster than it is draining
-
-**Symptom:** Pending count in `outbox_messages` increases over time even with the worker running.
-
-**Investigation:**
-
-1. Check worker poll interval and batch size — default is 5-second poll, 10 messages per batch
-2. Check if SMTP is throttling — the SMTP provider may be rate-limiting sends
-3. Check if a high-volume event created many messages at once (e.g., bulk invite send)
-
-**Resolution:**
-
-- Temporarily increase `OUTBOX_BATCH_SIZE` and/or decrease `OUTBOX_POLL_INTERVAL_MS` to drain the backlog faster
-- If SMTP is throttling, work with the provider to increase the send rate limit
-
----
-
-## Session and Authentication Issues
-
-### Users are being unexpectedly logged out
-
-**Symptom:** Users report being logged out randomly without taking any action.
-
-**Investigation:**
-
-1. Check `SESSION_TTL_SECONDS` — default 86400 (24 hours). If set lower, sessions expire faster
-2. Check Redis eviction: if Redis is under memory pressure and evicting keys, sessions will be lost
-3. Check if a `destroyAllForUser` event was triggered — this happens on password reset
-4. Check if session cookies are being cleared by the browser (check for `Max-Age=0` in Set-Cookie headers)
-
-### Login returns 401 with valid credentials
-
-**Symptom:** A user with correct credentials gets `Invalid email or password.`
-
-**Investigation:**
-
-1. Check if the user's membership is `SUSPENDED` — this returns a different error but check anyway
-2. Check if the tenant is active: `SELECT is_active FROM tenants WHERE key = '<tenantKey>';`
-3. Check rate limits: `SELECT * FROM redis WHERE key LIKE 'rl:login:email:%'` — check the Redis key for this email hash
-4. Check if the user only has SSO identities (no password identity) — the login policy returns `invalidCredentials` for SSO-only users
-
-### MFA setup is stuck or recovery codes are lost
-
-**Symptom:** User cannot complete MFA setup or is locked out because recovery codes were lost.
-
-**Investigation:**
-
-1. Check `mfa_secrets` for the user: `SELECT id, is_verified, created_at FROM mfa_secrets WHERE user_id = '<userId>';`
-2. If `is_verified = false`, the setup was started but not completed. The user can restart MFA setup.
-3. If `is_verified = true`, the user needs admin assistance to reset their MFA secret
-
-**Admin MFA reset (requires direct DB access — use only for verified support requests):**
-
-```sql
-BEGIN;
-DELETE FROM mfa_recovery_codes WHERE user_id = '<userId>';
-DELETE FROM mfa_secrets WHERE user_id = '<userId>';
-COMMIT;
+```bash
+docker compose -f infra/docker-compose.yml up -d --build
 ```
 
-After this, the next login will return `nextAction: 'MFA_SETUP_REQUIRED'` and the user can set up MFA again.
+#### Mailpit ports
+
+- SMTP: `1025`
+- UI/API: `8025`
+
+Open Mailpit UI:
+
+- `http://localhost:8025`
+
+#### Local proof checklist
+
+##### Proof 1 — Invite email
+
+1. Start infra and app(s)
+2. Ensure dev seed ran or run the explicit dev-seed entry point
+3. Open Mailpit UI
+4. Confirm invite email arrival for the seeded admin recipient
+5. Open the message and copy/inspect the invite link
+6. Verify the host uses the tenant-aware pattern, for example `goodwill-ca.localhost:3000`
+
+##### Proof 2 — Verify-email email
+
+1. Trigger a verification mail from the implemented flow
+2. Confirm the email appears in Mailpit
+3. Open the message and inspect the verification link
+4. Verify tenant host correctness
+
+##### Proof 3 — Password-reset email
+
+1. Trigger forgot-password for a valid local account
+2. Confirm reset mail arrival in Mailpit
+3. Open the message and inspect the reset link
+4. Verify tenant host correctness
+
+#### What counts as a pass
+
+All of the following must be true:
+
+- real SMTP send path used
+- message arrives in Mailpit
+- intended template/body is present
+- tokenized link exists
+- link is constructed with the correct tenant-based host pattern
+
+#### If local proof fails
+
+Check, in order:
+
+1. Mailpit container/process health
+2. backend SMTP env values
+3. outbox poller status
+4. outbox table state / pending attempts
+5. backend SMTP logs and provider error classification
+6. tenant/public-base-url configuration
 
 ---
 
-## Invite Flow Issues
+### B. Staging sandbox delivery proof
 
-### Invite link says "already used" but user never accepted it
+#### Goal
 
-**Symptom:** User receives invite email, clicks the link, and gets `This invitation has already been accepted.`
+Prove that staging sends through a real sandbox SMTP provider, mail lands in a sandbox inbox, and provider failure behavior maps correctly to backend SMTP classification.
 
-**Investigation:**
+#### Staging provider choice
 
-1. Check the invite row: `SELECT status, used_at, expires_at FROM invites WHERE token_hash = sha256('<raw-token-from-link>');`
-   (Note: token_hash is SHA-256 of the raw token. Use `sha256hex()` or hash it in application code.)
-2. If `status = 'ACCEPTED'`: the invite was already consumed. Check if another user used the same link.
-3. If `status = 'EXPIRED'`: the invite expired before the user clicked
+Use **Mailtrap Email Sandbox** for staging proof.
 
-**Resolution:**
+Rationale:
 
-- Create a new invite for the user via the admin invite management UI or API
-- The old invite cannot be reactivated
+- sandboxed and non-production by design
+- supports real SMTP credentials
+- safe for staging proof of arrival
+- practical for validating provider responses without delivering to real user inboxes
 
-### Invite resend is not delivering a new email
+#### Credential handling rule
 
-**Symptom:** Admin clicks "Resend" but the user reports receiving nothing new.
+Do **not** commit staging SMTP credentials.
 
-**Investigation:**
+Store them in the staging secret manager / deployment-secret mechanism already used for environment variables.
 
-1. Check if the original invite was cancelled: `SELECT status FROM invites WHERE id = '<inviteId>';`
-2. Check the outbox for a new message: `SELECT status, attempts, last_error FROM outbox_messages WHERE payload->>'inviteId' = '<inviteId>' ORDER BY created_at DESC LIMIT 3;`
-3. If the outbox message exists and `status = 'dead'`: follow the outbox dead-letter runbook above
+At minimum, staging must provide:
 
----
-
-## Password Reset Issues
-
-### Password reset email not arriving
-
-**Symptom:** User requests password reset but receives no email.
-
-**Investigation:**
-
-1. Check if the user exists and has a password identity:
-   ```sql
-   SELECT u.id, u.email, ai.provider
-   FROM users u
-   LEFT JOIN auth_identities ai ON ai.user_id = u.id
-   WHERE u.email = '<email>';
-   ```
-   If no `password` identity row exists, the user cannot reset their password (SSO-only users do not receive reset emails — by design).
-2. Check if the rate limit was hit: the forgot-password flow silently skips sending if the rate limit is exceeded. Check audit events for `auth.password_reset.requested` with `outcome: 'rate_limited'`.
-3. Check the outbox for the reset message: `SELECT status, attempts, last_error FROM outbox_messages WHERE type = 'password.reset' ORDER BY created_at DESC LIMIT 5;`
-
-### Password reset token says "expired or invalid"
-
-**Symptom:** User clicks the reset link and gets the expired token error.
-
-**Investigation:**
-
-1. Reset tokens expire after 1 hour
-2. Only the most recent token for a user is valid — requesting a new reset cancels the old token
-3. Check if the token was already used: `SELECT used_at FROM password_reset_tokens WHERE token_hash = <hash>;`
-
----
-
-## Rate Limiting Issues
-
-### Legitimate user is locked out by rate limiting
-
-**Symptom:** A user cannot log in and receives the lockout message despite having correct credentials.
-
-**Investigation:**
-
-1. The login rate limit is 5 attempts per email per 15 minutes and 20 per IP per 15 minutes
-2. Check the Redis key TTL to understand how long until the lock expires:
-   `TTL rl:login:email:<sha256(email)>` — returns seconds until expiry
-
-**Resolution:**
-
-- Wait for the rate limit window to expire (maximum 15 minutes)
-- If immediate access is needed, delete the Redis key: `DEL rl:login:email:<sha256(email)>`
-- **Only do this for verified support requests** — deleting rate limit keys removes abuse protection
-
----
-
-## Audit Event Issues
-
-### Audit events not appearing in admin view
-
-**Symptom:** Admin views the audit log but recent events are missing.
-
-**Investigation:**
-
-1. Check if the audit events were written: `SELECT COUNT(*) FROM audit_events WHERE created_at > NOW() - INTERVAL '1 hour';`
-2. Check if the admin audit query has a tenant filter bug — audit events are tenant-scoped
-3. Check if the admin user's session is properly authenticated with `role = 'ADMIN'` and `mfaVerified = true`
-
----
-
-## [PENDING — DEPLOYMENT PHASE]
-
-The following runbook sections will be added when the deployment infrastructure is finalized:
-
-- Application startup and shutdown procedures
-- Database migration rollback procedure
-- Log access and log search guides
-- Alert routing and escalation paths
-- Redis backup and restore procedures
-
----
-
-## How to Add a New Runbook Section
-
-When a new module ships with non-obvious operational failure modes, add a section to this file in the same PR as the module. Follow this structure:
-
-```markdown
-## <Module Name> Issues
-
-### <Symptom name>
-
-**Symptom:** What the operator or user observes.
-
-**Investigation:**
-
-1. First check
-2. Second check
-3. ...
-
-**Resolution:**
-
-- Resolution step
+```env
+EMAIL_PROVIDER=smtp
+SMTP_HOST=<mailtrap-host>
+SMTP_PORT=<mailtrap-port>
+SMTP_SECURE=<provider-specific>
+SMTP_USER=<mailtrap-username>
+SMTP_PASS=<mailtrap-password>
+SMTP_FROM=<approved-sandbox-from>
+SMTP_PUBLIC_BASE_URL=https://{tenantKey}.<staging-frontend-domain>
 ```
 
-Do not add sections for failure modes that are handled by generic sections already in this document (Postgres down, Redis down, health check failures). Only add sections for failure modes that are specific to the module's behavior.
+#### Staging proof checklist
+
+##### Proof 1 — Invite email
+
+1. Deploy backend with sandbox SMTP credentials
+2. Trigger an invite in staging
+3. Confirm the message appears in the Mailtrap sandbox inbox
+4. Open the message and inspect the invite link
+5. Confirm tenant-aware host construction for the staging frontend domain
+
+##### Proof 2 — Verify-email email
+
+1. Trigger verify-email in staging
+2. Confirm the message appears in the Mailtrap sandbox inbox
+3. Inspect the link
+4. Confirm tenant-aware host construction
+
+#### Provider permanent-failure classification validation
+
+The backend SMTP adapter already distinguishes retryable vs permanent provider failures.
+This phase requires validating that classification against a real provider response.
+
+##### Safe validation approach
+
+Use one controlled failing configuration or request that produces a provider-side permanent SMTP failure in staging sandbox conditions.
+
+Examples:
+
+- intentionally invalid sandbox SMTP credentials
+- intentionally invalid authenticated sender configuration if the provider rejects it with a permanent response
+- another sandbox-safe provider action that yields a clear 5xx permanent response
+
+##### Validation goal
+
+Confirm all of the following:
+
+- backend records/logs the provider failure
+- backend classifies permanent failure as non-retryable/dead-letter behavior according to current implementation
+- backend does **not** loop indefinitely retrying a clearly permanent provider rejection
+
+#### If staging proof fails
+
+Check, in order:
+
+1. staging secrets injected correctly
+2. network egress from staging to provider SMTP host/port
+3. provider sandbox credentials and inbox selection
+4. sender/from restrictions enforced by the provider
+5. backend SMTP classification logs
+6. staging `SMTP_PUBLIC_BASE_URL`
+
+---
+
+## SMTP classification investigation guide
+
+### Symptom: mail stays pending/retries forever
+
+**Possible causes:**
+
+- provider/network failure is being treated as retryable
+- provider is timing out or intermittently unavailable
+- a supposed permanent rejection is actually being surfaced as a transient/network error
+
+**Steps:**
+
+1. inspect backend logs for SMTP adapter error details
+2. inspect provider response code/message if available
+3. confirm whether the adapter classified it as retryable or permanent
+4. compare with the intended provider behavior
+5. if classification is wrong, open a targeted bug with the exact provider response and current classification outcome
+
+### Symptom: mail goes directly to permanent failure
+
+**Possible causes:**
+
+- bad credentials
+- sender/from rejection
+- malformed recipient/address rejected by provider
+- provider sandbox restriction violation
+
+**Steps:**
+
+1. confirm credentials and sender identity
+2. inspect the exact provider response
+3. verify the current backend classification is expected
+4. correct configuration before replaying
+
+---
+
+## Data Reset / Recovery
+
+### Symptom: local environment is too inconsistent to trust
+
+Use a full local reset.
+
+#### Infra-only reset
+
+```bash
+docker compose -f infra/docker-compose-infra.yml down -v
+docker compose -f infra/docker-compose-infra.yml up -d
+```
+
+Then rerun backend/frontend and reseed.
+
+#### Full-stack reset
+
+```bash
+docker compose -f infra/docker-compose.yml down -v
+docker compose -f infra/docker-compose.yml up -d --build
+```
+
+After reset, verify:
+
+- `/health`
+- Mailpit UI
+- seeded invite email
+
+---
+
+## Logging guidance during incidents
+
+When investigating auth/email incidents, prioritize logs that answer these questions:
+
+1. Did the request reach the backend through the expected topology path?
+2. Which tenant/host was derived?
+3. Was an outbox message created?
+4. Did the poller attempt delivery?
+5. What exact SMTP/provider response came back?
+6. How was the failure classified?
+
+If logs do not make those questions answerable, capture that gap and improve observability after the incident.
+
+---
+
+## Escalation guidance
+
+Escalate when:
+
+- dependency health cannot be restored quickly
+- tenant identity is being derived incorrectly and risks cross-tenant behavior
+- SMTP classification appears wrong for a real provider response
+- staging sandbox proof cannot be completed due to networking or secret-management blockers
+- the system can only be made to work by violating the locked topology
+
+---
+
+## Change discipline reminder
+
+Operational pressure is not permission to rewrite architecture.
+
+During incidents or proof work:
+
+- do not bypass same-origin browser routing
+- do not move tenant truth into the frontend
+- do not replace host-derived tenant identity with manual toggles
+- do not swap sandbox/local delivery for production delivery shortcuts
+
+Repair within the locked system model.

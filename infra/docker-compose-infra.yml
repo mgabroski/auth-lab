@@ -3,7 +3,7 @@
 # WHY:
 # - Used when running backend + frontend on the HOST for active development
 #   (hot reload, no Docker rebuild cycle).
-# - Provides only the infrastructure dependencies: Postgres + Redis.
+# - Provides only the infrastructure dependencies: Mailpit + Postgres + Redis.
 # - The full topology (with proxy) is in docker-compose.yml.
 #
 # HOW TO USE:
@@ -13,6 +13,13 @@
 name: hubins-infra
 
 services:
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: auth-lab-mailpit
+    ports:
+      - '8025:8025'
+      - '1025:1025'
+
   postgres:
     image: postgres:17
     container_name: auth-lab-postgres

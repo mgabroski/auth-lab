@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildTestApp } from '../helpers/build-test-app';
 import { runDevSeed } from '../../src/shared/db/seed/dev-seed';
+import { getLatestOutboxPayload } from '../helpers/outbox-test-helpers';
 
 describe('dev seed', () => {
   it('is idempotent for the canonical auth fixtures', async () => {
@@ -14,6 +15,8 @@ describe('dev seed', () => {
         db: deps.db,
         tokenHasher: deps.tokenHasher,
         passwordHasher: deps.passwordHasher,
+        outboxRepo: deps.outboxRepo,
+        outboxEncryption: deps.outboxEncryption,
         options: {
           tenantKey,
           tenantName: 'GoodWill California',
@@ -26,6 +29,8 @@ describe('dev seed', () => {
         db: deps.db,
         tokenHasher: deps.tokenHasher,
         passwordHasher: deps.passwordHasher,
+        outboxRepo: deps.outboxRepo,
+        outboxEncryption: deps.outboxEncryption,
         options: {
           tenantKey,
           tenantName: 'GoodWill California',
@@ -57,6 +62,18 @@ describe('dev seed', () => {
 
       expect(invites).toHaveLength(1);
       expect(invites[0].status).toBe('PENDING');
+
+      const inviteOutbox = await getLatestOutboxPayload({
+        db: deps.db,
+        outboxEncryption: deps.outboxEncryption,
+        type: 'invite.created',
+        tenantKey,
+      });
+
+      expect(inviteOutbox.toEmail).toBe(adminEmail.toLowerCase());
+      expect(inviteOutbox.idempotencyKey).toBe(
+        `seed.invite.created:${bootstrapTenantId}:${adminEmail.toLowerCase()}`,
+      );
 
       const memberUser = await deps.db
         .selectFrom('users')

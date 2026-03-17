@@ -23,6 +23,8 @@ import type { DbExecutor } from '../db';
 import type { TokenHasher } from '../../security/token-hasher';
 import type { PasswordHasher } from '../../security/password-hasher';
 import { logger } from '../../logger/logger';
+import type { OutboxRepo } from '../../outbox/outbox.repo';
+import type { OutboxEncryption } from '../../outbox/outbox-encryption';
 
 type DevSeedOptions = {
   tenantKey: string;
@@ -103,8 +105,19 @@ async function ensureAdminInvite(opts: {
   tenantKey: string;
   adminEmail: string;
   inviteTtlHours: number;
+  outboxRepo?: OutboxRepo;
+  outboxEncryption?: OutboxEncryption;
 }): Promise<void> {
-  const { db, tokenHasher, tenantId, tenantKey, adminEmail, inviteTtlHours } = opts;
+  const {
+    db,
+    tokenHasher,
+    tenantId,
+    tenantKey,
+    adminEmail,
+    inviteTtlHours,
+    outboxRepo,
+    outboxEncryption,
+  } = opts;
   const flow = 'seed.dev';
   const email = adminEmail.toLowerCase();
 
@@ -134,20 +147,38 @@ async function ensureAdminInvite(opts: {
   const tokenHash = tokenHasher.hash(rawToken);
   const expiresAt = addHours(new Date(), inviteTtlHours);
 
-  const created = await db
-    .insertInto('invites')
-    .values({
-      tenant_id: tenantId,
-      email,
-      role: 'ADMIN',
-      status: 'PENDING',
-      token_hash: tokenHash,
-      expires_at: expiresAt,
-      created_by_user_id: null,
-      used_at: null,
-    })
-    .returning(['id'])
-    .executeTakeFirstOrThrow();
+  const created = await db.transaction().execute(async (trx) => {
+    const inserted = await trx
+      .insertInto('invites')
+      .values({
+        tenant_id: tenantId,
+        email,
+        role: 'ADMIN',
+        status: 'PENDING',
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        created_by_user_id: null,
+        used_at: null,
+      })
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
+
+    if (outboxRepo && outboxEncryption) {
+      await outboxRepo.enqueueWithinTx(trx, {
+        type: 'invite.created',
+        payload: outboxEncryption.encryptPayload({
+          token: rawToken,
+          toEmail: email,
+          tenantKey,
+          inviteId: inserted.id,
+          role: 'ADMIN',
+        }),
+        idempotencyKey: `seed.invite.created:${tenantId}:${email}`,
+      });
+    }
+
+    return inserted;
+  });
 
   logger.info('seed.invite.created', {
     flow,
@@ -159,6 +190,7 @@ async function ensureAdminInvite(opts: {
     status: 'PENDING',
     expiresAt,
     rawInviteToken: rawToken,
+    outboxQueued: Boolean(outboxRepo && outboxEncryption),
   });
 }
 
@@ -293,9 +325,11 @@ export async function runDevSeed(opts: {
   db: DbExecutor;
   tokenHasher: TokenHasher;
   passwordHasher: PasswordHasher;
+  outboxRepo?: OutboxRepo;
+  outboxEncryption?: OutboxEncryption;
   options: DevSeedOptions;
 }): Promise<void> {
-  const { db, tokenHasher, passwordHasher, options } = opts;
+  const { db, tokenHasher, passwordHasher, outboxRepo, outboxEncryption, options } = opts;
 
   const bootstrapTenant = await ensureTenant(db, {
     key: options.tenantKey,
@@ -311,6 +345,8 @@ export async function runDevSeed(opts: {
     tenantKey: bootstrapTenant.key,
     adminEmail: options.adminEmail,
     inviteTtlHours: options.inviteTtlHours,
+    outboxRepo,
+    outboxEncryption,
   });
 
   const publicSignupTenant = await ensureTenant(db, {

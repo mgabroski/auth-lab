@@ -52,513 +52,392 @@ Enable Corepack once:
 corepack enable
 ```
 
----
-
-## The two local modes
-
-### 1. Host-run mode — daily development
-
-Use this for normal feature work.
+Install workspace dependencies:
 
 ```bash
-yarn dev
+yarn install
 ```
-
-What it starts:
-
-- Postgres in Docker
-- Redis in Docker
-- backend on the host (`http://localhost:3001`)
-- frontend on the host (`http://goodwill-ca.localhost:3000`)
-
-What it automatically does before boot:
-
-- installs dependencies
-- creates `backend/.env` from `backend/.env.example` if missing
-- creates `frontend/.env.local` from `frontend/.env.example` if missing
-- runs backend migrations
-- regenerates Kysely DB types
-
-Important browser URL:
-
-```text
-http://goodwill-ca.localhost:3000
-```
-
-Do **not** use `http://localhost:3000` for tenant-aware checks.
-
-### 2. Full stack mode — topology validation
-
-Use this when validating the actual proxy/public topology.
-
-```bash
-yarn stack
-```
-
-Public entrypoint:
-
-```text
-http://goodwill-ca.lvh.me:3000
-```
-
-This mode runs:
-
-- Caddy proxy
-- frontend in Docker
-- backend in Docker
-- Postgres
-- Redis
-
-Use this before merging changes that affect:
-
-- `infra/`
-- proxy rules
-- forwarded headers
-- session/cookie behavior
-- host-derived tenant assumptions
-- SSO start/callback topology
 
 ---
 
-## Quick-start paths
+## Repository layout at a glance
 
-### A. First-time daily development setup
+Main working areas:
 
-```bash
-yarn dev
-```
+- `backend/` — Node/TypeScript backend
+- `frontend/` — Next.js frontend
+- `infra/` — Docker Compose topology and infra services
+- `docs/` — active repo truth docs and runbooks
 
-Then confirm:
+Important docs:
 
-- frontend: `http://goodwill-ca.localhost:3000`
-- backend health: `http://localhost:3001/health`
-- status helper: `yarn status`
-
-### B. First-time full topology setup
-
-```bash
-yarn stack
-yarn stack:test
-```
-
-Then confirm:
-
-- public root: `http://goodwill-ca.lvh.me:3000`
-- public health: `http://goodwill-ca.lvh.me:3000/api/health`
+- `docs/current-foundation-status.md`
+- `docs/ops/runbooks.md`
+- this file
 
 ---
 
-## Health and status checks
+## Environment files
 
-### Fast status snapshot
+### Backend example env
 
-```bash
-yarn status
-```
-
-This checks:
-
-- Docker container presence/health
-- host-run frontend reachability
-- host-run backend reachability
-- full-stack public root reachability
-- full-stack public `/api/health` reachability
-
-### Direct health endpoints
-
-Host-run backend:
-
-```text
-http://localhost:3001/health
-```
-
-Full-stack public health:
-
-```text
-http://goodwill-ca.lvh.me:3000/api/health
-```
-
-### Topology conformance
+Copy:
 
 ```bash
-yarn stack:test
+cp backend/.env.example backend/.env
 ```
 
-This runs the PT-01 to PT-08 proxy conformance checks against the live full stack.
+Important defaults in the example:
 
----
+- local Postgres on `localhost:5432`
+- local Redis on `localhost:6379`
+- local Mailpit SMTP on `localhost:1025`
+- frontend public-base-url pattern: `http://{tenantKey}.localhost:3000`
+- `SEED_ON_START=true`
 
-## Canonical reset/reseed procedure
+Update values only as needed for your machine.
 
-Use this exact sequence to turn a dirty local environment into a clean, seeded state.
+### Frontend example env
 
-### Safe default reset
+Copy:
 
 ```bash
-yarn stop
-yarn reset-db
+cp frontend/.env.example frontend/.env.local
 ```
 
-That wipes both:
-
-- infra-only host-run volumes
-- full-stack volumes
-
-### Reseed in host-run mode
-
-```bash
-yarn seed:dev
-```
-
-or, if you want the app running immediately after reset:
-
-```bash
-yarn dev
-```
-
-Because the committed host-run env template sets `SEED_ON_START=true`, backend startup also runs the canonical dev seed automatically.
-
----
-
-### Reseed in full-stack mode
-
-```bash
-yarn stack
-```
-
-The full-stack compose file sets `SEED_ON_START=true`, so backend boot seeds automatically.
-
-### When to prefer the explicit seed command
-
-Use the explicit seed command when:
-
-- infra is already running
-- you do not want to start the full backend server yet
-- you reset or migrated the DB and want fixtures restored immediately
-
-### After reseed, verify these three checks
-
-1. backend health is green
-2. `goodwill-ca` resolves in the app/browser
-3. the canonical fixtures below exist
-
----
-
-## What the canonical local seed creates today
-
-The repo now guarantees these local fixtures through `yarn seed:dev` and `SEED_ON_START=true` startup paths.
-
-### Tenant 1 — admin bootstrap tenant
-
-| Field               | Value                                     |
-| ------------------- | ----------------------------------------- |
-| Tenant key          | `goodwill-ca`                             |
-| Tenant name         | `GoodWill California`                     |
-| Public signup       | disabled                                  |
-| Member MFA required | false                                     |
-| Allowed SSO         | `google`, `microsoft`                     |
-| Purpose             | canonical admin onboarding/bootstrap path |
-
-### Tenant 2 — public signup variant tenant
-
-| Field               | Value                                          |
-| ------------------- | ---------------------------------------------- |
-| Tenant key          | `goodwill-open`                                |
-| Tenant name         | `GoodWill Open Signup`                         |
-| Public signup       | enabled                                        |
-| Member MFA required | false                                          |
-| Allowed SSO         | `google`, `microsoft`                          |
-| Purpose             | canonical public-signup-enabled policy variant |
-
-### Seeded admin onboarding artifact
-
-| Field          | Value                                |
-| -------------- | ------------------------------------ |
-| Email          | `system_admin@example.com`           |
-| Tenant         | `goodwill-ca`                        |
-| Role           | `ADMIN`                              |
-| State          | pending invite                       |
-| Delivery today | raw invite token logged locally only |
-| Why            | local admin bootstrap proof path     |
-
-Important:
-
-- the raw invite token is logged locally for convenience
-- that is acceptable only for local development
-- shared staging/QA and production must not rely on raw token logging
-
-### Seeded member login persona
-
-| Field             | Value                          |
-| ----------------- | ------------------------------ |
-| Email             | `member@example.com`           |
-| Password          | `Password123!`                 |
-| Tenant            | `goodwill-open`                |
-| Role              | `MEMBER`                       |
-| Membership status | `ACTIVE`                       |
-| Email verified    | true                           |
-| Purpose           | canonical member login persona |
-
----
-
-## Test persona matrix
-
-This matrix is the practical Phase 1 truth.
-
-| Persona / variant                  | Source today                                   | Host                                                                       | Credentials / artifact                                        | Use case                                          |
-| ---------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------- |
-| Admin onboarding                   | canonical local seed                           | `goodwill-ca.localhost:3000` or `goodwill-ca.lvh.me:3000`                  | `system_admin@example.com` + raw invite token from local logs | invite acceptance, first admin onboarding chain   |
-| Member login                       | canonical local seed                           | `goodwill-open.localhost:3000` or `goodwill-open.lvh.me:3000`              | `member@example.com` / `Password123!`                         | standard member login/logout                      |
-| Public signup disabled tenant      | canonical local seed                           | `goodwill-ca.*`                                                            | n/a                                                           | confirm signup is blocked/hidden by tenant policy |
-| Public signup enabled tenant       | canonical local seed                           | `goodwill-open.*`                                                          | n/a                                                           | confirm signup route/behavior on open tenant      |
-| MFA proof persona                  | not seed-backed yet                            | created during MFA proof work or test helpers                              | depends on proof flow                                         | Phase 5 real authenticator/recovery validation    |
-| Google/Microsoft SSO proof persona | not seed-backed and cannot be fully local-only | external provider sandbox/test account + staging/prod-like callback config | provider-managed credentials                                  | Phase 6/7 live-provider proof                     |
-
-Important truth:
-
-- Phase 1 makes the baseline admin/member/policy variants repeatable locally
-- it does **not** claim that real MFA or real provider-backed SSO proof is already completed
-- later phases still own real authenticator-app proof and real sandbox/provider round-trips
-
----
-
-## Environment matrix
-
-### Summary table
-
-| Environment         | Email provider mode                          | Seed/bootstrap mechanism                                                         | Session cookie name                                                     | SSO credential source                                | Tenant/host routing expectation                                                                                    |
-| ------------------- | -------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Local host-run      | `noop` by default; optional local SMTP later | `SEED_ON_START=true` or `yarn seed:dev`                                          | `sid` / `sso-state`                                                     | local placeholder/test values in env                 | use `*.localhost:3000`; browser still uses same-origin `/api/*`; Next Route Handler proxies `/api/*`               |
-| Local full stack    | `noop` by default; optional local SMTP later | compose-backed `SEED_ON_START=true` on backend boot                              | `sid` / `sso-state`                                                     | local placeholder/test values in compose env         | use `*.lvh.me:3000`; Caddy is the public entrypoint                                                                |
-| Shared staging / QA | sandbox SMTP required for later email phases | operator bootstrap / seed runbook; invite delivery must go through outbox + SMTP | production cookie policy: `__Host-sid` / `__Host-sso-state` under HTTPS | staging sandbox/provider credentials                 | one public origin, reverse proxy in front, same-origin browser `/api/*`, SSR direct backend with forwarded headers |
-| Production          | real SMTP provider                           | operator bootstrap/runbook only; never raw token logging                         | `__Host-sid` / `__Host-sso-state` under HTTPS                           | production provider credentials managed outside repo | one public origin, host-derived tenant routing, HTTPS, strict production cookie rules                              |
-
-### Notes that must stay true
-
-- local HTTP environments use non-`__Host-` cookie names because Secure+HTTPS is not active there
-- production/staging expectations use the locked `__Host-` cookie policy under HTTPS
-- the browser never calls the backend directly by host/port in any environment
-- SSR still calls the backend directly via `INTERNAL_API_URL`/internal service URL and forwards request headers
-
----
-
-## Secrets and config checklist
-
-This is the minimum practical checklist for current and upcoming auth phases.
-
-| Dependency / purpose              | Variable(s)                                                                                            | Expected format                                                           | Where it must be set                               | First phase that depends on it       |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------ |
-| Postgres                          | `DATABASE_URL`                                                                                         | Postgres connection string                                                | backend env / compose                              | current foundation                   |
-| Redis                             | `REDIS_URL`                                                                                            | Redis connection string                                                   | backend env / compose                              | current foundation                   |
-| Session TTL                       | `SESSION_TTL_SECONDS`                                                                                  | integer seconds                                                           | backend env / compose                              | current foundation                   |
-| Password hashing                  | `BCRYPT_COST`                                                                                          | integer cost                                                              | backend env / compose                              | current foundation                   |
-| MFA issuer                        | `MFA_ISSUER`                                                                                           | non-empty string                                                          | backend env / compose                              | current foundation                   |
-| MFA secret encryption             | `MFA_ENCRYPTION_KEY_BASE64`                                                                            | base64 that decodes to exactly 32 bytes                                   | backend env / compose                              | current foundation / Phase 5 proof   |
-| MFA recovery-code hashing         | `MFA_HMAC_KEY_BASE64`                                                                                  | base64 string                                                             | backend env / compose                              | current foundation / Phase 5 proof   |
-| SSO state cookie encryption       | `SSO_STATE_ENCRYPTION_KEY`                                                                             | base64 that decodes to exactly 32 bytes                                   | backend env / compose                              | current foundation / Phase 6-7 proof |
-| SSO redirect base fallback        | `SSO_REDIRECT_BASE_URL`                                                                                | absolute URL                                                              | backend env / compose                              | current foundation / later SSO proof |
-| Google SSO                        | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                                                             | provider credential strings                                               | backend env / compose / staging secret store       | Phase 6                              |
-| Microsoft SSO                     | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`                                                       | provider credential strings                                               | backend env / compose / staging secret store       | Phase 7                              |
-| Outbox encryption                 | `OUTBOX_ENC_DEFAULT_VERSION`, `OUTBOX_ENC_KEY_V1` (+ optional future versions)                         | version string + 32-byte base64 key(s)                                    | backend env / compose                              | current foundation / email phases    |
-| Email provider selection          | `EMAIL_PROVIDER`                                                                                       | `noop` or `smtp`                                                          | backend env / compose                              | current foundation / Phase 2         |
-| SMTP transport                    | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_PUBLIC_BASE_URL` | host / integer / boolean / credential strings / from value / URL template | backend env / compose / staging secret store       | Phase 2                              |
-| Sentry                            | `SENTRY_DSN`                                                                                           | URL                                                                       | backend env / deployment secret store              | later production hardening           |
-| Canonical seed enablement         | `SEED_ON_START`                                                                                        | boolean                                                                   | backend env / compose                              | Phase 1                              |
-| Canonical seed tenant/admin knobs | `SEED_TENANT_KEY`, `SEED_TENANT_NAME`, `SEED_ADMIN_EMAIL`, `SEED_INVITE_TTL_HOURS`                     | strings / integer hours                                                   | backend env / compose                              | Phase 1                              |
-| Frontend SSR backend access       | `INTERNAL_API_URL`                                                                                     | absolute backend URL                                                      | frontend env / compose / Playwright web server env | current foundation                   |
-| Frontend env marker               | `NEXT_PUBLIC_ENV`                                                                                      | string                                                                    | frontend env / compose                             | optional informational only          |
-
-### Current repo truth
-
-- committed host-run env templates exist for backend and frontend
-- the full stack compose file carries its own local-safe dev values
-- shared staging/QA and production secret storage are documented as expectations, not provisioned by this repo alone
-
----
-
-## Running the seed
-
-### Explicit seed command
-
-From repo root:
-
-```bash
-yarn seed:dev
-```
-
-From `backend/` directly:
-
-```bash
-yarn db:seed:dev
-```
-
-### Startup-driven seed path
-
-If `SEED_ON_START=true`, backend startup also runs the canonical seed.
-
-That means all of these seed automatically:
-
-```bash
-yarn dev
-yarn stack
-```
-
-### When seed output matters
-
-For local admin onboarding, watch the backend logs for the raw invite token tied to `system_admin@example.com`.
-
-That raw token logging is:
-
-- allowed locally
-- not the contract for shared staging/QA
-- forbidden in production
-
----
-
-## Running tests and checks
-
-### Repo-wide verification
-
-```bash
-yarn verify
-```
-
-Current repo truth:
-
-- format check
-- lint
-- backend + frontend typecheck
-- frontend build
-- backend tests
-- frontend tests
-
-### Backend tests
-
-```bash
-yarn test:backend
-```
-
-or:
-
-```bash
-cd backend
-yarn test
-```
-
-### Frontend unit tests
-
-```bash
-yarn test:frontend:unit
-```
-
-or:
-
-```bash
-cd frontend
-yarn test:unit
-```
-
-### Frontend Playwright locally
-
-```bash
-yarn test:frontend:e2e
-```
-
-or:
-
-```bash
-cd frontend
-yarn test:e2e
-```
-
-Important:
-
-- the current Playwright suite uses its own mock auth backend on port `3101`
-- it validates frontend auth journeys and routing discipline
-- it is **not** the same thing as the full real-stack/proxy proof path from later phases
-
-### Proxy conformance checks
-
-```bash
-yarn stack
-yarn stack:test
-```
-
-These validate the live Docker stack through the proxy path.
-
----
-
-## Troubleshooting checklist
-
-### `yarn dev` fails immediately with missing env example
-
-Confirm these committed files exist:
-
-- `backend/.env.example`
-- `frontend/.env.example`
-
-### Frontend loads but auth/SSR is broken
-
-Check `frontend/.env.local`:
+Default:
 
 ```env
 INTERNAL_API_URL=http://localhost:3001
+NEXT_PUBLIC_ENV=development
 ```
 
-### Host-run app opens but tenant-aware behavior is wrong
-
-Confirm the browser URL includes the subdomain:
-
-```text
-http://goodwill-ca.localhost:3000
-```
-
-not plain `localhost:3000`.
-
-### Full stack is up but proxy tests fail
-
-Run:
-
-```bash
-yarn status
-yarn stack:test
-```
-
-and verify you are using `*.lvh.me:3000`, not plain `localhost:3000`.
-
-### Local fixtures are missing after reset
-
-Run:
-
-```bash
-yarn seed:dev
-```
-
-or restart via:
-
-```bash
-yarn dev
-```
-
-with `SEED_ON_START=true` in `backend/.env`.
+Do not point browser requests directly at backend public ports.
+The browser must continue to use same-origin `/api/*`.
 
 ---
 
-## Truthful limitations at the end of Phase 1
+## Supported local run modes
 
-Phase 1 after these updates means:
+The repo supports two main local paths.
 
-- a new engineer can start the local environment from committed examples
-- local reset/reseed is explicit and repeatable
-- the canonical admin/member/policy variants are present locally
-- proxy conformance checks have an explicit local path
-- config/secrets discovery for later phases is documented
+### Mode A — Host-run app + infra services
 
-It does **not** mean:
+Use this for fastest inner-loop development.
 
-- real SMTP delivery is already proven
-- real authenticator-app MFA proof is already done
-- real Google/Microsoft provider round-trips are already done
-- shared staging/QA bootstrap is already proven end to end
+Infra only:
 
-Those remain owned by later roadmap phases.
+```bash
+docker compose -f infra/docker-compose-infra.yml up -d
+```
+
+Then start backend:
+
+```bash
+yarn workspace @auth-lab/backend dev
+```
+
+Then start frontend:
+
+```bash
+yarn workspace @auth-lab/frontend dev
+```
+
+What runs in this mode:
+
+- Postgres
+- Redis
+- Mailpit
+- backend on host
+- frontend on host
+
+Recommended URL for tenant-aware testing:
+
+- `http://goodwill-ca.localhost:3000`
+
+Mailpit UI:
+
+- `http://localhost:8025`
+
+### Mode B — Full local stack via Docker Compose
+
+Use this when you want the full proxy/topology path.
+
+```bash
+docker compose -f infra/docker-compose.yml up -d --build
+```
+
+This runs:
+
+- proxy
+- frontend
+- backend
+- Postgres
+- Redis
+- Mailpit
+
+Use the committed proxy host contract from infra/docs or your local host mappings if already established in the repo.
+
+---
+
+## Health and basic verification
+
+### Backend health
+
+Check:
+
+```bash
+curl -s http://localhost:3001/health | jq
+```
+
+Expected:
+
+- `ok: true`
+- db check healthy
+- redis check healthy
+
+### Frontend availability
+
+Open the tenant host in the browser, for example:
+
+- `http://goodwill-ca.localhost:3000`
+
+### Mailpit availability
+
+Open:
+
+- `http://localhost:8025`
+
+You should see captured messages if the outbox poller and SMTP configuration are correct.
+
+---
+
+## Canonical seed behavior
+
+The canonical seed now supports both identity/bootstrap data and local email proof.
+
+Relevant example env keys:
+
+```env
+SEED_ON_START=true
+SEED_TENANT_KEY=goodwill-ca
+SEED_TENANT_NAME=GoodWill California
+SEED_ADMIN_EMAIL=system_admin@example.com
+SEED_INVITE_TTL_HOURS=168
+```
+
+### What the seed is expected to create
+
+At minimum, the dev seed is expected to prepare:
+
+- the seed tenant
+- the bootstrap/system admin user path needed by the current module
+- a pending bootstrap invite suitable for local email proof
+- an outbox email message for that invite
+
+### Manual dev-seed entry point
+
+You can run the dedicated seed entry point directly when needed:
+
+```bash
+yarn workspace @auth-lab/backend dev:seed
+```
+
+Use this after clearing data or when you want to refresh the canonical local state without relying on automatic startup seed behavior.
+
+---
+
+## Local email proof workflow
+
+Phase 2 makes email part of the real local contract.
+
+### Expected backend SMTP settings in local
+
+These values should come from `backend/.env` derived from the example:
+
+```env
+EMAIL_PROVIDER=smtp
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_SECURE=false
+SMTP_FROM=Hubins <noreply@hubins.local>
+SMTP_PUBLIC_BASE_URL=http://{tenantKey}.localhost:3000
+```
+
+### Proof 1 — Invite email
+
+1. Start infra and app(s)
+2. Ensure seed ran successfully
+3. Open Mailpit
+4. Confirm an invite email exists for `system_admin@example.com`
+5. Open the email and inspect the generated link
+6. Confirm the link host uses the tenant host pattern, for example `http://goodwill-ca.localhost:3000/...`
+
+### Proof 2 — Verify-email flow
+
+1. Create or trigger a flow that sends verification mail
+2. Open Mailpit
+3. Confirm verification mail arrival
+4. Inspect the verification link host and path
+5. Confirm tenant-based link construction is correct
+
+### Proof 3 — Forgot-password / reset email
+
+1. Trigger forgot-password for a valid seeded/test account
+2. Open Mailpit
+3. Confirm reset mail arrival
+4. Inspect the reset link
+5. Confirm host-derived tenant link construction is correct
+
+### What is considered a local pass
+
+Local proof is good only if all of the following are true:
+
+- email is actually accepted by SMTP, not mocked
+- email visibly arrives in Mailpit
+- subject/body match the intended flow
+- tokenized link is present
+- link host resolves to the correct tenant-shaped frontend origin
+
+---
+
+## Running checks and tests
+
+### Repo-wide checks
+
+Run from repo root as applicable:
+
+```bash
+yarn lint
+yarn typecheck
+yarn test
+```
+
+If your workspace uses more granular scripts, prefer the repo-standard package scripts first and fall back to workspace scripts only if needed.
+
+### Backend-focused checks
+
+Useful commands:
+
+```bash
+yarn workspace @auth-lab/backend test
+yarn workspace @auth-lab/backend test --watch
+```
+
+### Frontend checks
+
+Useful commands:
+
+```bash
+yarn workspace @auth-lab/frontend lint
+yarn workspace @auth-lab/frontend test
+```
+
+### Proxy conformance / route checks
+
+If the repo includes the expected scripts/check commands from earlier phases, run those after stack startup to confirm the same-origin proxy path still holds.
+
+---
+
+## Resetting local state
+
+### Stop compose services
+
+Infra only:
+
+```bash
+docker compose -f infra/docker-compose-infra.yml down
+```
+
+Full stack:
+
+```bash
+docker compose -f infra/docker-compose.yml down
+```
+
+### Remove volumes when you need a full clean start
+
+Infra only:
+
+```bash
+docker compose -f infra/docker-compose-infra.yml down -v
+```
+
+Full stack:
+
+```bash
+docker compose -f infra/docker-compose.yml down -v
+```
+
+Then rerun the chosen stack start flow and reseed.
+
+---
+
+## Common local pitfalls
+
+### 1. Mail is not arriving in Mailpit
+
+Check:
+
+- Mailpit is running
+- backend env has `EMAIL_PROVIDER=smtp`
+- SMTP host/port point to Mailpit
+- outbox poller is enabled and running
+- backend logs show successful SMTP send
+
+### 2. Links use the wrong host
+
+Check:
+
+- `SMTP_PUBLIC_BASE_URL`
+- tenant key in the seeded record
+- whether you are testing with the correct tenant host
+
+Do not “fix” this by bypassing host-derived tenant behavior.
+Repair the base-url/env or seed assumptions instead.
+
+### 3. Browser requests are hitting backend directly
+
+That is a topology regression.
+The browser must use same-origin `/api/*`.
+Do not change the frontend into a direct-browser-to-backend model.
+
+### 4. Seed data exists but no invite email appears
+
+Check whether:
+
+- the seed completed without error
+- the seed created the pending invite
+- the seed enqueued the outbox email message
+- the outbox poller picked up and sent the message
+
+### 5. Plain `localhost` does not reproduce tenant behavior
+
+That is expected.
+Use tenant-shaped hosts like `goodwill-ca.localhost` when verifying host-derived tenant identity.
+
+---
+
+## Staging email note
+
+Staging proof is intentionally sandboxed and documented in `docs/ops/runbooks.md`.
+Do not repurpose local Mailpit instructions as the staging operator procedure.
+
+---
+
+## Practical day-one setup checklist
+
+For a new machine or a fresh clone:
+
+1. `corepack enable`
+2. `yarn install`
+3. `cp backend/.env.example backend/.env`
+4. `cp frontend/.env.example frontend/.env.local`
+5. `docker compose -f infra/docker-compose-infra.yml up -d`
+6. start backend and frontend on host
+7. open `http://goodwill-ca.localhost:3000`
+8. open `http://localhost:8025`
+9. confirm backend health
+10. confirm seeded invite email is visible in Mailpit
+
+If all ten pass, the current local foundation is behaving as intended.
