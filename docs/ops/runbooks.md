@@ -301,6 +301,152 @@ This section is a manual operator/QA proof procedure.
 It is intentionally different from the repo's existing mocked browser tests and backend E2E tests.
 Do not claim Phase 5 is operationally proven until this real-device checklist has been executed in the target environment.
 
+## Phase 6 real Google SSO integration proof
+
+This section is the canonical operational procedure for the Phase 6 Google live-provider proof scope.
+
+### Goal
+
+Prove all of the following against the real staging stack:
+
+- Google OAuth browser round-trip works end to end
+- session creation is correct after callback completion
+- user, membership, and tenant data are correct after Google sign-in
+- Google SSO respects LOCK-4 for expired invites
+- Google SSO respects LOCK-5 and continues into app-level MFA when required
+- audit evidence exists for the successful sign-in
+- Google provider key discovery is reachable from the staging network
+
+### Preconditions
+
+Before starting the proof, confirm all of the following:
+
+1. the shared staging backend is running with real `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+2. the staging Google app registration includes the exact redirect URI for the tenant host you are about to prove
+3. the target tenant allows Google SSO
+4. you have one real Google account that matches an already-`ACTIVE` membership in the target tenant
+5. you have one target email whose only tenant-entry basis is an expired invite, for LOCK-4 validation
+6. you have one admin-path persona that should require MFA after SSO, for LOCK-5 validation
+7. you have access to the staging audit log surface or direct DB/log inspection method used by the team
+8. the staging network can reach Google's JWKS endpoint:
+
+```bash
+curl -fsS https://www.googleapis.com/oauth2/v3/certs > /dev/null
+```
+
+### A. Configuration proof
+
+#### Goal
+
+Prove the staging Google configuration is correct before spending time on browser debugging.
+
+#### Checklist
+
+1. open the staging backend secret/config source and confirm `GOOGLE_CLIENT_ID` is set
+2. confirm `GOOGLE_CLIENT_SECRET` is set
+3. confirm `SSO_STATE_ENCRYPTION_KEY` is set to the staging value
+4. confirm the Google app registration type is **Web application**
+5. confirm the exact authorized redirect URI is registered in Google Cloud Console:
+
+```
+https://<tenant-host>/api/auth/sso/google/callback
+```
+
+6. confirm the tenant being tested has `google` in its allowed SSO providers
+7. confirm the staging tenant host loads through the normal browser path and that browser requests still use same-origin `/api/*`
+
+#### What counts as a pass
+
+- backend secrets are present in staging
+- the Google app registration exactly matches the callback URI used by the tenant host under proof
+- provider-key reachability succeeds from the staging network
+
+### B. Active member success proof
+
+#### Goal
+
+Prove an already-active member can sign in with a real Google account and that the resulting session and tenant context are correct.
+
+#### Checklist
+
+1. open the target tenant host in a fresh browser session
+2. start Google SSO from the real login page
+3. complete the Google account chooser / consent flow with the real test account
+4. confirm the browser returns to the tenant host, not another tenant
+5. confirm the browser lands on `/auth/sso/done` only transiently and then resolves into the correct post-auth route
+6. call or inspect `/api/auth/me` for that same browser session
+7. confirm the returned user email matches the Google account used in the round-trip
+8. confirm the returned tenant key and membership role/status match the expected tenant membership
+9. confirm the backend session cookie exists and the session is bound to the same tenant
+10. confirm an `auth.sso.login.success` audit entry exists for that sign-in
+
+#### What counts as a pass
+
+- a real Google account completes the OAuth round-trip successfully
+- authenticated session truth is owned by the backend after callback completion
+- `/auth/me` reflects the correct user, tenant, and membership context
+- success audit evidence exists
+
+### C. LOCK-4 expired-invite rejection proof
+
+#### Goal
+
+Prove Google SSO does not revive an expired invite when that invite is the user's only tenant-entry basis.
+
+#### Checklist
+
+1. prepare or confirm an expired invite for the target tenant and email address
+2. start Google SSO on that tenant host using the matching Google account
+3. complete the Google provider flow
+4. confirm the backend rejects the callback instead of activating membership
+5. confirm no new user row or active membership was created as a side effect
+6. confirm the recovery path remains admin resend or recreate invite
+
+#### What counts as a pass
+
+- expired invite flow is rejected
+- Google SSO does not bypass invite expiration
+- no orphan user or revived membership is created
+
+### D. LOCK-5 MFA continuation proof
+
+#### Goal
+
+Prove Google SSO does not bypass app-level MFA requirements.
+
+#### Checklist
+
+1. use an admin-path persona that should require MFA in the target tenant
+2. start Google SSO and complete the provider flow
+3. confirm the callback resolves into the backend-owned continuation route instead of direct authenticated access
+4. if MFA has not yet been configured for that user, confirm continuation goes to `/auth/mfa/setup`
+5. if MFA is already configured for that user, confirm continuation goes to `/auth/mfa/verify`
+6. complete the required MFA step and confirm only then does authenticated access continue
+
+#### What counts as a pass
+
+- Google SSO never lands directly in the authenticated area when app-level MFA is still required
+- setup is required for MFA-unconfigured admin users
+- verify is required for MFA-configured admin users
+
+### Evidence to capture
+
+Capture at least the following during the proof:
+
+- screenshot of the Google Cloud Console redirect URI configuration
+- screenshot or terminal output proving JWKS endpoint reachability from staging
+- browser capture of successful Google sign-in for an already-active member
+- `/api/auth/me` evidence showing correct user, tenant, and membership context after success
+- audit evidence for `auth.sso.login.success`
+- browser and/or backend evidence showing expired-invite rejection
+- browser evidence showing MFA continuation after Google SSO for the admin-path persona
+
+### Important boundary
+
+This is a live-provider operator/QA proof procedure.
+The repository's automated tests can prove policy and callback behavior, but they do not replace a real Google credential round-trip in staging.
+Do not claim Phase 6 is operationally proven until this checklist has been executed with real Google credentials in the target staging environment.
+
 ## Rate Limiting Issues
 
 ### Symptom: repeated login or auth actions suddenly return throttling behavior
@@ -323,23 +469,27 @@ If rate limiting blocks proof unexpectedly, debug the topology/request identity 
 
 Check:
 
-1. whether the flow reached the correct backend branch
-2. whether the success/failure path used the expected audit action
-3. whether a generic response intentionally hides user existence while the audit layer still records the correct internal outcome
+1. whether the current path writes audit only on success, or on both success and failure
+2. whether the tenant/user context was available at the point the event was written
+3. whether the event exists but you are looking in the wrong tenant scope
+4. whether a failing transaction rolled back an earlier write you expected to survive
 
-For example, forgot-password for a nonexistent email should still preserve the non-enumerating public response while internal audit captures the true outcome.
+For auth/provisioning, the audit trail is not optional convenience data.
+If a required audit event is missing, treat it as a real defect.
 
 ---
 
 ## Local reset / reseed procedure
 
-Use this when the local environment is too dirty to trust.
+Use this when local data is dirty and you need a predictable starting point.
 
 ### 1. Stop local app processes
 
-Stop frontend/backend processes if they are running in host mode.
+Stop any running backend/frontend dev processes.
 
 ### 2. Reset infra volumes when necessary
+
+If you need a full clean reset:
 
 ```bash
 docker compose -f infra/docker-compose-infra.yml down -v
@@ -353,198 +503,194 @@ docker compose -f infra/docker-compose-infra.yml up -d
 
 ### 4. Recreate backend database schema / migrations if required
 
-Use the current backend workflow documented in `docs/developer-guide.md`.
+Run the repo-standard migration/reset commands used by the backend package.
 
 ### 5. Run the canonical local dev seed
 
 ```bash
-yarn seed:dev
+yarn workspace @auth-lab/backend dev:seed
 ```
 
 ### 6. Start backend/frontend again
 
+Use the normal host-run workflow from `docs/developer-guide.md`.
+
 ### 7. Confirm baseline health
 
-At minimum, confirm:
+Confirm:
 
-- backend `/health`
-- frontend loads
+- backend health endpoint works
+- tenant host loads
 - Mailpit loads
-- seeded admin/member personas exist as expected
+- the seeded bootstrap invite email is present
+
+If those checks pass, you are back at the canonical local baseline.
 
 ---
 
 ## Tenant bootstrap runbook
 
-This runbook captures the current real operator/bootstrap flow for the first admin invite path.
+This section is the operator-facing proof contract for bootstrap invite creation in shared QA/staging/production-style environments.
 
 ### Goal
 
-Create or ensure a tenant, issue the first admin invite through the real outbox + SMTP path, and validate the onboarding chain in a real browser.
+Create or ensure a tenant and queue the first pending ADMIN invite through the real outbox + SMTP path, without logging raw invite tokens.
 
 ### Local developer path
 
-Local development may still use convenience-friendly seed behavior, including precreated data and Mailpit capture.
+Local dev may still use seed convenience behavior.
+That is not the proof contract for shared environments.
 
 ### Shared QA / staging / production-style path
 
-Use the explicit bootstrap command.
+Run the explicit tenant bootstrap command with tenant/admin values appropriate for the environment.
 
-Example shape:
+Expected outcome:
 
-```bash
-yarn bootstrap:tenant --tenant goodwill-ca --email admin@example.com --name "First Admin"
-```
-
-Use the exact command contract implemented in the backend package.
+- tenant exists or is created
+- one pending ADMIN invite exists
+- one outbox message is queued for invite delivery
+- no raw invite token is printed as the operational delivery mechanism
 
 ### Validation sequence
 
-1. run/reset the target environment
-2. confirm backend and email sink/provider are healthy
-3. execute tenant bootstrap command
-4. confirm an outbox message is created
-5. confirm the invite email arrives through the real delivery path
-6. open the invite link in a real browser
-7. confirm the accept-invite page loads correctly
-8. continue through registration if required
-9. confirm session creation after onboarding
-10. if the admin is subject to MFA setup, confirm continuation reaches the MFA setup entry point
+1. run the tenant bootstrap command
+2. confirm backend accepted the command without error
+3. confirm invite email arrives through the configured email path
+4. open the delivered email in the target inbox/sandbox
+5. open the invite link in a real browser
+6. confirm `/accept-invite` loads on the correct tenant host
+7. continue through invite acceptance / registration
+8. confirm authenticated session creation
+9. if applicable, confirm continuation into MFA setup entry point
 
 ### Important contract
 
-In shared QA/staging/production-style proof:
+In shared QA/staging/production-style environments:
 
-- do **not** rely on raw invite token logs
-- do **not** bypass email delivery
-- do **not** hand-edit database rows as the normal bootstrap mechanism
+- delivery proof is the delivered email, not raw token logging
+- browser proof is the real frontend path, not direct API-only completion
+- bootstrap remains an operator action, not a public tenant self-serve flow
 
 ---
 
 ## Phase 4 public signup, verification, and password recovery proof
 
-This section closes the current Phase 4 operational proof requirements.
+This section is the canonical operational procedure for the Phase 4 public auth proof scope.
 
 ### A. Local public signup + email verification proof
 
 #### Goal
 
-Prove the following end to end on a signup-enabled tenant:
+Prove the real local browser flow for:
 
-- public signup succeeds
-- verification email is delivered through Mailpit
-- opening the verification link in a real browser works
-- resend verification sends a fresh email
-- the older token becomes invalid after resend
-- verified login works normally afterward
-
-#### Preconditions
-
-- local environment is healthy
-- Mailpit is running and empty or easy to inspect
-- you know the signup-enabled tenant host, for example `http://goodwill-open.localhost:3000`
+- public signup on a signup-enabled tenant
+- verification email delivery
+- verification link completion
+- verified session/auth state
+- resend verification behavior
 
 #### Local signup proof checklist
 
 1. Start from a clean or trusted local state
-2. Open Mailpit and clear old messages if needed
-3. Open `http://goodwill-open.localhost:3000/auth/signup`
-4. Sign up with a brand-new email address that has not been used before
-5. Confirm the browser lands on `/verify-email`
-6. Confirm the page offers resend behavior because the link token is not yet present in the URL
-7. In Mailpit, open the first verification email and copy the verification link
-8. Back in the browser, click **Resend verification email**
-9. Confirm a second verification email arrives in Mailpit
-10. Open the **older** verification link first and confirm the app shows the invalid/expired-link outcome
-11. Open the **newest** verification link in the same browser session
-12. Confirm the browser completes verification and continues into authenticated usage
-13. Log out
-14. Sign in again with the same email and password
-15. Confirm login now succeeds normally
+2. Ensure the target tenant under test has public signup enabled
+3. Open the tenant signup page in the real browser
+4. Complete signup with a new email address
+5. Confirm the browser shows the expected post-signup continuation state
+6. Open Mailpit and confirm the verification email arrived
+7. Open the verification link in the browser
+8. Confirm verification succeeds and the authenticated state is correct
+9. Log out if needed and confirm login now succeeds for that user
+
+#### Resend verification proof checklist
+
+1. Repeat signup or use a user that is still unverified
+2. Trigger resend verification
+3. Confirm a fresh verification email arrives
+4. Open the newest verification link and confirm success
+5. If validating old-token behavior, confirm the older token no longer works according to the current contract
 
 #### What counts as a pass
 
-All of the following must be true:
-
-- signup succeeded only on the signup-enabled tenant host
-- verification mail was delivered through Mailpit via the real outbox + SMTP path
-- resend produced a fresh verification email
-- the older verification token no longer worked after resend
-- the newest verification link worked in a real browser
-- the verified session continued into normal authenticated usage
-- later login with the verified credentials worked
+- signup succeeds only on a signup-enabled tenant
+- verification email is delivered through the real configured email path
+- the verification link works in the real browser
+- verified login/authenticated usage is possible afterward
+- resend verification sends a fresh usable email
 
 ### B. Local blocked-signup proof
 
 #### Goal
 
-Prove the frontend and backend both honor a tenant where public signup is disabled.
+Prove signup is blocked where tenant policy disables it.
 
 #### Checklist
 
-1. Open the signup-disabled tenant host, for example `http://goodwill-ca.localhost:3000/auth/signup`
-2. Confirm the page renders the blocked-signup state instead of a usable signup form
-3. Confirm a direct `POST /auth/signup` against the same tenant still returns the backend-forbidden outcome if you probe it manually
+1. Choose a tenant with public signup disabled
+2. Open signup on that tenant host
+3. Attempt the normal signup path
+4. Confirm the UI/API response reflects the blocked policy
+5. Confirm no active user/membership is created through that blocked path
 
 #### What counts as a pass
 
-- the signup-disabled tenant does not expose a working public signup path
-- the browser and backend behavior agree on the blocked outcome
+- signup cannot be used to bypass tenant policy
+- blocked tenant behavior is explicit and consistent
 
 ### C. Local forgot-password + reset-password proof
 
 #### Goal
 
-Prove password recovery works end to end in local development through:
+Prove the real local browser flow for:
 
-- forgot-password request
-- reset email delivery through Mailpit
-- opening the reset link in a real browser
-- setting a new password
-- invalidating the old password
-- confirming the new password works
-- proving expired-token rejection
-- proving reused-token rejection
-
-#### Preconditions
-
-- Mailpit is empty or easily inspectable
-- you have a password-based account on a tenant host (for example `member@example.com` on `goodwill-open.localhost`)
+- forgot-password mail delivery
+- reset link completion
+- old-password invalidation
+- expired-token failure
+- reused-token failure
 
 #### Local password-recovery proof checklist
 
-1. Open `http://goodwill-open.localhost:3000/auth/forgot-password`
-2. Submit forgot-password for a real password user such as `member@example.com`
-3. Confirm the page shows the generic success copy
-4. In Mailpit, open the newest password reset email and copy the reset link
-5. Open the reset link in a real browser tab
-6. Set a new password and submit the form
-7. Confirm the browser reports reset success
-8. Attempt login with the old password and confirm it fails
-9. Attempt login with the new password and confirm it succeeds
-10. Trigger another reset email if you need an extra token for negative-path proof
-11. For expired-token proof, expire the token by waiting past validity or by using the available local test support if that is your current workflow
-12. Confirm an expired reset token fails
-13. For reuse proof, successfully use one reset token once and then try the same link again
-14. Confirm the reused token fails
+1. Use a real password user in the target tenant
+2. Trigger forgot-password from the real UI
+3. Confirm the reset email arrives in Mailpit
+4. Open the reset link in the browser
+5. Set a new password
+6. Confirm reset completion succeeds
+7. Confirm login with the old password fails
+8. Confirm login with the new password succeeds
+
+#### Expired-token proof checklist
+
+1. Generate a reset token
+2. Wait for expiry or manipulate test state according to the environment contract
+3. Open the expired reset link
+4. Confirm reset is rejected
+
+#### Reused-token proof checklist
+
+1. Generate a reset token
+2. Complete one successful reset with it
+3. Attempt to use the same token again
+4. Confirm the second use is rejected
 
 #### What counts as a pass
 
-- forgot-password delivered a real email through the local SMTP capture path
-- the reset link worked in a real browser
-- the old password stopped working
-- the new password worked
-- expired-token failure was confirmed
-- reused-token failure was confirmed
+- forgot-password delivery works through the configured email path
+- reset works once with a valid token
+- the old password no longer works after successful reset
+- expired tokens fail
+- reused tokens fail
 
 ---
 
 ## [PENDING — DEPLOYMENT PHASE]
 
-These procedures are intentionally deferred until the deployment/release phase is in scope:
+The following remain intentionally deferred until the repo enters the explicit deployment/operations phase:
 
-- startup/shutdown runbooks for deployed environments
+- startup/shutdown production procedures
 - rollback procedure
-- production log access procedure
-- production secret rotation procedure
-- production mail-provider cutover procedure
+- production log access
+- production secret rotation runbook
+- production email-provider failover guidance
+- incident escalation matrix

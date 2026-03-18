@@ -31,6 +31,8 @@ Today the repo contains all of the following as real implemented surfaces:
 - a documented Phase 4 runbook for public signup, email verification, resend verification, and password recovery proof
 - a real MFA setup page that now renders a scannable QR from the backend `otpauth://` URI plus issuer/account preview for manual Phase 5 proof
 - a documented Phase 5 runbook for real authenticator-app setup, MFA login verification, and recovery-code single-use proof
+- backend/frontend example env files now exist and document the Google SSO staging keys engineers must set before live-provider proof
+- a documented Phase 6 runbook for real Google SSO staging proof, including redirect URI, JWKS reachability, expired-invite rejection, MFA continuation, and audit/session validation
 
 That does **not** mean the broader Hubins product UI is finished.
 It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
@@ -197,11 +199,25 @@ Specifically it adds:
 Phase 5 does **not** automatically turn mocked/unit coverage into real-device proof by itself.
 The final authenticator-app scan and reuse evidence remain a manual runbook execution step in the target environment.
 
+## 7. What Phase 6 added
+
+Phase 6 adds the repository-side readiness items for real Google live-provider validation.
+
+Specifically it adds:
+
+- committed backend/frontend `.env.example` files so the documented local/staging config contract now exists in the repo
+- explicit Google SSO secrets/config checklist guidance in `docs/developer-guide.md`
+- a dedicated Phase 6 runbook in `docs/ops/runbooks.md` covering configuration proof, active-member success proof, expired-invite rejection, MFA continuation, audit validation, and JWKS reachability
+- stronger Google callback regression coverage for session payload correctness and the `MFA_REQUIRED` continuation when Google SSO is used by an admin who already has verified MFA
+
+Phase 6 still requires a real staging execution with real Google credentials before it can be claimed as operationally proven.
+The repository now contains the required proof procedure and regression coverage, but the live-provider round-trip itself remains an environment execution step.
+
 ---
 
-## 7. Canonical local dev/test assumptions
+## 8. Canonical local dev/test assumptions
 
-### 7.1 Hostnames matter
+### 8.1 Hostnames matter
 
 Tenant-aware behavior must be tested using tenant hosts, not plain `localhost`, whenever host-derived tenant identity is part of the flow.
 
@@ -211,7 +227,7 @@ Current practical hosts:
 - host-run backend public-base-url pattern: `http://{tenantKey}.localhost:3000`
 - full-stack proxy path may use the committed proxy host contract in infra/docs
 
-### 7.2 Email is now part of the real local contract
+### 8.2 Email is now part of the real local contract
 
 Email-dependent auth flows are no longer “pretend only” in local development.
 
@@ -224,7 +240,7 @@ For local development, the repo expects:
 This is intentionally convenience-first and **not production-safe**.
 It exists only for local proof, developer feedback loops, and repeatable auth-flow verification.
 
-### 7.3 Staging email remains sandboxed
+### 8.3 Staging email remains sandboxed
 
 The intended non-production staging behavior is sandbox SMTP delivery, not real end-user delivery.
 
@@ -235,7 +251,7 @@ That choice exists to:
 - validate SMTP config shape with real credentials
 - validate permanent-failure behavior without using real production mail delivery
 
-### 7.4 Production-style bootstrap is explicit
+### 8.4 Production-style bootstrap is explicit
 
 Production-style tenant bootstrap is now treated as an explicit operator action.
 
@@ -248,7 +264,7 @@ That means:
 
 ---
 
-## 8. What is intentionally deferred or out of scope here
+## 9. What is intentionally deferred or out of scope here
 
 This file is not claiming completion of every future hardening concern.
 The following remain outside the scope of this status snapshot unless separately marked shipped:
@@ -262,7 +278,7 @@ The following remain outside the scope of this status snapshot unless separately
 
 ---
 
-## 9. Active truth-chain rule
+## 10. Active truth-chain rule
 
 The current truth-chain is:
 
@@ -275,7 +291,7 @@ If an older planning document implies a behavior that the repository no longer f
 
 ---
 
-## 10. Quick reality checklist
+## 11. Quick reality checklist
 
 As of the current foundation state, all of the following should be true:
 
@@ -289,6 +305,8 @@ As of the current foundation state, all of the following should be true:
 - forgot-password + reset-password can be manually proven through the documented browser runbook
 - MFA setup page can render a real scannable QR from the backend `otpauth://` URI
 - Phase 5 real-device MFA proof can be executed through the documented runbook
+- Google SSO staging config can be prepared from the committed `.env.example` files and the documented config checklist
+- Phase 6 live Google proof can be executed through the documented runbook once real staging credentials are available
 - generated email links target the tenant-aware frontend host shape
 - operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token
 - invite acceptance can continue into registration, authenticated session creation, and MFA setup entry for a first admin bootstrap path
@@ -298,7 +316,7 @@ If one of these statements stops being true, this file must be updated or the re
 
 ---
 
-## 11. Current foundation score intent
+## 12. Current foundation score intent
 
 The repository should now be understood as:
 

@@ -117,6 +117,54 @@ The browser must continue to use same-origin `/api/*`.
 
 ---
 
+## Phase 6 Google SSO config checklist
+
+This is the repo-level secrets/config checklist for the Google live-provider proof.
+
+### Backend env keys used by Google SSO
+
+These keys belong in the backend environment only:
+
+- `GOOGLE_CLIENT_ID` — Google OAuth web application client ID
+- `GOOGLE_CLIENT_SECRET` — Google OAuth client secret
+- `SSO_STATE_ENCRYPTION_KEY` — encrypts the short-lived `sso-state` cookie payload
+- `SSO_REDIRECT_BASE_URL` — fallback only when the real public request origin is unavailable
+
+### Frontend env keys
+
+No Google OAuth client secret belongs in the frontend.
+The frontend only needs:
+
+- `INTERNAL_API_URL` for SSR/server-side backend calls
+- `NEXT_PUBLIC_ENV` for environment display/behavior
+
+### Staging Google app registration checklist
+
+For the shared staging environment, document and confirm all of the following before attempting the live round-trip:
+
+1. Google app type is **Web application**
+2. the staging backend env contains the real `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+3. the Google app has the exact authorized redirect URI for the staging tenant host you are proving, in the form:
+
+```
+https://<tenant-host>/api/auth/sso/google/callback
+```
+
+4. the staging tenant has `google` in `allowed_sso`
+5. the staging tenant host resolves through the real same-origin `/api/*` topology
+
+### Provider key discovery reachability check
+
+Before the live proof, confirm the staging network can reach Google's JWKS endpoint because backend token validation depends on it:
+
+```bash
+curl -fsS https://www.googleapis.com/oauth2/v3/certs > /dev/null
+```
+
+A zero-exit curl is the minimum pass signal for provider-key reachability.
+
+---
+
 ## Supported local run modes
 
 The repo supports two main local paths.
