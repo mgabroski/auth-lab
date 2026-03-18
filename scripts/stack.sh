@@ -32,26 +32,52 @@
 #   ./scripts/stack.sh rebuild  — rebuild images and restart
 #   ./scripts/stack.sh test     — run proxy conformance tests
 
+#!/usr/bin/env bash
+# scripts/stack.sh
+
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE="docker compose -f $ROOT_DIR/infra/docker-compose.yml"
+COMPOSE_ENV_FILE="$ROOT_DIR/infra/.env.stack"
+COMPOSE="docker compose --env-file $COMPOSE_ENV_FILE -f $ROOT_DIR/infra/docker-compose.yml"
 
 CMD="${1:-up}"
 
+ensure_env_file() {
+  local target_file="$1"
+  local example_file="$2"
+  local label="$3"
+
+  if [ -f "$target_file" ]; then
+    return 0
+  fi
+
+  if [ ! -f "$example_file" ]; then
+    echo "❌ Missing required example env file: $example_file"
+    echo "   Restore the missing file and re-run ./scripts/stack.sh."
+    exit 1
+  fi
+
+  cp "$example_file" "$target_file"
+  echo "✅ Created $target_file from $example_file"
+}
+
+ensure_compose_env() {
+  ensure_env_file "$COMPOSE_ENV_FILE" "$ROOT_DIR/infra/.env.stack.example" "Infra"
+}
+
 case "$CMD" in
   up)
+    ensure_compose_env
     echo "🐳 Starting full Hubins stack..."
     $COMPOSE up --build -d
     echo ""
     echo "✅ Stack started."
     echo ""
-    echo "  Proxy:    http://goodwill-ca.lvh.me:3000"
-    echo "  Health:   http://goodwill-ca.lvh.me:3000/api/health"
-    echo "  Frontend: http://goodwill-ca.lvh.me:3000/"
-    echo ""
-    echo "  Logs: ./scripts/stack.sh logs"
-    echo "  Test: ./scripts/stack.sh test"
+    echo "  Public app: http://goodwill-ca.lvh.me:3000"
+    echo "  Health:     http://goodwill-ca.lvh.me:3000/api/health"
+    echo "  Logs:       ./scripts/stack.sh logs"
+    echo "  Test:       ./scripts/stack.sh test"
     ;;
 
   down)
@@ -64,6 +90,7 @@ case "$CMD" in
     ;;
 
   rebuild)
+    ensure_compose_env
     echo "🔨 Rebuilding and restarting full Hubins stack..."
     $COMPOSE down
     $COMPOSE up --build -d

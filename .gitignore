@@ -46,6 +46,7 @@ frontend/.env.*
 infra/.env
 infra/.env.*
 !infra/.env.example
+!infra/.env.stack.example
 
 # =========================
 # OS / Editor junk

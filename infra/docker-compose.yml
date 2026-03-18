@@ -1,53 +1,3 @@
-# infra/docker-compose.yml
-#
-# WHY:
-# - Full topology foundation: one file, one command, entire local stack.
-# - Only the proxy is bound to the host network (port 3000).
-# - Frontend and backend are INTERNAL only — never reachable directly from
-#   the host. All traffic flows through the reverse proxy.
-# - Postgres + Redis expose ports to the host (DEV ONLY) for local tooling
-#   (DBeaver, redis-cli, migrations from host-based scripts).
-# - Mailpit also exposes DEV-ONLY ports so engineers can inspect captured mail
-#   in a browser and optionally point host-run backend SMTP at localhost:1025.
-#
-# TOPOLOGY:
-#   Browser → proxy:3000 → frontend:3000 (/* and /_next/*)
-#                        → backend:3001  (/api/*)
-#
-# TENANT RESOLUTION:
-#   goodwill-ca.lvh.me:3000 → proxy preserves Host → backend reads tenantKey
-#
-# RULES:
-# - Only `proxy` is public application traffic.
-# - Frontend + backend have NO ports: entries (internal only).
-# - Mailpit/Postgres/Redis expose DEV-ONLY tooling ports.
-# - All services share hubins_net bridge network.
-# - INTERNAL_API_URL lets Next.js SSR call backend directly (container-to-container).
-#   Client-side calls always use relative /api/* through the proxy.
-#
-# ── KEY SEGREGATION NOTE ─────────────────────────────────────────────────────
-# Each cryptographic purpose uses a DISTINCT key below.
-# DEV-ONLY values are committed here for local development convenience.
-#
-# !! NEVER COPY THESE VALUES TO PRODUCTION !!
-#
-# Before any deployment, generate fresh keys for each purpose:
-#   MFA encryption key:    openssl rand -base64 32
-#   MFA HMAC key:         openssl rand -base64 32
-#   SSO state key:         openssl rand -base64 32
-#   Outbox encryption key: openssl rand -base64 32
-#
-# Using the same key for multiple purposes (e.g., MFA and outbox) reduces
-# the blast radius of a key compromise to a single subsystem rather than all.
-# ─────────────────────────────────────────────────────────────────────────────
-#
-# HOW TO START (full stack):
-#   docker compose -f infra/docker-compose.yml up --build
-#
-# HOW TO START (infra only, backend on host for hot-reload dev):
-#   docker compose -f infra/docker-compose-infra.yml up -d
-#   (then run backend with: yarn workspace @auth-lab/backend dev)
-
 name: hubins
 
 networks:
@@ -55,11 +5,10 @@ networks:
     driver: bridge
 
 services:
-  # ── Reverse proxy (single public-facing entry point) ────────────────────
   proxy:
     image: caddy:2
     ports:
-      - '3000:3000' # ONLY publicly exposed port in dev
+      - '3000:3000'
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
     networks: [hubins_net]
@@ -70,94 +19,59 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Next.js frontend (internal only) ────────────────────────────────────
   frontend:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
     environment:
-      # IMPORTANT: this container runs the standalone production build, not
-      # `next dev`. Stack mode validates topology/proxy wiring, not HMR.
-      - NODE_ENV=production
-      # WHY: SSR server components call the backend directly (container-to-container).
-      # Client-side code always uses relative /api/* through the proxy.
-      - INTERNAL_API_URL=http://backend:3001
-      - NEXT_PUBLIC_ENV=development
+      NODE_ENV: production
+      INTERNAL_API_URL: ${FRONTEND_INTERNAL_API_URL}
+      NEXT_PUBLIC_ENV: ${NEXT_PUBLIC_ENV}
     networks: [hubins_net]
-    # No ports: — internal only; all traffic through proxy
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Fastify backend (internal only) ─────────────────────────────────────
   backend:
     build:
       context: ..
       dockerfile: backend/Dockerfile
     environment:
-      - NODE_ENV=development
-      - PORT=3001
-      - DATABASE_URL=postgres://auth_lab:auth_lab@postgres:5432/auth_lab
-      - REDIS_URL=redis://redis:6379
-      - LOG_LEVEL=info
-      - SERVICE_NAME=auth-lab-backend
-      - BCRYPT_COST=12
-      - SEED_ON_START=true
-      - SEED_TENANT_KEY=goodwill-ca
-      - SEED_TENANT_NAME=GoodWill California
-      - SEED_ADMIN_EMAIL=system_admin@example.com
-      - SEED_INVITE_TTL_HOURS=168
-      - SESSION_TTL_SECONDS=86400
-      - MFA_ISSUER=Hubins
-
-      # ── Encryption keys — DEV ONLY, distinct per purpose ─────────────────
-      # Each key is independently generated to enforce key segregation.
-      # Sharing keys across purposes (e.g., MFA + outbox) is prohibited even
-      # in dev: it creates false confidence that production will use distinct keys.
-      #
-      # NEVER USE THESE VALUES IN PRODUCTION.
-      # Generate production keys with: openssl rand -base64 32
-
-      # AES-256-GCM key for TOTP secret encryption at rest
-      # Purpose: encrypts mfa_secrets.encrypted_secret
-      - MFA_ENCRYPTION_KEY_BASE64=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
-
-      # HMAC-SHA256 key for MFA recovery code hashing
-      # Purpose: hashes mfa_recovery_codes.code_hash
-      - MFA_HMAC_KEY_BASE64=8Emt6e4gn6r8rgRGSuYTVQ+D/3upFEckXRoMQYKJRJ8=
-
-      # AES-256-GCM key for SSO state encryption
-      # Purpose: encrypts/decrypts sso-state cookie payload
-      # All-zeros key is intentional for dev: SSO state is short-lived and
-      # non-sensitive in a local environment. Use a real key in production.
-      - SSO_STATE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-
-      # Fallback only: startSso prefers the real request public origin.
-      - SSO_REDIRECT_BASE_URL=http://goodwill-ca.lvh.me:3000/api
-      - GOOGLE_CLIENT_ID=test-google-client-id
-      - GOOGLE_CLIENT_SECRET=test-google-client-secret
-      - MICROSOFT_CLIENT_ID=test-microsoft-client-id
-      - MICROSOFT_CLIENT_SECRET=test-microsoft-client-secret
-
-      # AES-256-GCM key for outbox payload encryption
-      # Purpose: encrypts outbox_messages.payload fields (token, toEmail)
-      # DISTINCT from MFA_ENCRYPTION_KEY_BASE64 by design.
-      - OUTBOX_ENC_DEFAULT_VERSION=v1
-      - OUTBOX_ENC_KEY_V1=Kj3mN8vP2qR5sT7wX1yZ4aB6cD9eF0gH3iJ5kL7mN9=
-
-      # Email delivery — local capture by default (Phase 2)
-      # Safe for local development because Mailpit traps messages instead of
-      # delivering them to real recipients.
-      - EMAIL_PROVIDER=smtp
-      - SMTP_HOST=mailpit
-      - SMTP_PORT=1025
-      - SMTP_SECURE=false
-      - SMTP_FROM=Hubins <noreply@hubins.local>
-      - SMTP_PUBLIC_BASE_URL=http://{tenantKey}.lvh.me:3000
-
+      NODE_ENV: ${NODE_ENV}
+      PORT: ${PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      SERVICE_NAME: ${SERVICE_NAME}
+      BCRYPT_COST: ${BCRYPT_COST}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS}
+      MFA_ISSUER: ${MFA_ISSUER}
+      MFA_ENCRYPTION_KEY_BASE64: ${MFA_ENCRYPTION_KEY_BASE64}
+      MFA_HMAC_KEY_BASE64: ${MFA_HMAC_KEY_BASE64}
+      SSO_STATE_ENCRYPTION_KEY: ${SSO_STATE_ENCRYPTION_KEY}
+      SSO_REDIRECT_BASE_URL: ${SSO_REDIRECT_BASE_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET}
+      OUTBOX_ENC_DEFAULT_VERSION: ${OUTBOX_ENC_DEFAULT_VERSION}
+      OUTBOX_ENC_KEY_V1: ${OUTBOX_ENC_KEY_V1}
+      OUTBOX_POLL_INTERVAL_MS: ${OUTBOX_POLL_INTERVAL_MS}
+      OUTBOX_BATCH_SIZE: ${OUTBOX_BATCH_SIZE}
+      OUTBOX_MAX_ATTEMPTS: ${OUTBOX_MAX_ATTEMPTS}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_SECURE: ${SMTP_SECURE}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_PUBLIC_BASE_URL: ${SMTP_PUBLIC_BASE_URL}
+      SEED_ON_START: ${SEED_ON_START}
+      SEED_TENANT_KEY: ${SEED_TENANT_KEY}
+      SEED_TENANT_NAME: ${SEED_TENANT_NAME}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_INVITE_TTL_HOURS: ${SEED_INVITE_TTL_HOURS}
     networks: [hubins_net]
-    # No ports: — internal only; all traffic through proxy
     depends_on:
       postgres:
         condition: service_healthy
@@ -166,39 +80,35 @@ services:
       mailpit:
         condition: service_started
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/health || exit 1']
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:${PORT}/health || exit 1']
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
     restart: unless-stopped
 
-  # ── Postgres (DEV: port exposed for local tooling) ───────────────────────
   postgres:
     image: postgres:17
     container_name: auth-lab-postgres
     environment:
-      POSTGRES_DB: auth_lab
-      POSTGRES_USER: auth_lab
-      POSTGRES_PASSWORD: auth_lab
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      # DEV ONLY: exposed so host-based scripts (migrations, seeds) can connect
       - '5432:5432'
     volumes:
       - hubins_pg:/var/lib/postgresql/data
     networks: [hubins_net]
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U auth_lab -d auth_lab']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
       interval: 5s
       timeout: 3s
       retries: 20
 
-  # ── Redis (DEV: port exposed for local tooling) ──────────────────────────
   redis:
     image: redis:7-alpine
     container_name: auth-lab-redis
     ports:
-      # DEV ONLY: exposed for redis-cli and session inspection
       - '6379:6379'
     volumes:
       - hubins_redis:/data
@@ -209,12 +119,10 @@ services:
       timeout: 3s
       retries: 20
 
-  # ── Mailpit (DEV-ONLY local email capture) ──────────────────────────────
   mailpit:
     image: axllent/mailpit:latest
     container_name: auth-lab-mailpit
     ports:
-      # DEV ONLY: host access for browser inbox inspection + host-run SMTP
       - '8025:8025'
       - '1025:1025'
     networks: [hubins_net]

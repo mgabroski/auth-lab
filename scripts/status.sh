@@ -10,6 +10,9 @@
 # HOW TO USE:
 #   ./scripts/status.sh
 
+#!/usr/bin/env bash
+# scripts/status.sh
+
 set -euo pipefail
 
 probe_url() {
@@ -57,14 +60,15 @@ fi
 echo ""
 echo "🌐 HTTP probes"
 echo "--------------"
-probe_url "Host-run frontend" "http://goodwill-ca.localhost:3000"
+probe_url "Canonical tenant host" "http://goodwill-ca.lvh.me:3000"
+probe_url "Canonical /api/health" "http://goodwill-ca.lvh.me:3000/api/health"
 probe_url "Host-run backend health" "http://localhost:3001/health"
-probe_url "Full-stack public root" "http://goodwill-ca.lvh.me:3000"
-probe_url "Full-stack proxy health" "http://goodwill-ca.lvh.me:3000/api/health"
+probe_url "Mailpit UI" "http://localhost:8025"
 
 echo ""
 echo "🧭 Interpretation"
 echo "-----------------"
-echo "- Host-run frontend/backend are checked via HTTP only; they are not Docker-managed."
-echo "- Full-stack endpoints prove the reverse proxy path is alive."
-echo "- Container listings show Docker state for both infra-only and full-stack modes."
+echo "- goodwill-ca.lvh.me:3000 is now the single canonical browser URL in both local modes."
+echo "- Host-run mode serves that URL from the Next dev server on your machine."
+echo "- Full-stack mode serves that URL through Caddy inside Docker."
+echo "- Container listings show Docker state for infra-only and full-stack modes."
