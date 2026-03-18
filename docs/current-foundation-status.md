@@ -227,11 +227,44 @@ Specifically it adds:
 Phase 7 still requires a real staging execution with real Microsoft credentials before it can be claimed as operationally proven.
 The repository now contains the required proof procedure and regression coverage, but the live-provider round-trip itself remains an environment execution step.
 
+## 9. What Phase 8 added
+
+Phase 8 adds real-stack browser E2E coverage and the CI job that proves it.
+
+Specifically it adds:
+
+- `backend/src/shared/db/seed/seed-e2e-fixtures.ts` — seeds a dedicated ADMIN persona (`e2e-admin@example.com`) in `goodwill-open` with no MFA configured, so the admin login continuation path returns `MFA_SETUP_REQUIRED` predictably in real-stack tests
+- `backend/src/shared/db/seed/run-seed-e2e-fixtures.ts` — CLI runner: `yarn workspace @auth-lab/backend db:seed:e2e`
+- `frontend/playwright.config.real-stack.mts` — Playwright config targeting the real Caddy proxy at `*.lvh.me:3000`; no mock backend, no `next dev` web server block
+- `frontend/test/e2e/helpers/mailpit.ts` — Mailpit HTTP API helper (`purgeMailpit`, `waitForEmailToRecipient`, `extractLinkFromText`) for email-driven real-stack tests
+- `frontend/test/e2e/real-stack-smoke.spec.ts` — 8 smoke tests covering all Phase 8 required journeys
+- `.github/workflows/frontend-e2e-real-stack.yml` — CI job: builds Docker stack, seeds E2E fixtures, runs Playwright real-stack suite, uploads failure artifacts, tears down
+- `scripts/seed-e2e-fixtures.sh` — local convenience wrapper for `docker compose exec` seed
+- `frontend/package.json` and `backend/package.json` — `test:e2e:real-stack` and `db:seed:e2e` scripts added
+- `docs/developer-guide.md` — updated frontend checks section with real-stack E2E instructions
+
+**Drift fixed in this phase:**
+
+- Mock (`acme` tenant) vs real stack (`goodwill-open`/`goodwill-ca`) tenant and persona mismatch now documented and resolved
+- `frontend-tests.yml` stale "not yet" comment replaced with correct pointer to the new real-stack job
+- Mailpit API helper created so real-stack tests never depend on mock backend `/__mail/messages` endpoint
+
+**Boundary:**
+Phase 8 proves the topology and session model in a real browser. Real OAuth round-trips (Google, Microsoft) remain Phase 6/7 operator proof — the SSO topology probe in Phase 8 stops at the 302 redirect + state cookie check without requiring live OAuth credentials.
+
+Phase 8 does **not** change:
+
+- backend auth flows or policies
+- frontend auth forms or components
+- session or cookie contracts
+- proxy topology or Caddy/nginx configuration
+- first-admin `/admin/settings` routing (Phase 9 scope)
+
 ---
 
-## 9. Canonical local dev/test assumptions
+## 10. Canonical local dev/test assumptions
 
-### 9.1 Hostnames matter
+### 10.1 Hostnames matter
 
 Tenant-aware behavior must be tested using tenant hosts, not plain `localhost`, whenever host-derived tenant identity is part of the flow.
 
@@ -241,7 +274,7 @@ Current practical hosts:
 - host-run backend public-base-url pattern: `http://{tenantKey}.localhost:3000`
 - full-stack proxy path may use the committed proxy host contract in infra/docs
 
-### 9.2 Email is now part of the real local contract
+### 10.2 Email is now part of the real local contract
 
 Email-dependent auth flows are no longer “pretend only” in local development.
 
@@ -254,7 +287,7 @@ For local development, the repo expects:
 This is intentionally convenience-first and **not production-safe**.
 It exists only for local proof, developer feedback loops, and repeatable auth-flow verification.
 
-### 9.3 Staging email remains sandboxed
+### 10.3 Staging email remains sandboxed
 
 The intended non-production staging behavior is sandbox SMTP delivery, not real end-user delivery.
 
@@ -265,7 +298,7 @@ That choice exists to:
 - validate SMTP config shape with real credentials
 - validate permanent-failure behavior without using real production mail delivery
 
-### 9.4 Production-style bootstrap is explicit
+### 10.4 Production-style bootstrap is explicit
 
 Production-style tenant bootstrap is now treated as an explicit operator action.
 
@@ -278,7 +311,7 @@ That means:
 
 ---
 
-## 10. What is intentionally deferred or out of scope here
+## 11. What is intentionally deferred or out of scope here
 
 This file is not claiming completion of every future hardening concern.
 The following remain outside the scope of this status snapshot unless separately marked shipped:
@@ -292,7 +325,7 @@ The following remain outside the scope of this status snapshot unless separately
 
 ---
 
-## 11. Active truth-chain rule
+## 12. Active truth-chain rule
 
 The current truth-chain is:
 
@@ -305,7 +338,7 @@ If an older planning document implies a behavior that the repository no longer f
 
 ---
 
-## 12. Quick reality checklist
+## 13. Quick reality checklist
 
 As of the current foundation state, all of the following should be true:
 
@@ -323,6 +356,10 @@ As of the current foundation state, all of the following should be true:
 - Microsoft SSO staging config can be prepared from the committed `.env.example` files and the documented config checklist
 - Phase 6 live Google proof can be executed through the documented runbook once real staging credentials are available
 - Phase 7 live Microsoft proof can be executed through the documented runbook once real staging credentials are available
+- real-stack Playwright smoke tests pass against the full Docker Compose topology: `yarn workspace frontend test:e2e:real-stack`
+- the Phase 8 CI job (`frontend-e2e-real-stack.yml`) runs the real-stack smoke suite on push/PR
+- the E2E fixture seed (`yarn workspace @auth-lab/backend db:seed:e2e`) creates the required admin persona in `goodwill-open` with no MFA
+- Mailpit HTTP API is reachable at port 8025 when running the full stack (used by real-stack E2E email-verification test)
 - generated email links target the tenant-aware frontend host shape
 - operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token
 - invite acceptance can continue into registration, authenticated session creation, and MFA setup entry for a first admin bootstrap path
@@ -332,7 +369,7 @@ If one of these statements stops being true, this file must be updated or the re
 
 ---
 
-## 13. Current foundation score intent
+## 14. Current foundation score intent
 
 The repository should now be understood as:
 

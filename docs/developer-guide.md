@@ -465,16 +465,61 @@ yarn workspace @auth-lab/backend test --watch
 
 ### Frontend checks
 
-Useful commands:
+Unit tests and typecheck (no stack required):
 
 ```bash
-yarn workspace @auth-lab/frontend lint
-yarn workspace @auth-lab/frontend test
+yarn workspace frontend lint
+yarn workspace frontend typecheck
+yarn workspace frontend test:unit
 ```
+
+Mock-backed Playwright E2E (fast local loop, no Docker stack required):
+
+```bash
+# Requires: nothing running — the playwright.config.mts starts next dev + mock backend
+yarn workspace frontend test:e2e
+```
+
+Real-stack Playwright E2E (Phase 8 — requires Docker Compose stack to be running):
+
+```bash
+# 1. Start the full stack
+./scripts/stack.sh up
+
+# 2. Seed E2E fixtures (admin persona — idempotent, safe to re-run)
+./scripts/seed-e2e-fixtures.sh
+
+# 3. Run real-stack smoke tests
+yarn workspace frontend test:e2e:real-stack
+```
+
+The real-stack suite (`test/e2e/real-stack-smoke.spec.ts`) runs 8 smoke tests against the live Caddy proxy at `*.lvh.me:3000`. It uses `playwright.config.real-stack.mts` (not the default config). No webServer is started — the Docker stack must already be running.
+
+**What the real-stack suite proves:**
+
+- member login → `/app` + session cookie correct
+- logout clears session + `/api/auth/me` returns 401 + `/app` SSR rejects
+- admin login → `MFA_SETUP_REQUIRED` → `/auth/mfa/setup`
+- signup → Mailpit email delivery → verify link → `/app`
+- signup blocked on invite-only tenant (`goodwill-ca`)
+- host-derived tenant identity via Caddy proxy (two hosts → two tenant names)
+- SSO start sets `sso-state` cookie (SameSite=Lax) + Location → Google
+- cross-tenant session isolation enforced by backend
+
+**Mailpit API:**
+The real-stack tests read email from Mailpit's HTTP API at `http://localhost:8025`.
+If Mailpit is exposed on a different port, set `MAILPIT_API_URL=http://localhost:<port>` before running.
 
 ### Proxy conformance / route checks
 
-If the repo includes the expected scripts/check commands from earlier phases, run those after stack startup to confirm the same-origin proxy path still holds.
+Run after any change to `infra/`, proxy config, session middleware, or SSO flows:
+
+```bash
+# Requires full Docker stack running:
+./scripts/stack.sh test
+```
+
+This runs PT-01 through PT-08 from the topology document using curl + jq against the live Compose stack.
 
 ---
 

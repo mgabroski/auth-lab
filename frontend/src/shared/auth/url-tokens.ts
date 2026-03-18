@@ -6,6 +6,11 @@
  *   from URLs without duplicating parsing logic.
  * - Supports both Next.js server-page `searchParams` objects and browser URLSearchParams.
  * - Keeps reset / verify / invite / returnTo parsing consistent with backend expectations.
+ *
+ * TRIMMING CONTRACT:
+ * - All read functions trim whitespace and return null for blank values.
+ * - This applies consistently across all input types (string, URL, URLSearchParams, object).
+ * - A token or path that is only whitespace is treated as absent.
  */
 
 export type SearchParamValue = string | string[] | undefined;
@@ -22,18 +27,21 @@ export type SearchParamsInput =
   | SearchParamsRecord
   | SearchParamsWithGet;
 
+function trimOrNull(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
 function getFirstValue(value: SearchParamValue): string | null {
   if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed.length ? trimmed : null;
+    return trimOrNull(value);
   }
 
   if (Array.isArray(value)) {
     for (const entry of value) {
-      const trimmed = entry.trim();
-      if (trimmed.length) {
-        return trimmed;
-      }
+      const result = trimOrNull(entry);
+      if (result) return result;
     }
   }
 
@@ -51,18 +59,15 @@ function hasGetMethod(value: unknown): value is SearchParamsWithGet {
 
 function readFromSearchParams(searchParams: SearchParamsInput, key: string): string | null {
   if (typeof searchParams === 'string') {
-    return fromString(searchParams).get(key);
+    return trimOrNull(fromString(searchParams).get(key));
   }
 
   if (searchParams instanceof URL) {
-    return searchParams.searchParams.get(key);
+    return trimOrNull(searchParams.searchParams.get(key));
   }
 
   if (searchParams instanceof URLSearchParams || hasGetMethod(searchParams)) {
-    const value = searchParams.get(key);
-    if (!value) return null;
-    const trimmed = value.trim();
-    return trimmed.length ? trimmed : null;
+    return trimOrNull(searchParams.get(key));
   }
 
   return getFirstValue(searchParams[key]);

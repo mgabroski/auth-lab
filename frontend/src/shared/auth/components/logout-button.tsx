@@ -3,13 +3,19 @@
 /**
  * frontend/src/shared/auth/components/logout-button.tsx
  *
- * WHY:
- * - Implements the real logout interaction for authenticated routes.
- * - Calls the backend logout endpoint so session destruction stays backend-owned.
- * - Routes the browser back through the public root handoff after the cookie is cleared.
+ * WHY window.location.replace instead of router.replace:
+ * - Logout clears the session cookie via Set-Cookie: sid=; Max-Age=0 in the
+ *   POST /auth/logout response.
+ * - Next.js router.replace() is a soft navigation — it fetches the RSC payload
+ *   for the next route while cookie changes from the previous response may not
+ *   yet be applied to the browser's cookie jar.
+ * - This race condition causes the root page SSR to still see the old session
+ *   cookie, redirecting back to /app instead of /auth/login.
+ * - window.location.replace() is a hard redirect: the browser applies all
+ *   pending cookie changes before issuing the new request. SSR then sees no
+ *   cookie, reads 401 from /auth/me, and correctly redirects to /auth/login.
  */
 
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { logout } from '@/shared/auth/browser-api';
 import { getApiErrorMessage } from '@/shared/auth/api-errors';
@@ -35,7 +41,6 @@ const feedbackStyle = {
 } as const;
 
 export function LogoutButton() {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -47,7 +52,9 @@ export function LogoutButton() {
       const result = await logout();
 
       if (result.ok || result.status === 401) {
-        router.replace(ROOT_HANDOFF_PATH);
+        // Hard redirect — ensures the cleared session cookie is applied before
+        // the next server request, so SSR correctly sees an unauthenticated state.
+        window.location.replace(ROOT_HANDOFF_PATH);
         return;
       }
 

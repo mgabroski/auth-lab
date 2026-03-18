@@ -12,7 +12,8 @@
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "db:seed:dev": "tsx src/shared/db/seed/run-dev-seed.ts",
-    "db:bootstrap:tenant": "tsx src/shared/db/seed/run-bootstrap-tenant.ts"
+    "db:bootstrap:tenant": "tsx src/shared/db/seed/run-bootstrap-tenant.ts",
+    "db:seed:e2e": "tsx src/shared/db/seed/run-seed-e2e-fixtures.ts"
   },
   "dependencies": {
     "@sentry/node": "^10.42.0",

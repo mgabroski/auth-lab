@@ -963,7 +963,132 @@ Prove the real local browser flow for:
 
 ---
 
-## [PENDING — DEPLOYMENT PHASE]
+## Phase 8 real-stack browser E2E proof
+
+This section is the operational procedure for running and verifying the Phase 8 real-stack Playwright smoke suite.
+
+### Goal
+
+Prove all of the following against the real Docker Compose topology:
+
+- member login reaches `/app` and the session cookie is set correctly through the proxy
+- logout clears the backend session in Redis; `/api/auth/me` returns 401; SSR on `/app` redirects to `/auth/login`
+- admin login with no MFA configured continues to `/auth/mfa/setup` (real backend `MFA_SETUP_REQUIRED` nextAction)
+- public signup triggers outbox email delivery via Mailpit; the verify-link from the email completes authentication
+- signup is blocked on the invite-only tenant (`goodwill-ca`)
+- host-derived tenant identity resolves correctly through the Caddy proxy for two different tenant hosts
+- SSO start through the proxy sets the `sso-state` cookie (SameSite=Lax, HttpOnly) and returns a redirect to Google
+- a session created on `goodwill-open` is rejected with 401 when used on `goodwill-ca`
+
+### Prerequisites
+
+1. Docker and Docker Compose installed
+2. `jq` installed (`brew install jq` or equivalent) — required only for proxy conformance, not for Playwright
+3. `yarn install` completed at repo root
+4. Playwright Chromium installed: `yarn workspace frontend playwright install chromium --with-deps`
+5. `infra/.env.stack` exists (copy from `infra/.env.stack.example` if needed)
+
+### Running the real-stack suite locally
+
+```bash
+# 1. Start the full Docker Compose topology
+./scripts/stack.sh up
+
+# 2. Wait for the health check to pass (stack.sh polls internally)
+#    Confirm manually if needed:
+curl -sf http://goodwill-ca.lvh.me:3000/api/health && echo "✅ Backend healthy"
+
+# 3. Seed the E2E admin persona (idempotent — safe to re-run)
+./scripts/seed-e2e-fixtures.sh
+
+# 4. Run real-stack Playwright smoke tests
+yarn workspace frontend test:e2e:real-stack
+```
+
+### What counts as a pass
+
+All 8 tests in `frontend/test/e2e/real-stack-smoke.spec.ts` must pass:
+
+1. `member login reaches /app and session cookie is set correctly`
+2. `logout clears session and /app is rejected afterward`
+3. `admin login without MFA continues to /auth/mfa/setup`
+4. `signup delivers verification email and verify-link completes auth`
+5. `signup page shows blocked state on invite-only tenant`
+6. `topology: host-derived tenant identity resolves correctly through Caddy`
+7. `topology: SSO start through proxy sets sso-state cookie and redirects to provider`
+8. `cross-tenant isolation: goodwill-open session rejected on goodwill-ca`
+
+### Debugging failures
+
+**Symptom: test 4 (signup/email) times out waiting for email**
+
+Check in order:
+
+1. Mailpit is running: `curl -sf http://localhost:8025/api/v1/messages | jq .messages_count`
+2. Backend SMTP env points to Mailpit: `SMTP_HOST=mailpit` in `infra/.env.stack`
+3. Outbox worker is running: backend logs show `outbox.worker` events
+4. Outbox poll interval is low enough for CI: `OUTBOX_POLL_INTERVAL_MS=2000` recommended
+
+**Symptom: test 1 fails — tenant name does not match heading**
+
+Check that the stack seeded correctly:
+
+```bash
+docker compose --env-file infra/.env.stack -f infra/docker-compose.yml \
+  exec postgres psql -U auth_lab -d auth_lab \
+  -c "SELECT key, name FROM tenants;"
+```
+
+Expected rows: `goodwill-ca`, `goodwill-open`, and any other seed-created tenants.
+
+**Symptom: test 3 fails — admin continues to /app instead of /auth/mfa/setup**
+
+The E2E admin persona has MFA set up from a previous manual test run. Re-run the fixture seed to clear MFA rows:
+
+```bash
+./scripts/seed-e2e-fixtures.sh
+```
+
+**Symptom: SSO test (test 7) fails with non-302 or missing Location header**
+
+Check that the tenant has Google in `allowed_sso`:
+
+```bash
+docker compose --env-file infra/.env.stack -f infra/docker-compose.yml \
+  exec postgres psql -U auth_lab -d auth_lab \
+  -c "SELECT key, allowed_sso FROM tenants WHERE key = 'goodwill-open';"
+```
+
+Expected: `allowed_sso` contains `google`.
+
+Also confirm `GOOGLE_CLIENT_ID` is set in `infra/.env.stack` (a placeholder value is fine — the SSO start route only needs a non-empty client ID to build the redirect URL).
+
+### Teardown
+
+```bash
+./scripts/stack.sh down
+```
+
+To fully reset volumes (needed when DB state is dirty):
+
+```bash
+docker compose --env-file infra/.env.stack -f infra/docker-compose.yml down -v
+```
+
+### CI execution
+
+The CI job `.github/workflows/frontend-e2e-real-stack.yml` runs automatically on push/PR to any of:
+
+- `frontend/**`
+- `backend/**`
+- `infra/**`
+- `scripts/**`
+
+The job performs all setup steps above automatically: writes a deterministic `infra/.env.stack`, builds the Docker stack, waits for health, seeds E2E fixtures, runs Playwright, uploads traces/screenshots on failure, and tears down.
+
+`MAILPIT_API_URL=http://localhost:8025` is injected by the CI job so the Playwright helper can reach Mailpit from the runner.
+
+---
 
 The following remain intentionally deferred until the repo enters the explicit deployment/operations phase:
 

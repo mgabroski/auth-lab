@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "./scripts/dev.sh",
+    "dev:stack": "./scripts/dev.sh --stack",
     "stack": "./scripts/stack.sh up",
     "stack:down": "./scripts/stack.sh down",
     "stack:test": "./scripts/stack.sh test",
@@ -24,17 +25,16 @@
     "typecheck:backend": "yarn workspace @auth-lab/backend typecheck",
     "typecheck:frontend": "yarn workspace frontend typecheck",
     "build:frontend": "yarn workspace frontend build",
-    "test": "yarn test:backend && yarn test:frontend",
+    "test": "./scripts/test.sh",
     "test:backend": "yarn workspace @auth-lab/backend test",
-    "test:frontend": "yarn workspace frontend test",
     "test:frontend:unit": "yarn workspace frontend test:unit",
-    "test:frontend:e2e": "yarn workspace frontend test:e2e",
-    "test:watch": "yarn test:watch:backend",
-    "test:watch:backend": "yarn workspace @auth-lab/backend test:watch",
-    "verify": "yarn fmt:check && yarn lint && yarn typecheck && yarn build:frontend && yarn test",
-    "prepare": "husky",
+    "test:e2e": "yarn workspace frontend test:e2e",
+    "test:watch": "yarn workspace @auth-lab/backend test:watch",
+    "verify": "./scripts/verify.sh",
     "seed:dev": "yarn workspace @auth-lab/backend db:seed:dev",
-    "bootstrap:tenant": "yarn workspace @auth-lab/backend db:bootstrap:tenant"
+    "seed:e2e": "yarn workspace @auth-lab/backend db:seed:e2e",
+    "bootstrap:tenant": "yarn workspace @auth-lab/backend db:bootstrap:tenant",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
