@@ -348,7 +348,7 @@ Prove the staging Google configuration is correct before spending time on browse
 4. confirm the Google app registration type is **Web application**
 5. confirm the exact authorized redirect URI is registered in Google Cloud Console:
 
-```
+```text
 https://<tenant-host>/api/auth/sso/google/callback
 ```
 
@@ -446,6 +446,285 @@ Capture at least the following during the proof:
 This is a live-provider operator/QA proof procedure.
 The repository's automated tests can prove policy and callback behavior, but they do not replace a real Google credential round-trip in staging.
 Do not claim Phase 6 is operationally proven until this checklist has been executed with real Google credentials in the target staging environment.
+
+## Phase 7 real Microsoft SSO integration proof
+
+This section is the canonical operational procedure for the Phase 7 Microsoft live-provider proof scope.
+
+### Goal
+
+Prove all of the following against the real staging stack:
+
+- Microsoft OAuth browser round-trip works end to end
+- session creation is correct after callback completion
+- user, membership, and tenant data are correct after Microsoft sign-in
+- Microsoft SSO respects the repo's email-claim fallback contract
+- Microsoft SSO respects LOCK-4 for expired invites
+- Microsoft SSO respects LOCK-5 and continues into app-level MFA when required
+- audit evidence exists for the successful sign-in
+- Microsoft provider key discovery is reachable from the staging network
+
+### Preconditions
+
+Before starting the proof, confirm all of the following:
+
+1. the shared staging backend is running with real `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`
+2. the staging Microsoft app registration includes the exact redirect URI for the tenant host you are about to prove
+3. the target tenant allows Microsoft SSO
+4. you have one real Microsoft account that matches an already-`ACTIVE` membership in the target tenant
+5. you have one target email whose only tenant-entry basis is an expired invite, for LOCK-4 validation
+6. you have one admin-path persona without MFA configured, for the `MFA_SETUP_REQUIRED` branch
+7. you have one admin-path persona with verified app-level MFA already configured, for the `MFA_REQUIRED` branch
+8. you have access to the staging audit log surface or direct DB/log inspection method used by the team
+9. the staging network can reach Microsoft's JWKS endpoint:
+
+```bash
+curl -fsS https://login.microsoftonline.com/common/discovery/v2.0/keys > /dev/null
+```
+
+### A. Microsoft app registration creation guide
+
+#### Goal
+
+Create the exact Microsoft Entra app registration shape required by this repo, starting from the Azure portal, with no guessing.
+
+#### Steps
+
+1. Open `https://portal.azure.com/` in a real browser and sign in with the Azure account that owns the staging Microsoft Entra tenant
+2. In the portal search bar, type **Microsoft Entra ID** and open it
+3. In the left navigation, open **Applications** → **App registrations**
+4. Click **New registration**
+5. In **Name**, enter exactly: `Hubins Auth-Lab Staging SSO`
+6. Under **Supported account types**, choose **Accounts in any organizational directory and personal Microsoft accounts**
+7. Leave the initial **Redirect URI** field empty on the first screen and click **Register**
+8. After the app opens on the **Overview** page, copy and store:
+   - **Application (client) ID**
+   - **Directory (tenant) ID**
+
+9. In the left navigation for the app, open **Authentication**
+10. Under **Platform configurations**, click **Add a platform**
+11. Choose **Web**
+12. In **Redirect URI**, enter the exact callback URL for the tenant host you are proving:
+
+```text
+https://<tenant-host>/api/auth/sso/microsoft/callback
+```
+
+13. Click **Configure**
+14. Stay on the app and open **Certificates & secrets**
+15. Under **Client secrets**, click **New client secret**
+16. In **Description**, enter exactly: `Hubins Auth-Lab staging backend secret`
+17. Choose an expiration that matches your team's staging secret-rotation policy
+18. Click **Add**
+19. Immediately copy the new **Value** for the client secret and store it securely
+20. Do **not** use the secret's **Secret ID** in this repo
+
+#### Exact repo mapping from Microsoft values
+
+- **Application (client) ID** → `MICROSOFT_CLIENT_ID`
+- client secret **Value** → `MICROSOFT_CLIENT_SECRET`
+- **Directory (tenant) ID** → operator record only; this repo does **not** read a `MICROSOFT_TENANT_ID` env var
+
+### B. Configuration proof
+
+#### Goal
+
+Prove the staging Microsoft configuration is correct before spending time on browser debugging.
+
+#### Checklist
+
+1. open the staging backend secret/config source and confirm `MICROSOFT_CLIENT_ID` is set
+2. confirm `MICROSOFT_CLIENT_SECRET` is set
+3. confirm the values match the Microsoft app registration you just created
+4. confirm `SSO_STATE_ENCRYPTION_KEY` is set to the staging value
+5. confirm the exact redirect URI configured in Microsoft matches the tenant host under test:
+
+```text
+https://<tenant-host>/api/auth/sso/microsoft/callback
+```
+
+6. confirm the tenant being tested has `microsoft` in its allowed SSO providers
+7. confirm the frontend is still using the locked same-origin `/api/*` browser topology and is **not** trying to call Microsoft through `fetch()`
+
+#### What counts as a pass
+
+- backend secrets are present in staging
+- the Microsoft app registration exactly matches the callback URI used by the tenant host under proof
+- provider-key reachability succeeds from the staging network
+
+### C. Claim / issuer proof
+
+#### Goal
+
+Prove the repo's Microsoft-specific claim and issuer assumptions line up with the real provider.
+
+#### What must be true
+
+1. the repo resolves user email in this order:
+   - `email`
+   - `preferred_username`
+   - `upn`
+
+2. the backend lowercases the resolved email before membership lookup and identity linking
+3. the backend does **not** use a static Microsoft tenant ID env var
+4. the backend reads `tid` from the unverified token payload only to build the expected issuer and then verifies the token against:
+
+```text
+https://login.microsoftonline.com/<tid>/v2.0
+```
+
+#### Manual confirmation steps
+
+1. perform one successful Microsoft sign-in with the real active member account
+2. inspect the resulting user row / session / audit evidence using the team's normal staging inspection path
+3. confirm the resolved email matches the expected Microsoft account email identity for that user
+4. if the sign-in used an enterprise account without a direct `email` claim, record whether the match came from `preferred_username` or `upn`
+5. if the token or logs expose tenant metadata through approved inspection channels, confirm the tenant-specific issuer path corresponds to the token `tid`
+
+#### What counts as a pass
+
+- the successful sign-in resolved the expected email identity
+- fallback behavior is understood and documented for the tested account
+- issuer resolution matches the token tenant context instead of relying on a static tenant env var
+
+### D. Active-member success proof
+
+#### Goal
+
+Prove an already-active member can complete the real Microsoft browser round-trip and land in an authenticated session.
+
+#### Checklist
+
+1. open the real tenant login page on the staging tenant host
+2. start Microsoft SSO from the real login page
+3. complete the Microsoft browser sign-in with the active-member account
+4. confirm the browser is redirected back to the app through:
+
+```text
+/api/auth/sso/microsoft/callback
+```
+
+5. confirm the app lands on the expected post-SSO page, not an error screen
+6. call or inspect `/api/auth/me` for that same browser session
+7. confirm the returned user email matches the Microsoft account used in the round-trip
+8. confirm the returned tenant key and membership role/status match the expected tenant membership
+9. confirm the backend session cookie exists and the session is bound to the same tenant
+10. confirm an `auth.sso.login.success` audit entry exists for that sign-in
+
+#### What counts as a pass
+
+- a real Microsoft account completes the OAuth round-trip successfully
+- authenticated session truth is owned by the backend after callback completion
+- `/api/auth/me` reflects the correct user, tenant, and membership context
+- success audit evidence exists
+
+### E. LOCK-4 expired-invite rejection proof
+
+#### Goal
+
+Prove Microsoft SSO does not revive an expired invite when that invite is the user's only tenant-entry basis.
+
+#### Checklist
+
+1. prepare or confirm an expired invite for the target tenant and email address
+2. start Microsoft SSO on that tenant host using the matching Microsoft account
+3. complete the Microsoft provider flow
+4. confirm the backend rejects the callback instead of activating membership
+5. confirm no new user row or active membership was created as a side effect
+6. confirm the recovery path remains admin resend or recreate invite
+7. confirm a failure audit entry exists if your normal inspection path exposes it
+
+#### What counts as a pass
+
+- expired invite flow is rejected
+- Microsoft SSO does not bypass invite expiration
+- no orphan user or revived membership is created
+
+### F. LOCK-5 MFA continuation proof
+
+#### Goal
+
+Prove Microsoft SSO does not bypass app-level MFA requirements.
+
+#### `MFA_SETUP_REQUIRED` branch
+
+1. use the admin-path persona that does **not** yet have verified MFA configured
+2. start Microsoft SSO and complete the provider flow
+3. confirm the callback resolves into the backend-owned continuation route instead of direct authenticated access
+4. confirm continuation goes to `/auth/mfa/setup`
+5. complete setup and confirm only then does authenticated access continue
+
+#### `MFA_REQUIRED` branch
+
+1. use the admin-path persona that already has verified app-level MFA configured
+2. start Microsoft SSO and complete the provider flow
+3. confirm the callback resolves into the backend-owned continuation route instead of direct authenticated access
+4. confirm continuation goes to `/auth/mfa/verify`
+5. complete verification and confirm only then does authenticated access continue
+
+#### What counts as a pass
+
+- Microsoft SSO never lands directly in the authenticated area when app-level MFA is still required
+- setup is required for MFA-unconfigured admin users
+- verify is required for MFA-configured admin users
+
+### G. Audit and session proof
+
+#### Goal
+
+Prove the successful Microsoft callback produced the expected internal application state.
+
+#### Checklist
+
+1. inspect the created or reused session after successful callback completion
+2. confirm the session contains the expected user ID, membership ID, tenant ID/tenant key, role, and verified-auth state
+3. inspect audit evidence for the same sign-in event
+4. confirm a success audit entry exists for `auth.sso.login.success`
+5. confirm the audit metadata records `provider: microsoft`
+6. do **not** require raw token logging as proof
+
+#### What counts as a pass
+
+- session truth is correct after callback completion
+- tenant and membership context are correct
+- audit evidence exists and attributes the success to Microsoft SSO
+
+### H. Minimal operator checklist
+
+Use this short checklist when you only need the minimum operational path:
+
+1. create the Microsoft app registration
+2. add the **Web** redirect URI for `https://<tenant-host>/api/auth/sso/microsoft/callback`
+3. create the client secret and copy the **Value**
+4. update backend env from `backend/.env.example` or `infra/.env.stack.example`:
+   - `MICROSOFT_CLIENT_ID`
+   - `MICROSOFT_CLIENT_SECRET`
+
+5. confirm frontend env from `frontend/.env.example` stays unchanged for Microsoft secrets
+6. restart the app / stack so backend picks up the new credentials
+7. run a real browser Microsoft sign-in
+8. verify callback completion, authenticated session, and audit evidence
+9. verify expired-invite rejection
+10. verify MFA continuation for both setup-required and verify-required cases
+
+### Evidence to capture
+
+Capture at least the following during the proof:
+
+- screenshot of the Microsoft Entra app registration redirect URI configuration
+- screenshot or terminal output proving Microsoft JWKS endpoint reachability from staging
+- browser capture of successful Microsoft sign-in for an already-active member
+- `/api/auth/me` evidence showing correct user, tenant, and membership context after success
+- audit evidence for `auth.sso.login.success` with `provider: microsoft`
+- browser and/or backend evidence showing expired-invite rejection
+- browser evidence showing MFA continuation after Microsoft SSO for both setup-required and verify-required admin personas
+- notes or screenshot proving which claim supplied the resolved email if the account did not expose a direct `email` claim
+
+### Important boundary
+
+This is a live-provider operator/QA proof procedure.
+The repository's automated tests can prove policy and callback behavior, but they do not replace a real Microsoft credential round-trip in staging.
+Do not claim Phase 7 is operationally proven until this checklist has been executed with real Microsoft credentials in the target staging environment.
 
 ## Rate Limiting Issues
 

@@ -31,8 +31,9 @@ Today the repo contains all of the following as real implemented surfaces:
 - a documented Phase 4 runbook for public signup, email verification, resend verification, and password recovery proof
 - a real MFA setup page that now renders a scannable QR from the backend `otpauth://` URI plus issuer/account preview for manual Phase 5 proof
 - a documented Phase 5 runbook for real authenticator-app setup, MFA login verification, and recovery-code single-use proof
-- backend/frontend example env files now exist and document the Google SSO staging keys engineers must set before live-provider proof
+- backend/frontend example env files now exist and document the Google + Microsoft SSO staging keys engineers must set before live-provider proof
 - a documented Phase 6 runbook for real Google SSO staging proof, including redirect URI, JWKS reachability, expired-invite rejection, MFA continuation, and audit/session validation
+- a documented Phase 7 runbook for real Microsoft SSO staging proof, including Azure portal app-registration steps, claim fallback and issuer resolution proof, expired-invite rejection, MFA continuation, and audit/session validation
 
 That does **not** mean the broader Hubins product UI is finished.
 It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
@@ -213,11 +214,24 @@ Specifically it adds:
 Phase 6 still requires a real staging execution with real Google credentials before it can be claimed as operationally proven.
 The repository now contains the required proof procedure and regression coverage, but the live-provider round-trip itself remains an environment execution step.
 
+## 8. What Phase 7 added
+
+Phase 7 adds the repository-side readiness items for real Microsoft live-provider validation.
+
+Specifically it adds:
+
+- explicit Microsoft SSO secrets/config checklist guidance in `docs/developer-guide.md`, including exact env file/variable wiring and the note that this repo does not use a `MICROSOFT_TENANT_ID` env var
+- a dedicated Phase 7 runbook in `docs/ops/runbooks.md` covering Azure portal app-registration steps, configuration proof, claim fallback proof, issuer resolution proof, active-member success proof, expired-invite rejection, MFA continuation, audit validation, and JWKS reachability
+- stronger Microsoft callback regression coverage for session payload correctness, claim fallback resolution, and the `MFA_REQUIRED` continuation when Microsoft SSO is used by an admin who already has verified MFA
+
+Phase 7 still requires a real staging execution with real Microsoft credentials before it can be claimed as operationally proven.
+The repository now contains the required proof procedure and regression coverage, but the live-provider round-trip itself remains an environment execution step.
+
 ---
 
-## 8. Canonical local dev/test assumptions
+## 9. Canonical local dev/test assumptions
 
-### 8.1 Hostnames matter
+### 9.1 Hostnames matter
 
 Tenant-aware behavior must be tested using tenant hosts, not plain `localhost`, whenever host-derived tenant identity is part of the flow.
 
@@ -227,7 +241,7 @@ Current practical hosts:
 - host-run backend public-base-url pattern: `http://{tenantKey}.localhost:3000`
 - full-stack proxy path may use the committed proxy host contract in infra/docs
 
-### 8.2 Email is now part of the real local contract
+### 9.2 Email is now part of the real local contract
 
 Email-dependent auth flows are no longer “pretend only” in local development.
 
@@ -240,7 +254,7 @@ For local development, the repo expects:
 This is intentionally convenience-first and **not production-safe**.
 It exists only for local proof, developer feedback loops, and repeatable auth-flow verification.
 
-### 8.3 Staging email remains sandboxed
+### 9.3 Staging email remains sandboxed
 
 The intended non-production staging behavior is sandbox SMTP delivery, not real end-user delivery.
 
@@ -251,7 +265,7 @@ That choice exists to:
 - validate SMTP config shape with real credentials
 - validate permanent-failure behavior without using real production mail delivery
 
-### 8.4 Production-style bootstrap is explicit
+### 9.4 Production-style bootstrap is explicit
 
 Production-style tenant bootstrap is now treated as an explicit operator action.
 
@@ -264,7 +278,7 @@ That means:
 
 ---
 
-## 9. What is intentionally deferred or out of scope here
+## 10. What is intentionally deferred or out of scope here
 
 This file is not claiming completion of every future hardening concern.
 The following remain outside the scope of this status snapshot unless separately marked shipped:
@@ -278,7 +292,7 @@ The following remain outside the scope of this status snapshot unless separately
 
 ---
 
-## 10. Active truth-chain rule
+## 11. Active truth-chain rule
 
 The current truth-chain is:
 
@@ -291,7 +305,7 @@ If an older planning document implies a behavior that the repository no longer f
 
 ---
 
-## 11. Quick reality checklist
+## 12. Quick reality checklist
 
 As of the current foundation state, all of the following should be true:
 
@@ -306,7 +320,9 @@ As of the current foundation state, all of the following should be true:
 - MFA setup page can render a real scannable QR from the backend `otpauth://` URI
 - Phase 5 real-device MFA proof can be executed through the documented runbook
 - Google SSO staging config can be prepared from the committed `.env.example` files and the documented config checklist
+- Microsoft SSO staging config can be prepared from the committed `.env.example` files and the documented config checklist
 - Phase 6 live Google proof can be executed through the documented runbook once real staging credentials are available
+- Phase 7 live Microsoft proof can be executed through the documented runbook once real staging credentials are available
 - generated email links target the tenant-aware frontend host shape
 - operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token
 - invite acceptance can continue into registration, authenticated session creation, and MFA setup entry for a first admin bootstrap path
@@ -316,7 +332,7 @@ If one of these statements stops being true, this file must be updated or the re
 
 ---
 
-## 12. Current foundation score intent
+## 13. Current foundation score intent
 
 The repository should now be understood as:
 

@@ -49,6 +49,29 @@ describe('MicrosoftSsoAdapter.validateAndExtractIdentity', () => {
     expect(identity).toEqual({ email: 'user@example.com', sub: 'sub-1', name: 'User Name' });
   });
 
+  it('email claim takes precedence over preferred_username and upn', async () => {
+    const adapter = new MicrosoftSsoAdapter(CLIENT_ID, 'secret');
+    const idToken = buildFakeIdToken({ tid: 'tenant-123' });
+
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: {
+        nonce: 'n1',
+        sub: 'sub-1',
+        email: 'PRIMARY@Example.com',
+        preferred_username: 'fallback@example.com',
+        upn: 'second-fallback@example.com',
+      },
+    });
+
+    const identity = await adapter.validateAndExtractIdentity({
+      idToken,
+      expectedNonce: 'n1',
+      now: new Date(),
+    });
+
+    expect(identity.email).toBe('primary@example.com');
+  });
+
   it('tid missing in raw payload → 401', async () => {
     const adapter = new MicrosoftSsoAdapter(CLIENT_ID, 'secret');
     const idToken = buildFakeIdToken({}); // no tid

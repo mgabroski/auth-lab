@@ -12,6 +12,21 @@ import {
 
 const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID ?? 'test-microsoft-client-id';
 
+function extractSessionIdFromSetCookie(setCookieHeader: string | string[] | undefined): string {
+  const first = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
+
+  if (!first) {
+    throw new Error('Expected Set-Cookie header to contain a session cookie');
+  }
+
+  const match = /^sid=([^;]+)/.exec(first);
+  if (!match) {
+    throw new Error(`Could not extract sid cookie from: ${first}`);
+  }
+
+  return match[1];
+}
+
 /**
  * Helper to generate a standard Microsoft V2 issuer URL based on tenant ID.
  */
@@ -29,7 +44,7 @@ describe('GET /auth/sso/microsoft/callback', () => {
       const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['microsoft'] });
       const email = `u-${randomUUID().slice(0, 8)}@example.com`;
 
-      await createUserWithMembership({
+      const created = await createUserWithMembership({
         db: deps.db,
         tenantId: tenant.id,
         email,
@@ -67,6 +82,19 @@ describe('GET /auth/sso/microsoft/callback', () => {
       expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
       expect(res.headers['set-cookie']).toBeTruthy();
 
+      const sessionId = extractSessionIdFromSetCookie(res.headers['set-cookie']);
+      const session = await deps.sessionStore.get(sessionId);
+
+      expect(session).toMatchObject({
+        userId: created.user.id,
+        tenantId: tenant.id,
+        tenantKey,
+        membershipId: created.membership.id,
+        role: 'MEMBER',
+        mfaVerified: true,
+        emailVerified: true,
+      });
+
       const audits = await deps.db
         .selectFrom('audit_events')
         .selectAll()
@@ -78,6 +106,65 @@ describe('GET /auth/sso/microsoft/callback', () => {
       const meta = audits[0].metadata as Record<string, unknown>;
       expect(meta.email).toBeUndefined();
       expect(meta.provider).toBe('microsoft');
+    } finally {
+      await close();
+    }
+  });
+
+  it('success: ADMIN with verified MFA → 302 done?nextAction=MFA_REQUIRED', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['microsoft'] });
+      const email = `admin-mfa-${randomUUID().slice(0, 8)}@example.com`;
+
+      const created = await createUserWithMembership({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+      });
+
+      await deps.db
+        .insertInto('mfa_secrets')
+        .values({
+          user_id: created.user.id,
+          encrypted_secret: deps.encryptionService.encrypt('JBSWY3DPEHPK3PXP'),
+          is_verified: true,
+          verified_at: new Date(),
+        })
+        .execute();
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'microsoft',
+      });
+      const tid = `tenant-${randomUUID().slice(0, 8)}`;
+
+      sso.microsoftAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          tid,
+          iss: msIssuer(tid),
+          aud: MICROSOFT_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `ms-sub-${randomUUID()}`,
+          preferred_username: email,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/microsoft/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=MFA_REQUIRED');
     } finally {
       await close();
     }
@@ -359,7 +446,7 @@ describe('GET /auth/sso/microsoft/callback', () => {
           aud: MICROSOFT_CLIENT_ID,
           exp: Math.floor(Date.now() / 1000) + 60,
           nonce,
-          sub: `ms-sub-${randomUUID()}`,
+          sub: `ms-sub-${randomUUID().slice(0, 8)}@example.com`,
           preferred_username: `u-${randomUUID().slice(0, 8)}@example.com`,
         }),
       });

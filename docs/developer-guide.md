@@ -115,6 +115,16 @@ NEXT_PUBLIC_ENV=development
 Do not point browser requests directly at backend public ports.
 The browser must continue to use same-origin `/api/*`.
 
+### Infra stack example env
+
+If you are running the Docker/local-stack path that reads stack-level env, copy:
+
+```bash
+cp infra/.env.stack.example infra/.env.stack
+```
+
+This is the right place to wire backend/runtime secrets for the stack-driven environment when you are not using a host-run `backend/.env` directly.
+
 ---
 
 ## Phase 6 Google SSO config checklist
@@ -146,7 +156,7 @@ For the shared staging environment, document and confirm all of the following be
 2. the staging backend env contains the real `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
 3. the Google app has the exact authorized redirect URI for the staging tenant host you are proving, in the form:
 
-```
+```text
 https://<tenant-host>/api/auth/sso/google/callback
 ```
 
@@ -159,6 +169,87 @@ Before the live proof, confirm the staging network can reach Google's JWKS endpo
 
 ```bash
 curl -fsS https://www.googleapis.com/oauth2/v3/certs > /dev/null
+```
+
+A zero-exit curl is the minimum pass signal for provider-key reachability.
+
+---
+
+## Phase 7 Microsoft SSO config checklist
+
+This is the repo-level secrets/config checklist for the Microsoft live-provider proof.
+
+### Exact env files used by this repo for Microsoft SSO wiring
+
+Use these exact example files as the wiring source of truth:
+
+- `backend/.env.example` → copy into `backend/.env` for host-run backend development
+- `infra/.env.stack.example` → copy into `infra/.env.stack` for Docker/local-stack or staging-style stack wiring
+- `frontend/.env.example` → copy into `frontend/.env.local` for frontend SSR wiring only
+
+### Backend env keys used by Microsoft SSO
+
+These keys belong in the backend environment only:
+
+- `MICROSOFT_CLIENT_ID` — the Microsoft **Application (client) ID** from the app registration Overview page
+- `MICROSOFT_CLIENT_SECRET` — the Microsoft client secret **Value** from **Certificates & secrets**
+- `SSO_STATE_ENCRYPTION_KEY` — encrypts the short-lived `sso-state` cookie payload
+- `SSO_REDIRECT_BASE_URL` — fallback only when the real public request origin is unavailable
+
+Important repo-specific rule:
+
+- this repo does **not** use a `MICROSOFT_TENANT_ID` env var
+- the backend starts against Microsoft `/common` endpoints and resolves the final issuer from the token `tid` claim during verification
+
+### Frontend env keys
+
+No Microsoft OAuth client secret belongs in the frontend.
+The frontend only needs:
+
+- `INTERNAL_API_URL` for SSR/server-side backend calls
+- `NEXT_PUBLIC_ENV` for environment display/behavior
+
+### Microsoft claim fallback behavior confirmed in this repo
+
+The Microsoft callback path resolves the user email in this exact order:
+
+1. `email`
+2. `preferred_username`
+3. `upn`
+
+The resolved value is normalized to lowercase before user lookup / identity linking.
+If none of those claims contains an email-like value, the callback must fail.
+
+### Staging Microsoft app registration checklist
+
+For the shared staging environment, document and confirm all of the following before attempting the live round-trip:
+
+1. Microsoft app platform is **Web**
+2. Supported account types is **Accounts in any organizational directory and personal Microsoft accounts**
+3. the staging backend env contains the real `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`
+4. the Microsoft app has the exact redirect URI for the staging tenant host you are proving, in the form:
+
+```text
+https://<tenant-host>/api/auth/sso/microsoft/callback
+```
+
+5. the staging tenant has `microsoft` in `allowed_sso`
+6. the staging tenant host resolves through the real same-origin `/api/*` topology
+
+### Exact value mapping from Microsoft into repo env
+
+Use these exact mappings:
+
+- Microsoft **Application (client) ID** → `MICROSOFT_CLIENT_ID`
+- Microsoft client secret **Value** → `MICROSOFT_CLIENT_SECRET`
+- Microsoft **Directory (tenant) ID** → operator reference only; do not try to wire it into backend env because this repo does not read a `MICROSOFT_TENANT_ID`
+
+### Provider key discovery reachability check
+
+Before the live proof, confirm the staging network can reach Microsoft's JWKS endpoint because backend token validation depends on it:
+
+```bash
+curl -fsS https://login.microsoftonline.com/common/discovery/v2.0/keys > /dev/null
 ```
 
 A zero-exit curl is the minimum pass signal for provider-key reachability.
@@ -486,6 +577,6 @@ For a new machine or a fresh clone:
 7. open `http://goodwill-ca.localhost:3000`
 8. open `http://localhost:8025`
 9. confirm backend health
-10. confirm seeded invite email is visible in Mailpit
+10. confirm seeded invite email is visible in Mailpit`
 
 If all ten pass, the current local foundation is behaving as intended.
