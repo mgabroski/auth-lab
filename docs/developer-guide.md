@@ -135,6 +135,33 @@ This is the right place to wire backend/runtime secrets for the stack-driven env
 
 ---
 
+## Secrets hygiene — never share env files
+
+`backend/.env`, `infra/.env.stack`, and `frontend/.env.local` are gitignored for good reason: they contain real credentials.
+
+**Never include these files in:**
+
+- review artifacts or zip files sent to reviewers
+- screen recordings or screenshots
+- Slack messages, emails, or issue attachments
+- any shared document or chat thread
+
+These files contain real OAuth client secrets (Google, Microsoft), encryption keys, and SMTP credentials. Once a file leaves your machine you cannot control where it ends up or who can read it.
+
+**If you have already shared a file containing real credentials:**
+
+1. Assume the credentials are compromised
+2. Rotate the affected secrets immediately (OAuth secrets in Google Cloud Console / Azure Portal, generate new encryption keys)
+3. Update your local env files with the new values
+
+**The safe way to share env context with another engineer:**
+
+- point them to the `.env.example` or `.env.stack.example` files — these are committed and contain safe placeholders
+- list the env var names they need to set, not the values
+- for OAuth credentials, give them access to the shared secret manager or the cloud console directly
+
+---
+
 ## Phase 6 Google SSO config checklist
 
 This is the repo-level secrets/config checklist for the Google live-provider proof.

@@ -314,7 +314,11 @@ describe('POST /auth/mfa/setup and /auth/mfa/verify-setup', () => {
     }
   });
 
-  it('fail-open on replay cache READ error: valid code still succeeds', async () => {
+  // NOTE: The replay path uses setIfAbsent only — cache.get is never called.
+  // A READ error test patching cache.get would pass trivially and prove nothing.
+  // Only the WRITE path matters here.
+
+  it('fail-closed on replay cache WRITE error: valid code → 500, not silently allowed', async () => {
     const { app, deps, cryptoHelpers, reset } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
@@ -345,56 +349,9 @@ describe('POST /auth/mfa/setup and /auth/mfa/verify-setup', () => {
       const setupBody = parseJson<{ secret: string }>(setupRes);
       const validCode = cryptoHelpers.generateTotpCode(setupBody.secret);
 
-      const originalGet = deps.cache.get.bind(deps.cache);
-      deps.cache.get = async (key: string) => {
-        if (key.startsWith('totp:used:')) throw new Error('redis_read_error');
-        return originalGet(key);
-      };
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/mfa/verify-setup',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-        body: { code: validCode },
-      });
-
-      expect(res.statusCode).toBe(200);
-    } finally {
-      await app.close();
-    }
-  });
-
-  it('fail-open on replay cache WRITE error: valid code still succeeds', async () => {
-    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
-    const tenantKey = `tenant-${randomUUID()}`;
-    const email = `admin-${randomUUID()}@example.com`;
-    const password = 'password123';
-
-    try {
-      await reset();
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      await seedUserWithPassword({
-        db: deps.db,
-        passwordHasher: deps.passwordHasher,
-        tenantId: tenant.id,
-        email,
-        password,
-        role: 'ADMIN',
-      });
-
-      const cookie = await loginAndGetCookie({ app, tenantKey, email, password });
-
-      const setupRes = await app.inject({
-        method: 'POST',
-        url: '/auth/mfa/setup',
-        headers: { host: `${tenantKey}.hubins.com`, cookie },
-      });
-
-      expect(setupRes.statusCode).toBe(200);
-      const setupBody = parseJson<{ secret: string }>(setupRes);
-      const validCode = cryptoHelpers.generateTotpCode(setupBody.secret);
-
+      // Patch setIfAbsent to simulate Redis write failure on the replay key.
+      // The flow must NOT silently proceed — it must throw so the user cannot
+      // reuse a valid code during a Redis write-unavailability window.
       const originalSetIfAbsent = deps.cache.setIfAbsent.bind(deps.cache);
       deps.cache.setIfAbsent = async (
         key: string,
@@ -412,7 +369,8 @@ describe('POST /auth/mfa/setup and /auth/mfa/verify-setup', () => {
         body: { code: validCode },
       });
 
-      expect(res.statusCode).toBe(200);
+      // Fail-closed: Redis write failure blocks the flow, not silently passes it.
+      expect(res.statusCode).toBe(500);
     } finally {
       await app.close();
     }

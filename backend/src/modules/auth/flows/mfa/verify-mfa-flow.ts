@@ -4,6 +4,15 @@
  * WHY:
  * - Deep module for verifying MFA during login (Brick 9b).
  * - Preserves rate limit + audit behavior exactly.
+ *
+ * REPLAY PROTECTION:
+ * - After a valid TOTP code is accepted, the code is claimed in Redis with a
+ *   120-second TTL (wider than the ±1 step / 90-second TOTP window).
+ * - If the Redis write fails the flow throws rather than proceeding.
+ *   FAIL-CLOSED is the correct security posture: a failed replay-check write
+ *   must block, not silently pass. Allowing the flow to continue would let an
+ *   attacker reuse a valid code during any Redis write-unavailability window.
+ *   The user sees a 500 and can retry once Redis recovers.
  */
 
 import { AuditWriter } from '../../../../shared/audit/audit.writer';
@@ -87,15 +96,19 @@ export async function verifyMfaFlow(params: {
 
   const usedCodeKey = `totp:used:${userKey}:${input.code}`;
 
-  let claimed = true;
+  // FAIL-CLOSED: if the Redis write throws, we block rather than proceed.
+  // Allowing the flow to continue on a write failure would let a valid code
+  // be reused during any Redis write-unavailability window.
+  let claimed: boolean;
   try {
     claimed = await deps.cache.setIfAbsent(usedCodeKey, '1', { ttlSeconds: 120 });
   } catch (err) {
-    deps.logger.warn('mfa.replay_cache_write_error', {
+    deps.logger.error('mfa.replay_cache_write_error', {
       flow: 'mfa.verify',
       userId: input.userId,
       error: (err as Error).message,
     });
+    throw AppError.internal('MFA verification temporarily unavailable. Please try again.');
   }
 
   if (!claimed) {

@@ -256,7 +256,11 @@ describe('POST /auth/mfa/verify', () => {
     }
   });
 
-  it('fail-open on replay cache READ error: valid code still succeeds', async () => {
+  // NOTE: The replay path uses setIfAbsent only — cache.get is never called.
+  // A READ error test patching cache.get would pass trivially and prove nothing.
+  // Only the WRITE path matters here.
+
+  it('fail-closed on replay cache WRITE error: valid code → 500, not silently allowed', async () => {
     const { app, deps, cryptoHelpers, reset } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID()}`;
     const email = `admin-${randomUUID()}@example.com`;
@@ -290,59 +294,9 @@ describe('POST /auth/mfa/verify', () => {
       expect(cookieHeader).toBeTruthy();
       const preMfaCookie = Array.isArray(cookieHeader) ? cookieHeader[0] : (cookieHeader as string);
 
-      const originalGet = deps.cache.get.bind(deps.cache);
-      deps.cache.get = async (key: string) => {
-        if (key.startsWith('totp:used:')) throw new Error('redis_read_error');
-        return originalGet(key);
-      };
-
-      const validCode = cryptoHelpers.generateTotpCode(plainSecret);
-      const res = await app.inject({
-        method: 'POST',
-        url: '/auth/mfa/verify',
-        headers: { host: `${tenantKey}.hubins.com`, cookie: preMfaCookie },
-        body: { code: validCode },
-      });
-      expect(res.statusCode).toBe(200);
-    } finally {
-      await app.close();
-    }
-  });
-
-  it('fail-open on replay cache WRITE error: valid code still succeeds', async () => {
-    const { app, deps, cryptoHelpers, reset } = await buildTestApp();
-    const tenantKey = `tenant-${randomUUID()}`;
-    const email = `admin-${randomUUID()}@example.com`;
-    const password = 'password123';
-
-    try {
-      await reset();
-      const tenant = await createTenant({ db: deps.db, tenantKey });
-
-      const plainSecret = cryptoHelpers.generateTotpSecret();
-      const encryptedSecret = cryptoHelpers.encryptSecret(plainSecret);
-
-      await seedAdminWithMfa({
-        db: deps.db,
-        passwordHasher: deps.passwordHasher,
-        tenantId: tenant.id,
-        email,
-        password,
-        mfaSecretEncrypted: encryptedSecret,
-      });
-
-      const loginRes = await app.inject({
-        method: 'POST',
-        url: '/auth/login',
-        headers: { host: `${tenantKey}.hubins.com` },
-        body: { email, password },
-      });
-
-      expect(loginRes.statusCode).toBe(200);
-      const cookieHeader = loginRes.headers['set-cookie'];
-      expect(cookieHeader).toBeTruthy();
-      const preMfaCookie = Array.isArray(cookieHeader) ? cookieHeader[0] : (cookieHeader as string);
-
+      // Patch setIfAbsent to simulate Redis write failure on the replay key.
+      // The flow must NOT silently proceed — it must throw so the user cannot
+      // reuse a valid code during a Redis write-unavailability window.
       const originalSetIfAbsent = deps.cache.setIfAbsent.bind(deps.cache);
       deps.cache.setIfAbsent = async (
         key: string,
@@ -360,7 +314,8 @@ describe('POST /auth/mfa/verify', () => {
         headers: { host: `${tenantKey}.hubins.com`, cookie: preMfaCookie },
         body: { code: validCode },
       });
-      expect(res.statusCode).toBe(200);
+      // Fail-closed: Redis write failure blocks the flow, not silently passes it.
+      expect(res.statusCode).toBe(500);
     } finally {
       await app.close();
     }

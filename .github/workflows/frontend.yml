@@ -82,6 +82,8 @@ jobs:
       # BCRYPT_COST=4 keeps hash operations fast in CI (not 12).
       # OUTBOX_POLL_INTERVAL_MS=2000 means email arrives within ~2s of send.
       # SSO credentials are placeholders — no live OAuth round-trip in CI.
+      # KEY SEPARATION: MFA_ENCRYPTION_KEY_BASE64 and OUTBOX_ENC_KEY_V1 must
+      # be different values — enforced by startup guard added in di.ts.
 
       - name: Write infra/.env.stack for CI
         run: |
@@ -110,7 +112,7 @@ jobs:
           LOCAL_OIDC_ISSUER=http://local-oidc:9998
           LOCAL_OIDC_CLIENT_ID=local-oidc-ci-client
           OUTBOX_ENC_DEFAULT_VERSION=v1
-          OUTBOX_ENC_KEY_V1=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+          OUTBOX_ENC_KEY_V1=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           OUTBOX_POLL_INTERVAL_MS=2000
           OUTBOX_BATCH_SIZE=10
           OUTBOX_MAX_ATTEMPTS=5

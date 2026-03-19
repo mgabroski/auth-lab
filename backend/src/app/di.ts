@@ -15,9 +15,14 @@
  *   rather than silently swallowing all email delivery.
  * - Avoid `any` and unsafe casts; validate + narrow config at boundaries.
  *
- * 9/10 HARDENING:
- * - Added SmtpEmailAdapter wiring based on config.email.provider.
- * - Added production guard: NoopEmailAdapter is not allowed when nodeEnv=production.
+ * STARTUP GUARDS (enforced before any service is constructed):
+ * - Guard 1 — key separation: MFA_ENCRYPTION_KEY_BASE64 and the active
+ *   OUTBOX_ENC_KEY must never be the same value. They encrypt different data
+ *   at rest (TOTP secrets vs outbox payloads). Reusing the same key means a
+ *   single key compromise exposes both. Rejected in all envs except test.
+ * - Guard 2 — SSO state key: SSO_STATE_ENCRYPTION_KEY must not be the
+ *   all-zeros placeholder outside of NODE_ENV=test. An all-zeros key provides
+ *   no confidentiality for the SSO state cookie. Rejected in dev + production.
  */
 
 import type { AppConfig } from './config';
@@ -118,6 +123,66 @@ function isOutboxEncVersion(v: string): v is OutboxEncVersion {
   return /^v[0-9]+$/.test(v);
 }
 
+// The all-zeros placeholder used in .env.example and CI (NODE_ENV=test only).
+// The value is 43 'A' chars + one '=' — a valid base64-encoded 32-byte zero buffer.
+const ALL_ZEROS_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
+/**
+ * STARTUP GUARD 1 — Key separation.
+ *
+ * MFA_ENCRYPTION_KEY_BASE64 and the active OUTBOX_ENC_KEY must not share the
+ * same value. They protect different data at rest. A shared key means one
+ * compromise exposes both TOTP secrets and outbox payloads simultaneously.
+ *
+ * Allowed in NODE_ENV=test only — CI uses intentionally weak/shared placeholders
+ * against throwaway data and there is no real secret at risk.
+ */
+export function assertKeySeparation(config: AppConfig): void {
+  if (config.nodeEnv === 'test') return;
+
+  const mfaKey = config.mfa.encryptionKeyBase64;
+  const activeOutboxKey = config.outbox.encKeysByVersion[config.outbox.encDefaultVersion];
+
+  if (mfaKey === activeOutboxKey) {
+    throw new Error(
+      [
+        'STARTUP GUARD: MFA_ENCRYPTION_KEY_BASE64 and OUTBOX_ENC_KEY_V1 must not be the same value.',
+        'They encrypt different data at rest. A shared key exposes both TOTP secrets and outbox',
+        'payloads if either is compromised.',
+        'Generate two separate keys: openssl rand -base64 32',
+        'See backend/.env.example § "KEY SEPARATION RULE".',
+      ].join('\n'),
+    );
+  }
+}
+
+/**
+ * STARTUP GUARD 2 — SSO state encryption key.
+ *
+ * SSO_STATE_ENCRYPTION_KEY must not be the all-zeros placeholder outside of
+ * NODE_ENV=test. An all-zeros key provides no confidentiality for the SSO
+ * state cookie — anyone who knows the placeholder can decrypt the state and
+ * forge or replay SSO flows.
+ *
+ * Allowed in NODE_ENV=test only — backend E2E tests run with the all-zeros key
+ * against a throwaway DB with no real credentials at risk.
+ */
+export function assertSsoStateKey(config: AppConfig): void {
+  if (config.nodeEnv === 'test') return;
+
+  if (config.sso.stateEncryptionKeyBase64 === ALL_ZEROS_KEY) {
+    throw new Error(
+      [
+        'STARTUP GUARD: SSO_STATE_ENCRYPTION_KEY must not be the all-zeros placeholder',
+        'outside of NODE_ENV=test. An all-zeros key provides no confidentiality for',
+        'the SSO state cookie.',
+        'Generate a real key: openssl rand -base64 32',
+        'See backend/.env.example § "SSO".',
+      ].join('\n'),
+    );
+  }
+}
+
 function buildOutboxEncryptionConfig(config: AppConfig): OutboxEncryptionConfig {
   const defaultVersionRaw = config.outbox.encDefaultVersion;
   if (!isOutboxEncVersion(defaultVersionRaw)) {
@@ -164,6 +229,27 @@ function buildEmailAdapter(
       );
     }
 
+    // PRODUCTION GUARD: reject local/dev SMTP endpoints in production.
+    // An operator who copies infra/.env.stack to production would silently
+    // point all transactional email at a non-existent Mailpit container.
+    // Every invite, password-reset, and verification email would fail at the
+    // SMTP connection level with no startup warning. Catching it here is
+    // cheaper than debugging silent email delivery failures post-deploy.
+    if (config.nodeEnv === 'production') {
+      const localHosts = ['localhost', '127.0.0.1', 'mailpit'];
+      const host = config.email.smtp.host.toLowerCase();
+      if (localHosts.some((h) => host === h || host.endsWith(`.${h}`))) {
+        throw new Error(
+          [
+            'PRODUCTION STARTUP GUARD: SMTP_HOST appears to be a local or dev endpoint',
+            `("${config.email.smtp.host}"). Configure a real SMTP provider for production.`,
+            'Examples: email-smtp.<region>.amazonaws.com (AWS SES),',
+            'smtp.sendgrid.net (SendGrid), smtp.eu.mailgun.org (Mailgun).',
+          ].join('\n'),
+        );
+      }
+    }
+
     return new SmtpEmailAdapter(config.email.smtp, deps);
   }
 
@@ -187,6 +273,12 @@ export async function buildDeps(
   config: AppConfig,
   overrides: BuildDepsOverrides = {},
 ): Promise<AppDeps> {
+  // ── Startup guards ─────────────────────────────────────────────────────────
+  // Run before constructing any service so misconfiguration fails fast with a
+  // clear message rather than a cryptic runtime error deep inside a flow.
+  assertKeySeparation(config);
+  assertSsoStateKey(config);
+
   const db = createDb(config.databaseUrl);
 
   const redis = await RedisCache.connect(config.redisUrl);
