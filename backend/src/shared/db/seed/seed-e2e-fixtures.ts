@@ -207,4 +207,134 @@ export async function seedE2eFixtures(opts: {
     message:
       'E2E admin persona is ready: ADMIN, ACTIVE, email_verified, no MFA → login returns MFA_SETUP_REQUIRED',
   });
+
+  // Seed the second admin persona used by the invite-acceptance Playwright test.
+  await seedE2eInviteAdminPersona({ db, passwordHasher, tenant });
+}
+
+// ── Second E2E admin persona: invite-admin ───────────────────────────────────
+//
+// WHY a separate persona for the invite-acceptance Playwright test:
+// - The primary e2e-admin persona (e2e-admin@example.com) has its MFA state
+//   cleared by the seed so it always starts with no MFA. After the MFA-loop
+//   Playwright test (test 11) runs, that admin has a configured + verified MFA
+//   secret. The invite-acceptance test (test 12) also needs a fresh admin to
+//   drive POST /admin/invites — but it must be MFA-verified to call that endpoint.
+// - If test 12 reused e2e-admin@example.com, it would encounter MFA_REQUIRED
+//   (login continuation, not MFA_SETUP_REQUIRED) and the verify flow differs.
+// - A dedicated second persona (e2e-invite-admin@example.com) keeps both tests
+//   independent regardless of execution order. It also has its MFA cleared so
+//   test 12 always goes through the consistent MFA_SETUP_REQUIRED path.
+//
+// PERSONAS CREATED:
+//   goodwill-open / e2e-invite-admin@example.com
+//     - ADMIN role, ACTIVE status, email_verified: true
+//     - Password: Password123!
+//     - No MFA rows → login will return MFA_SETUP_REQUIRED
+
+const E2E_INVITE_ADMIN_EMAIL = 'e2e-invite-admin@example.com';
+const E2E_INVITE_ADMIN_NAME = 'E2E Invite Admin';
+
+async function seedE2eInviteAdminPersona(opts: {
+  db: DbExecutor;
+  passwordHasher: PasswordHasher;
+  tenant: { id: string; key: string };
+}): Promise<void> {
+  const { db, passwordHasher, tenant } = opts;
+  const flow = 'seed.e2e.invite_admin';
+  const email = E2E_INVITE_ADMIN_EMAIL.toLowerCase();
+
+  // ── Ensure user row ──────────────────────────────────────────────────────
+  let user = await db
+    .selectFrom('users')
+    .select(['id', 'email', 'name', 'email_verified'])
+    .where('email', '=', email)
+    .executeTakeFirst();
+
+  if (!user) {
+    user = await db
+      .insertInto('users')
+      .values({ email, name: E2E_INVITE_ADMIN_NAME, email_verified: true })
+      .returning(['id', 'email', 'name', 'email_verified'])
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.invite_admin.user.created', { flow, email, userId: user.id });
+  } else {
+    if (!user.email_verified) {
+      await db
+        .updateTable('users')
+        .set({ email_verified: true })
+        .where('id', '=', user.id)
+        .execute();
+    }
+    logger.info('seed.e2e.invite_admin.user.exists', { flow, email, userId: user.id });
+  }
+
+  // ── Ensure password identity ─────────────────────────────────────────────
+  const identity = await db
+    .selectFrom('auth_identities')
+    .select(['id'])
+    .where('user_id', '=', user.id)
+    .where('provider', '=', 'password')
+    .executeTakeFirst();
+
+  if (!identity) {
+    const passwordHash = await passwordHasher.hash(E2E_ADMIN_PASSWORD);
+    await db
+      .insertInto('auth_identities')
+      .values({
+        user_id: user.id,
+        provider: 'password',
+        provider_subject: null,
+        password_hash: passwordHash,
+      })
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.invite_admin.password_identity.created', {
+      flow,
+      email,
+      userId: user.id,
+    });
+  }
+
+  // ── Ensure ADMIN ACTIVE membership ──────────────────────────────────────
+  const existing = await db
+    .selectFrom('memberships')
+    .select(['id', 'role', 'status'])
+    .where('tenant_id', '=', tenant.id)
+    .where('user_id', '=', user.id)
+    .executeTakeFirst();
+
+  if (!existing) {
+    const now = new Date();
+    await db
+      .insertInto('memberships')
+      .values({
+        tenant_id: tenant.id,
+        user_id: user.id,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        invited_at: now,
+        accepted_at: now,
+        suspended_at: null,
+      })
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.invite_admin.membership.created', { flow, email, userId: user.id });
+  } else if (existing.role !== 'ADMIN' || existing.status !== 'ACTIVE') {
+    await db
+      .updateTable('memberships')
+      .set({ role: 'ADMIN', status: 'ACTIVE', suspended_at: null })
+      .where('id', '=', existing.id)
+      .execute();
+    logger.info('seed.e2e.invite_admin.membership.patched', { flow, email, userId: user.id });
+  }
+
+  // ── Clear ALL MFA state (same reason as primary e2e-admin persona) ───────
+  await db.deleteFrom('mfa_recovery_codes').where('user_id', '=', user.id).execute();
+  await db.deleteFrom('mfa_secrets').where('user_id', '=', user.id).executeTakeFirst();
+
+  logger.info('seed.e2e.invite_admin.done', {
+    flow,
+    email,
+    tenantKey: tenant.key,
+    message: 'E2E invite-admin persona ready: ADMIN, ACTIVE, email_verified, no MFA',
+  });
 }

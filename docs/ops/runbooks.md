@@ -1218,6 +1218,122 @@ workspace.
 
 ---
 
+## Secret Management and Environment Promotion Rules
+
+This section documents the key-separation requirements and staging promotion checklist
+that must be satisfied before any shared environment (staging, production) receives a
+deployment of this module.
+
+---
+
+### MFA_ENCRYPTION_KEY_BASE64 — key isolation (mandatory before staging)
+
+The MFA encryption key (`MFA_ENCRYPTION_KEY_BASE64`) is an AES-256-GCM key that
+encrypts TOTP secrets at rest in the `mfa_secrets` table. If this key is shared
+between environments, a DB compromise in one environment can decrypt TOTP secrets
+from another. The MFA HMAC key (`MFA_HMAC_KEY_BASE64`) has the same requirement.
+
+**Rule: every environment must have a unique, independently generated key.**
+
+| Environment | Source                             | May reuse another env's key? |
+| ----------- | ---------------------------------- | ---------------------------- |
+| Local dev   | `.env.example` default             | Yes — data is ephemeral      |
+| CI          | CI workflow env var (test DB only) | Yes — isolated test database |
+| Staging     | Secret manager (unique)            | **No. Generate fresh.**      |
+| Production  | Secret manager (unique)            | **No. Generate fresh.**      |
+
+**Generate a new key:**
+
+```bash
+openssl rand -base64 32
+```
+
+Store in your secret manager (AWS Secrets Manager, GCP Secret Manager, Doppler, etc.).
+Never write a real staging or production key to any file in this repo.
+
+---
+
+### SSO_STATE_ENCRYPTION_KEY — strong key required in all shared environments
+
+The SSO state encryption key (`SSO_STATE_ENCRYPTION_KEY`) protects the CSRF-binding
+state cookie during OAuth redirect flows. The `backend/.env.example` default is all-zeros
+(`AAAA...=`) which is intentional for local HTTP dev but trivially decryptable.
+
+**Rule: replace with a real 32-byte random key before any shared environment.**
+
+```bash
+openssl rand -base64 32
+```
+
+The all-zeros key in `.env.example` must never reach staging or production.
+
+---
+
+### Outbox encryption key (`OUTBOX_ENC_KEY_V1`)
+
+Same isolation requirement as MFA keys. The outbox encryption key protects email
+payloads at rest. Generate a unique key per environment using `openssl rand -base64 32`.
+
+---
+
+### Staging promotion checklist
+
+Complete this checklist before the first deployment to any shared or staging environment.
+Each item is a hard gate — do not promote without all items confirmed.
+
+- [ ] `MFA_ENCRYPTION_KEY_BASE64` is a freshly generated key, unique to this environment
+- [ ] `MFA_HMAC_KEY_BASE64` is a freshly generated key, unique to this environment
+- [ ] `SSO_STATE_ENCRYPTION_KEY` is a freshly generated 32-byte key (not all-zeros)
+- [ ] `OUTBOX_ENC_KEY_V1` is a freshly generated key, unique to this environment
+- [ ] `NODE_ENV=production` is set — required for the `Secure` cookie flag on `sid`
+- [ ] `LOCAL_OIDC_ENABLED` is absent or `false` — the local OIDC server is CI-only
+- [ ] Real Google OAuth credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) are loaded
+      from the secret manager, not from any file
+- [ ] Real Microsoft OAuth credentials (`MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`)
+      are loaded from the secret manager, not from any file
+- [ ] Google OAuth redirect URI is updated to the staging domain in Google Cloud Console
+- [ ] Microsoft OAuth redirect URI is updated to the staging domain in Entra (Azure AD)
+- [ ] `EMAIL_PROVIDER=smtp` with real SMTP credentials — `noop` is rejected at startup
+      when `NODE_ENV=production` (enforced in `di.ts`)
+- [ ] SENTRY_DSN is configured if error tracking is required for this environment
+
+---
+
+### Credential rotation procedure
+
+If real OAuth credentials are accidentally exposed — for example, by being included
+in a zip artifact that is shared externally — rotate immediately. Do not wait.
+
+**For Google:**
+
+1. Go to Google Cloud Console → APIs & Services → Credentials.
+2. Find the OAuth 2.0 Client ID in use and regenerate the client secret.
+   (Do not delete and recreate the client — redirect URIs are preserved on regeneration.)
+3. Update the secret manager with the new `GOOGLE_CLIENT_SECRET` value.
+4. Redeploy the backend (it reads credentials from env at startup).
+5. Confirm the old secret is no longer accepted by attempting an SSO start/callback
+   cycle with the old value.
+6. Record the incident in the decision log if the exposure scope is non-trivial.
+
+**For Microsoft:**
+
+1. Go to Microsoft Entra admin center → App registrations → your app → Certificates & secrets.
+2. Delete the exposed client secret and create a new one.
+3. Update the secret manager with the new `MICROSOFT_CLIENT_SECRET` value.
+4. Redeploy the backend.
+5. Confirm the old secret is inactive in the Entra console.
+
+**Note on `.env` files in build artifacts:**
+
+The repo `.gitignore` correctly excludes `backend/.env`. The risk is accidental
+inclusion when manually creating zip archives for sharing or review (e.g. zipping
+the project directory without using `git archive`). CI workflows use placeholder
+values only and never write real credentials to any file. Real credentials must
+exist only in the secret manager and in the running process environment — never
+in any artifact, log, or commit.
+
+---
+
 ## Deferred Operational Items
 
 The following operational items are explicitly deferred from the Auth + User Provisioning

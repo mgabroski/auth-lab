@@ -23,6 +23,20 @@ export default [
   js.configs.recommended,
   ...typedTsConfigs,
 
+  // Local OIDC server — Node.js script, no TypeScript, needs Node globals
+  {
+    files: ['infra/oidc-server/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        Buffer: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        console: 'readonly',
+      },
+    },
+  },
+
   {
     files: ['backend/**/*.{ts,tsx}'],
     languageOptions: {

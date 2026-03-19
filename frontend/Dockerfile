@@ -39,6 +39,16 @@ COPY frontend ./frontend
 ENV NEXT_PUBLIC_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# WHY ARG + ENV here:
+# next.config.ts validates INTERNAL_API_URL at startup, which includes during
+# `next build` (Next.js sets NODE_ENV=production internally for the build process).
+# The actual runtime value is injected by docker-compose.yml at container start.
+# This build arg satisfies the startup check without baking a real URL into the image.
+# The value used here is the Docker-internal backend service name — the same value
+# that will be set at runtime via docker-compose environment.
+ARG INTERNAL_API_URL=http://backend:3001
+ENV INTERNAL_API_URL=${INTERNAL_API_URL}
+
 WORKDIR /repo/frontend
 RUN yarn build
 
@@ -54,7 +64,11 @@ RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /repo/frontend/public ./public
 COPY --from=builder --chown=nextjs:nodejs /repo/frontend/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /repo/frontend/.next/static ./.next/static
+# WHY frontend/.next/static not .next/static:
+# outputFileTracingRoot points to the repo root, so Next.js standalone output
+# mirrors the repo structure. server.js lands at /app/frontend/server.js and
+# expects static files at /app/frontend/.next/static — not /app/.next/static.
+COPY --from=builder --chown=nextjs:nodejs /repo/frontend/.next/static ./frontend/.next/static
 
 USER nextjs
 
@@ -63,4 +77,4 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-CMD ["node", "server.js"]
+CMD ["node", "frontend/server.js"]

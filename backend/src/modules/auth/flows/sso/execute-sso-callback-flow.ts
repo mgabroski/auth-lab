@@ -83,6 +83,36 @@ type FailureAuditPayload = {
   emailKey?: string;
 };
 
+/**
+ * WHY — SsoDeniedError carrier pattern:
+ *
+ * The SSO callback flow has an unusual constraint: it must write a failure audit
+ * event OUTSIDE the transaction (so the audit survives a tx rollback), but the
+ * information needed for that audit (tenantId, userId, membershipId, provider,
+ * reason) is only known INSIDE the transaction — after tenant resolution,
+ * identity extraction, and policy evaluation have already run.
+ *
+ * A plain `throw AppError.forbidden(...)` inside the transaction discards all
+ * of that context before the catch block can use it. Storing audit context in
+ * a closure variable is fragile (only one variable, multiple throw sites,
+ * short-circuit logic).
+ *
+ * Solution — the carrier pattern:
+ * - Every denial site inside the transaction throws a `SsoDeniedError` instead
+ *   of an AppError directly.
+ * - The SsoDeniedError carries BOTH the public-safe AppError to re-throw AND
+ *   the full audit context needed to write the failure event.
+ * - The outer catch block checks `instanceof SsoDeniedError`, writes the
+ *   failure audit using the carried context, THEN re-throws only `err.appError`
+ *   (the public-safe error) so callers never see the internal carrier class.
+ *
+ * This is the only way to satisfy two constraints simultaneously:
+ *   1. Failure audit survives rollback (must write outside tx).
+ *   2. Audit payload is accurate (must be assembled inside tx).
+ *
+ * The class is intentionally private to this file — it is an implementation
+ * detail of the flow, not a shared error type. No other file should import it.
+ */
 class SsoDeniedError extends Error {
   readonly appError: Error;
   readonly audit: { ctx: FailureAuditContext; payload: FailureAuditPayload };

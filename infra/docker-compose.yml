@@ -23,6 +23,12 @@ services:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
+      args:
+        # WHY: next.config.ts validates INTERNAL_API_URL at startup, which includes
+        # during `next build`. Passing it as a build arg satisfies the check.
+        # The Dockerfile defaults to http://backend:3001 so this arg is optional,
+        # but explicit is better — it documents the intent and allows override.
+        INTERNAL_API_URL: ${FRONTEND_INTERNAL_API_URL}
     environment:
       NODE_ENV: production
       INTERNAL_API_URL: ${FRONTEND_INTERNAL_API_URL}

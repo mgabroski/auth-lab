@@ -87,6 +87,16 @@ const ConfigSchema = z.object({
   MICROSOFT_CLIENT_ID: z.string().min(1),
   MICROSOFT_CLIENT_SECRET: z.string().min(1),
 
+  // Local OIDC server — CI only (Phase 6/7 SSO proof gap closure)
+  // When LOCAL_OIDC_ENABLED=true, di.ts registers LocalOidcSsoAdapter for both
+  // 'google' and 'microsoft' SSO provider slots instead of the real adapters.
+  // The local OIDC server (infra/oidc-server/) issues real RS256 JWTs so the
+  // full cryptographic validation path is proven in CI without real credentials.
+  // NEVER set LOCAL_OIDC_ENABLED=true in staging or production.
+  LOCAL_OIDC_ENABLED: z.coerce.boolean().default(false),
+  LOCAL_OIDC_ISSUER: z.string().url().optional(),
+  LOCAL_OIDC_CLIENT_ID: z.string().optional(),
+
   // Outbox (PR2)
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(250).max(60_000).default(5_000),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
@@ -171,6 +181,14 @@ export type AppConfig = {
     googleClientSecret: string;
     microsoftClientId: string;
     microsoftClientSecret: string;
+    /**
+     * CI-only: when set, LocalOidcSsoAdapter is used for all SSO providers
+     * instead of real Google/Microsoft adapters. Never set in production.
+     */
+    localOidc?: {
+      issuerUrl: string;
+      clientId: string;
+    };
   };
 
   outbox: {
@@ -264,6 +282,15 @@ export function buildConfig(): AppConfig {
       googleClientSecret: parsed.GOOGLE_CLIENT_SECRET,
       microsoftClientId: parsed.MICROSOFT_CLIENT_ID,
       microsoftClientSecret: parsed.MICROSOFT_CLIENT_SECRET,
+      // CI-only local OIDC override (see LOCAL_OIDC_ENABLED comment in schema)
+      ...(parsed.LOCAL_OIDC_ENABLED && parsed.LOCAL_OIDC_ISSUER && parsed.LOCAL_OIDC_CLIENT_ID
+        ? {
+            localOidc: {
+              issuerUrl: parsed.LOCAL_OIDC_ISSUER,
+              clientId: parsed.LOCAL_OIDC_CLIENT_ID,
+            },
+          }
+        : {}),
     },
 
     outbox: {

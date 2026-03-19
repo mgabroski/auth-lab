@@ -106,6 +106,9 @@ jobs:
           GOOGLE_CLIENT_SECRET=ci-placeholder-google-client-secret
           MICROSOFT_CLIENT_ID=ci-placeholder-microsoft-client-id
           MICROSOFT_CLIENT_SECRET=ci-placeholder-microsoft-client-secret
+          LOCAL_OIDC_ENABLED=true
+          LOCAL_OIDC_ISSUER=http://local-oidc:9998
+          LOCAL_OIDC_CLIENT_ID=local-oidc-ci-client
           OUTBOX_ENC_DEFAULT_VERSION=v1
           OUTBOX_ENC_KEY_V1=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
           OUTBOX_POLL_INTERVAL_MS=2000
@@ -126,9 +129,16 @@ jobs:
           NEXT_PUBLIC_ENV=development
           ENVEOF
 
-      - name: Start Docker Compose stack
+      # WHY --file infra/docker-compose-ci-oidc.yml:
+      # The CI OIDC override adds the local-oidc service and overrides the backend
+      # environment to use LOCAL_OIDC_ENABLED=true. This wires LocalOidcSsoAdapter
+      # for both 'google' and 'microsoft' provider slots so the real jose jwtVerify()
+      # path is proven in CI without real provider credentials.
+      - name: Start Docker Compose stack (with local OIDC overlay)
         run: |
-          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml \
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
             up --build -d
 
       - name: Wait for backend healthy
@@ -141,7 +151,29 @@ jobs:
             sleep 3
           done
           echo "❌ Backend did not become healthy within 180s"
-          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml logs --tail=150
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
+            logs --tail=150
+          exit 1
+
+      # WHY this step:
+      # The local OIDC server must be healthy before Playwright runs tests 11/12
+      # (MFA loop + invite acceptance) because the backend SSO callback flow calls
+      # the OIDC server's JWKS endpoint during JWT validation. If the server is not
+      # yet ready when these tests run, the JWKS fetch fails and the callback returns
+      # a 401/500, causing false test failures.
+      - name: Wait for local OIDC server healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9998/.well-known/jwks.json > /dev/null 2>&1; then
+              echo "✅ Local OIDC server healthy (attempt ${i})"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "❌ Local OIDC server did not become healthy within 60s"
+          docker logs auth-lab-local-oidc --tail=50 || true
           exit 1
 
       - name: Seed E2E fixtures
@@ -177,10 +209,15 @@ jobs:
       - name: Dump Docker logs on failure
         if: failure()
         run: |
-          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml \
-            logs proxy backend frontend --tail=100
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
+            logs proxy backend frontend local-oidc --tail=100
 
       - name: Tear down stack
         if: always()
         run: |
-          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml down -v
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
+            down -v

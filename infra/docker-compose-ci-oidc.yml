@@ -1,0 +1,72 @@
+# infra/docker-compose-ci-oidc.yml
+#
+# WHY:
+# - Adds the local OIDC server to the CI stack so real SSO callback flows can
+#   be proven without real Google/Microsoft credentials.
+# - This is a Docker Compose OVERRIDE file, not a replacement. It is used
+#   alongside docker-compose.yml in CI with --file flags:
+#
+#   docker compose \
+#     --env-file infra/.env.stack \
+#     -f infra/docker-compose.yml \
+#     -f infra/docker-compose-ci-oidc.yml \
+#     up --build -d
+#
+# - The local-oidc service is NOT added to docker-compose.yml because it has
+#   no role in local dev (dev uses real credentials or no SSO). Adding it here
+#   as an override means the main compose file stays clean and local dev is
+#   unaffected.
+#
+# NETWORK TOPOLOGY:
+#   backend container → http://local-oidc:9998 (JWKS fetch, Docker DNS)
+#   CI test code      → http://localhost:9998  (POST /code to register identities)
+#
+# LOCKED TOPOLOGY CONSTRAINT:
+# - SSO start must remain browser navigation, not fetch(). This service does NOT
+#   change that. The CI Playwright tests call POST /code (test helper) and then
+#   directly call the backend SSO callback endpoint. The browser navigation path
+#   is proven separately by the existing SSO-start Playwright test (test 7).
+
+name: hubins
+
+services:
+  local-oidc:
+    build:
+      context: ./oidc-server
+      dockerfile: Dockerfile
+    container_name: auth-lab-local-oidc
+    environment:
+      LOCAL_OIDC_PORT: 9998
+      # WHY: The issuer URL must match what the backend sees when it validates
+      # the `iss` claim in the JWT. The backend container reaches this service
+      # via the Docker network name 'local-oidc'. The JWT iss claim must equal
+      # this URL exactly for jose jwtVerify() to accept the token.
+      LOCAL_OIDC_ISSUER: http://local-oidc:9998
+      LOCAL_OIDC_CLIENT_ID: ${LOCAL_OIDC_CLIENT_ID:-local-oidc-ci-client}
+    ports:
+      - '9998:9998'
+    networks: [hubins_net]
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9998/.well-known/jwks.json || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  # Override backend to add local OIDC environment and depend on local-oidc
+  backend:
+    environment:
+      # Tell the backend to use the local OIDC server instead of Google/Microsoft
+      # for the 'google' and 'microsoft' SSO providers in CI.
+      #
+      # WHY two separate env vars:
+      # - GOOGLE_OIDC_ISSUER_OVERRIDE and MICROSOFT_OIDC_ISSUER_OVERRIDE are
+      #   checked by LocalOidcSsoAdapter wiring in di.ts when LOCAL_OIDC_ENABLED=true.
+      # - This keeps the override path isolated from the real adapter code paths.
+      LOCAL_OIDC_ENABLED: 'true'
+      LOCAL_OIDC_ISSUER: http://local-oidc:9998
+      LOCAL_OIDC_CLIENT_ID: ${LOCAL_OIDC_CLIENT_ID:-local-oidc-ci-client}
+    depends_on:
+      local-oidc:
+        condition: service_healthy

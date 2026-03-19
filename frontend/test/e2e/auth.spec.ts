@@ -30,6 +30,7 @@
 
 import { expect, test } from '@playwright/test';
 import { extractLinkFromText, purgeMailpit, waitForEmailToRecipient } from './helpers/mailpit';
+import { generateTotp } from './helpers/totp';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -391,5 +392,223 @@ test.describe('auth smoke', () => {
     // Still goes to MFA setup — NONE + ADMIN → /admin happens only after full auth
     await expect(page).toHaveURL(`${OPEN_ORIGIN}/auth/mfa/setup`);
     await expect(page.getByRole('heading', { name: /multi-factor authentication/i })).toBeVisible();
+  });
+
+  // ── 11. MFA full verification loop ───────────────────────────────────────
+  //
+  // WHY this test exists (Phase 5 roadmap closure):
+  // - All prior tests stop at QR-renders or MFA_SETUP_REQUIRED continuation.
+  // - The roadmap success criterion requires proof that a user can COMPLETE MFA
+  //   verification against the real backend and land on the authenticated area.
+  // - Without this test, the backend's POST /auth/mfa/verify-setup and the full
+  //   TOTP validation path are only proven at the backend E2E level (Fastify inject),
+  //   not in a real browser against the full Docker stack.
+  //
+  // WHAT IS PROVEN:
+  // - POST /auth/mfa/setup returns a real base32 secret from the real backend.
+  // - generateTotp() computes the same 6-digit code a real authenticator app would.
+  // - POST /auth/mfa/verify-setup accepts the code → session gains mfaVerified=true.
+  // - Frontend routes NONE + ADMIN → /admin (role-aware routing proven end-to-end).
+  // - GET /auth/me confirms mfaVerified=true and role=ADMIN on the upgraded session.
+  //
+  // WHY we read the secret from the UI element (not call POST /auth/mfa/setup ourselves):
+  // - Reading from the rendered "Authenticator secret" input proves the full frontend
+  //   rendering path (component mounted, useEffect fired, API call succeeded, UI updated).
+  // - A direct API call would bypass the frontend rendering path entirely.
+  //
+  // CLOCK-SKEW NOTE:
+  // - generateTotp(secret, 0) generates the code for the CURRENT 30-second slot.
+  // - The backend accepts ±1 step (see TotpService WINDOW=1 comment in totp.ts).
+  // - If CI clock drift causes a spurious failure, add a second attempt with window=1.
+
+  test('mfa full loop: setup → compute TOTP → verify-setup → /admin → mfaVerified=true', async ({
+    page,
+  }) => {
+    // Step 1: login as E2E admin (no MFA → MFA_SETUP_REQUIRED)
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(E2E_ADMIN_EMAIL);
+    await page.getByLabel('Password').fill(E2E_ADMIN_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/auth/mfa/setup`);
+    await expect(page.getByRole('heading', { name: /multi-factor authentication/i })).toBeVisible();
+
+    // Step 2: wait for QR code image and secret input to appear
+    // (proves POST /auth/mfa/setup succeeded on the real backend)
+    const secretInput = page.getByLabel('Authenticator secret');
+    const errorLocator = page.getByRole('alert').filter({ hasText: /error|failed|wrong/i });
+
+    const which = await Promise.race([
+      secretInput.waitFor({ state: 'visible' }).then(() => 'secret' as const),
+      errorLocator.waitFor({ state: 'visible' }).then(() => 'error' as const),
+    ]);
+
+    if (which === 'error') {
+      const errorText = await errorLocator.textContent().catch(() => '(unreadable)');
+      throw new Error(
+        `MFA setup page showed an error instead of the secret.\n` +
+          `Error: ${errorText}\n` +
+          `Check: backend logs for POST /auth/mfa/setup; confirm seed-e2e-fixtures cleared mfa_secrets.`,
+      );
+    }
+
+    const base32Secret = await secretInput.inputValue();
+
+    // In Jest/Vitest, the message argument is not supported inside expect()
+    expect(base32Secret.length).toBeGreaterThan(0);
+    expect(base32Secret).toMatch(/^[A-Z2-7]+=*$/i);
+
+    // Step 3: compute a real TOTP code from the secret
+    // (RFC 6238 TOTP over HMAC-SHA1).
+    const totpCode = generateTotp(base32Secret, 0);
+
+    expect(totpCode).toMatch(/^\d{6}$/);
+
+    // Step 4: submit the code via the verify-setup form
+    const codeInput = page.getByLabel('6-digit code');
+    await codeInput.fill(totpCode);
+    await page.getByRole('button', { name: 'Finish MFA setup' }).click();
+
+    // Step 5: POST /auth/mfa/verify-setup accepted → nextAction: NONE + ADMIN → /admin
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/admin`);
+
+    // Step 6: confirm the backend session reflects mfaVerified=true
+    const me = await page.request.get(`${OPEN_ORIGIN}/api/auth/me`);
+    expect(me.status(), '/api/auth/me must be 200 after MFA verification').toBe(200);
+
+    const meBody = (await me.json()) as {
+      session: { mfaVerified: boolean; emailVerified: boolean };
+      membership: { role: string };
+    };
+
+    expect(
+      meBody.session.mfaVerified,
+      '/api/auth/me must return mfaVerified=true after verify-setup',
+    ).toBe(true);
+    expect(meBody.membership.role, 'Authenticated admin must have role ADMIN').toBe('ADMIN');
+  });
+
+  // ── 12. Invite acceptance full browser journey ────────────────────────────
+  //
+  // WHY this test exists (Phase 8 roadmap closure — audit S1 item):
+  // - Invite flows are proven at the backend E2E level (Fastify inject) but not
+  //   in a real browser against the full Docker stack including email delivery.
+  // - This test proves the end-to-end invite onboarding path: admin creates invite
+  //   → real SMTP delivery via Mailpit → browser accepts token → register form
+  //   → authenticated session → /app.
+  //
+  // WHAT IS PROVEN:
+  // - POST /admin/invites creates a real invite and enqueues email delivery.
+  // - The outbox worker delivers the email to Mailpit via real SMTP.
+  // - The invite link is shaped correctly (tenant-scoped, contains token).
+  // - POST /auth/invites/accept returns nextAction: SET_PASSWORD.
+  // - POST /auth/register with the token creates a real session.
+  // - MEMBER role + no MFA → nextAction: NONE → frontend routes to /app.
+  //
+  // WHY this test uses a SECOND admin persona (e2e-invite-admin@example.com):
+  // - Test 11 configures MFA for e2e-admin@example.com. After test 11, that admin
+  //   has MFA_REQUIRED (not MFA_SETUP_REQUIRED) on the next login. Reusing the
+  //   same persona would require handling a different continuation branch.
+  // - e2e-invite-admin@example.com is seeded with no MFA (same as the primary admin
+  //   before test 11 runs), giving this test a fully independent setup path.
+  //   See seed-e2e-fixtures.ts for the second persona's seeding logic.
+
+  test('invite acceptance journey: admin creates invite → email → accept → register → /app', async ({
+    page,
+  }) => {
+    // WHY 120s: this test does more sequential work than any other test —
+    // MFA setup, invite creation, email delivery wait (up to 30s outbox poll),
+    // fresh context navigation, and registration. The global 60s is too tight.
+    test.setTimeout(120_000);
+    const E2E_INVITE_ADMIN_EMAIL = 'e2e-invite-admin@example.com';
+    const inviteRecipientEmail = `e2e-invite-recipient-${Date.now()}@example.com`;
+
+    await purgeMailpit();
+
+    // ── A. Establish a MFA-verified admin session ────────────────────────────
+    // The invite-admin persona starts with no MFA → goes through MFA_SETUP_REQUIRED.
+
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(E2E_INVITE_ADMIN_EMAIL);
+    await page.getByLabel('Password').fill(E2E_ADMIN_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/auth/mfa/setup`);
+
+    const secretInput = page.getByLabel('Authenticator secret');
+    await expect(secretInput).toBeVisible({ timeout: 15_000 });
+    const base32Secret = await secretInput.inputValue();
+
+    const setupCode = generateTotp(base32Secret);
+    await page.getByLabel('6-digit code').fill(setupCode);
+    await page.getByRole('button', { name: 'Finish MFA setup' }).click();
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/admin`, { timeout: 15_000 });
+
+    // ── B. Create the invite via POST /api/admin/invites ─────────────────────
+    // page.request shares the authenticated session cookie established above.
+
+    const createRes = await page.request.post(`${OPEN_ORIGIN}/api/admin/invites`, {
+      data: { email: inviteRecipientEmail, role: 'MEMBER' },
+    });
+    expect(
+      createRes.status(),
+      `POST /admin/invites must return 201 (got ${createRes.status()})`,
+    ).toBe(201);
+
+    // ── C. Wait for invite email in Mailpit ──────────────────────────────────
+    // The outbox worker delivers this asynchronously via real SMTP.
+
+    const message = await waitForEmailToRecipient(inviteRecipientEmail);
+    expect(message.Subject, 'Invite email subject must contain "invite"').toMatch(/invite/i);
+
+    // ── D. Extract invite link ────────────────────────────────────────────────
+    const inviteLink = extractLinkFromText(message.Text, '/accept-invite?token=');
+    expect(inviteLink, 'Invite link must be on the open tenant host').toContain(
+      `${OPEN_TENANT}.lvh.me`,
+    );
+
+    // ── E. Navigate to the invite link as a new (unauthenticated) user ───────
+    // Open a fresh browser context so the admin session cookie does not carry over.
+
+    const inviteBrowser = page.context().browser();
+    if (!inviteBrowser) throw new Error('Could not get browser instance from page context');
+
+    const freshContext = await inviteBrowser.newContext();
+    const freshPage = await freshContext.newPage();
+
+    try {
+      await freshPage.goto(inviteLink);
+
+      // accept-invite-flow auto-submits POST /auth/invites/accept on mount.
+      // nextAction: SET_PASSWORD → frontend redirects to /auth/register?token=...
+      await expect(freshPage).toHaveURL(/\/auth\/register/, { timeout: 15_000 });
+
+      // ── F. Fill and submit the register form ───────────────────────────────
+      await freshPage.getByLabel('Full name').fill('Invited Browser User');
+      await freshPage.getByLabel('Email').fill(inviteRecipientEmail);
+      await freshPage.getByLabel('Password').fill('Password123!');
+      await freshPage.getByRole('button', { name: 'Set password and continue' }).click();
+
+      // ── G. Verify landing on /app (MEMBER, no MFA required) ───────────────
+      await expect(freshPage).toHaveURL(`${OPEN_ORIGIN}/app`, { timeout: 15_000 });
+      await expect(freshPage.getByRole('heading', { name: 'Member app' })).toBeVisible();
+      await expect(freshPage.getByText('Authenticated handoff complete')).toBeVisible();
+
+      // Confirm the session is authenticated as the new member
+      const me = await freshPage.request.get(`${OPEN_ORIGIN}/api/auth/me`);
+      expect(me.status(), '/api/auth/me must be 200 after invite registration').toBe(200);
+
+      const meBody = (await me.json()) as {
+        user: { email: string };
+        membership: { role: string };
+        session: { mfaVerified: boolean };
+      };
+
+      expect(meBody.user.email.toLowerCase()).toBe(inviteRecipientEmail.toLowerCase());
+      expect(meBody.membership.role, 'Invite-registered user must have MEMBER role').toBe('MEMBER');
+    } finally {
+      await freshContext.close().catch(() => undefined);
+    }
   });
 });

@@ -26,6 +26,7 @@
  */
 
 import type { NextConfig } from 'next';
+import path from 'path';
 
 // ── Startup validation ────────────────────────────────────────────────────────
 
@@ -50,6 +51,13 @@ if (nodeEnv !== 'development' && !internalApiUrl) {
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // WHY: In a Yarn workspace, Next.js traces files relative to the repo root
+  // by default, which causes the standalone output to nest server.js under a
+  // subdirectory path. Setting outputFileTracingRoot to the repo root (one level
+  // up from this file) tells Next.js exactly where the workspace root is, which
+  // produces server.js at the expected root of .next/standalone/ so the
+  // Dockerfile COPY + CMD ["node", "server.js"] resolves correctly.
+  outputFileTracingRoot: path.join(__dirname, '../'),
 };
 
 export default nextConfig;

@@ -75,6 +75,7 @@ import type { AuditModule } from '../modules/audit/audit.module';
 import { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
 import { GoogleSsoAdapter } from '../modules/auth/sso/google/google-sso.adapter';
 import { MicrosoftSsoAdapter } from '../modules/auth/sso/microsoft/microsoft-sso.adapter';
+import { LocalOidcSsoAdapter } from '../modules/auth/sso/local-oidc/local-oidc-sso.adapter';
 
 export type AppDeps = {
   db: ReturnType<typeof createDb>;
@@ -211,11 +212,28 @@ export async function buildDeps(
 
   const ssoProviderRegistry =
     overrides.ssoProviderRegistry ??
-    new SsoProviderRegistry()
-      .register(new GoogleSsoAdapter(config.sso.googleClientId, config.sso.googleClientSecret))
-      .register(
-        new MicrosoftSsoAdapter(config.sso.microsoftClientId, config.sso.microsoftClientSecret),
-      );
+    (() => {
+      const registry = new SsoProviderRegistry();
+
+      // CI-only: when LOCAL_OIDC_ENABLED=true, the local OIDC server
+      // (infra/oidc-server/) is used for both SSO provider slots.
+      // This proves the real jose jwtVerify() cryptographic path
+      // (JWKS HTTP fetch → RSA-256 signature → iss/aud/exp → nonce)
+      // in CI without real Google/Microsoft credentials.
+      // In production and staging, config.sso.localOidc is always undefined.
+      if (config.sso.localOidc) {
+        const { issuerUrl, clientId } = config.sso.localOidc;
+        return registry
+          .register(new LocalOidcSsoAdapter({ providerKey: 'google', issuerUrl, clientId }))
+          .register(new LocalOidcSsoAdapter({ providerKey: 'microsoft', issuerUrl, clientId }));
+      }
+
+      return registry
+        .register(new GoogleSsoAdapter(config.sso.googleClientId, config.sso.googleClientSecret))
+        .register(
+          new MicrosoftSsoAdapter(config.sso.microsoftClientId, config.sso.microsoftClientSecret),
+        );
+    })();
 
   const outboxRepo = new OutboxRepo(db);
   const outboxEncryption = new OutboxEncryption(buildOutboxEncryptionConfig(config));
