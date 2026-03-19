@@ -9,10 +9,11 @@ function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigRe
       name: 'Acme',
       isActive: true,
       publicSignupEnabled: true,
-      // signupAllowed is now a required field (publicSignupEnabled && !adminInviteRequired).
-      // Default to true in tests — override explicitly when testing the blocked-signup case.
       signupAllowed: true,
       allowedSso: ['google'],
+      // Phase 9: setupCompleted is a required field. Default to true in tests —
+      // override explicitly when testing the banner-visible case.
+      setupCompleted: true,
       ...overrides,
     },
   };
@@ -51,6 +52,7 @@ describe('resolveAuthRouteState', () => {
         publicSignupEnabled: false,
         signupAllowed: false,
         allowedSso: [],
+        setupCompleted: false,
       }),
       me: null,
     });
@@ -116,6 +118,34 @@ describe('resolveAuthRouteState', () => {
     });
 
     expect(state.kind).toBe('MFA_REQUIRED');
+  });
+
+  it('AUTHENTICATED_ADMIN carries setupCompleted=false through config for banner rendering', () => {
+    // Phase 9: the route state passes config through so admin page can read
+    // config.tenant.setupCompleted to conditionally render the setup banner.
+    const state = resolveAuthRouteState({
+      config: makeConfig({ setupCompleted: false }),
+      me: makeMe({
+        nextAction: 'NONE',
+        membership: { id: 'membership-1', role: 'ADMIN' },
+      }),
+    });
+
+    expect(state.kind).toBe('AUTHENTICATED_ADMIN');
+    expect(state.config.tenant.setupCompleted).toBe(false);
+  });
+
+  it('AUTHENTICATED_ADMIN carries setupCompleted=true through config when setup is done', () => {
+    const state = resolveAuthRouteState({
+      config: makeConfig({ setupCompleted: true }),
+      me: makeMe({
+        nextAction: 'NONE',
+        membership: { id: 'membership-1', role: 'ADMIN' },
+      }),
+    });
+
+    expect(state.kind).toBe('AUTHENTICATED_ADMIN');
+    expect(state.config.tenant.setupCompleted).toBe(true);
   });
 
   it('signupAllowed is false when adminInviteRequired overrides publicSignupEnabled', () => {

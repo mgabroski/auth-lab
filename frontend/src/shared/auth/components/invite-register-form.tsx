@@ -58,7 +58,9 @@ export function InviteRegisterForm({ token, returnTo }: InviteRegisterFormProps)
       return;
     }
 
-    router.replace(getPostAuthRedirectPath(result.data.nextAction, returnTo));
+    router.replace(
+      getPostAuthRedirectPath(result.data.nextAction, result.data.membership.role, returnTo),
+    );
     router.refresh();
   };
 

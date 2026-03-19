@@ -27,6 +27,15 @@
  *   rather than requiring the frontend to re-implement the combination rule.
  *   Without this, a tenant with publicSignupEnabled=true and adminInviteRequired=true
  *   causes the frontend to show a signup path that the backend immediately rejects.
+ *
+ * PHASE 9 UPDATE (ADR 0003):
+ * - Added setupCompleted to ConfigResponse.tenant.
+ *   Derived from: setup_completed_at IS NOT NULL.
+ *   When false, the admin dashboard shows a non-blocking setup banner.
+ *   Any admin visiting /admin/settings calls POST /auth/workspace-setup-ack
+ *   which sets setup_completed_at = now(). Banner disappears for all admins.
+ *   AuthNextAction is NOT extended — workspace setup is tenant state, not
+ *   auth continuation state.
  */
 
 export type AuthProvider = 'password' | 'google' | 'microsoft';
@@ -55,7 +64,7 @@ export type PasswordResetToken = {
 
 /**
  * Represents a valid (not-yet-used, not-expired) email verification token.
- * The raw token is never stored — only the hash lives in DB.
+ * The raw token is never stored here — only the hash lives in DB.
  */
 export type EmailVerificationToken = {
   id: string;
@@ -73,6 +82,10 @@ export type EmailVerificationToken = {
  *   MFA_SETUP_REQUIRED           — admin who hasn't set up MFA yet
  *   MFA_REQUIRED                 — admin/member must verify MFA
  *   NONE                         — fully authenticated
+ *
+ * Note (Phase 9): workspace setup state is NOT represented here.
+ * setupCompleted lives in ConfigResponse.tenant and drives a UI banner
+ * on the admin dashboard, not an auth continuation redirect. See ADR 0003.
  */
 export type AuthNextAction =
   | 'NONE'
@@ -130,6 +143,11 @@ export type MeResponse = {
  * The frontend must use signupAllowed to decide whether to render signup entry
  * points — NOT publicSignupEnabled alone. When adminInviteRequired=true, the
  * backend blocks public signup even when publicSignupEnabled=true.
+ *
+ * setupCompleted (Phase 9): derived from setup_completed_at IS NOT NULL.
+ * When false, the admin dashboard renders a non-blocking setup banner.
+ * Any admin calling POST /auth/workspace-setup-ack sets this to true for
+ * the entire workspace. Frontend reads this field; never re-derives it.
  */
 export type ConfigResponse = {
   tenant: {
@@ -142,6 +160,12 @@ export type ConfigResponse = {
      */
     signupAllowed: boolean;
     allowedSso: ('google' | 'microsoft')[];
+    /**
+     * Phase 9 (ADR 0003): true when any admin has visited /admin/settings and
+     * called the workspace-setup-ack endpoint. False = show setup banner.
+     * This is tenant-level state, not per-user state.
+     */
+    setupCompleted: boolean;
   };
 };
 

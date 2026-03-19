@@ -4,6 +4,10 @@
  * WHY:
  * - Real MFA setup continuation page.
  * - Only renders when backend truth says the current session must configure MFA.
+ *
+ * PHASE 9 UPDATE (ADR 0003):
+ * - Passes role from routeState.me.membership.role to MfaSetupFlow so the
+ *   component can route NONE + ADMIN → /admin after setup completes.
  */
 
 import { redirect } from 'next/navigation';
@@ -49,7 +53,7 @@ export default async function MfaSetupPage() {
         title="Authenticator app required"
         description="Admin access is not complete until the backend confirms MFA setup for this session."
       >
-        <MfaSetupFlow userEmail={routeState.me.user.email} />
+        <MfaSetupFlow userEmail={routeState.me.user.email} role={routeState.me.membership.role} />
       </AuthCard>
     </AuthShell>
   );

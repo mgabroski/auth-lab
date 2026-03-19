@@ -20,6 +20,12 @@
  *   Without this, a tenant with publicSignupEnabled=true AND adminInviteRequired=true
  *   caused the frontend to show a signup link that the backend would reject with 403.
  *   The frontend now has a single authoritative boolean to use for signup UI gating.
+ *
+ * PHASE 9 UPDATE (ADR 0003):
+ * - Added setupCompleted to the response.
+ *   Derived from tenant.setupCompletedAt IS NOT NULL.
+ *   When false, the admin dashboard shows a non-blocking setup banner.
+ *   UNAVAILABLE shape returns setupCompleted: false (consistent with inactive tenant).
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -33,6 +39,7 @@ const UNAVAILABLE: ConfigResponse = {
     publicSignupEnabled: false,
     signupAllowed: false,
     allowedSso: [],
+    setupCompleted: false,
   },
 };
 
@@ -61,6 +68,9 @@ export async function getAuthConfig(
       // in which case signup is still blocked — the frontend must use this field.
       signupAllowed: tenant.publicSignupEnabled && !tenant.adminInviteRequired,
       allowedSso: PROVIDER_ORDER.filter((provider) => tenant.allowedSso.includes(provider)),
+      // Phase 9: setupCompleted drives the admin dashboard setup banner.
+      // True once any admin visits /admin/settings and calls the ack endpoint.
+      setupCompleted: tenant.setupCompletedAt !== null,
     },
   };
 }

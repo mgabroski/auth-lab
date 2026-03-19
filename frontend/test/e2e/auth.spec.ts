@@ -298,4 +298,98 @@ test.describe('auth smoke', () => {
       '/api/auth/me on goodwill-ca with goodwill-open session must be 401',
     ).toBe(401);
   });
+
+  // ── Phase 9 smoke tests ───────────────────────────────────────────────────
+  //
+  // Proves the workspace setup banner contract (ADR 0003):
+  // - /admin/settings route exists and is reachable (not 404)
+  // - unauthenticated access to /admin/settings is redirected, not 500
+  // - NONE + MEMBER routes to /app (role-aware routing fix)
+  // - NONE + ADMIN routes to /admin (role-aware routing fix)
+  // - members are redirected away from /admin (role gate enforced)
+  //
+  // The full workspace-setup-ack flow (banner → settings → ack → banner gone)
+  // requires a fully authenticated admin session (MFA verified), which needs a
+  // real authenticator app. That is Phase 5 territory. These tests prove the
+  // route surfaces and role-routing contracts that are prerequisite to that proof.
+
+  test('phase-9: /admin/settings route exists and redirects unauthenticated access', async ({
+    page,
+  }) => {
+    // Route must exist (not 404). Unauthenticated access must redirect to login.
+    await page.goto(`${OPEN_ORIGIN}/admin/settings`);
+
+    // Should have been redirected — not still on /admin/settings and not a 404.
+    const finalUrl = page.url();
+    expect(
+      finalUrl,
+      '/admin/settings must redirect unauthenticated access, not stay on the page',
+    ).not.toBe(`${OPEN_ORIGIN}/admin/settings`);
+
+    // The redirect destination must be a valid auth page, not an error page.
+    expect(
+      finalUrl.includes('/auth/') || finalUrl.includes('/app'),
+      `Expected redirect to an auth path, got: ${finalUrl}`,
+    ).toBe(true);
+  });
+
+  test('phase-9: /admin/settings responds with a page (not 404) for any request', async ({
+    request,
+  }) => {
+    // Even without a session, Next.js must handle the route and return a
+    // renderable response (200 with redirect HTML, or a 3xx). Never 404.
+    const response = await request.get(`${OPEN_ORIGIN}/admin/settings`, {
+      maxRedirects: 0,
+    });
+
+    expect(
+      response.status(),
+      '/admin/settings must not return 404 — route must be registered in Next.js',
+    ).not.toBe(404);
+  });
+
+  test('phase-9: member login lands on /app, not /admin (NONE + MEMBER role-aware routing)', async ({
+    page,
+  }) => {
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(MEMBER_EMAIL);
+    await page.getByLabel('Password').fill(MEMBER_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    // NONE + MEMBER → /app (not /admin, not /admin/settings)
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/app`);
+    await expect(page.getByRole('heading', { name: 'Member app' })).toBeVisible();
+    await expect(page.getByText('Authenticated handoff complete')).toBeVisible();
+  });
+
+  test('phase-9: member is redirected away from /admin (role gate enforced)', async ({ page }) => {
+    // Log in as member first to get an authenticated session
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(MEMBER_EMAIL);
+    await page.getByLabel('Password').fill(MEMBER_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/app`);
+
+    // Attempt to navigate to the admin area directly
+    await page.goto(`${OPEN_ORIGIN}/admin`);
+
+    // Member must be redirected — /admin is ADMIN-only
+    await expect(page).not.toHaveURL(`${OPEN_ORIGIN}/admin`);
+  });
+
+  test('phase-9: admin login continues to /auth/mfa/setup (MFA_SETUP_REQUIRED continuation unchanged)', async ({
+    page,
+  }) => {
+    // Proves the auth continuation chain is unaffected by Phase 9 changes.
+    // Admin with no MFA still continues to /auth/mfa/setup — not /admin/settings.
+    // Setup banner lives on /admin; it does not intercept the auth flow.
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(E2E_ADMIN_EMAIL);
+    await page.getByLabel('Password').fill(E2E_ADMIN_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    // Still goes to MFA setup — NONE + ADMIN → /admin happens only after full auth
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/auth/mfa/setup`);
+    await expect(page.getByRole('heading', { name: /multi-factor authentication/i })).toBeVisible();
+  });
 });

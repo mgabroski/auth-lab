@@ -1090,6 +1090,132 @@ The job performs all setup steps above automatically: writes a deterministic `in
 
 ---
 
+## Phase 9 — Workspace setup banner and /admin/settings
+
+This section documents the Phase 9 operational contract for workspace setup
+state and the admin settings route (ADR 0003).
+
+### Design principle
+
+Workspace setup state belongs to the tenant, not to individual users.
+If five admin invites are sent simultaneously and all five complete onboarding,
+all five should have a consistent experience — not a race condition where only
+one gets a special redirect and the others are silently skipped.
+
+Phase 9 solves this with a **non-blocking banner** on the admin dashboard
+(`/admin`) rather than an auth continuation redirect. Any admin can dismiss
+it. Once dismissed, it disappears for all admins in the workspace.
+
+### What changed in Phase 9
+
+**`GET /auth/config`** now returns `setupCompleted: boolean` in
+`ConfigResponse.tenant`. Derived from `tenants.setup_completed_at IS NOT NULL`.
+
+**All admins always land on `/admin`** after full authentication. No auth
+redirect to `/admin/settings` ever occurs. The `AuthNextAction` contract is
+unchanged.
+
+**`/admin` dashboard** renders a `WorkspaceSetupBanner` when
+`config.tenant.setupCompleted === false`. The banner prompts any admin to
+open `/admin/settings` to complete workspace configuration.
+
+**`/admin/settings`** is a new SSR-gated admin-only route. When visited with
+`setupCompleted === false`, it calls `POST /auth/workspace-setup-ack` on SSR
+load, which sets `tenants.setup_completed_at = now()`. On the next page load
+anywhere in the workspace, `GET /auth/config` returns `setupCompleted: true`
+and the banner disappears for all admins.
+
+**Role-aware `NONE` routing** was fixed as part of this phase:
+`NONE + ADMIN` → `/admin`, `NONE + MEMBER` → `/app`.
+
+### Final destination after bootstrap invite chain
+
+```
+operator runs bootstrap command
+  → outbox queues invite email
+  → admin receives email, opens invite link → /accept-invite
+  → registers password → /auth/register
+  → MFA setup required → /auth/mfa/setup
+  → submits TOTP code → POST /auth/mfa/verify-setup
+  → GET /auth/me returns nextAction: NONE, role: ADMIN
+  → frontend routes to /admin
+  → /admin renders WorkspaceSetupBanner (setupCompleted: false)
+  → admin clicks "Open workspace settings →"
+  → /admin/settings SSR loads, calls POST /auth/workspace-setup-ack
+  → tenants.setup_completed_at = now()
+  → admin sees workspace settings placeholder
+  → next /admin load: setupCompleted: true → banner gone for all admins
+```
+
+### POST /auth/workspace-setup-ack endpoint contract
+
+- **Method:** POST
+- **Path:** `/auth/workspace-setup-ack`
+- **Auth guard:** ADMIN role + email verified + MFA verified
+- **Body:** none
+- **Response:** `200 { status: 'ACKNOWLEDGED' }`
+- **Scope:** tenant-level — affects all admins in the workspace
+- **Idempotent:** yes — `UPDATE WHERE setup_completed_at IS NULL` is a no-op
+  when already set. Repeated calls are safe.
+- **Effect:** sets `tenants.setup_completed_at = now()`. On the next
+  `GET /auth/config` call, `setupCompleted` is `true` and the banner is gone.
+
+### /admin/settings route contract
+
+- **URL:** `/admin/settings`
+- **Type:** Next.js SSR Server Component
+- **Access gate:** `AUTHENTICATED_ADMIN` only. Any other route state redirects.
+- **On first visit** (`setupCompleted === false`): calls
+  `POST /auth/workspace-setup-ack` during SSR. Ack failure is swallowed —
+  non-fatal. Banner remains until the next successful visit.
+- **Content:** placeholder at Phase 9. Settings configuration content belongs
+  to later product phases.
+
+### Symptom: setup banner keeps appearing for all admins
+
+This means `setup_completed_at` is not being set. Check in order:
+
+1. Confirm the admin visiting `/admin/settings` is fully authenticated (email
+   verified + MFA verified). A session still in `MFA_SETUP_REQUIRED` or
+   `MFA_REQUIRED` is redirected away before the ack fires.
+2. Check backend logs for `POST /auth/workspace-setup-ack` — confirm it was
+   called and returned 200.
+3. Inspect the tenant row directly:
+
+```sql
+SELECT id, key, name, setup_completed_at
+FROM tenants
+WHERE key = '<tenant-key>';
+```
+
+4. If `setup_completed_at` is still NULL, check backend error logs for the ack
+   request. The ack call is swallowed on the frontend — errors are silent.
+5. If the ack call returns 403, the session is not fully MFA-verified.
+
+### Symptom: admin lands on /app instead of /admin
+
+As of Phase 9, `NONE + ADMIN` routes to `/admin` and `NONE + MEMBER` routes
+to `/app`. If an admin lands on `/app`, check:
+
+1. That the frontend build has the Phase 9 `redirects.ts` changes deployed.
+2. That `GET /auth/me` returns `role: 'ADMIN'` for that session.
+3. That the session cookie is present and the correct tenant host is being used.
+
+### DB column reference
+
+Migration `0013_tenants_setup_completed_at` adds:
+
+```sql
+ALTER TABLE tenants
+ADD COLUMN setup_completed_at TIMESTAMPTZ NULL;
+```
+
+Existing tenants have `NULL` after migration. Every admin will see the banner
+once. The first admin to visit `/admin/settings` clears it for the entire
+workspace.
+
+---
+
 The following remain intentionally deferred until the repo enters the explicit deployment/operations phase:
 
 - startup/shutdown production procedures

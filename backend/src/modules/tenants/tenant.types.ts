@@ -13,6 +13,12 @@ export type TenantAllowedSso = string[];
  * - It exists separately from publicSignupEnabled because later phases need to
  *   distinguish "signup available" from "invite required" without inferring one
  *   rule from the other.
+ *
+ * Phase 9 (ADR 0003):
+ * - setupCompletedAt: null = workspace has never been acknowledged by an admin
+ *   visiting /admin/settings. The admin dashboard shows a setup banner.
+ *   Once set (via POST /auth/workspace-setup-ack), the banner disappears for
+ *   all admins in this workspace.
  */
 export type Tenant = {
   id: string;
@@ -27,6 +33,9 @@ export type Tenant = {
 
   allowedEmailDomains: TenantAllowedEmailDomains;
   allowedSso: TenantAllowedSso;
+
+  /** Phase 9: null until any admin visits /admin/settings. */
+  setupCompletedAt: Date | null;
 
   createdAt: Date;
   updatedAt: Date;

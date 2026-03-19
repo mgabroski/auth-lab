@@ -34,6 +34,8 @@ function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigRe
       // Default to true in tests — override explicitly when testing the blocked-signup case.
       signupAllowed: true,
       allowedSso: ['google'],
+      // Phase 9: setupCompleted is a required field. Default to true in tests.
+      setupCompleted: true,
       ...overrides,
     },
   };

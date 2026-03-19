@@ -46,7 +46,7 @@ type LoginFormProps = {
 
 function getLoginSuccessRedirect(result: AuthResult, returnTo?: string | null): string {
   if (result.nextAction !== 'NONE') {
-    return getPostAuthRedirectPath(result.nextAction, returnTo);
+    return getPostAuthRedirectPath(result.nextAction, result.membership.role, returnTo);
   }
 
   if (returnTo) {

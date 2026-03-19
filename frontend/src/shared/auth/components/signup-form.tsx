@@ -45,7 +45,9 @@ export function SignupForm({ returnTo }: SignupFormProps) {
         return;
       }
 
-      router.replace(getPostAuthRedirectPath(result.data.nextAction, returnTo));
+      router.replace(
+        getPostAuthRedirectPath(result.data.nextAction, result.data.membership.role, returnTo),
+      );
     } catch (caughtError) {
       setError(caughtError);
       setPending(false);

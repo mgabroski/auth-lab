@@ -34,6 +34,9 @@ Today the repo contains all of the following as real implemented surfaces:
 - backend/frontend example env files now exist and document the Google + Microsoft SSO staging keys engineers must set before live-provider proof
 - a documented Phase 6 runbook for real Google SSO staging proof, including redirect URI, JWKS reachability, expired-invite rejection, MFA continuation, and audit/session validation
 - a documented Phase 7 runbook for real Microsoft SSO staging proof, including Azure portal app-registration steps, claim fallback and issuer resolution proof, expired-invite rejection, MFA continuation, and audit/session validation
+- a workspace setup banner on the admin dashboard (Phase 9): when `setup_completed_at IS NULL` on the tenant, a non-blocking banner on `/admin` prompts any admin to open `/admin/settings`; once any admin visits it the banner disappears for the entire workspace
+- a real `/admin/settings` SSR route gated by ADMIN session; calls `POST /auth/workspace-setup-ack` on first visit to mark setup complete tenant-wide
+- role-aware `NONE` routing (Phase 9 fix): `NONE + ADMIN` → `/admin`, `NONE + MEMBER` → `/app`
 
 That does **not** mean the broader Hubins product UI is finished.
 It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
@@ -262,52 +265,79 @@ Phase 8 does **not** change:
 
 ---
 
-## 10. Canonical local dev/test assumptions
+## 10. What Phase 9 added
 
-### 10.1 Hostnames matter
+Phase 9 closes the auth module's dependency on initial Settings routing and
+creates the real first-admin workspace setup UX.
 
-Tenant-aware behavior must be tested using tenant hosts, not plain `localhost`, whenever host-derived tenant identity is part of the flow.
+**Design decision (ADR 0003):** workspace setup state belongs to the tenant,
+not to individual users. A per-membership redirect would create a race
+condition when multiple admins complete onboarding simultaneously. Instead,
+a non-blocking banner on the admin dashboard surfaces the setup call to action
+for any admin, and the acknowledgement is tenant-scoped.
 
-Current practical hosts:
+Specifically Phase 9 adds:
 
-- host-run frontend: `http://goodwill-ca.localhost:3000`
-- host-run backend public-base-url pattern: `http://{tenantKey}.localhost:3000`
-- full-stack proxy path may use the committed proxy host contract in infra/docs
+**ADR and design gate:**
 
-### 10.2 Email is now part of the real local contract
+- `backend/docs/adr/0003-workspace-setup-banner.md` — documents the workspace
+  setup banner approach, the rejected per-membership `FIRST_TIME_SETUP`
+  alternative, and the role-aware `NONE` routing fix
 
-Email-dependent auth flows are no longer “pretend only” in local development.
+**Backend:**
 
-For local development, the repo expects:
+- migration `0013_tenants_setup_completed_at` — `setup_completed_at TIMESTAMPTZ NULL`
+  on `tenants`
+- `tenant.types.ts` — `setupCompletedAt: Date | null`
+- `tenant.queries.ts` — maps `setup_completed_at` in `rowToTenant`
+- `auth.types.ts` `ConfigResponse.tenant` gains `setupCompleted: boolean`. `AuthNextAction` is
+  unchanged — workspace setup is not an auth continuation state
+- `get-auth-config.ts` — derives `setupCompleted = setupCompletedAt !== null`
+- `workspace-setup-ack-flow.ts` — idempotent
+  `UPDATE tenants SET setup_completed_at = now() WHERE id = ? AND setup_completed_at IS NULL`
+- `POST /auth/workspace-setup-ack` — ADMIN + emailVerified + mfaVerified gated; tenant-scoped
 
-- `EMAIL_PROVIDER=smtp`
-- SMTP directed to Mailpit
-- Mailpit UI/API available locally
+**Frontend:**
 
-This is intentionally convenience-first and **not production-safe**.
-It exists only for local proof, developer feedback loops, and repeatable auth-flow verification.
+- `contracts.ts` — `ConfigResponse.tenant.setupCompleted: boolean` added;
+  `AuthNextAction` unchanged
+- `route-state.ts` — unchanged; all admins resolve to `AUTHENTICATED_ADMIN`;
+  `setupCompleted` passes through `config` for the page to read
+- `redirects.ts` — `getPathForNextAction(nextAction, role)` now requires `role`;
+  `NONE + ADMIN` → `/admin`, `NONE + MEMBER` → `/app`; `ADMIN_SETTINGS_PATH` exported
+- all callers of `getPathForNextAction` and `getPostAuthRedirectPath` updated with
+  `role` parameter: `login-form`, `signup-form`, `invite-register-form`,
+  `mfa-setup-flow`, `mfa-verify-flow`, `verify-email-flow`, `auth/mfa/setup/page.tsx`,
+  `auth/mfa/verify/page.tsx`
+- `workspace-setup-banner.tsx` — new client component; renders when
+  `setupCompleted === false`; links to `/admin/settings`; returns null when complete
+- `/admin/page.tsx` — renders `WorkspaceSetupBanner` conditional on
+  `routeState.config.tenant.setupCompleted`
+- `/admin/settings/page.tsx` — new SSR-gated page; calls
+  `POST /auth/workspace-setup-ack` on load when `!setupCompleted`
 
-### 10.3 Staging email remains sandboxed
+**Tests:**
 
-The intended non-production staging behavior is sandbox SMTP delivery, not real end-user delivery.
+- `redirects.spec.ts` — `role` param throughout; `NONE + ADMIN → /admin`,
+  `NONE + MEMBER → /app`; `setupCompleted` in test helpers
+- `route-state.spec.ts` — `setupCompleted` passthrough tests; no setup-specific
+  route state (correct by design)
+- `auth.spec.ts` (E2E) — 5 Phase 9 smoke tests: route existence, unauthenticated
+  gate, role-aware member routing, member `/admin` gate, MFA continuation unchanged
 
-The documented staging provider choice for this phase is Mailtrap Email Sandbox.
-That choice exists to:
+**Docs:**
 
-- prove email arrival outside local
-- validate SMTP config shape with real credentials
-- validate permanent-failure behavior without using real production mail delivery
+- `docs/ops/runbooks.md` — Phase 9 section with final destination chain,
+  endpoint contracts, troubleshooting guide
+- `docs/current-foundation-status.md` — Phase 9 completion recorded
 
-### 10.4 Production-style bootstrap is explicit
+Phase 9 does **not** change:
 
-Production-style tenant bootstrap is now treated as an explicit operator action.
-
-That means:
-
-- do **not** rely on `SEED_ON_START` in production-like environments
-- use the explicit bootstrap command with tenant/admin parameters
-- let the running backend worker deliver the invite via the real outbox + SMTP path
-- validate the browser onboarding chain using the operator/bootstrap runbook
+- `AuthNextAction` — no new continuation states
+- auth flows (login, register, MFA, SSO) — unchanged
+- session or cookie contracts
+- proxy topology
+- invite lifecycle semantics
 
 ---
 
@@ -319,9 +349,9 @@ The following remain outside the scope of this status snapshot unless separately
 - production email-provider rollout
 - real browser E2E coverage for all auth flows in CI
 - broader non-auth Hubins product surfaces
+- workspace settings configuration content (placeholder at Phase 9 — content belongs to later product phases)
 - future settings/account-management modules not already shipped
 - later operational hardening beyond the current documented runbooks and checks
-- first-admin `/admin/settings` landing completion
 
 ---
 
@@ -363,6 +393,11 @@ As of the current foundation state, all of the following should be true:
 - generated email links target the tenant-aware frontend host shape
 - operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token
 - invite acceptance can continue into registration, authenticated session creation, and MFA setup entry for a first admin bootstrap path
+- all admins land on `/admin` after full authentication; `NONE + ADMIN` routes to `/admin` (Phase 9 role-aware fix)
+- when `tenants.setup_completed_at IS NULL`, the admin dashboard shows a `WorkspaceSetupBanner` prompting setup
+- any admin visiting `/admin/settings` triggers `POST /auth/workspace-setup-ack`, setting `setup_completed_at` tenant-wide
+- after ack, `GET /auth/config` returns `setupCompleted: true` and the banner is gone for all admins
+- members always land on `/app` (`NONE + MEMBER`)
 - current docs point to `/docs` as the repo truth home
 
 If one of these statements stops being true, this file must be updated or the repo must be repaired.

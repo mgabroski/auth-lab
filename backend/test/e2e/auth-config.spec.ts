@@ -80,6 +80,7 @@ describe('GET /auth/config', () => {
           publicSignupEnabled: false,
           signupAllowed: false,
           allowedSso: [],
+          setupCompleted: false,
         },
       });
     } finally {

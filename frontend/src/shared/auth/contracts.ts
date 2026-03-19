@@ -19,6 +19,15 @@
  * - Added signupAllowed to ConfigResponse to match backend auth.types.ts.
  *   Frontend code must use signupAllowed (not publicSignupEnabled) to decide
  *   whether to render signup entry points. See backend auth.types.ts for rationale.
+ *
+ * PHASE 9 UPDATE (ADR 0003):
+ * - Added setupCompleted to ConfigResponse.tenant.
+ *   Derived by the backend from tenants.setup_completed_at IS NOT NULL.
+ *   When false, the admin dashboard shows a non-blocking setup banner.
+ *   Any admin visiting /admin/settings calls POST /auth/workspace-setup-ack,
+ *   which sets setup_completed_at on the tenant. Banner disappears for all admins.
+ *   AuthNextAction is NOT extended — workspace setup is tenant state, not auth
+ *   continuation state. See ADR 0003.
  */
 
 export type AuthProvider = 'password' | 'google' | 'microsoft';
@@ -84,6 +93,12 @@ export type ConfigResponse = {
      */
     signupAllowed: boolean;
     allowedSso: PublicSsoProvider[];
+    /**
+     * Phase 9 (ADR 0003): true once any admin has visited /admin/settings and
+     * acknowledged workspace setup. False = show non-blocking setup banner on
+     * the admin dashboard. This is tenant-level state, not per-user state.
+     */
+    setupCompleted: boolean;
   };
 };
 

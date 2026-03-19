@@ -12,7 +12,7 @@ import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
 import { AuthCard } from '@/shared/auth/components/auth-card';
 import { AuthErrorBanner } from '@/shared/auth/components/auth-error-banner';
 import { AuthShell } from '@/shared/auth/components/auth-shell';
-import { getPathForNextAction, getRouteStateRedirectPath } from '@/shared/auth/redirects';
+import { getRouteStateRedirectPath } from '@/shared/auth/redirects';
 import type { AuthNextAction } from '@/shared/auth/contracts';
 import { readQueryParam, type SearchParamsRecord } from '@/shared/auth/url-tokens';
 
@@ -38,7 +38,6 @@ function parseNextAction(value: string | null): AuthNextAction | null {
 export default async function AuthSsoDonePage({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
   const hintedNextAction = parseNextAction(readQueryParam(resolvedSearchParams, 'nextAction'));
-  const hintedPath = hintedNextAction ? getPathForNextAction(hintedNextAction) : null;
   const bootstrap = await loadAuthBootstrap();
 
   if (!bootstrap.ok) {
@@ -57,9 +56,9 @@ export default async function AuthSsoDonePage({ searchParams }: PageProps) {
             error={bootstrap.error}
             fallbackMessage="Unable to complete SSO sign-in. Please try again."
           />
-          {hintedPath ? (
+          {hintedNextAction ? (
             <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: '#475569' }}>
-              Backend callback hint: <strong>{hintedNextAction}</strong> → <code>{hintedPath}</code>
+              Backend callback hint: <strong>{hintedNextAction}</strong>
             </p>
           ) : null}
         </AuthCard>

@@ -52,7 +52,7 @@ export default async function MfaVerifyPage() {
         title="MFA verification required"
         description="The backend already established the session, but `nextAction` still requires MFA verification before the app can continue."
       >
-        <MfaVerifyFlow userEmail={routeState.me.user.email} />
+        <MfaVerifyFlow userEmail={routeState.me.user.email} role={routeState.me.membership.role} />
       </AuthCard>
     </AuthShell>
   );

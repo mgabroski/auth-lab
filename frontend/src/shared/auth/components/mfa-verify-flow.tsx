@@ -7,11 +7,20 @@
  * - Implements the real MFA verification continuation flow.
  * - Supports both TOTP verification and recovery-code verification.
  * - Uses the backend as source of truth for success/error outcomes.
+ *
+ * PHASE 9 UPDATE (ADR 0003):
+ * - Accepts a `role: MembershipRole` prop (supplied by the SSR page from
+ *   routeState.me.membership.role) so getPostAuthRedirectPath can route
+ *   NONE + ADMIN → /admin correctly.
+ * - The verify/recover response nextAction is always 'NONE'; role comes
+ *   from the SSR page props rather than re-fetching GET /auth/me here,
+ *   since the SSR page already has the fully resolved session context.
  */
 
 import { useRouter } from 'next/navigation';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { recoverMfa, verifyMfa } from '@/shared/auth/browser-api';
+import type { MembershipRole } from '@/shared/auth/contracts';
 import { getPostAuthRedirectPath } from '@/shared/auth/redirects';
 import { AuthErrorBanner } from './auth-error-banner';
 import { AuthSuccessBanner } from './auth-success-banner';
@@ -26,9 +35,11 @@ import {
 
 type MfaVerifyFlowProps = {
   userEmail: string;
+  /** Phase 9: required to route NONE + ADMIN → /admin correctly. */
+  role: MembershipRole;
 };
 
-export function MfaVerifyFlow({ userEmail }: MfaVerifyFlowProps) {
+export function MfaVerifyFlow({ userEmail, role }: MfaVerifyFlowProps) {
   const router = useRouter();
   const [code, setCode] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
@@ -37,7 +48,7 @@ export function MfaVerifyFlow({ userEmail }: MfaVerifyFlowProps) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const finishAuth = (nextAction: 'NONE') => {
-    router.replace(getPostAuthRedirectPath(nextAction, null));
+    router.replace(getPostAuthRedirectPath(nextAction, role, null));
     router.refresh();
   };
 

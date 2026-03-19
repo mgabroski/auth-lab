@@ -7,6 +7,14 @@
  * - Implements the real MFA setup continuation flow using backend setup + verify-setup endpoints.
  * - Shows a scannable QR code, the raw authenticator URI, and recovery codes returned by the backend.
  * - Keeps the page thin while the browser owns the interactive setup state.
+ *
+ * PHASE 9 UPDATE (ADR 0003):
+ * - Accepts a `role: MembershipRole` prop (supplied by the SSR page from
+ *   routeState.me.membership.role) so getPostAuthRedirectPath routes
+ *   NONE + ADMIN → /admin correctly after MFA setup completes.
+ * - The verify-setup response always returns nextAction: 'NONE'; role comes from
+ *   the SSR page props which already have the fully resolved session context.
+ *   No extra GET /auth/me call is required.
  */
 
 import {
@@ -19,7 +27,7 @@ import {
 } from 'react';
 import QRCode from 'react-qr-code';
 import { useRouter } from 'next/navigation';
-import type { MfaSetupResponse } from '@/shared/auth/contracts';
+import type { MfaSetupResponse, MembershipRole } from '@/shared/auth/contracts';
 import { setupMfa, verifyMfaSetup } from '@/shared/auth/browser-api';
 import { parseOtpAuthUri } from '@/shared/auth/otpauth';
 import { AUTHENTICATED_APP_ENTRY_PATH, getPostAuthRedirectPath } from '@/shared/auth/redirects';
@@ -89,9 +97,11 @@ const recoveryCodeListStyle: CSSProperties = {
 
 type MfaSetupFlowProps = {
   userEmail: string;
+  /** Phase 9: required to route NONE + ADMIN → /admin correctly after setup. */
+  role: MembershipRole;
 };
 
-export function MfaSetupFlow({ userEmail }: MfaSetupFlowProps) {
+export function MfaSetupFlow({ userEmail, role }: MfaSetupFlowProps) {
   const router = useRouter();
   const setupRequestedRef = useRef(false);
   const [setupData, setSetupData] = useState<MfaSetupResponse | null>(null);
@@ -142,7 +152,8 @@ export function MfaSetupFlow({ userEmail }: MfaSetupFlowProps) {
       }
 
       setSuccessMessage('MFA setup completed. Redirecting to your workspace…');
-      router.replace(getPostAuthRedirectPath(result.data.nextAction, null));
+      // Phase 9: role prop is supplied by the SSR page so NONE + ADMIN → /admin.
+      router.replace(getPostAuthRedirectPath(result.data.nextAction, role, null));
     } catch (caughtError) {
       setError(caughtError);
       setVerifyPending(false);

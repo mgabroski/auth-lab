@@ -23,6 +23,11 @@
  * - /auth/logout:              trapping an unverified user from logging out
  *                              creates a support burden with zero security benefit.
  *
+ * PHASE 9 UPDATE:
+ * - /auth/workspace-setup-ack: POST, requires ADMIN + emailVerified + mfaVerified.
+ *   Sets setup_completed_at on the tenant so GET /auth/config returns
+ *   setupCompleted: true for the workspace. Banner disappears for all admins. Idempotent.
+ *
  * Public Signup + Email Verification:
  * - /auth/signup: session required = false (unauthenticated endpoint)
  * - /auth/verify-email: session required (user authenticated after signup)
@@ -468,6 +473,31 @@ export class AuthController {
     });
 
     return reply.status(200).send(RESEND_VERIFICATION_RESPONSE);
+  }
+
+  /**
+   * POST /auth/workspace-setup-ack
+   *
+   * Phase 9 (ADR 0003). Called by /admin/settings SSR page on load.
+   *
+   * Guard: ADMIN role + emailVerified + mfaVerified (fully authenticated admin).
+   * Sets setup_completed_at = now() on the tenant row (tenant-scoped, not per-user).
+   * Idempotent: UPDATE WHERE setup_completed_at IS NULL is a no-op when already set.
+   *
+   * Returns 200 { status: 'ACKNOWLEDGED' }.
+   *
+   * After this succeeds, GET /auth/config returns setupCompleted: true for the
+   * entire workspace and the setup banner disappears for all admins.
+   */
+  async workspaceSetupAck(req: FastifyRequest, reply: FastifyReply) {
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireEmailVerified: true,
+      requireMfa: true,
+    });
+
+    const result = await this.authService.ackWorkspaceSetup(auth);
+    return reply.status(200).send(result);
   }
 
   /**

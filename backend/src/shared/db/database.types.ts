@@ -135,6 +135,7 @@ export interface Tenants {
   member_mfa_required: Generated<boolean>;
   name: string;
   public_signup_enabled: Generated<boolean>;
+  setup_completed_at: Timestamp | null;
   updated_at: Generated<Timestamp>;
 }
 

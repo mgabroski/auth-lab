@@ -16,6 +16,9 @@
  *
  * PHASE 1A UPDATE:
  * - Hydrates adminInviteRequired as an explicit tenant policy input.
+ *
+ * PHASE 9 UPDATE (ADR 0003):
+ * - Hydrates setupCompletedAt from setup_completed_at column.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -57,6 +60,8 @@ function parseAllowedSso(value: unknown): TenantAllowedSso {
 function rowToTenant(row: Awaited<ReturnType<typeof findTenantByKeySql>>): Tenant | undefined {
   if (!row) return undefined;
 
+  const setupAt = row.setup_completed_at;
+
   return {
     id: row.id,
     key: row.key,
@@ -68,6 +73,10 @@ function rowToTenant(row: Awaited<ReturnType<typeof findTenantByKeySql>>): Tenan
     memberMfaRequired: row.member_mfa_required,
     allowedEmailDomains: parseAllowedEmailDomains(row.allowed_email_domains),
     allowedSso: parseAllowedSso(row.allowed_sso),
+
+    // Phase 9: normalise to Date | null regardless of driver return type.
+    setupCompletedAt:
+      setupAt == null ? null : setupAt instanceof Date ? setupAt : new Date(setupAt as string),
 
     createdAt: row.created_at,
     updatedAt: row.updated_at,

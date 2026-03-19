@@ -34,7 +34,7 @@ async function resolvePostVerificationPath(): Promise<string> {
   const meResult = await getAuthMe();
 
   if (meResult.ok) {
-    return getPathForNextAction(meResult.data.nextAction);
+    return getPathForNextAction(meResult.data.nextAction, meResult.data.membership.role);
   }
 
   return AUTHENTICATED_APP_ENTRY_PATH;
