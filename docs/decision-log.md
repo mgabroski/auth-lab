@@ -415,10 +415,10 @@ Re-evaluate this decision when any of the following becomes true:
 
 ---
 
-## ADR-011 — First-admin onboarding: workspace setup banner, not auth continuation redirect
+## ADR-011 — Workspace setup banner, not auth continuation redirect
 
 **Date:** 2026-03
-**Status:** Accepted (Phase 9 implementation — supersedes original LOCK-1 redirect intent)
+**Status:** Accepted (Phase 9 implementation — official replacement for the original LOCK-1 redirect expectation)
 
 ### Context
 
@@ -474,8 +474,8 @@ completes the setup flow. The banner correctly models this as a tenant-level fla
 ### Named re-evaluation trigger
 
 **`FIRST_ADMIN_REDIRECT_TRIGGER`**: Re-evaluate if future product requirements need a
-hard-gated first-admin onboarding sequence that cannot be skipped or deferred by navigating
-to other admin pages before setup is complete.
+hard-gated admin workspace-onboarding sequence that cannot be skipped or deferred by
+navigating to other admin pages before setup is complete.
 
 ---
 
@@ -654,16 +654,16 @@ the full rationale, rejected alternatives, and named re-evaluation triggers.
 
 ---
 
-### LOCK-1 — First-admin workspace setup routing
+### LOCK-1 — Workspace setup banner and admin-settings acknowledgement
 
 **ADR:** ADR-011
 **Status:** Locked — Phase 9 implementation complete
 
-Workspace setup for the first admin is delivered as a **non-blocking banner on `/admin`**,
+Workspace setup is delivered as a **tenant-scoped non-blocking banner on `/admin`**,
 not an auth continuation redirect. All admins always land on `/admin` after full authentication
 (`NONE + ADMIN`). No `FIRST_TIME_SETUP` nextAction exists or will be added to the
 `AuthNextAction` union. The banner disappears for all admins in the workspace once any admin
-visits `/admin/settings` and the ack is recorded on the tenant row.
+visits `/admin/settings` and the acknowledgement is recorded on the tenant row.
 
 **Named re-evaluation trigger:** `FIRST_ADMIN_REDIRECT_TRIGGER` (see ADR-011).
 

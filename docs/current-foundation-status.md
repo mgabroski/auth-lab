@@ -164,7 +164,7 @@ Specifically it added:
 
 Phase 3 did **not** change:
 
-- first-admin `/admin/settings` routing
+- workspace setup banner and `/admin/settings` scope
 - public signup proof scope
 - password-reset proof scope
 - real browser CI scope
@@ -185,7 +185,7 @@ Phase 4 did **not** change:
 
 - MFA provider-live proof scope
 - Google or Microsoft provider-live proof scope
-- first-admin `/admin/settings` landing scope
+- workspace setup banner and `/admin/settings` scope
 - Phase 8 real-stack browser CI scope
 - broader non-auth Hubins product scope
 
@@ -261,14 +261,14 @@ Phase 8 does **not** change:
 - frontend auth forms or components
 - session or cookie contracts
 - proxy topology or Caddy/nginx configuration
-- first-admin `/admin/settings` routing (Phase 9 scope)
+- workspace setup banner and `/admin/settings` scope (Phase 9)
 
 ---
 
 ## 10. What Phase 9 added
 
 Phase 9 closes the auth module's dependency on initial Settings routing and
-creates the real first-admin workspace setup UX.
+creates the real tenant-scoped workspace setup UX.
 
 **Design decision (ADR 0003):** workspace setup state belongs to the tenant,
 not to individual users. A per-membership redirect would create a race

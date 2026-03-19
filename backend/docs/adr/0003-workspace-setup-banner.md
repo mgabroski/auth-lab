@@ -1,4 +1,4 @@
-# ADR 0003 — Workspace setup state and first-admin onboarding UX
+# ADR 0003 — Workspace setup state and workspace-setup banner UX
 
 ## Status
 
@@ -6,10 +6,10 @@ Accepted (Phase 9)
 
 ## Context
 
-After a first-time admin completes the onboarding chain (invite → registration →
-MFA setup), the auth module needs to surface workspace configuration. The initial
-design proposed a per-membership `FIRST_TIME_SETUP` nextAction that would redirect
-the first admin to `/admin/settings` exactly once on first login.
+After admin onboarding is complete and a workspace is still unconfigured, the auth
+module needs to surface workspace configuration. The initial design proposed a
+per-membership `FIRST_TIME_SETUP` nextAction that would redirect one admin to
+`/admin/settings` exactly once from the auth flow.
 
 That design has two concrete correctness problems:
 

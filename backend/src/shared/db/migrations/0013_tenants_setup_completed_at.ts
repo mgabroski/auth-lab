@@ -4,7 +4,7 @@
  * WHY:
  * - Workspace setup state belongs to the tenant, not to individual users (ADR 0003).
  * - When setup_completed_at IS NULL, the admin dashboard shows a non-blocking
- *   banner prompting the first admin to configure the workspace.
+ *   banner prompting any admin to configure the workspace.
  * - When any admin visits /admin/settings, POST /auth/workspace-setup-ack sets
  *   setup_completed_at = now(). The banner disappears for all admins immediately.
  *
