@@ -1007,7 +1007,7 @@ yarn workspace frontend test:e2e:real-stack
 
 ### What counts as a pass
 
-All 15 tests in `frontend/test/e2e/auth.spec.ts` must pass:
+All 17 tests in `frontend/test/e2e/auth.spec.ts` must pass:
 
 1. `member login reaches /app and session cookie is set correctly`
 2. `logout clears session and /app is rejected afterward`
@@ -1016,14 +1016,16 @@ All 15 tests in `frontend/test/e2e/auth.spec.ts` must pass:
 5. `signup page shows blocked state on invite-only tenant`
 6. `topology: host-derived tenant identity resolves correctly through Caddy`
 7. `topology: SSO start sets sso-state cookie and redirects to provider`
-8. `cross-tenant isolation: goodwill-open session rejected on goodwill-ca`
-9. `phase-9: /admin/settings route exists and redirects unauthenticated access`
-10. `phase-9: /admin/settings responds with a page (not 404) for any request`
-11. `phase-9: member login lands on /app, not /admin (NONE + MEMBER role-aware routing)`
-12. `phase-9: member is redirected away from /admin (role gate enforced)`
-13. `phase-9: admin login continues to /auth/mfa/setup (MFA_SETUP_REQUIRED continuation unchanged)`
-14. `mfa full loop: setup → compute TOTP → verify-setup → /admin → mfaVerified=true`
-15. `invite acceptance journey: admin creates invite → email → accept → register → /app`
+8. `SSO Google callback: full loop via local OIDC → session created + audit written`
+9. `SSO Microsoft callback: full loop via local OIDC → session created`
+10. `cross-tenant isolation: goodwill-open session rejected on goodwill-ca`
+11. `phase-9: /admin/settings route exists and redirects unauthenticated access`
+12. `phase-9: /admin/settings responds with a page (not 404) for any request`
+13. `phase-9: member login lands on /app, not /admin (NONE + MEMBER role-aware routing)`
+14. `phase-9: member is redirected away from /admin (role gate enforced)`
+15. `phase-9: admin login continues to /auth/mfa/setup (MFA_SETUP_REQUIRED continuation unchanged)`
+16. `mfa full loop: setup → compute TOTP → verify-setup → /admin → mfaVerified=true`
+17. `invite acceptance journey: admin creates invite → email → accept → register → /app`
 
 ### Debugging failures
 
@@ -1069,6 +1071,45 @@ docker compose --env-file infra/.env.stack -f infra/docker-compose.yml \
 Expected: `allowed_sso` contains `google`.
 
 Also confirm `GOOGLE_CLIENT_ID` is set in `infra/.env.stack` (a placeholder value is fine — the SSO start route only needs a non-empty client ID to build the redirect URL).
+
+**Symptom: tests 8 or 9 (SSO callback via local OIDC) are skipped**
+
+The tests call `isLocalOidcReachable()` and skip themselves when the server is unreachable. This is expected in local dev unless you start the stack with the OIDC overlay:
+
+```bash
+docker compose --env-file infra/.env.stack \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose-ci-oidc.yml \
+  up --build -d
+```
+
+If the server is running but tests still skip, confirm port 9998 is exposed:
+
+```bash
+curl -sf http://localhost:9998/.well-known/jwks.json | head -1
+```
+
+**Symptom: tests 8 or 9 fail with `SSO start must redirect to local OIDC`**
+
+The backend is not using `LocalOidcSsoAdapter`. Confirm `LOCAL_OIDC_ENABLED=true` is set in the backend container environment. In CI this is injected by `docker-compose-ci-oidc.yml`. Locally you must pass it explicitly or use the overlay compose command above.
+
+Check the running backend env:
+
+```bash
+docker compose --env-file infra/.env.stack -f infra/docker-compose.yml \
+  exec backend env | grep LOCAL_OIDC
+```
+
+Expected: `LOCAL_OIDC_ENABLED=true`, `LOCAL_OIDC_ISSUER=http://local-oidc:9998`.
+
+**Symptom: tests 8 or 9 fail at the callback step with 4xx**
+
+The most common causes in order:
+
+1. `state` cookie expired (sso-state TTL is 600s — if the test runner pauses for over 10 min this can happen; unlikely in CI)
+2. `nonce` mismatch — the nonce passed to `registerOidcIdentity` must exactly match the one extracted from the SSO start redirect URL query params
+3. The local OIDC code expired (2-minute TTL) — re-run the test; codes are generated fresh each run
+4. The goodwill-open tenant does not have `google` or `microsoft` in `allowed_sso` — reseed with `./scripts/seed-e2e-fixtures.sh`
 
 ### Teardown
 

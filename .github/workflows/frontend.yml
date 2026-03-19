@@ -197,6 +197,11 @@ jobs:
         env:
           MAILPIT_API_URL: http://localhost:8025
           CI: 'true'
+          # WHY: Tests 8 and 9 (SSO callback via local OIDC) call isLocalOidcReachable()
+          # to skip themselves when the OIDC server is not running. Setting this var
+          # as a belt-and-suspenders guard alongside the reachability check ensures
+          # the tests are never silently skipped in CI when they should run.
+          LOCAL_OIDC_ENABLED: 'true'
 
       - name: Upload traces and screenshots on failure
         if: failure()
