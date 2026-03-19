@@ -238,10 +238,10 @@ Specifically it adds:
 
 - `backend/src/shared/db/seed/seed-e2e-fixtures.ts` — seeds a dedicated ADMIN persona (`e2e-admin@example.com`) in `goodwill-open` with no MFA configured, so the admin login continuation path returns `MFA_SETUP_REQUIRED` predictably in real-stack tests
 - `backend/src/shared/db/seed/run-seed-e2e-fixtures.ts` — CLI runner: `yarn workspace @auth-lab/backend db:seed:e2e`
-- `frontend/playwright.config.real-stack.mts` — Playwright config targeting the real Caddy proxy at `*.lvh.me:3000`; no mock backend, no `next dev` web server block
+- `frontend/playwright.config.mts` — Playwright config targeting the real Caddy proxy at `*.lvh.me:3000`; no mock backend, no `next dev` web server block
 - `frontend/test/e2e/helpers/mailpit.ts` — Mailpit HTTP API helper (`purgeMailpit`, `waitForEmailToRecipient`, `extractLinkFromText`) for email-driven real-stack tests
-- `frontend/test/e2e/real-stack-smoke.spec.ts` — 8 smoke tests covering all Phase 8 required journeys
-- `.github/workflows/frontend-e2e-real-stack.yml` — CI job: builds Docker stack, seeds E2E fixtures, runs Playwright real-stack suite, uploads failure artifacts, tears down
+- `frontend/test/e2e/auth.spec.ts` — 15 smoke tests covering all Phase 8 required journeys (expanded in Phase 9 and Phase C)
+- `.github/workflows/frontend.yml` — CI job (e2e job inside): builds Docker stack with local OIDC overlay, seeds E2E fixtures, runs Playwright real-stack suite, uploads failure artifacts, tears down
 - `scripts/seed-e2e-fixtures.sh` — local convenience wrapper for `docker compose exec` seed
 - `frontend/package.json` and `backend/package.json` — `test:e2e:real-stack` and `db:seed:e2e` scripts added
 - `docs/developer-guide.md` — updated frontend checks section with real-stack E2E instructions
@@ -387,8 +387,9 @@ As of the current foundation state, all of the following should be true:
 - Phase 6 live Google proof can be executed through the documented runbook once real staging credentials are available
 - Phase 7 live Microsoft proof can be executed through the documented runbook once real staging credentials are available
 - real-stack Playwright smoke tests pass against the full Docker Compose topology: `yarn workspace frontend test:e2e:real-stack`
-- the Phase 8 CI job (`frontend-e2e-real-stack.yml`) runs the real-stack smoke suite on push/PR
+- the Phase 8 CI job (e2e job inside `.github/workflows/frontend.yml`) runs the real-stack smoke suite on push/PR
 - the E2E fixture seed (`yarn workspace @auth-lab/backend db:seed:e2e`) creates the required admin persona in `goodwill-open` with no MFA
+- Google and Microsoft SSO callback flows are proven end-to-end in real browser CI via the local OIDC server (`infra/docker-compose-ci-oidc.yml`) — session creation, jose jwtVerify(), and audit are all exercised
 - Mailpit HTTP API is reachable at port 8025 when running the full stack (used by real-stack E2E email-verification test)
 - generated email links target the tenant-aware frontend host shape
 - operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token

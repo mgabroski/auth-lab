@@ -501,7 +501,7 @@ Real-stack Playwright E2E (Phase 8 — requires Docker Compose stack to be runni
 yarn workspace frontend test:e2e:real-stack
 ```
 
-The real-stack suite (`test/e2e/real-stack-smoke.spec.ts`) runs 8 smoke tests against the live Caddy proxy at `*.lvh.me:3000`. It uses `playwright.config.real-stack.mts` (not the default config). No webServer is started — the Docker stack must already be running.
+The real-stack suite (`test/e2e/auth.spec.ts`) runs 15 smoke tests against the live Caddy proxy at `*.lvh.me:3000`. It uses `playwright.config.mts` (the default config, which already targets the real stack — no mock webServer block). No webServer is started — the Docker stack must already be running.
 
 **What the real-stack suite proves:**
 

@@ -6,7 +6,7 @@
 #   backend container.
 # - Use this locally after `./scripts/stack.sh up` to prepare the admin persona
 #   required by real-stack Playwright smoke tests.
-# - In CI, the seed-e2e-fixtures step in frontend-e2e-real-stack.yml runs the
+# - In CI, the seed-e2e-fixtures step in the frontend.yml e2e job runs the
 #   equivalent docker compose exec command directly.
 #
 # PREREQUISITES:
@@ -25,7 +25,7 @@
 #   MFA:        none (so login returns MFA_SETUP_REQUIRED)
 #
 # WHAT THIS ENABLES:
-#   real-stack-smoke.spec.ts — "admin login without MFA continues to /auth/mfa/setup"
+#   auth.spec.ts — "admin login without MFA continues to /auth/mfa/setup"
 
 set -euo pipefail
 

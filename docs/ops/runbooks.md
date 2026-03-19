@@ -1007,7 +1007,7 @@ yarn workspace frontend test:e2e:real-stack
 
 ### What counts as a pass
 
-All 8 tests in `frontend/test/e2e/real-stack-smoke.spec.ts` must pass:
+All 15 tests in `frontend/test/e2e/auth.spec.ts` must pass:
 
 1. `member login reaches /app and session cookie is set correctly`
 2. `logout clears session and /app is rejected afterward`
@@ -1015,8 +1015,15 @@ All 8 tests in `frontend/test/e2e/real-stack-smoke.spec.ts` must pass:
 4. `signup delivers verification email and verify-link completes auth`
 5. `signup page shows blocked state on invite-only tenant`
 6. `topology: host-derived tenant identity resolves correctly through Caddy`
-7. `topology: SSO start through proxy sets sso-state cookie and redirects to provider`
+7. `topology: SSO start sets sso-state cookie and redirects to provider`
 8. `cross-tenant isolation: goodwill-open session rejected on goodwill-ca`
+9. `phase-9: /admin/settings route exists and redirects unauthenticated access`
+10. `phase-9: /admin/settings responds with a page (not 404) for any request`
+11. `phase-9: member login lands on /app, not /admin (NONE + MEMBER role-aware routing)`
+12. `phase-9: member is redirected away from /admin (role gate enforced)`
+13. `phase-9: admin login continues to /auth/mfa/setup (MFA_SETUP_REQUIRED continuation unchanged)`
+14. `mfa full loop: setup → compute TOTP → verify-setup → /admin → mfaVerified=true`
+15. `invite acceptance journey: admin creates invite → email → accept → register → /app`
 
 ### Debugging failures
 
@@ -1077,7 +1084,7 @@ docker compose --env-file infra/.env.stack -f infra/docker-compose.yml down -v
 
 ### CI execution
 
-The CI job `.github/workflows/frontend-e2e-real-stack.yml` runs automatically on push/PR to any of:
+The CI job `.github/workflows/frontend.yml` (e2e job) runs automatically on push/PR to any of:
 
 - `frontend/**`
 - `backend/**`
