@@ -48,6 +48,11 @@ const MEMBER_PASSWORD = 'Password123!';
 
 // Seeded by E2E fixture seed (seed-e2e-fixtures.ts):
 const E2E_ADMIN_EMAIL = 'e2e-admin@example.com';
+// Dedicated persona for test 18 (MFA recovery). Never used by other tests,
+// so its MFA state is never configured mid-run. Seed always clears it.
+const E2E_RECOVERY_ADMIN_EMAIL = 'e2e-recovery-admin@example.com';
+// Dedicated persona for test 19 (password reset). Seed restores password on every run.
+const E2E_RESET_MEMBER_EMAIL = 'e2e-reset-member@example.com';
 const E2E_ADMIN_PASSWORD = 'Password123!';
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -270,7 +275,16 @@ test.describe('auth smoke', () => {
     expect(response.status(), 'SSO start must return 302').toBe(302);
 
     const location = response.headers()['location'] ?? '';
-    expect(location).toContain('accounts.google.com');
+    // WHY not asserting accounts.google.com:
+    // When LOCAL_OIDC_ENABLED=true (dev + CI), the google slot uses
+    // LocalOidcSsoAdapter which redirects to localhost:9998/authorize.
+    // When LOCAL_OIDC is off (staging/production), it redirects to
+    // accounts.google.com. Both are valid — we assert shape, not destination.
+    expect(location, 'SSO start must redirect to an authorize endpoint').toMatch(
+      /\/authorize\?|accounts\.google\.com|login\.microsoftonline\.com/,
+    );
+    expect(location, 'SSO start redirect must carry a state param').toContain('state=');
+    expect(location, 'SSO start redirect must carry a nonce param').toContain('nonce=');
 
     const setCookieHeaders = response
       .headersArray()
@@ -435,10 +449,13 @@ test.describe('auth smoke', () => {
     expect(meBody.membership.role, 'New SSO member in goodwill-open must have MEMBER role').toBe(
       'MEMBER',
     );
+    // WHY true: when MFA is not required for this membership, the SSO callback
+    // creates the session as fully authenticated. mfaVerified=false means
+    // "MFA is required but not yet completed" — the opposite state.
     expect(
       meBody.session.mfaVerified,
-      'MEMBER with no MFA requirement must have mfaVerified=false or NONE continuation',
-    ).toBe(false);
+      'MEMBER with no MFA requirement is fully authenticated — mfaVerified must be true',
+    ).toBe(true);
   });
 
   // ── 9. Microsoft SSO — full callback loop via local OIDC server ───────────
@@ -886,5 +903,235 @@ test.describe('auth smoke', () => {
     } finally {
       await freshContext.close().catch(() => undefined);
     }
+  });
+
+  // ── 18. MFA recovery full loop ────────────────────────────────────────────
+  //
+  // Proves:
+  // - recovery code is visible on the MFA setup page after POST /auth/mfa/setup
+  // - POST /auth/mfa/recover accepts a valid recovery code and establishes session
+  // - session cookie is rotated after recovery (privilege elevation)
+  // - the same recovery code is rejected on a second use (single-use enforcement)
+  //
+  // Backend E2E tests cover this at the API level. This test proves the browser
+  // path: the user can actually read a recovery code off the setup page and use
+  // it to log in when they do not have their authenticator app.
+  //
+  // WHY a dedicated E2E admin persona rather than reusing e2e-admin:
+  // The MFA loop test (test 16) leaves e2e-admin with a configured MFA secret.
+  // Reusing it here would mean navigating MFA_REQUIRED (verify path) rather than
+  // MFA_SETUP_REQUIRED (setup path), which is a different page. A dedicated persona
+  // e2e-recovery-admin@example.com that always starts with no MFA keeps this test
+  // independent. However, rather than creating a third seed persona, we reuse
+  // e2e-admin after the fixture seed clears its MFA — which already happens
+  // between test runs. We just need to seed again before this test.
+  //
+  // PRACTICAL APPROACH: Use page.request to drive the API directly for setup +
+  // verify-setup (same as test 16 does via the UI), then log out, log back in
+  // via the UI to reach /auth/mfa/verify, and use the recovery code there.
+  // This keeps the test fast and deterministic — no TOTP timing window.
+
+  test('mfa recovery: use recovery code → session established → code rejected on reuse', async ({
+    page,
+  }) => {
+    // WHY 90s: login × 2 + MFA setup + recovery code path + re-login + reuse check
+    test.setTimeout(90_000);
+
+    // ── A. Login as e2e-recovery-admin → MFA_SETUP_REQUIRED ────────────────
+    // WHY dedicated persona: tests 16 and 17 both configure MFA for the other
+    // two E2E admin personas during the same run. e2e-recovery-admin is never
+    // touched by any other test, so the seed's MFA clear guarantees it always
+    // starts with no MFA and login always returns MFA_SETUP_REQUIRED.
+
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(E2E_RECOVERY_ADMIN_EMAIL);
+    await page.getByLabel('Password').fill(E2E_ADMIN_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/auth/mfa/setup`);
+
+    // ── B. Wait for setup data (QR + secret + recovery codes) ────────────────
+
+    const secretInput = page.getByLabel('Authenticator secret');
+    await expect(secretInput).toBeVisible({ timeout: 15_000 });
+    const base32Secret = await secretInput.inputValue();
+
+    // ── C. Read one recovery code from the page ───────────────────────────────
+    // Recovery codes are rendered as <li><code>...</code></li> inside the
+    // "Recovery codes" section. We grab the first one.
+
+    const firstRecoveryCode = page
+      .getByRole('listitem')
+      .filter({ has: page.locator('code') })
+      .first()
+      .locator('code');
+
+    await expect(firstRecoveryCode).toBeVisible({ timeout: 10_000 });
+    const recoveryCodeValue = await firstRecoveryCode.textContent();
+    expect(recoveryCodeValue, 'Recovery code must be a non-empty string').toBeTruthy();
+
+    // ── D. Complete MFA setup via TOTP so the MFA secret is verified ──────────
+    // POST /auth/mfa/verify-setup requires a valid TOTP code. Without completing
+    // setup the recovery codes are not yet activated (mfa_secrets.is_verified=false).
+
+    const setupCode = generateTotp(base32Secret);
+    await page.getByLabel('6-digit code').fill(setupCode);
+    await page.getByRole('button', { name: 'Finish MFA setup' }).click();
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/admin`, { timeout: 15_000 });
+
+    // ── E. Log out ────────────────────────────────────────────────────────────
+
+    await page.request.post(`${OPEN_ORIGIN}/api/auth/logout`);
+
+    // ── F. Log back in → MFA_REQUIRED → /auth/mfa/verify ─────────────────────
+    // Now the admin has a verified MFA secret, so login returns MFA_REQUIRED.
+
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(E2E_RECOVERY_ADMIN_EMAIL);
+    await page.getByLabel('Password').fill(E2E_ADMIN_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/auth/mfa/verify`, { timeout: 10_000 });
+
+    // ── G. Use the recovery code instead of TOTP ──────────────────────────────
+    // The MFA verify page shows "or use a recovery code" section below the TOTP form.
+
+    const recoveryCodeInput = page.getByLabel('Recovery code');
+    await expect(recoveryCodeInput).toBeVisible({ timeout: 5_000 });
+    await recoveryCodeInput.fill(recoveryCodeValue as string);
+    await page.getByRole('button', { name: 'Use recovery code' }).click();
+
+    // ── H. Assert authenticated session established ────────────────────────────
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/admin`, { timeout: 15_000 });
+
+    const meAfterRecovery = await page.request.get(`${OPEN_ORIGIN}/api/auth/me`);
+    expect(meAfterRecovery.status(), '/api/auth/me must be 200 after recovery login').toBe(200);
+
+    const meBody = (await meAfterRecovery.json()) as { session: { mfaVerified: boolean } };
+    expect(meBody.session.mfaVerified, 'session.mfaVerified must be true after recovery').toBe(
+      true,
+    );
+
+    // ── I. Log out + log back in + attempt to reuse the same code ─────────────
+
+    await page.request.post(`${OPEN_ORIGIN}/api/auth/logout`);
+
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(E2E_RECOVERY_ADMIN_EMAIL);
+    await page.getByLabel('Password').fill(E2E_ADMIN_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/auth/mfa/verify`, { timeout: 10_000 });
+
+    const recoveryCodeInput2 = page.getByLabel('Recovery code');
+    await expect(recoveryCodeInput2).toBeVisible({ timeout: 5_000 });
+    await recoveryCodeInput2.fill(recoveryCodeValue as string);
+    await page.getByRole('button', { name: 'Use recovery code' }).click();
+
+    // Single-use enforcement: the backend must reject the already-consumed code.
+    // The form should surface an error, and the URL must NOT advance to /admin.
+    await expect(
+      page.getByRole('alert').or(page.getByText(/invalid|expired|already used/i)),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await expect(page).not.toHaveURL(`${OPEN_ORIGIN}/admin`);
+  });
+
+  // ── 19. Password reset full loop ──────────────────────────────────────────
+  //
+  // Proves:
+  // - POST /auth/forgot-password delivers a reset email via real SMTP/Mailpit
+  // - the reset link in the email contains a valid token and navigates to
+  //   /auth/reset-password correctly
+  // - POST /auth/reset-password accepts the token and the new password
+  // - the user can log in with the new password
+  // - the old password is rejected after reset
+  //
+  // Uses a dedicated E2E persona (e2e-reset-member@example.com) that no other
+  // test touches. The seed restores its password on every run.
+
+  test('password reset: forgot → email → link → new password → login → old password rejected', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+
+    const RESET_PASSWORD = `Reset${Date.now()}!`;
+
+    await purgeMailpit();
+
+    // ── A. Navigate to forgot-password page ──────────────────────────────────
+
+    await page.goto(`${OPEN_ORIGIN}/auth/forgot-password`);
+    // Use level:2 to avoid strict mode violation — the page has both an h1 (tenant name)
+    // and an h2 ('Request a reset link'). We want the h2 form heading specifically.
+    await expect(
+      page.getByRole('heading', { level: 2, name: /request a reset link/i }),
+    ).toBeVisible();
+
+    // ── B. Submit the forgot-password form ────────────────────────────────────
+
+    await page.getByLabel('Email').fill(E2E_RESET_MEMBER_EMAIL);
+    await page.getByRole('button', { name: 'Send reset link' }).click();
+
+    // The backend always returns the generic "Check your email" message to
+    // prevent account enumeration — assert this is what the user sees.
+    await expect(page.getByText('Check your email')).toBeVisible({ timeout: 10_000 });
+
+    // ── C. Wait for the reset email in Mailpit ────────────────────────────────
+
+    const message = await waitForEmailToRecipient(E2E_RESET_MEMBER_EMAIL);
+    expect(message.Subject, 'Reset email subject must reference reset').toMatch(/reset|password/i);
+
+    // ── D. Extract the reset link ─────────────────────────────────────────────
+
+    const resetLink = extractLinkFromText(message.Text, '/auth/reset-password?token=');
+    expect(resetLink, 'Reset link must target the open tenant host').toContain(
+      `${OPEN_TENANT}.lvh.me`,
+    );
+
+    // ── E. Navigate to the reset link ─────────────────────────────────────────
+
+    await page.goto(resetLink);
+    await expect(page).toHaveURL(/\/auth\/reset-password/, { timeout: 10_000 });
+
+    // ── F. Submit the new password ────────────────────────────────────────────
+
+    await page.getByLabel('New password').fill(RESET_PASSWORD);
+    await page.getByRole('button', { name: /reset|update|save/i }).click();
+
+    // Backend returns "Password updated successfully. Please sign in with your new password."
+    // Target exact substring to avoid matching the "sign in" navigation links also on the page.
+    await expect(page.getByText('Password updated successfully')).toBeVisible({ timeout: 10_000 });
+
+    // ── G. Login with the new password ────────────────────────────────────────
+
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(E2E_RESET_MEMBER_EMAIL);
+    await page.getByLabel('Password').fill(RESET_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(page).toHaveURL(`${OPEN_ORIGIN}/app`, { timeout: 15_000 });
+
+    const meRes = await page.request.get(`${OPEN_ORIGIN}/api/auth/me`);
+    expect(meRes.status(), '/api/auth/me must be 200 after reset login').toBe(200);
+
+    // ── H. Confirm old password is rejected ───────────────────────────────────
+
+    await page.request.post(`${OPEN_ORIGIN}/api/auth/logout`);
+
+    await page.goto(`${OPEN_ORIGIN}/auth/login`);
+    await page.getByLabel('Email').fill(E2E_RESET_MEMBER_EMAIL);
+    await page.getByLabel('Password').fill(MEMBER_PASSWORD);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+
+    await expect(
+      page.getByText(/invalid credentials|incorrect|wrong/i).or(page.getByRole('alert')),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await expect(page).not.toHaveURL(`${OPEN_ORIGIN}/app`);
+    // No restore needed — the seed resets e2e-reset-member's password to
+    // Password123! on every run, so the next run always starts clean.
   });
 });

@@ -210,6 +210,12 @@ export async function seedE2eFixtures(opts: {
 
   // Seed the second admin persona used by the invite-acceptance Playwright test.
   await seedE2eInviteAdminPersona({ db, passwordHasher, tenant });
+
+  // Seed the third admin persona used exclusively by the MFA recovery Playwright test.
+  await seedE2eRecoveryAdminPersona({ db, passwordHasher, tenant });
+
+  // Seed the fourth persona used exclusively by the password reset Playwright test.
+  await seedE2eResetMemberPersona({ db, passwordHasher, tenant });
 }
 
 // ── Second E2E admin persona: invite-admin ───────────────────────────────────
@@ -336,5 +342,267 @@ async function seedE2eInviteAdminPersona(opts: {
     email,
     tenantKey: tenant.key,
     message: 'E2E invite-admin persona ready: ADMIN, ACTIVE, email_verified, no MFA',
+  });
+}
+
+// ── Third E2E admin persona: recovery-admin ──────────────────────────────────
+//
+// WHY a dedicated persona for the MFA recovery Playwright test (test 18):
+// - The primary e2e-admin (e2e-admin@example.com) goes through MFA setup in
+//   test 16 (mfa full loop). After that test runs, the persona has a verified
+//   MFA secret, so the next login returns MFA_REQUIRED, not MFA_SETUP_REQUIRED.
+// - The invite-admin (e2e-invite-admin@example.com) also configures MFA in
+//   test 17 (invite acceptance journey). Same problem.
+// - Test 18 needs a persona that ALWAYS starts with no MFA so it goes through
+//   MFA_SETUP_REQUIRED → /auth/mfa/setup, where it can read recovery codes off
+//   the page and then prove the recovery code flow end-to-end.
+// - This persona is never used by any other test, so its MFA state is never
+//   touched mid-run. The seed clears it on every run to guarantee a clean start.
+//
+// PERSONAS CREATED:
+//   goodwill-open / e2e-recovery-admin@example.com
+//     - ADMIN role, ACTIVE status, email_verified: true
+//     - Password: Password123!
+//     - No MFA rows → login always returns MFA_SETUP_REQUIRED
+
+const E2E_RECOVERY_ADMIN_EMAIL = 'e2e-recovery-admin@example.com';
+const E2E_RECOVERY_ADMIN_NAME = 'E2E Recovery Admin';
+
+async function seedE2eRecoveryAdminPersona(opts: {
+  db: DbExecutor;
+  passwordHasher: PasswordHasher;
+  tenant: { id: string; key: string };
+}): Promise<void> {
+  const { db, passwordHasher, tenant } = opts;
+  const flow = 'seed.e2e.recovery_admin';
+  const email = E2E_RECOVERY_ADMIN_EMAIL.toLowerCase();
+
+  // ── Ensure user row ──────────────────────────────────────────────────────
+  let user = await db
+    .selectFrom('users')
+    .select(['id', 'email', 'name', 'email_verified'])
+    .where('email', '=', email)
+    .executeTakeFirst();
+
+  if (!user) {
+    user = await db
+      .insertInto('users')
+      .values({ email, name: E2E_RECOVERY_ADMIN_NAME, email_verified: true })
+      .returning(['id', 'email', 'name', 'email_verified'])
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.recovery_admin.user.created', { flow, email, userId: user.id });
+  } else {
+    if (!user.email_verified) {
+      await db
+        .updateTable('users')
+        .set({ email_verified: true })
+        .where('id', '=', user.id)
+        .execute();
+    }
+    logger.info('seed.e2e.recovery_admin.user.exists', { flow, email, userId: user.id });
+  }
+
+  // ── Ensure password identity ─────────────────────────────────────────────
+  const identity = await db
+    .selectFrom('auth_identities')
+    .select(['id'])
+    .where('user_id', '=', user.id)
+    .where('provider', '=', 'password')
+    .executeTakeFirst();
+
+  if (!identity) {
+    const passwordHash = await passwordHasher.hash(E2E_ADMIN_PASSWORD);
+    await db
+      .insertInto('auth_identities')
+      .values({
+        user_id: user.id,
+        provider: 'password',
+        provider_subject: null,
+        password_hash: passwordHash,
+      })
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.recovery_admin.password_identity.created', {
+      flow,
+      email,
+      userId: user.id,
+    });
+  }
+
+  // ── Ensure ADMIN ACTIVE membership ──────────────────────────────────────
+  const existing = await db
+    .selectFrom('memberships')
+    .select(['id', 'role', 'status'])
+    .where('tenant_id', '=', tenant.id)
+    .where('user_id', '=', user.id)
+    .executeTakeFirst();
+
+  if (!existing) {
+    const now = new Date();
+    await db
+      .insertInto('memberships')
+      .values({
+        tenant_id: tenant.id,
+        user_id: user.id,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        invited_at: now,
+        accepted_at: now,
+        suspended_at: null,
+      })
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.recovery_admin.membership.created', { flow, email, userId: user.id });
+  } else if (existing.role !== 'ADMIN' || existing.status !== 'ACTIVE') {
+    await db
+      .updateTable('memberships')
+      .set({ role: 'ADMIN', status: 'ACTIVE', suspended_at: null })
+      .where('id', '=', existing.id)
+      .execute();
+    logger.info('seed.e2e.recovery_admin.membership.patched', { flow, email, userId: user.id });
+  }
+
+  // ── Clear ALL MFA state ───────────────────────────────────────────────────
+  // WHY: test 18 goes through MFA setup on every run. Without clearing,
+  // a previous run's mfa_secrets row would cause login to return MFA_REQUIRED
+  // instead of MFA_SETUP_REQUIRED, and the test would land on /auth/mfa/verify
+  // instead of /auth/mfa/setup, breaking the recovery-code read step.
+  await db.deleteFrom('mfa_recovery_codes').where('user_id', '=', user.id).execute();
+  await db.deleteFrom('mfa_secrets').where('user_id', '=', user.id).executeTakeFirst();
+
+  logger.info('seed.e2e.recovery_admin.done', {
+    flow,
+    email,
+    tenantKey: tenant.key,
+    message: 'E2E recovery-admin persona ready: ADMIN, ACTIVE, email_verified, no MFA',
+  });
+}
+
+// ── Fourth E2E persona: reset-member ─────────────────────────────────────────
+//
+// WHY a dedicated persona for the password reset Playwright test (test 19):
+// - Test 19 changes the member's password as part of the reset flow proof.
+// - Using the shared member@example.com persona broke tests 1, 2, 10, 13, 14
+//   on the same run because those tests all depend on MEMBER_PASSWORD being
+//   correct. Any failure in test 19's restore step poisons the whole suite.
+// - A dedicated persona that only test 19 uses means no other test cares what
+//   happens to its password. No restore step needed. No cross-test contamination.
+// - This is a MEMBER (not ADMIN) with public signup and password auth, which
+//   is exactly what the password reset flow requires.
+//
+// PERSONAS CREATED:
+//   goodwill-open / e2e-reset-member@example.com
+//     - MEMBER role, ACTIVE status, email_verified: true
+//     - Password: Password123!
+
+const E2E_RESET_MEMBER_EMAIL = 'e2e-reset-member@example.com';
+const E2E_RESET_MEMBER_NAME = 'E2E Reset Member';
+
+async function seedE2eResetMemberPersona(opts: {
+  db: DbExecutor;
+  passwordHasher: PasswordHasher;
+  tenant: { id: string; key: string };
+}): Promise<void> {
+  const { db, passwordHasher, tenant } = opts;
+  const flow = 'seed.e2e.reset_member';
+  const email = E2E_RESET_MEMBER_EMAIL.toLowerCase();
+
+  // ── Ensure user row ──────────────────────────────────────────────────────
+  let user = await db
+    .selectFrom('users')
+    .select(['id', 'email', 'name', 'email_verified'])
+    .where('email', '=', email)
+    .executeTakeFirst();
+
+  if (!user) {
+    user = await db
+      .insertInto('users')
+      .values({ email, name: E2E_RESET_MEMBER_NAME, email_verified: true })
+      .returning(['id', 'email', 'name', 'email_verified'])
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.reset_member.user.created', { flow, email, userId: user.id });
+  } else {
+    if (!user.email_verified) {
+      await db
+        .updateTable('users')
+        .set({ email_verified: true })
+        .where('id', '=', user.id)
+        .execute();
+    }
+    logger.info('seed.e2e.reset_member.user.exists', { flow, email, userId: user.id });
+  }
+
+  // ── Always reset password back to Password123! ───────────────────────────
+  // WHY: Test 19 changes this password as part of the reset flow. The seed
+  // restores it on every run so the test always starts from a known state.
+  const passwordHash = await passwordHasher.hash(E2E_ADMIN_PASSWORD);
+  const existingIdentity = await db
+    .selectFrom('auth_identities')
+    .select(['id'])
+    .where('user_id', '=', user.id)
+    .where('provider', '=', 'password')
+    .executeTakeFirst();
+
+  if (!existingIdentity) {
+    await db
+      .insertInto('auth_identities')
+      .values({
+        user_id: user.id,
+        provider: 'password',
+        provider_subject: null,
+        password_hash: passwordHash,
+      })
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.reset_member.password_identity.created', {
+      flow,
+      email,
+      userId: user.id,
+    });
+  } else {
+    // Always overwrite — test 19 changes the password, seed restores it.
+    await db
+      .updateTable('auth_identities')
+      .set({ password_hash: passwordHash })
+      .where('id', '=', existingIdentity.id)
+      .execute();
+    logger.info('seed.e2e.reset_member.password_identity.reset', { flow, email, userId: user.id });
+  }
+
+  // ── Ensure MEMBER ACTIVE membership ─────────────────────────────────────
+  const existing = await db
+    .selectFrom('memberships')
+    .select(['id', 'role', 'status'])
+    .where('tenant_id', '=', tenant.id)
+    .where('user_id', '=', user.id)
+    .executeTakeFirst();
+
+  if (!existing) {
+    const now = new Date();
+    await db
+      .insertInto('memberships')
+      .values({
+        tenant_id: tenant.id,
+        user_id: user.id,
+        role: 'MEMBER',
+        status: 'ACTIVE',
+        invited_at: now,
+        accepted_at: now,
+        suspended_at: null,
+      })
+      .executeTakeFirstOrThrow();
+    logger.info('seed.e2e.reset_member.membership.created', { flow, email, userId: user.id });
+  } else if (existing.status !== 'ACTIVE') {
+    await db
+      .updateTable('memberships')
+      .set({ status: 'ACTIVE', suspended_at: null })
+      .where('id', '=', existing.id)
+      .execute();
+    logger.info('seed.e2e.reset_member.membership.patched', { flow, email, userId: user.id });
+  }
+
+  logger.info('seed.e2e.reset_member.done', {
+    flow,
+    email,
+    tenantKey: tenant.key,
+    message:
+      'E2E reset-member persona ready: MEMBER, ACTIVE, email_verified, password restored to Password123!',
   });
 }

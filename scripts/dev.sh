@@ -39,8 +39,9 @@ if [ "$MODE" = "--stack" ]; then
   docker compose \
     --env-file "$COMPOSE_ENV_FILE" \
     -f "$ROOT_DIR/infra/docker-compose.yml" \
+    -f "$ROOT_DIR/infra/docker-compose-ci-oidc.yml" \
     up --build -d
-  echo "✅ Full stack started."
+  echo "✅ Full stack started (including local OIDC server)."
   echo "   Public app: http://goodwill-ca.lvh.me:3000"
   echo "   API health: http://goodwill-ca.lvh.me:3000/api/health"
   exit 0
@@ -59,7 +60,12 @@ until docker exec auth-lab-postgres pg_isready -U auth_lab -d auth_lab >/dev/nul
   sleep 1
 done
 
-echo "✅ Infra is up."
+echo "⏳ Waiting for local OIDC server to be ready..."
+until curl -sf http://localhost:9998/.well-known/jwks.json >/dev/null 2>&1; do
+  sleep 1
+done
+
+echo "✅ Infra is up (Postgres + Redis + Mailpit + local OIDC)."
 
 echo "📦 Installing dependencies..."
 cd "$ROOT_DIR"
@@ -81,6 +87,7 @@ echo "🚀 Starting backend + frontend (host-run mode)..."
 echo "   Public app:   http://goodwill-ca.lvh.me:3000"
 echo "   Backend URL:  http://localhost:3001"
 echo "   Mailpit UI:   http://localhost:8025"
+echo "   Local OIDC:   http://localhost:9998"
 echo ""
 echo "ℹ️  Use goodwill-ca.lvh.me:3000 in the browser for tenant-aware behaviour."
 echo "   Plain localhost:3000 does not include a tenant subdomain."

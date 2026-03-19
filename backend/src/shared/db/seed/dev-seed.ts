@@ -164,7 +164,17 @@ async function ensureMemberPersona(opts: {
       email,
     });
   } else {
-    logger.info('seed.password_identity.exists', {
+    // WHY always reset: a previous test run may have changed this password
+    // (e.g. the password-reset Playwright test before dedicated personas existed,
+    // or any future test that modifies auth state). The seed is the source of
+    // truth — always restore the canonical password so the stack starts clean.
+    const passwordHash = await passwordHasher.hash(member.password);
+    await db
+      .updateTable('auth_identities')
+      .set({ password_hash: passwordHash })
+      .where('id', '=', identity.id)
+      .execute();
+    logger.info('seed.password_identity.reset', {
       flow,
       tenantKey: member.tenantKey,
       userId: user.id,

@@ -1,6 +1,31 @@
 name: hubins-infra
 
 services:
+  local-oidc:
+    build:
+      context: ./oidc-server
+      dockerfile: Dockerfile
+    container_name: auth-lab-local-oidc
+    environment:
+      LOCAL_OIDC_PORT: 9998
+      # WHY localhost and not local-oidc:
+      # In host-run mode (yarn dev) the backend runs on the host, not inside
+      # Docker. The backend calls this URL to fetch JWKS and validate tokens.
+      # The container exposes port 9998 to the host, so localhost:9998 is the
+      # correct address. The CI overlay uses local-oidc:9998 (Docker-internal
+      # DNS) because both backend and OIDC server are in the same network there.
+      LOCAL_OIDC_ISSUER: http://localhost:9998
+      LOCAL_OIDC_CLIENT_ID: local-oidc-ci-client
+    ports:
+      - '9998:9998'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9998/.well-known/jwks.json || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
   mailpit:
     image: axllent/mailpit:latest
     container_name: auth-lab-mailpit
