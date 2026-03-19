@@ -1,3 +1,21 @@
+/**
+ * frontend/test/unit/shared/auth/redirects.spec.ts
+ *
+ * WHY:
+ * - Verifies the route-state → pathname mapping used by every auth page.
+ * - getPostAuthRedirectPath is a security boundary: an attacker-controlled returnTo
+ *   value must never escape to an external URL. Open-redirect vectors must be
+ *   explicitly rejected here, not just at the isSafeReturnToPath layer.
+ *
+ * SECURITY COVERAGE NOTE (Phase 10):
+ * - Pre-existing cases covered absolute URLs and protocol-relative paths.
+ * - Phase 10 adds explicit coverage for additional open-redirect vectors at the
+ *   getPostAuthRedirectPath boundary: backslash-prefix and data URI.
+ *   These are tested here as a defence-in-depth assertion — isSafeReturnToPath
+ *   is the primary guard, but getPostAuthRedirectPath must also be verified to
+ *   fall back correctly when handed one of these values.
+ */
+
 import { describe, expect, it } from 'vitest';
 
 import type { AuthNextAction, MembershipRole } from '../../../../src/shared/auth/contracts';
@@ -80,6 +98,8 @@ describe('getPathForNextAction', () => {
 // ─── getPostAuthRedirectPath ──────────────────────────────────────────────────
 
 describe('getPostAuthRedirectPath', () => {
+  // ── Happy paths ────────────────────────────────────────────────────────────
+
   it('NONE + MEMBER with no returnTo → /app', () => {
     expect(getPostAuthRedirectPath('NONE', 'MEMBER')).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
   });
@@ -100,18 +120,6 @@ describe('getPostAuthRedirectPath', () => {
     expect(getPostAuthRedirectPath('NONE', 'MEMBER', null)).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
   });
 
-  it('NONE + MEMBER with unsafe returnTo (external URL) → /app', () => {
-    expect(getPostAuthRedirectPath('NONE', 'MEMBER', 'https://evil.com')).toBe(
-      AUTHENTICATED_MEMBER_ENTRY_PATH,
-    );
-  });
-
-  it('NONE + MEMBER with unsafe returnTo (protocol-relative) → /app', () => {
-    expect(getPostAuthRedirectPath('NONE', 'MEMBER', '//evil.com')).toBe(
-      AUTHENTICATED_MEMBER_ENTRY_PATH,
-    );
-  });
-
   it('MFA_REQUIRED + ADMIN with returnTo matching continuation path → uses returnTo', () => {
     expect(getPostAuthRedirectPath('MFA_REQUIRED', 'ADMIN', AUTH_MFA_VERIFY_PATH)).toBe(
       AUTH_MFA_VERIFY_PATH,
@@ -129,6 +137,51 @@ describe('getPostAuthRedirectPath', () => {
   it('EMAIL_VERIFICATION_REQUIRED + MEMBER with no returnTo → /verify-email', () => {
     expect(getPostAuthRedirectPath('EMAIL_VERIFICATION_REQUIRED', 'MEMBER')).toBe(
       AUTH_EMAIL_VERIFICATION_PATH,
+    );
+  });
+
+  // ── Open-redirect rejection ────────────────────────────────────────────────
+  // These cases verify that getPostAuthRedirectPath falls back to the safe default
+  // when handed a returnTo value that isSafeReturnToPath rejects.
+  // isSafeReturnToPath is the primary guard; these tests are defence-in-depth.
+
+  it('NONE + MEMBER with unsafe returnTo (external URL) → /app', () => {
+    expect(getPostAuthRedirectPath('NONE', 'MEMBER', 'https://evil.com')).toBe(
+      AUTHENTICATED_MEMBER_ENTRY_PATH,
+    );
+  });
+
+  it('NONE + MEMBER with unsafe returnTo (protocol-relative //) → /app', () => {
+    expect(getPostAuthRedirectPath('NONE', 'MEMBER', '//evil.com')).toBe(
+      AUTHENTICATED_MEMBER_ENTRY_PATH,
+    );
+  });
+
+  it('NONE + MEMBER with backslash returnTo (open-redirect vector) → /app', () => {
+    // Some browsers normalize \evil.com to //evil.com in navigation contexts.
+    // Must fall back to the safe default, not redirect to the external host.
+    expect(getPostAuthRedirectPath('NONE', 'MEMBER', '\\evil.com')).toBe(
+      AUTHENTICATED_MEMBER_ENTRY_PATH,
+    );
+  });
+
+  it('NONE + MEMBER with data URI returnTo (XSS/open-redirect vector) → /app', () => {
+    // data: URIs can execute script in some browser contexts.
+    // Must fall back to the safe default.
+    expect(
+      getPostAuthRedirectPath('NONE', 'MEMBER', 'data:text/html,<script>alert(1)</script>'),
+    ).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
+  });
+
+  it('NONE + ADMIN with backslash returnTo → /admin', () => {
+    expect(getPostAuthRedirectPath('NONE', 'ADMIN', '\\evil.com')).toBe(
+      AUTHENTICATED_ADMIN_ENTRY_PATH,
+    );
+  });
+
+  it('NONE + ADMIN with data URI returnTo → /admin', () => {
+    expect(getPostAuthRedirectPath('NONE', 'ADMIN', 'data:text/html,xss')).toBe(
+      AUTHENTICATED_ADMIN_ENTRY_PATH,
     );
   });
 });

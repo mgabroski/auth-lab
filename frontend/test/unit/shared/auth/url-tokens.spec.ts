@@ -1,3 +1,18 @@
+/**
+ * frontend/test/unit/shared/auth/url-tokens.spec.ts
+ *
+ * WHY:
+ * - Verifies the URL/token parsing utilities used across all auth pages.
+ * - isSafeReturnToPath is a security boundary: open-redirect vectors must be
+ *   explicitly covered. Any path allowed here can be used in a browser redirect.
+ *
+ * SECURITY COVERAGE NOTE (Phase 10):
+ * - The standard cases (absolute URL, protocol-relative) were already present.
+ * - Phase 10 adds explicit coverage for additional open-redirect attack vectors:
+ *   backslash-prefix (\evil.com), data URI, and leading-whitespace.
+ *   These are real browser-level vectors that isSafeReturnToPath must reject.
+ */
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -24,12 +39,44 @@ describe('isSafeReturnToPath', () => {
     expect(isSafeReturnToPath('/')).toBe(true);
   });
 
-  it('rejects an absolute URL', () => {
+  it('accepts a deeply nested path', () => {
+    expect(isSafeReturnToPath('/admin/invites/123')).toBe(true);
+  });
+
+  it('rejects an absolute URL with https scheme', () => {
     expect(isSafeReturnToPath('https://evil.com/steal')).toBe(false);
   });
 
-  it('rejects a protocol-relative URL (open redirect)', () => {
+  it('rejects an absolute URL with http scheme', () => {
+    expect(isSafeReturnToPath('http://evil.com/steal')).toBe(false);
+  });
+
+  it('rejects a protocol-relative URL (open redirect via //)', () => {
     expect(isSafeReturnToPath('//evil.com')).toBe(false);
+  });
+
+  it('rejects a backslash-prefixed path (open-redirect vector on some browsers)', () => {
+    // Some browsers normalize \evil.com to //evil.com in navigation contexts.
+    // The value does not start with '/' so it is already rejected by the first check.
+    // This test makes the rejection of this specific vector explicit.
+    expect(isSafeReturnToPath('\\evil.com')).toBe(false);
+  });
+
+  it('rejects a data URI (open-redirect and XSS vector)', () => {
+    // data: URIs can execute script in some browser contexts.
+    // They do not start with '/' so they are rejected by the first check.
+    expect(isSafeReturnToPath('data:text/html,<script>alert(1)</script>')).toBe(false);
+  });
+
+  it('rejects a path with leading whitespace (isSafeReturnToPath does not trim)', () => {
+    // A space-prefixed value is not a safe path. isSafeReturnToPath does not
+    // trim whitespace — trimming happens at the readQueryParam layer.
+    // A value with a leading space does not start with '/' so it is rejected.
+    expect(isSafeReturnToPath(' /app')).toBe(false);
+  });
+
+  it('rejects a javascript: URI (XSS vector)', () => {
+    expect(isSafeReturnToPath('javascript:alert(1)')).toBe(false);
   });
 
   it('rejects an empty string', () => {
@@ -130,12 +177,16 @@ describe('getReturnToPath', () => {
     expect(getReturnToPath('returnTo=%2Fadmin')).toBe('/admin');
   });
 
-  it('returns null for an unsafe returnTo', () => {
+  it('returns null for an unsafe returnTo (absolute URL)', () => {
     expect(getReturnToPath('returnTo=https%3A%2F%2Fevil.com')).toBeNull();
   });
 
   it('returns null when returnTo is absent', () => {
     expect(getReturnToPath('')).toBeNull();
+  });
+
+  it('returns null for a protocol-relative returnTo', () => {
+    expect(getReturnToPath('returnTo=%2F%2Fevil.com')).toBeNull();
   });
 });
 
@@ -146,7 +197,7 @@ describe('normalizeReturnToPath', () => {
     expect(normalizeReturnToPath('/dashboard')).toBe('/dashboard');
   });
 
-  it('returns the fallback for an unsafe value', () => {
+  it('returns the fallback for an unsafe value (protocol-relative)', () => {
     expect(normalizeReturnToPath('//evil.com')).toBe('/');
   });
 
@@ -156,5 +207,13 @@ describe('normalizeReturnToPath', () => {
 
   it('returns / when value is null and no fallback given', () => {
     expect(normalizeReturnToPath(null)).toBe('/');
+  });
+
+  it('returns the fallback for a backslash-prefixed value', () => {
+    expect(normalizeReturnToPath('\\evil.com', '/auth/login')).toBe('/auth/login');
+  });
+
+  it('returns the fallback for a data URI', () => {
+    expect(normalizeReturnToPath('data:text/html,xss', '/auth/login')).toBe('/auth/login');
   });
 });

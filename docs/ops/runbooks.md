@@ -1216,11 +1216,94 @@ workspace.
 
 ---
 
-The following remain intentionally deferred until the repo enters the explicit deployment/operations phase:
+---
 
-- startup/shutdown production procedures
-- rollback procedure
-- production log access
-- production secret rotation runbook
-- production email-provider failover guidance
-- incident escalation matrix
+## Deferred Operational Items
+
+The following operational items are explicitly deferred from the Auth + User Provisioning
+module closure. Each entry names the trigger condition that must be true before the item
+becomes required. These are not missing work — they are accepted defers with named
+conditions.
+
+---
+
+### DEFER-OPS-1 — Production startup and shutdown procedures
+
+**Status:** Deferred
+**Named trigger:** `PRODUCTION_DEPLOY_TRIGGER` — required before the first production
+deployment begins.
+**Scope:** Ordered startup sequence (infra → backend → frontend → proxy), graceful
+shutdown procedure, and health-gate checks required before marking a deployment as live.
+
+---
+
+### DEFER-OPS-2 — Production rollback procedure
+
+**Status:** Deferred
+**Named trigger:** `PRODUCTION_DEPLOY_TRIGGER` — required before the first production
+deployment begins.
+**Scope:** How to roll back a bad backend deploy without losing data. Applied migrations
+are immutable — a rollback procedure must address this constraint explicitly. Options
+are forward-only migration with a compensating migration, or a point-in-time database
+restore depending on the severity of the incident.
+
+---
+
+### DEFER-OPS-3 — Production log access runbook
+
+**Status:** Deferred
+**Named trigger:** `PRODUCTION_DEPLOY_TRIGGER` — required before the first production
+deployment begins.
+**Scope:** How operators access structured JSON logs (CloudWatch or equivalent).
+Log query patterns for auth events, session events, and error events. Log retention
+policy and access control.
+
+---
+
+### DEFER-OPS-4 — Production secret rotation runbook
+
+**Status:** Deferred
+**Named trigger:** `PRODUCTION_SECRET_ROTATION_TRIGGER` — required before any of the
+following keys approaches its rotation schedule or requires emergency rotation:
+`MFA_ENCRYPTION_KEY_BASE64`, `MFA_HMAC_KEY_BASE64`, `SSO_STATE_ENCRYPTION_KEY`,
+`OUTBOX_ENC_KEY_V*` (versioned), session signing secret if added.
+**Scope:** Zero-downtime key rotation procedure for each secret type. The outbox
+encryption key already supports versioned rotation (`v1`/`v2` key envelope). Other
+keys require a migration + re-encrypt pass or a rolling restart with grace period
+depending on their usage pattern.
+
+---
+
+### DEFER-OPS-5 — Production TLS certificate provisioning
+
+**Status:** Deferred
+**Named trigger:** `PRODUCTION_DOMAIN_REGISTERED_TRIGGER` — required once the production
+domain and subdomain pattern are confirmed and DNS is configured.
+**Scope:** Caddy (or nginx) TLS configuration for wildcard or per-tenant subdomains.
+Certificate authority choice, auto-renewal configuration, and staging certificate
+validation before production promotion.
+**Current behavior:** `lvh.me` subdomains are used in local and CI environments without
+TLS. This is correct for development only and must not be used in staging or production.
+
+---
+
+### DEFER-OPS-6 — Production email-provider failover guidance
+
+**Status:** Deferred
+**Named trigger:** `PRODUCTION_DEPLOY_TRIGGER`
+**Scope:** What to do when the production SMTP provider becomes unavailable. Note that
+outbox messages survive provider downtime — they remain in the DB until successfully
+delivered or until `OUTBOX_MAX_ATTEMPTS` is exhausted. Guidance must cover: operator
+procedure for switching providers, how to confirm no messages were permanently lost,
+and how to replay failed outbox messages after provider recovery.
+
+---
+
+### DEFER-OPS-7 — Incident escalation matrix
+
+**Status:** Deferred
+**Named trigger:** `TEAM_GROWTH_TRIGGER` — required when the engineering team exceeds
+3 people or when the product enters a paying-customer environment.
+**Scope:** Who to contact for a P0 incident. Escalation path for auth/session failures,
+data isolation concerns, SSO provider outages, and email delivery failures. On-call
+rotation policy if applicable.

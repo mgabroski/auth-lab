@@ -415,61 +415,67 @@ Re-evaluate this decision when any of the following becomes true:
 
 ---
 
-## ADR-011 — First-admin onboarding emits a one-time `FIRST_TIME_SETUP` nextAction
+## ADR-011 — First-admin onboarding: workspace setup banner, not auth continuation redirect
 
 **Date:** 2026-03
-**Status:** Accepted
+**Status:** Accepted (Phase 9 implementation — supersedes original LOCK-1 redirect intent)
 
 ### Context
 
-The roadmap locks a future first-admin experience for tenant setup. Without an explicit rule, future implementation could incorrectly treat first-admin setup as either:
-
-- a permanent route gate
-- an admin-wide redirect for every admin
-- or a redirect that fires before onboarding is actually complete
-
-That would create drift in both UX and continuation semantics.
+LOCK-1 (see Locked Decisions Register at the end of this file) originally described a one-time
+`FIRST_TIME_SETUP` nextAction that would redirect the first fully onboarded admin in a tenant
+to `/admin/settings`. Phase 9 evaluated this approach before implementation began and changed
+the design. This ADR records what was built in Phase 9 and why the redirect approach was
+superseded.
 
 ### Decision
 
-The first fully onboarded admin in a tenant receives a **one-time** post-onboarding redirect via a dedicated `FIRST_TIME_SETUP` nextAction.
+Workspace setup guidance is delivered via a **non-blocking banner on `/admin`**, not an auth
+continuation redirect.
 
-### Definition of "first admin"
+- All admins always land on `/admin` after full authentication (`NONE + ADMIN`).
+- No `FIRST_TIME_SETUP` nextAction is emitted. The `AuthNextAction` contract is unchanged.
+- `GET /auth/config` returns `setupCompleted: boolean` derived from `tenants.setup_completed_at IS NOT NULL`.
+- The `/admin` page renders a `WorkspaceSetupBanner` when `config.tenant.setupCompleted === false`.
+- Any admin visiting `/admin/settings` triggers `POST /auth/workspace-setup-ack` on SSR load,
+  which sets `tenants.setup_completed_at = now()`.
+- On the next `GET /auth/config` call, `setupCompleted` is `true` and the banner disappears
+  for **all admins** in the workspace.
 
-The "first admin" is the first `ADMIN` membership in a tenant that becomes **fully onboarded**.
+### Why the redirect approach was superseded
 
-### Definition of "fully onboarded"
+#### Race condition
 
-A membership is fully onboarded only when all required steps in the current auth chain are complete:
+If multiple admin invites are sent simultaneously and all complete onboarding at the same time,
+redirect-based first-admin detection creates a race: exactly one admin gets the special redirect
+and the rest are silently skipped. The banner approach is consistent — every admin sees it
+until any admin dismisses it.
 
-- invite accepted
-- identity created if needed
-- email verified if required
-- MFA completed if required
-- authenticated session established
+#### Auth continuation is the wrong mechanism for setup guidance
 
-### Behavior
+Auth continuation redirects enforce required steps such as email verification and MFA.
+Workspace setup is onboarding assistance, not a security gate. Using the auth continuation
+contract for a non-mandatory UI hint conflates two distinct concerns and adds unnecessary
+complexity to the continuation contract.
 
-- the first fully onboarded admin receives a one-time redirect to `/admin/settings`
-- this is **not** a persistent auth gate
-- later logins for that same admin go to `/admin`
-- any other admin who is not that first fully onboarded admin goes directly to `/admin`
+#### Tenant-level state, not user-level state
+
+Setup completion belongs to the tenant as a whole, not to the specific user who first
+completes the setup flow. The banner correctly models this as a tenant-level flag.
 
 ### Consequences
 
-- a dedicated `FIRST_TIME_SETUP` nextAction is required when this behavior is implemented
-- that nextAction must be emitted only after the user has an authenticated session and has satisfied any required email-verification / MFA continuation
-- future Phase 9 work must implement this as a post-onboarding continuation, not as a standing authorization rule
+- `FIRST_TIME_SETUP` nextAction does **not** exist and must never be added.
+- `frontend/src/shared/auth/redirects.ts` has no `FIRST_TIME_SETUP` case — this is intentional.
+- The `AuthNextAction` union type has no `FIRST_TIME_SETUP` member — this is intentional.
+- Future product phases that need onboarding flows must model them as page-level state,
+  not as auth continuation nextActions.
 
-### Rejected alternatives
+### Named re-evaluation trigger
 
-#### Permanent redirect gate
-
-Rejected because settings completion is onboarding assistance, not a permanent access-control rule.
-
-#### Redirect before email verification or MFA completion
-
-Rejected because the user would not yet be fully onboarded, and the redirect would violate the current continuation contract.
+**`FIRST_ADMIN_REDIRECT_TRIGGER`**: Re-evaluate if future product requirements need a
+hard-gated first-admin onboarding sequence that cannot be skipped or deferred by navigating
+to other admin pages before setup is complete.
 
 ---
 
@@ -634,3 +640,84 @@ Recovery-code behavior remains valid after SSO login exactly as it does after pa
 #### Treat SSO as sufficient to skip app-level MFA
 
 Rejected because it would create inconsistent enforcement and weaken the application's own continuation / step-up policy.
+
+---
+
+## Locked Decisions Register (LOCK-1 through LOCK-5)
+
+This section is the canonical cross-reference for the five decisions locked by the Auth +
+User Provisioning module roadmap. These decisions are referenced by their LOCK-N labels
+throughout `docs/ops/runbooks.md`, `docs/qa/qa-execution-pack.md`, and CI test comments.
+
+Each entry states the decision in summary form and references the ADR above that contains
+the full rationale, rejected alternatives, and named re-evaluation triggers.
+
+---
+
+### LOCK-1 — First-admin workspace setup routing
+
+**ADR:** ADR-011
+**Status:** Locked — Phase 9 implementation complete
+
+Workspace setup for the first admin is delivered as a **non-blocking banner on `/admin`**,
+not an auth continuation redirect. All admins always land on `/admin` after full authentication
+(`NONE + ADMIN`). No `FIRST_TIME_SETUP` nextAction exists or will be added to the
+`AuthNextAction` union. The banner disappears for all admins in the workspace once any admin
+visits `/admin/settings` and the ack is recorded on the tenant row.
+
+**Named re-evaluation trigger:** `FIRST_ADMIN_REDIRECT_TRIGGER` (see ADR-011).
+
+---
+
+### LOCK-2 — MFA QR code TOTP label
+
+**ADR:** ADR-012
+**Status:** Locked — correction applied before Phase 5 proof
+
+TOTP QR code issuer is `Hubins`. Label is the user's verified email address.
+Using `userId` as the label was an oversight and was corrected. Any environment with
+pre-correction MFA seeds must be reset before real authenticator-app proof is accepted
+as evidence.
+
+---
+
+### LOCK-3 — Seed bootstrap delivery mechanism
+
+**ADR:** ADR-013
+**Status:** Locked
+
+Invite delivery is environment-specific:
+
+- **Local dev:** raw token logging acceptable as developer convenience only.
+- **Staging / QA:** must use the real outbox + SMTP path. Raw token logging is not the delivery contract.
+- **Production:** operator bootstrap only. Raw token logging must never occur in production.
+
+---
+
+### LOCK-4 — Expired invite is invalid for SSO activation
+
+**ADR:** ADR-014
+**Status:** Locked
+
+An expired invite cannot be activated by Google or Microsoft SSO. If a user's only
+tenant-entry basis is an expired invite, the SSO callback must reject activation and
+create no orphan user or revived membership. Recovery path: admin resends or recreates
+the invite.
+
+**Referenced in:** `docs/ops/runbooks.md` Phase 6-C (Google), Phase 7-E (Microsoft);
+`docs/qa/qa-execution-pack.md` TC-09, TC-10.
+
+---
+
+### LOCK-5 — SSO does not bypass app-level MFA
+
+**ADR:** ADR-015
+**Status:** Locked
+
+SSO authentication does not remove app-level MFA requirements. If MFA is required and not
+yet configured, SSO login continues into `MFA_SETUP_REQUIRED`. If MFA is configured and
+required for that login, SSO login continues into `MFA_REQUIRED`. Recovery codes remain
+valid after SSO login on the same terms as after password login.
+
+**Referenced in:** `docs/ops/runbooks.md` Phase 6-D (Google), Phase 7-F (Microsoft);
+`docs/qa/qa-execution-pack.md` TC-09, TC-10.

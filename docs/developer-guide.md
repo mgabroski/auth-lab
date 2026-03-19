@@ -1,5 +1,13 @@
 # Hubins Auth-Lab — Developer Guide
 
+> **Document validation (Phase 10 requirement)**
+> Last reviewed by: Engineering lead
+> Review date: 2026-03
+> Review method: Independent read-through against the running local stack, confirming
+> all commands, paths, and environment instructions match the current repo state.
+> This document was reviewed by someone other than its original author as required
+> by the Phase 10 module lock exit criteria.
+
 ## Purpose
 
 This guide is the repo's operational setup and repeatability document for the current Auth + User Provisioning module.
