@@ -341,7 +341,28 @@ Phase 9 does **not** change:
 
 ---
 
-## 11. What is intentionally deferred or out of scope here
+## 11. What the latest hardening pass added
+
+The latest hardening pass did not redesign the module.
+It closed three practical quality gaps that mattered for final signoff confidence:
+
+- `LOCAL_OIDC_ENABLED` is now explicitly rejected at startup in production so the CI-only local OIDC server cannot silently replace the real Google/Microsoft adapters in a shared environment
+- decrypted SSO state now re-validates `returnTo` as an app-relative path before it can re-enter application control flow; absolute, scheme-relative, and backslash-based values are dropped
+- shared tenant provisioning is now conflict-safe under concurrency; membership creation no longer relies on a plain read-then-insert path and instead converges on a single membership row under race
+
+This hardening pass improves signoff confidence, but it does **not** by itself convert the module into a fully locked operational slice.
+The lock still requires:
+
+- TC-09 executed and passed in staging with a real Google account and evidence captured
+- TC-10 executed and passed in staging with a real Microsoft account and evidence captured
+- the real-stack browser CI job green on the committed topology path
+
+The repository can now truthfully claim stronger config hardening, stronger redirect hygiene, and stronger provisioning idempotency.
+It still must not claim live-provider closure before the staging runbooks are actually executed.
+
+---
+
+## 12. What is intentionally deferred or out of scope here
 
 This file is not claiming completion of every future hardening concern.
 The following remain outside the scope of this status snapshot unless separately marked shipped:
@@ -355,7 +376,7 @@ The following remain outside the scope of this status snapshot unless separately
 
 ---
 
-## 12. Active truth-chain rule
+## 13. Active truth-chain rule
 
 The current truth-chain is:
 
@@ -368,7 +389,7 @@ If an older planning document implies a behavior that the repository no longer f
 
 ---
 
-## 13. Quick reality checklist
+## 14. Quick reality checklist
 
 As of the current foundation state, all of the following should be true:
 
@@ -386,6 +407,9 @@ As of the current foundation state, all of the following should be true:
 - Microsoft SSO staging config can be prepared from the committed `.env.example` files and the documented config checklist
 - Phase 6 live Google proof can be executed through the documented runbook once real staging credentials are available
 - Phase 7 live Microsoft proof can be executed through the documented runbook once real staging credentials are available
+- staging / production startup must reject `LOCAL_OIDC_ENABLED=true`; the local OIDC server remains CI-only
+- decrypted SSO-state `returnTo` values are constrained to app-relative paths before they re-enter app control flow
+- concurrent provisioning of the same `(tenant, user)` identity converges on one membership row instead of surfacing a unique-constraint race to the caller
 - real-stack Playwright smoke tests pass against the full Docker Compose topology: `yarn workspace frontend test:e2e:real-stack`
 - the Phase 8 CI job (e2e job inside `.github/workflows/frontend.yml`) runs the real-stack smoke suite on push/PR
 - the E2E fixture seed (`yarn workspace @auth-lab/backend db:seed:e2e`) creates the required admin persona in `goodwill-open` with no MFA
@@ -405,7 +429,7 @@ If one of these statements stops being true, this file must be updated or the re
 
 ---
 
-## 14. Current foundation score intent
+## 15. Current foundation score intent
 
 The repository should now be understood as:
 
@@ -413,6 +437,7 @@ The repository should now be understood as:
 - beyond backend-foundation-only
 - functionally implemented for the current Auth + User Provisioning slice
 - supported by local and operator bootstrap proof procedures
-- still subject to further hardening, operational proof expansion, and broader product work
+- materially stronger after config-hardening, redirect-hardening, and concurrency-hardening updates
+- still subject to live-provider staging proof execution, operational proof expansion, and broader product work
 
 That is the correct practical reading of the repo at this point.

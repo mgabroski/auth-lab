@@ -29,6 +29,13 @@
  * - All existing callers (register flow, SSO flow) omit this param and get
  *   DB default (true) — zero behavior change for them.
  *
+ * PHASE B HARDENING:
+ * - Membership creation is now conflict-safe under concurrency.
+ * - The old flow was read → insert, which could still throw a unique violation
+ *   when two requests provisioned the same (tenantId, userId) in parallel.
+ * - We now use insertMembershipIfAbsent() and re-read on conflict. That makes
+ *   provisioning idempotent the same way findOrCreateUser() already is.
+ *
  * THIS IS A LOCKED CROSS-MODULE CONTRACT.
  * Breaking changes require an ADR.
  */
@@ -90,6 +97,35 @@ export type ProvisionResult = {
   membershipCreated: boolean;
 };
 
+async function resolveExistingMembership(params: {
+  membershipRepo: MembershipRepo;
+  membership: Membership;
+  now: Date;
+}): Promise<{ membership: Membership; membershipActivated: boolean }> {
+  const { membershipRepo, membership, now } = params;
+
+  if (membership.status === 'SUSPENDED') {
+    throw MembershipErrors.membershipSuspended();
+  }
+
+  if (membership.status === 'INVITED') {
+    const activated = await membershipRepo.activateMembership({
+      membershipId: membership.id,
+      acceptedAt: now,
+    });
+
+    return {
+      membership: activated ? { ...membership, status: 'ACTIVE', acceptedAt: now } : membership,
+      membershipActivated: activated,
+    };
+  }
+
+  return {
+    membership,
+    membershipActivated: false,
+  };
+}
+
 // ── Use-case ─────────────────────────────────────────────────
 
 export async function provisionUserToTenant(
@@ -118,48 +154,44 @@ export async function provisionUserToTenant(
     emailVerifiedForNewUser,
   });
 
-  // ── 2. Find or create/activate membership ─────────────────
-
+  // ── 2. Find existing membership first ─────────────────────
+  // Fast path: the normal sequential case should not even attempt an insert.
   const existingMembership = await getMembershipByTenantAndUser(trx, {
     tenantId,
     userId: user.id,
   });
 
-  let membershipActivated = false;
-  let membershipCreated = false;
-  let membership: Membership;
-
   if (existingMembership) {
-    if (existingMembership.status === 'SUSPENDED') {
-      throw MembershipErrors.membershipSuspended();
-    }
-
-    if (existingMembership.status === 'INVITED') {
-      const activated = await membershipRepo.activateMembership({
-        membershipId: existingMembership.id,
-        acceptedAt: now,
-      });
-
-      membership = activated
-        ? { ...existingMembership, status: 'ACTIVE', acceptedAt: now }
-        : existingMembership;
-
-      membershipActivated = !!activated;
-    } else {
-      // ACTIVE — idempotent, no action needed
-      membership = existingMembership;
-    }
-  } else {
-    const created = await membershipRepo.insertMembership({
-      tenantId,
-      userId: user.id,
-      role,
-      status: 'ACTIVE',
-      invitedAt: now,
+    const resolved = await resolveExistingMembership({
+      membershipRepo,
+      membership: existingMembership,
+      now,
     });
 
-    membership = {
-      id: created.id,
+    return {
+      user,
+      membership: resolved.membership,
+      userCreated,
+      membershipActivated: resolved.membershipActivated,
+      membershipCreated: false,
+    };
+  }
+
+  // ── 3. No membership found — create it conflict-safely ────
+  // This is the concurrency-hardening path.
+  // If another request inserts the same (tenantId, userId) first, the repo
+  // re-reads the existing row instead of surfacing a unique-violation error.
+  const insertResult = await membershipRepo.insertMembershipIfAbsent({
+    tenantId,
+    userId: user.id,
+    role,
+    status: 'ACTIVE',
+    invitedAt: now,
+  });
+
+  if (insertResult.created) {
+    const membership: Membership = {
+      id: insertResult.id,
       tenantId,
       userId: user.id,
       role,
@@ -170,8 +202,41 @@ export async function provisionUserToTenant(
       createdAt: now,
       updatedAt: now,
     };
-    membershipCreated = true;
+
+    return {
+      user,
+      membership,
+      userCreated,
+      membershipActivated: false,
+      membershipCreated: true,
+    };
   }
 
-  return { user, membership, userCreated, membershipActivated, membershipCreated };
+  // ── 4. Conflict path — another request created the membership ────────────
+  // Re-read the authoritative row in the same db scope and apply the same
+  // state machine as the normal existing-membership path.
+  const racedMembership = await getMembershipByTenantAndUser(trx, {
+    tenantId,
+    userId: user.id,
+  });
+
+  if (!racedMembership) {
+    throw new Error(
+      'Membership insert reported a conflict, but no existing membership was found on re-read.',
+    );
+  }
+
+  const resolved = await resolveExistingMembership({
+    membershipRepo,
+    membership: racedMembership,
+    now,
+  });
+
+  return {
+    user,
+    membership: resolved.membership,
+    userCreated,
+    membershipActivated: resolved.membershipActivated,
+    membershipCreated: false,
+  };
 }

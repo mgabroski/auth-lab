@@ -486,7 +486,7 @@ Capture at least the following during the proof:
 ### Important boundary
 
 This is a live-provider operator/QA proof procedure.
-The repository's automated tests can prove policy and callback behavior, but they do not replace a real Google credential round-trip in staging.
+The repository's automated tests can prove policy and callback behavior, and the real-stack browser CI job can prove the callback path against the CI-only local OIDC server, but neither of those substitutes for a real Google credential round-trip in staging.
 Do not claim Phase 6 is operationally proven until this checklist has been executed with real Google credentials in the target staging environment.
 
 ## Phase 7 real Microsoft SSO integration proof
@@ -765,7 +765,7 @@ Capture at least the following during the proof:
 ### Important boundary
 
 This is a live-provider operator/QA proof procedure.
-The repository's automated tests can prove policy and callback behavior, but they do not replace a real Microsoft credential round-trip in staging.
+The repository's automated tests can prove policy and callback behavior, and the real-stack browser CI job can prove the callback path against the CI-only local OIDC server, but neither of those substitutes for a real Microsoft credential round-trip in staging.
 Do not claim Phase 7 is operationally proven until this checklist has been executed with real Microsoft credentials in the target staging environment.
 
 ## Rate Limiting Issues
@@ -1376,7 +1376,7 @@ Each item is a hard gate — do not promote without all items confirmed.
 - [ ] `SSO_STATE_ENCRYPTION_KEY` is a freshly generated 32-byte key (not all-zeros)
 - [ ] `OUTBOX_ENC_KEY_V1` is a freshly generated key, unique to this environment
 - [ ] `NODE_ENV=production` is set — required for the `Secure` cookie flag on `sid`
-- [ ] `LOCAL_OIDC_ENABLED` is absent or `false` — the local OIDC server is CI-only
+- [ ] `LOCAL_OIDC_ENABLED` is absent or `false` — the local OIDC server is CI-only and production startup now hard-fails if it is enabled
 - [ ] Real Google OAuth credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) are loaded
       from the secret manager, not from any file
 - [ ] Real Microsoft OAuth credentials (`MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`)
@@ -1513,3 +1513,53 @@ and how to replay failed outbox messages after provider recovery.
 **Scope:** Who to contact for a P0 incident. Escalation path for auth/session failures,
 data isolation concerns, SSO provider outages, and email delivery failures. On-call
 rotation policy if applicable.
+
+---
+
+## Final auth module lock closeout checklist
+
+Use this section only when you are preparing the final module signoff call.
+It is intentionally short and should be executed after the repo-level code and CI work are already green.
+
+### Goal
+
+Close the remaining truth gap between:
+
+- repository/browser-CI proof
+- operator runbook proof
+- final module lock claim
+
+### Required closeout sequence
+
+1. run the real-stack browser smoke suite and confirm the CI topology path is green:
+
+```bash
+yarn workspace frontend test:e2e:real-stack
+```
+
+2. capture local evidence for TC-01 through TC-08, TC-11, and TC-12 using `docs/qa/qa-execution-pack.md`
+3. execute the **Phase 6** Google runbook in staging with a real Google account and capture all required evidence
+4. execute the **Phase 7** Microsoft runbook in staging with a real Microsoft account and capture all required evidence
+5. confirm the staging environment is using the real provider adapters, not Local OIDC:
+
+```bash
+# Expected: no output in staging / production
+printenv | grep LOCAL_OIDC
+```
+
+6. confirm the latest deployment includes the hardening changes from the final closure pass:
+   - production startup rejects `LOCAL_OIDC_ENABLED=true`
+   - decrypted SSO-state `returnTo` is constrained to an app-relative path
+   - concurrent tenant provisioning converges on one membership row under race
+7. update `docs/current-foundation-status.md` only after the real staging evidence exists
+8. do **not** mark the module locked if TC-09 or TC-10 is still pending, even if local OIDC CI and all repository tests are green
+
+### What counts as complete
+
+The auth module can be called fully locked only when all of the following are simultaneously true:
+
+- real-stack browser CI is green
+- TC-09 evidence exists from staging with a real Google account
+- TC-10 evidence exists from staging with a real Microsoft account
+- no open P0 or P1 findings remain
+- `docs/current-foundation-status.md` and `docs/qa/qa-execution-pack.md` still describe the exact truth of the repo and the executed proof

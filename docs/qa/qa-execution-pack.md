@@ -97,7 +97,7 @@ Before beginning any QA execution, confirm all of the following:
    curl -sf http://goodwill-ca.lvh.me:3000/api/auth/config | jq .
    ```
    This must return tenant config for `goodwill-ca`, not an error.
-5. **For SSO flows (staging only):** SSO credentials are confirmed present in the backend env. Redirect URIs are registered in the Google / Microsoft app registration. JWKS endpoints are reachable from the staging network.
+5. **For SSO flows (staging only):** SSO credentials are confirmed present in the backend env. Redirect URIs are registered in the Google / Microsoft app registration. JWKS endpoints are reachable from the staging network. The repo's local OIDC browser-CI proof is supporting evidence only and does **not** satisfy TC-09 or TC-10 by itself.
 6. **For MFA flows:** A real authenticator app (Google Authenticator, 1Password, Microsoft Authenticator, or any TOTP app) is available on the device being used for proof.
 
 ---
@@ -254,7 +254,7 @@ See `docs/ops/runbooks.md` Phase 5 section for the full procedural checklist wit
 
 ### TC-09 — Google SSO (staging only)
 
-**Precondition:** Real `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` configured in the staging backend. Correct redirect URI registered in Google Cloud Console for the tenant host being tested.
+**Precondition:** Real `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` configured in the staging backend. Correct redirect URI registered in Google Cloud Console for the tenant host being tested. The local OIDC CI/browser proof does **not** satisfy this test case; this case requires a real Google account in staging.
 
 Full procedural checklist is in `docs/ops/runbooks.md` Phase 6 section.
 
@@ -274,7 +274,7 @@ Full procedural checklist is in `docs/ops/runbooks.md` Phase 6 section.
 
 ### TC-10 — Microsoft SSO (staging only)
 
-**Precondition:** Real `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET` configured in the staging backend. Correct redirect URI registered in Microsoft Entra app registration.
+**Precondition:** Real `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET` configured in the staging backend. Correct redirect URI registered in Microsoft Entra app registration. The local OIDC CI/browser proof does **not** satisfy this test case; this case requires a real Microsoft account in staging.
 
 Full procedural checklist (including Microsoft app registration creation guide) is in `docs/ops/runbooks.md` Phase 7 section.
 
@@ -333,6 +333,7 @@ For each test flow, the following evidence must exist before the flow can be mar
 | MFA proof               | Authenticator app screenshot showing the entry with issuer `Hubins` and the verified email as label           |
 | Audit events            | DB query output or admin audit log surface showing the expected audit action and metadata                     |
 | SSO round-trip          | Browser screenshot post-callback; `/api/auth/me` JSON confirming user + tenant context                        |
+| Provider configuration  | Screenshot of Google Cloud Console / Microsoft Entra redirect URI configuration plus JWKS reachability output |
 | Rejection / error cases | Browser screenshot or curl response showing the error, the HTTP status code, and the `error.code` field       |
 | Session invalidation    | `GET /api/auth/me` returning 401 after logout; Redis key confirmed absent                                     |
 | Cross-tenant rejection  | `GET /api/auth/me` returning 401 on the wrong tenant host                                                     |
@@ -399,6 +400,7 @@ The Auth + User Provisioning module may be considered **locked** only when all o
 - [ ] TC-01 through TC-08 executed and passed in local environment with evidence captured
 - [ ] TC-09 (Google SSO) executed and passed in staging with real credentials and evidence captured
 - [ ] TC-10 (Microsoft SSO) executed and passed in staging with real credentials and evidence captured
+- [ ] Local OIDC CI/browser proof was treated only as supporting evidence and not as a substitute for TC-09 or TC-10
 - [ ] TC-11 (rate limiting) confirmed
 - [ ] TC-12 (workspace setup banner) confirmed
 - [ ] All automated CI jobs are green:

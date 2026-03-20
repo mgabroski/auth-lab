@@ -14,6 +14,7 @@
 
 import type { DbExecutor } from '../../../shared/db/db';
 import type { MembershipRole, MembershipStatus } from '../membership.types';
+import { selectMembershipIdByTenantAndUserSql } from './membership.query-sql';
 
 export class MembershipRepo {
   constructor(private readonly db: DbExecutor) {}
@@ -45,6 +46,56 @@ export class MembershipRepo {
       .executeTakeFirstOrThrow();
 
     return { id: row.id };
+  }
+
+  /**
+   * Creates a membership if absent. If another request already created the same
+   * (tenant_id, user_id) membership, the existing id is returned instead of
+   * throwing a unique-constraint error.
+   *
+   * Pattern: INSERT … ON CONFLICT (tenant_id, user_id) DO NOTHING RETURNING.
+   * If RETURNING is empty (conflict), re-read the existing row in the same db/tx
+   * scope and return its id.
+   *
+   * This mirrors the conflict-safe pattern already used in UserRepo.insertUser()
+   * and AuthRepo.insertSsoIdentity().
+   */
+  async insertMembershipIfAbsent(params: {
+    tenantId: string;
+    userId: string;
+    role: MembershipRole;
+    status: MembershipStatus;
+    invitedAt: Date;
+  }): Promise<{ id: string; created: boolean }> {
+    const inserted = await this.db
+      .insertInto('memberships')
+      .values({
+        tenant_id: params.tenantId,
+        user_id: params.userId,
+        role: params.role,
+        status: params.status,
+        invited_at: params.invitedAt,
+      })
+      .onConflict((oc) => oc.columns(['tenant_id', 'user_id']).doNothing())
+      .returning(['id'])
+      .executeTakeFirst();
+
+    if (inserted) {
+      return { id: inserted.id, created: true };
+    }
+
+    const existing = await selectMembershipIdByTenantAndUserSql(this.db, {
+      tenantId: params.tenantId,
+      userId: params.userId,
+    });
+
+    if (!existing) {
+      throw new Error(
+        'Membership insert conflicted, but the existing membership could not be re-read.',
+      );
+    }
+
+    return { id: existing.id, created: false };
   }
 
   /**

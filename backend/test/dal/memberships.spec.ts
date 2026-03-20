@@ -50,7 +50,6 @@ async function seedTenantAndUser(db: DbExecutor): Promise<{
     await db.deleteFrom('tenants').where('id', '=', tenant.id).execute();
   };
 
-  // Ensure we only return the fields the tests actually need (typed, minimal surface)
   return {
     tenant: { id: tenant.id, key: tenant.key },
     user: { id: user.id, email: user.email },
@@ -81,6 +80,50 @@ describe('memberships DAL', () => {
         expect(row).toBeDefined();
         expect(row!.role).toBe('MEMBER');
         expect(row!.status).toBe('INVITED');
+      } finally {
+        await cleanup();
+      }
+    } finally {
+      await close();
+    }
+  });
+
+  it('insertMembershipIfAbsent returns the existing id on the second call instead of throwing', async () => {
+    const { deps, close } = await buildTestApp();
+    try {
+      const { tenant, user, cleanup } = await seedTenantAndUser(deps.db);
+      try {
+        const repo = new MembershipRepo(deps.db);
+
+        const first = await repo.insertMembershipIfAbsent({
+          tenantId: tenant.id,
+          userId: user.id,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+          invitedAt: new Date(),
+        });
+
+        const second = await repo.insertMembershipIfAbsent({
+          tenantId: tenant.id,
+          userId: user.id,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+          invitedAt: new Date(),
+        });
+
+        expect(first.created).toBe(true);
+        expect(second.created).toBe(false);
+        expect(second.id).toBe(first.id);
+
+        const rows = await deps.db
+          .selectFrom('memberships')
+          .select(['id'])
+          .where('tenant_id', '=', tenant.id)
+          .where('user_id', '=', user.id)
+          .execute();
+
+        expect(rows).toHaveLength(1);
+        expect(rows[0].id).toBe(first.id);
       } finally {
         await cleanup();
       }

@@ -29,6 +29,22 @@ export async function selectMembershipByTenantAndUserSql(
     .executeTakeFirst();
 }
 
+/**
+ * Minimal projection used by conflict-safe write paths.
+ * The repo only needs the existing id after ON CONFLICT DO NOTHING.
+ */
+export async function selectMembershipIdByTenantAndUserSql(
+  db: DbExecutor,
+  params: { tenantId: string; userId: string },
+): Promise<{ id: string } | undefined> {
+  return db
+    .selectFrom('memberships')
+    .select(['id'])
+    .where('tenant_id', '=', params.tenantId)
+    .where('user_id', '=', params.userId)
+    .executeTakeFirst();
+}
+
 export async function selectMembershipByIdSql(
   db: DbExecutor,
   membershipId: string,
