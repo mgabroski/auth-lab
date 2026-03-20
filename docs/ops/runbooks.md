@@ -1,3 +1,45 @@
+## Pre-Staging and Pre-Production Security Checklist
+
+Run this checklist before promoting any environment beyond local development.
+
+### Secrets and keys
+
+- [ ] `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are real staging/production OAuth
+      app credentials registered in Google Cloud Console for this environment's
+      redirect URIs — NOT the dev placeholders from `.env.example`.
+- [ ] `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET` are real staging/production
+      Entra ID app credentials — NOT dev placeholders.
+- [ ] `MFA_ENCRYPTION_KEY_BASE64` is a 32-byte random key unique to this environment.
+      It must NOT match the key in any other environment.
+- [ ] `MFA_HMAC_KEY_BASE64` is a 32-byte random key unique to this environment.
+- [ ] `SSO_STATE_ENCRYPTION_KEY` is a 32-byte random key, NOT the all-zeros placeholder.
+- [ ] `OUTBOX_ENC_KEY_V1` is a 32-byte random key unique to this environment.
+      It must NOT match `MFA_ENCRYPTION_KEY_BASE64`.
+
+### Environment mode
+
+- [ ] `NODE_ENV=production` is set. Without this, session cookies do not receive
+      the `Secure` flag and the `__Host-` prefix is not used.
+- [ ] `BCRYPT_COST` is set to at least 12 for all internet-facing environments.
+      CI and local development may use 4 for speed.
+
+### Bootstrap delivery (LOCK-3)
+
+- [ ] For staging/QA: `EMAIL_PROVIDER=smtp` is configured with real SMTP credentials.
+      The bootstrap operator flow must deliver invites through the real outbox + SMTP
+      path, not via raw token logging.
+- [ ] For production: bootstrap is an operator-only flow. Raw token logging never occurs.
+      The production bootstrap runbook (see Bootstrap Tenant section below) describes
+      the exact operator sequence.
+
+### SSO OAuth app registration
+
+- [ ] Google OAuth app redirect URIs include: `https://<tenantKey>.<domain>/api/auth/sso/google/callback`
+- [ ] Microsoft Entra ID app redirect URIs include: `https://<tenantKey>.<domain>/api/auth/sso/microsoft/callback`
+- [ ] Both SSO apps are registered for each tenant subdomain that will use SSO.
+
+---
+
 ## System Dependencies & Health Checks
 
 ### Health check surface

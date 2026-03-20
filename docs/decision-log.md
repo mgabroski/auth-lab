@@ -643,6 +643,44 @@ Rejected because it would create inconsistent enforcement and weaken the applica
 
 ---
 
+## ADR-016 — Open redirect guard hardened to block backslash-normalised paths
+
+**Date:** 2026-03
+**Status:** Accepted
+
+### Context
+
+`isSafeReturnToPath` in `frontend/src/shared/auth/url-tokens.ts` guarded against
+`//evil.com` style protocol-relative redirects by checking `!startsWith('//')`.
+Some older browser parsers normalise `/\evil.com` to `//evil.com`, creating a
+second bypass path for the same class of attack.
+
+The unit test file (`url-tokens.spec.ts`) already covered this vector explicitly
+as part of Phase 10 security coverage, but the implementation guard was missing.
+
+### Decision
+
+Add `!value.startsWith('/\\')` as a third guard in `isSafeReturnToPath`.
+
+### Why
+
+Defence in depth. The practical risk is low for modern browsers, but the guard
+is a one-line addition with zero false-positive surface: no legitimate return-to
+path in this system begins with `/\`.
+
+### Consequences
+
+- `isSafeReturnToPath('/\\evil.com')` returns `false`.
+- All existing return-to paths (starting with a single `/` followed by a letter) are unaffected.
+- Unit test already covered the case; the implementation now matches the stated contract.
+
+### Rejected alternative
+
+**Do nothing** — rejected because the cost of adding the guard is zero and the
+defence-in-depth principle (from `docs/security-model.md`) favours adding it.
+
+---
+
 ## Locked Decisions Register (LOCK-1 through LOCK-5)
 
 This section is the canonical cross-reference for the five decisions locked by the Auth +

@@ -94,7 +94,17 @@ export function getVerificationToken(searchParams: SearchParamsInput): string | 
 }
 
 export function isSafeReturnToPath(value: string | null | undefined): value is string {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+  // WHY three guards:
+  // (1) must be a string that starts with '/' — relative path only
+  // (2) must not start with '//' — blocks protocol-relative open redirects
+  // (3) must not start with '/\' — some older parsers normalise '/\' to '//'
+  //     making it a second form of protocol-relative redirect bypass
+  return (
+    typeof value === 'string' &&
+    value.startsWith('/') &&
+    !value.startsWith('//') &&
+    !value.startsWith('/\\')
+  );
 }
 
 export function getReturnToPath(searchParams: SearchParamsInput): string | null {
