@@ -73,6 +73,15 @@ export function decryptAndValidateSsoState(params: {
     throw AuthErrors.ssoStateInvalid({ reason: 'redirectUri_missing' });
   }
 
+  const returnTo =
+    typeof returnToRaw === 'string' &&
+    returnToRaw.length > 0 &&
+    returnToRaw.startsWith('/') &&
+    !returnToRaw.startsWith('//') &&
+    !returnToRaw.includes('\\')
+      ? returnToRaw
+      : undefined;
+
   const payload: SsoStatePayload = {
     provider: params.provider,
     tenantKey: params.tenantKey,
@@ -81,7 +90,7 @@ export function decryptAndValidateSsoState(params: {
     expiresAt,
     requestId,
     redirectUri,
-    ...(typeof returnToRaw === 'string' && returnToRaw.length ? { returnTo: returnToRaw } : {}),
+    ...(returnTo ? { returnTo } : {}),
   };
 
   return payload;

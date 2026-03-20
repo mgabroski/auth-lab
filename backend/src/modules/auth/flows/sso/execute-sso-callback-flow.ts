@@ -49,7 +49,6 @@ import {
 import { auditInviteAccepted } from '../../../invites/invite.audit';
 
 import { hasVerifiedMfaSecret } from '../../helpers/has-verified-mfa-secret';
-import { isMfaRequiredForLogin } from '../../policies/mfa-required.policy';
 
 import { createAuthSession } from '../../helpers/create-auth-session';
 import { resolveTenantEntryAuthDecision } from '../../helpers/resolve-tenant-entry-auth-decision';
@@ -468,12 +467,8 @@ export async function executeSsoCallbackFlow(
   }
 
   const mfaConfigured = await hasVerifiedMfaSecret(deps.db, txResult.user.id);
-  const mfaRequired = isMfaRequiredForLogin({
-    role: txResult.membership.role,
-    tenantMemberMfaRequired: txResult.tenant.memberMfaRequired,
-  });
 
-  const { sessionId } = await createAuthSession({
+  const { sessionId, nextAction } = await createAuthSession({
     sessionStore: deps.sessionStore,
     userId: txResult.user.id,
     tenantId: txResult.tenant.id,
@@ -485,8 +480,6 @@ export async function executeSsoCallbackFlow(
     emailVerified: txResult.user.emailVerified,
     now: new Date(),
   });
-
-  const nextAction = mfaRequired ? (mfaConfigured ? 'MFA_REQUIRED' : 'MFA_SETUP_REQUIRED') : 'NONE';
 
   const redirectTo = `/auth/sso/done?nextAction=${encodeURIComponent(nextAction)}`;
 

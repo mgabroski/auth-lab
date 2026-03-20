@@ -23,6 +23,9 @@
  * - Guard 2 — SSO state key: SSO_STATE_ENCRYPTION_KEY must not be the
  *   all-zeros placeholder outside of NODE_ENV=test. An all-zeros key provides
  *   no confidentiality for the SSO state cookie. Rejected in dev + production.
+ * - Guard 3 — Local OIDC: LOCAL_OIDC_ENABLED must never be enabled in
+ *   production. It replaces real Google/Microsoft provider adapters with the
+ *   CI-only LocalOidcSsoAdapter. Rejected in production.
  */
 
 import type { AppConfig } from './config';
@@ -183,6 +186,32 @@ export function assertSsoStateKey(config: AppConfig): void {
   }
 }
 
+/**
+ * STARTUP GUARD 3 — Local OIDC must never run in production.
+ *
+ * LOCAL_OIDC_ENABLED swaps the real Google/Microsoft adapters for the CI-only
+ * LocalOidcSsoAdapter. That server exists only to prove the real RS256/JWKS
+ * cryptographic path in local/CI environments without external credentials.
+ *
+ * In production, enabling it would replace live provider trust with a mock
+ * issuer path. Fail fast at startup instead of relying on comments or env-file
+ * hygiene to keep this flag out of production.
+ */
+export function assertLocalOidcDisabledInProduction(config: AppConfig): void {
+  if (config.nodeEnv !== 'production') return;
+
+  if (config.sso.localOidc) {
+    throw new Error(
+      [
+        'PRODUCTION STARTUP GUARD: LOCAL_OIDC_ENABLED must never be enabled in production.',
+        'It replaces the real Google/Microsoft SSO adapters with the CI-only',
+        'LocalOidcSsoAdapter mock issuer path.',
+        'Disable LOCAL_OIDC_ENABLED and configure the real provider credentials instead.',
+      ].join('\n'),
+    );
+  }
+}
+
 function buildOutboxEncryptionConfig(config: AppConfig): OutboxEncryptionConfig {
   const defaultVersionRaw = config.outbox.encDefaultVersion;
   if (!isOutboxEncVersion(defaultVersionRaw)) {
@@ -278,6 +307,7 @@ export async function buildDeps(
   // clear message rather than a cryptic runtime error deep inside a flow.
   assertKeySeparation(config);
   assertSsoStateKey(config);
+  assertLocalOidcDisabledInProduction(config);
 
   const db = createDb(config.databaseUrl);
 

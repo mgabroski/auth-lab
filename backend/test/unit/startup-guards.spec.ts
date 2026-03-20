@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 
-import { assertKeySeparation, assertSsoStateKey } from '../../src/app/di';
+import {
+  assertKeySeparation,
+  assertLocalOidcDisabledInProduction,
+  assertSsoStateKey,
+} from '../../src/app/di';
 import type { AppConfig } from '../../src/app/config';
 
 /**
@@ -28,14 +32,15 @@ const KEY_A = 'VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0='; // 32-byte base64
 const KEY_B = 'pjVKt5jeXMDX5YJkbDc1dDFW4ztqO1iRyHiAHi/9TjM='; // 32-byte base64, distinct
 const ALL_ZEROS = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
-function makeConfig(
-  overrides: Partial<AppConfig> & {
-    mfaKey?: string;
-    outboxKey?: string;
-    ssoStateKey?: string;
-    nodeEnv?: AppConfig['nodeEnv'];
-  } = {},
-): AppConfig {
+type MakeConfigOverrides = Omit<Partial<AppConfig>, 'sso'> & {
+  mfaKey?: string;
+  outboxKey?: string;
+  ssoStateKey?: string;
+  nodeEnv?: AppConfig['nodeEnv'];
+  sso?: Partial<AppConfig['sso']>;
+};
+
+function makeConfig(overrides: MakeConfigOverrides = {}): AppConfig {
   const nodeEnv = overrides.nodeEnv ?? 'development';
   const mfaKey = overrides.mfaKey ?? KEY_A;
   const outboxKey = overrides.outboxKey ?? KEY_B;
@@ -62,6 +67,7 @@ function makeConfig(
       googleClientSecret: 'test-google-client-secret',
       microsoftClientId: 'test-microsoft-client-id',
       microsoftClientSecret: 'test-microsoft-client-secret',
+      ...overrides.sso,
     },
     outbox: {
       pollIntervalMs: 5_000,
@@ -147,5 +153,56 @@ describe('assertSsoStateKey', () => {
   it('does not throw in test mode with a real key', () => {
     const config = makeConfig({ nodeEnv: 'test', ssoStateKey: KEY_A });
     expect(() => assertSsoStateKey(config)).not.toThrow();
+  });
+});
+
+// ── assertLocalOidcDisabledInProduction ───────────────────────────────────────
+
+describe('assertLocalOidcDisabledInProduction', () => {
+  it('throws when Local OIDC is enabled in production', () => {
+    const config = makeConfig({
+      nodeEnv: 'production',
+      sso: {
+        localOidc: {
+          issuerUrl: 'http://localhost:4010',
+          clientId: 'local-oidc-client-id',
+        },
+      },
+    });
+
+    expect(() => assertLocalOidcDisabledInProduction(config)).toThrow(/LOCAL_OIDC_ENABLED/i);
+  });
+
+  it('does not throw when Local OIDC is enabled in development', () => {
+    const config = makeConfig({
+      nodeEnv: 'development',
+      sso: {
+        localOidc: {
+          issuerUrl: 'http://localhost:4010',
+          clientId: 'local-oidc-client-id',
+        },
+      },
+    });
+
+    expect(() => assertLocalOidcDisabledInProduction(config)).not.toThrow();
+  });
+
+  it('does not throw when Local OIDC is enabled in test', () => {
+    const config = makeConfig({
+      nodeEnv: 'test',
+      sso: {
+        localOidc: {
+          issuerUrl: 'http://localhost:4010',
+          clientId: 'local-oidc-client-id',
+        },
+      },
+    });
+
+    expect(() => assertLocalOidcDisabledInProduction(config)).not.toThrow();
+  });
+
+  it('does not throw in production when Local OIDC is disabled', () => {
+    const config = makeConfig({ nodeEnv: 'production' });
+    expect(() => assertLocalOidcDisabledInProduction(config)).not.toThrow();
   });
 });
