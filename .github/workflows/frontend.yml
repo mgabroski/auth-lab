@@ -18,72 +18,52 @@ on:
   workflow_dispatch:
 
 jobs:
-  # ── Job 1: typecheck + unit tests ──────────────────────────────────────────
-  # Fast gate. No Docker. Fails in ~2 minutes if types or unit tests are broken.
-  # E2E does not start until this passes.
-
   unit:
     name: Typecheck + unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Enable Corepack
-        run: corepack enable
-
+      - name: Enable Corepack and activate repo Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.12.0 --activate
+          yarn --version
       - name: Install dependencies
         run: yarn install --immutable
-
       - name: Typecheck
         run: yarn typecheck:frontend
-
       - name: Unit tests
         run: yarn test:frontend:unit
         env:
           NODE_ENV: test
-
-  # ── Job 2: Playwright E2E against real Docker stack ────────────────────────
-  # Full topology: Caddy proxy + Fastify backend + Next.js frontend + Postgres
-  # + Redis + Mailpit. Proves session, cookie, proxy, SSR, and email delivery.
-  # Only runs after unit job passes.
 
   e2e:
     name: Playwright auth smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: unit
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      - name: Enable Corepack
-        run: corepack enable
-
+      - name: Enable Corepack and activate repo Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.12.0 --activate
+          yarn --version
       - name: Install workspace dependencies
         run: yarn install --immutable
-
       - name: Install Playwright Chromium
         run: yarn workspace frontend playwright install chromium --with-deps
-
-      # BCRYPT_COST=4 keeps hash operations fast in CI (not 12).
-      # OUTBOX_POLL_INTERVAL_MS=2000 means email arrives within ~2s of send.
-      # SSO credentials are placeholders — no live OAuth round-trip in CI.
-      # KEY SEPARATION: MFA_ENCRYPTION_KEY_BASE64 and OUTBOX_ENC_KEY_V1 must
-      # be different values — enforced by startup guard added in di.ts.
 
       - name: Write infra/.env.stack for CI
         run: |
@@ -131,17 +111,24 @@ jobs:
           NEXT_PUBLIC_ENV=development
           ENVEOF
 
-      # WHY --file infra/docker-compose-ci-oidc.yml:
-      # The CI OIDC override adds the local-oidc service and overrides the backend
-      # environment to use LOCAL_OIDC_ENABLED=true. This wires LocalOidcSsoAdapter
-      # for both 'google' and 'microsoft' provider slots so the real jose jwtVerify()
-      # path is proven in CI without real provider credentials.
       - name: Start Docker Compose stack (with local OIDC overlay)
         run: |
           docker compose --env-file infra/.env.stack \
             -f infra/docker-compose.yml \
             -f infra/docker-compose-ci-oidc.yml \
-            up --build -d
+            up --build -d || {
+              echo "❌ Docker Compose startup failed"
+              docker compose --env-file infra/.env.stack \
+                -f infra/docker-compose.yml \
+                -f infra/docker-compose-ci-oidc.yml \
+                ps || true
+              docker logs auth-lab-local-oidc --tail=100 || true
+              docker compose --env-file infra/.env.stack \
+                -f infra/docker-compose.yml \
+                -f infra/docker-compose-ci-oidc.yml \
+                logs local-oidc backend frontend proxy --tail=100 || true
+              exit 1
+            }
 
       - name: Wait for backend healthy
         run: |
@@ -153,29 +140,19 @@ jobs:
             sleep 3
           done
           echo "❌ Backend did not become healthy within 180s"
-          docker compose --env-file infra/.env.stack \
-            -f infra/docker-compose.yml \
-            -f infra/docker-compose-ci-oidc.yml \
-            logs --tail=150
           exit 1
 
-      # WHY this step:
-      # The local OIDC server must be healthy before Playwright runs tests 11/12
-      # (MFA loop + invite acceptance) because the backend SSO callback flow calls
-      # the OIDC server's JWKS endpoint during JWT validation. If the server is not
-      # yet ready when these tests run, the JWKS fetch fails and the callback returns
-      # a 401/500, causing false test failures.
       - name: Wait for local OIDC server healthy
         run: |
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:9998/.well-known/jwks.json > /dev/null 2>&1; then
+            if curl -sf http://127.0.0.1:9998/.well-known/jwks.json > /dev/null 2>&1; then
               echo "✅ Local OIDC server healthy (attempt ${i})"
               exit 0
             fi
             sleep 2
           done
           echo "❌ Local OIDC server did not become healthy within 60s"
-          docker logs auth-lab-local-oidc --tail=50 || true
+          docker logs auth-lab-local-oidc --tail=100 || true
           exit 1
 
       - name: Seed E2E fixtures
@@ -184,11 +161,6 @@ jobs:
             exec -T backend \
             yarn workspace @auth-lab/backend db:seed:e2e
 
-      # WHY flush Redis before Playwright:
-      # - Rate limiters use Redis counters keyed by user/IP with a 15-min window.
-      # - A fresh stack starts with an empty Redis, so this step is a no-op on
-      #   first run. On re-runs (e.g. flaky retry), it resets any leftover counters
-      #   from the previous attempt so tests never get 429s on legitimate actions.
       - name: Flush Redis (reset rate limit counters)
         run: |
           docker exec auth-lab-redis redis-cli FLUSHALL > /dev/null
@@ -199,10 +171,6 @@ jobs:
         env:
           MAILPIT_API_URL: http://localhost:8025
           CI: 'true'
-          # WHY: Tests 8 and 9 (SSO callback via local OIDC) call isLocalOidcReachable()
-          # to skip themselves when the OIDC server is not running. Setting this var
-          # as a belt-and-suspenders guard alongside the reachability check ensures
-          # the tests are never silently skipped in CI when they should run.
           LOCAL_OIDC_ENABLED: 'true'
 
       - name: Upload traces and screenshots on failure
