@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { buildTestApp } from '../helpers/build-test-app';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
+import type { OutboxEncryption } from '../../src/shared/outbox/outbox-encryption';
 
 /**
  * backend/test/e2e/auth-forgot-password.spec.ts
@@ -24,8 +25,14 @@ import type { PasswordHasher } from '../../src/shared/security/password-hasher';
  * ISOLATION NOTE:
  * Tests share a real Postgres + Redis instance and do NOT run inside rolled-back
  * transactions. Every assertion that checks counts or absences must be scoped to
- * the specific user_id / tenant_id created in that test, or use a timestamp scope.
- * Never query a full table without a scoping filter.
+ * the specific user_id / tenant_id created in that test, or use a deterministic
+ * key derived from data created in that test.
+ *
+ * FLAKE NOTE:
+ * Do NOT scope outbox assertions by `created_at >= requestStart`.
+ * The app timestamp comes from Node while created_at comes from Postgres `now()`.
+ * Those clocks can differ by a few milliseconds in CI, causing intermittent misses.
+ * Prefer exact keys (userId + tokenHash) or user-scoped queries instead.
  *
  * RATE LIMIT NOTE:
  * The rate limiter is disabled when nodeEnv === 'test' (see di.ts).
@@ -135,6 +142,35 @@ function parseOutboxPayload(input: unknown): z.infer<typeof EncryptedOutboxPaylo
   return EncryptedOutboxPayloadSchema.parse(input);
 }
 
+async function getPasswordResetOutboxRowsForUser(opts: { db: DbExecutor; userId: string }) {
+  return opts.db
+    .selectFrom('outbox_messages')
+    .selectAll()
+    .where('type', '=', 'password.reset')
+    .where('status', '=', 'pending')
+    .where('idempotency_key', 'like', `password-reset:${opts.userId}:%`)
+    .execute();
+}
+
+async function getPasswordResetOutboxRowsForEmail(opts: {
+  db: DbExecutor;
+  outboxEncryption: OutboxEncryption;
+  email: string;
+}) {
+  const rows = await opts.db
+    .selectFrom('outbox_messages')
+    .select(['payload', 'idempotency_key', 'type', 'status'])
+    .where('type', '=', 'password.reset')
+    .where('status', '=', 'pending')
+    .execute();
+
+  return rows.filter((row) => {
+    const payload = parseOutboxPayload(row.payload);
+    const plain = opts.outboxEncryption.decryptPayload(payload);
+    return plain.toEmail.toLowerCase() === opts.email.toLowerCase();
+  });
+}
+
 // ── Tests ─────────────────────────────────────────────────────
 
 describe('POST /auth/forgot-password', () => {
@@ -165,8 +201,6 @@ describe('POST /auth/forgot-password', () => {
         password: 'Password123!',
       });
 
-      const requestStart = new Date();
-
       const res = await app.inject({
         method: 'POST',
         url: '/auth/forgot-password',
@@ -189,14 +223,18 @@ describe('POST /auth/forgot-password', () => {
       expect(tokens[0].expires_at.getTime()).toBeGreaterThan(Date.now());
 
       // Outbox row exists (durable delivery)
+      // Use the exact idempotency key derived from the token hash instead of
+      // a Node-vs-Postgres timestamp boundary.
+      const expectedIdempotencyKey = `password-reset:${user.id}:${tokens[0].token_hash}`;
+
       const outbox = await db
         .selectFrom('outbox_messages')
         .selectAll()
-        .where('created_at', '>=', requestStart)
+        .where('idempotency_key', '=', expectedIdempotencyKey)
         .where('type', '=', 'password.reset')
         .where('status', '=', 'pending')
-        .where('idempotency_key', 'like', `password-reset:${user.id}:%`)
         .execute();
+
       expect(outbox).toHaveLength(1);
 
       const payload = parseOutboxPayload(outbox[0].payload);
@@ -217,40 +255,34 @@ describe('POST /auth/forgot-password', () => {
     }
   });
 
-  it('nonexistent email → 200 with identical body, no new token, no outbox row, audit written', async () => {
+  it('nonexistent email → 200 with identical body, no outbox row for that email, audit written', async () => {
     const { app, deps, close } = await buildTestApp();
-    const { db } = deps;
+    const { db, outboxEncryption } = deps;
 
     const tenantKey = `t-${randomUUID().slice(0, 8)}`;
     const host = `${tenantKey}.localhost:3000`;
+    const email = `ghost-${randomUUID()}@example.com`;
 
     try {
       await createTenant({ db, tenantKey });
-
-      const requestStart = new Date();
 
       const res = await app.inject({
         method: 'POST',
         url: '/auth/forgot-password',
         headers: { host },
-        payload: { email: `ghost-${randomUUID()}@example.com` },
+        payload: { email },
       });
 
       expect(res.statusCode).toBe(200);
       void res;
 
-      const newTokens = await db
-        .selectFrom('password_reset_tokens')
-        .selectAll()
-        .where('created_at', '>=', requestStart)
-        .execute();
-      expect(newTokens).toHaveLength(0);
-
-      const outbox = await db
-        .selectFrom('outbox_messages')
-        .selectAll()
-        .where('created_at', '>=', requestStart)
-        .execute();
+      // No outbox row addressed to this email.
+      // Do not use created_at >= requestStart — that is clock-racy in CI.
+      const outbox = await getPasswordResetOutboxRowsForEmail({
+        db,
+        outboxEncryption,
+        email,
+      });
       expect(outbox).toHaveLength(0);
 
       const audits = await db
@@ -280,8 +312,6 @@ describe('POST /auth/forgot-password', () => {
       const tenant = await createTenant({ db, tenantKey });
       const user = await seedSsoOnlyUser({ db, tenantId: tenant.id, email });
 
-      const requestStart = new Date();
-
       const res = await app.inject({
         method: 'POST',
         url: '/auth/forgot-password',
@@ -299,11 +329,10 @@ describe('POST /auth/forgot-password', () => {
         .execute();
       expect(tokens).toHaveLength(0);
 
-      const outbox = await db
-        .selectFrom('outbox_messages')
-        .selectAll()
-        .where('created_at', '>=', requestStart)
-        .execute();
+      const outbox = await getPasswordResetOutboxRowsForUser({
+        db,
+        userId: user.id,
+      });
       expect(outbox).toHaveLength(0);
 
       const audits = await db
@@ -373,12 +402,10 @@ describe('POST /auth/forgot-password', () => {
       expect(usedToken).toBeDefined();
 
       // Two outbox rows created (one per request), each with unique idempotency key
-      const outbox = await db
-        .selectFrom('outbox_messages')
-        .selectAll()
-        .where('type', '=', 'password.reset')
-        .where('idempotency_key', 'like', `password-reset:${user.id}:%`)
-        .execute();
+      const outbox = await getPasswordResetOutboxRowsForUser({
+        db,
+        userId: user.id,
+      });
       expect(outbox.length).toBe(2);
       expect(outbox[0].idempotency_key).not.toBe(outbox[1].idempotency_key);
     } finally {
@@ -415,7 +442,18 @@ describe('POST /auth/forgot-password', () => {
         expect(res.statusCode).toBe(200);
       }
 
-      const requestStart = new Date();
+      const tokensBefore = await db
+        .selectFrom('password_reset_tokens')
+        .selectAll()
+        .where('user_id', '=', user.id)
+        .execute();
+      expect(tokensBefore).toHaveLength(3);
+
+      const outboxBefore = await getPasswordResetOutboxRowsForUser({
+        db,
+        userId: user.id,
+      });
+      expect(outboxBefore).toHaveLength(3);
 
       // Request 4: over limit — silent 200
       const res4 = await app.inject({
@@ -426,30 +464,20 @@ describe('POST /auth/forgot-password', () => {
       });
       expect(res4.statusCode).toBe(200);
 
-      // No new token after requestStart
-      const newTokens = await db
+      // No new token for this user
+      const tokensAfter = await db
         .selectFrom('password_reset_tokens')
         .selectAll()
         .where('user_id', '=', user.id)
-        .where('created_at', '>=', requestStart)
         .execute();
-      expect(newTokens).toHaveLength(0);
+      expect(tokensAfter).toHaveLength(3);
 
-      // No outbox row after requestStart
-      const outbox = await db
-        .selectFrom('outbox_messages')
-        .selectAll()
-        .where('created_at', '>=', requestStart)
-        .execute();
-      expect(outbox).toHaveLength(0);
-
-      // Only 3 tokens total exist for this user
-      const allTokens = await db
-        .selectFrom('password_reset_tokens')
-        .where('user_id', '=', user.id)
-        .selectAll()
-        .execute();
-      expect(allTokens).toHaveLength(3);
+      // No new outbox row for this user
+      const outboxAfter = await getPasswordResetOutboxRowsForUser({
+        db,
+        userId: user.id,
+      });
+      expect(outboxAfter).toHaveLength(3);
     } finally {
       await close();
     }

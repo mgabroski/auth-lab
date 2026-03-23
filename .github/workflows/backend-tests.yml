@@ -17,6 +17,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://auth_lab:auth_lab@localhost:5432/auth_lab_test
+      REDIS_URL: redis://localhost:6379
+      LOG_LEVEL: warn
+      SERVICE_NAME: auth-lab-backend
+
+      # Config parse / crypto / auth
+      BCRYPT_COST: 4
+      SESSION_TTL_SECONDS: 3600
+      MFA_ISSUER: Hubins
+      MFA_ENCRYPTION_KEY_BASE64: VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+      MFA_HMAC_KEY_BASE64: 8Emt6e4gn6r8rgRGSuYTVQ+D/3upFEckXRoMQYKJRJ8=
+      SSO_STATE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      SSO_REDIRECT_BASE_URL: http://goodwill-ca.lvh.me:3000/api
+      GOOGLE_CLIENT_ID: test-google-client-id
+      GOOGLE_CLIENT_SECRET: test-google-client-secret
+      MICROSOFT_CLIENT_ID: test-microsoft-client-id
+      MICROSOFT_CLIENT_SECRET: test-microsoft-client-secret
+
+      # Outbox / email
+      OUTBOX_ENC_DEFAULT_VERSION: v1
+      OUTBOX_ENC_KEY_V1: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      OUTBOX_POLL_INTERVAL_MS: 5000
+      OUTBOX_BATCH_SIZE: 10
+      OUTBOX_MAX_ATTEMPTS: 5
+      EMAIL_PROVIDER: noop
+
     services:
       postgres:
         image: postgres:17
@@ -61,34 +89,9 @@ jobs:
         run: yarn install --immutable
 
       - name: Run database migrations
-        env:
-          DATABASE_URL: postgres://auth_lab:auth_lab@localhost:5432/auth_lab_test
         run: yarn workspace @auth-lab/backend db:migrate
 
       - name: Run backend tests
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgres://auth_lab:auth_lab@localhost:5432/auth_lab_test
-          REDIS_URL: redis://localhost:6379
-          LOG_LEVEL: warn
-          SERVICE_NAME: auth-lab-backend
-          BCRYPT_COST: 4
-          SESSION_TTL_SECONDS: 3600
-          MFA_ISSUER: Hubins
-          MFA_ENCRYPTION_KEY_BASE64: VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
-          MFA_HMAC_KEY_BASE64: 8Emt6e4gn6r8rgRGSuYTVQ+D/3upFEckXRoMQYKJRJ8=
-          SSO_STATE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          SSO_REDIRECT_BASE_URL: http://goodwill-ca.lvh.me:3000/api
-          GOOGLE_CLIENT_ID: test-google-client-id
-          GOOGLE_CLIENT_SECRET: test-google-client-secret
-          MICROSOFT_CLIENT_ID: test-microsoft-client-id
-          MICROSOFT_CLIENT_SECRET: test-microsoft-client-secret
-          OUTBOX_ENC_DEFAULT_VERSION: v1
-          OUTBOX_ENC_KEY_V1: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          OUTBOX_POLL_INTERVAL_MS: 5000
-          OUTBOX_BATCH_SIZE: 10
-          OUTBOX_MAX_ATTEMPTS: 5
-          EMAIL_PROVIDER: noop
         run: yarn workspace @auth-lab/backend test
 
       - name: Typecheck backend

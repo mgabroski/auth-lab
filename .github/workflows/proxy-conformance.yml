@@ -4,21 +4,25 @@ on:
   push:
     paths:
       - 'infra/**'
+      - 'frontend/**'
       - 'backend/src/shared/session/**'
       - 'backend/src/shared/http/request-context.ts'
       - 'backend/src/modules/auth/flows/sso/**'
       - 'backend/src/modules/auth/helpers/sso-state*.ts'
       - 'scripts/proxy-conformance.sh'
       - 'scripts/stack.sh'
+      - '.github/workflows/proxy-conformance.yml'
   pull_request:
     paths:
       - 'infra/**'
+      - 'frontend/**'
       - 'backend/src/shared/session/**'
       - 'backend/src/shared/http/request-context.ts'
       - 'backend/src/modules/auth/flows/sso/**'
       - 'backend/src/modules/auth/helpers/sso-state*.ts'
       - 'scripts/proxy-conformance.sh'
       - 'scripts/stack.sh'
+      - '.github/workflows/proxy-conformance.yml'
   workflow_dispatch:
 
 jobs:
@@ -34,41 +38,67 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Write backend .env for CI
+      - name: Write infra/.env.stack for CI
         run: |
-          cat > backend/.env << 'ENVEOF'
+          cat > infra/.env.stack << 'ENVEOF'
           NODE_ENV=development
           PORT=3001
-          DATABASE_URL=postgres://auth_lab:auth_lab@localhost:5432/auth_lab
-          REDIS_URL=redis://localhost:6379
+
+          POSTGRES_DB=auth_lab
+          POSTGRES_USER=auth_lab
+          POSTGRES_PASSWORD=auth_lab
+          DATABASE_URL=postgres://auth_lab:auth_lab@postgres:5432/auth_lab
+          REDIS_URL=redis://redis:6379
+
           LOG_LEVEL=info
           SERVICE_NAME=auth-lab-backend
-          BCRYPT_COST=12
+
+          BCRYPT_COST=4
           SESSION_TTL_SECONDS=86400
+
+          # MFA
           MFA_ISSUER=Hubins
-          MFA_ENCRYPTION_KEY_BASE64=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
-          MFA_HMAC_KEY_BASE64=8Emt6e4gn6r8rgRGSuYTVQ+D/3upFEckXRoMQYKJRJ8=
-          SSO_STATE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          MFA_ENCRYPTION_KEY_BASE64=N0uFFqX7KeFnhghnTMaeBdLKsn+W2Q9WJE1D2Aqdf14=
+          MFA_HMAC_KEY_BASE64=ygcc6Pr65aoBSF469cwcsVj+ARz1Pb2voHHHtt3bbCQ=
+
+          # SSO
+          SSO_STATE_ENCRYPTION_KEY=g+0YvJfzVdIgM+eoUUQ5UW3JKuGktJbtA6mvi3DcZDQ=
           SSO_REDIRECT_BASE_URL=http://goodwill-ca.lvh.me:3000/api
           GOOGLE_CLIENT_ID=test-google-client-id
           GOOGLE_CLIENT_SECRET=test-google-client-secret
           MICROSOFT_CLIENT_ID=test-microsoft-client-id
           MICROSOFT_CLIENT_SECRET=test-microsoft-client-secret
+
+          # Outbox
           OUTBOX_ENC_DEFAULT_VERSION=v1
-          OUTBOX_ENC_KEY_V1=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
+          OUTBOX_ENC_KEY_V1=pjVKt5jeXMDX5YJkbDc1dDFW4ztqO1iRyHiAHi/9TjM=
           OUTBOX_POLL_INTERVAL_MS=5000
           OUTBOX_BATCH_SIZE=10
           OUTBOX_MAX_ATTEMPTS=5
+
+          # Email
+          EMAIL_PROVIDER=smtp
+          SMTP_HOST=mailpit
+          SMTP_PORT=1025
+          SMTP_SECURE=false
+          SMTP_FROM=Hubins <noreply@hubins.local>
+          SMTP_PUBLIC_BASE_URL=http://{tenantKey}.lvh.me:3000
+
+          # Dev seed
           SEED_ON_START=true
           SEED_TENANT_KEY=goodwill-ca
           SEED_TENANT_NAME=GoodWill California
           SEED_ADMIN_EMAIL=system_admin@example.com
           SEED_INVITE_TTL_HOURS=168
+
+          # Frontend container runtime / build
+          FRONTEND_INTERNAL_API_URL=http://backend:3001
+          NEXT_PUBLIC_ENV=development
           ENVEOF
 
       - name: Start full Docker topology stack
         run: |
-          docker compose -f infra/docker-compose.yml up --build -d
+          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml up --build -d
           echo "Stack started — waiting for health checks..."
 
       - name: Wait for backend healthy
@@ -81,7 +111,7 @@ jobs:
             sleep 2
           done
           echo "❌ Backend did not become healthy in 120s"
-          docker compose -f infra/docker-compose.yml logs
+          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml logs
           exit 1
 
       - name: Run proxy conformance tests
@@ -91,8 +121,8 @@ jobs:
 
       - name: Dump logs on failure
         if: failure()
-        run: docker compose -f infra/docker-compose.yml logs --tail=100
+        run: docker compose --env-file infra/.env.stack -f infra/docker-compose.yml logs --tail=100
 
       - name: Tear down stack
         if: always()
-        run: docker compose -f infra/docker-compose.yml down -v
+        run: docker compose --env-file infra/.env.stack -f infra/docker-compose.yml down -v

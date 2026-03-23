@@ -25,19 +25,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
       - name: Enable Corepack and activate repo Yarn
         run: |
           corepack enable
           corepack prepare yarn@4.12.0 --activate
           yarn --version
+
       - name: Install dependencies
         run: yarn install --immutable
+
       - name: Typecheck
         run: yarn typecheck:frontend
+
       - name: Unit tests
         run: yarn test:frontend:unit
         env:
@@ -48,20 +53,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: unit
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
       - name: Enable Corepack and activate repo Yarn
         run: |
           corepack enable
           corepack prepare yarn@4.12.0 --activate
           yarn --version
+
       - name: Install workspace dependencies
         run: yarn install --immutable
+
       - name: Install Playwright Chromium
         run: yarn workspace frontend playwright install chromium --with-deps
 
@@ -70,43 +80,62 @@ jobs:
           cat > infra/.env.stack << 'ENVEOF'
           NODE_ENV=development
           PORT=3001
+
           POSTGRES_DB=auth_lab
           POSTGRES_USER=auth_lab
           POSTGRES_PASSWORD=auth_lab
           DATABASE_URL=postgres://auth_lab:auth_lab@postgres:5432/auth_lab
           REDIS_URL=redis://redis:6379
+
           LOG_LEVEL=info
           SERVICE_NAME=auth-lab-backend
+
           BCRYPT_COST=4
           SESSION_TTL_SECONDS=86400
+
+          # MFA
           MFA_ISSUER=Hubins
-          MFA_ENCRYPTION_KEY_BASE64=VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=
-          MFA_HMAC_KEY_BASE64=8Emt6e4gn6r8rgRGSuYTVQ+D/3upFEckXRoMQYKJRJ8=
-          SSO_STATE_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          MFA_ENCRYPTION_KEY_BASE64=N0uFFqX7KeFnhghnTMaeBdLKsn+W2Q9WJE1D2Aqdf14=
+          MFA_HMAC_KEY_BASE64=ygcc6Pr65aoBSF469cwcsVj+ARz1Pb2voHHHtt3bbCQ=
+
+          # SSO
+          # Must NOT be all-zeros outside NODE_ENV=test.
+          SSO_STATE_ENCRYPTION_KEY=g+0YvJfzVdIgM+eoUUQ5UW3JKuGktJbtA6mvi3DcZDQ=
           SSO_REDIRECT_BASE_URL=http://goodwill-ca.lvh.me:3000/api
           GOOGLE_CLIENT_ID=ci-placeholder-google-client-id
           GOOGLE_CLIENT_SECRET=ci-placeholder-google-client-secret
           MICROSOFT_CLIENT_ID=ci-placeholder-microsoft-client-id
           MICROSOFT_CLIENT_SECRET=ci-placeholder-microsoft-client-secret
+
+          # Local OIDC (CI only)
           LOCAL_OIDC_ENABLED=true
           LOCAL_OIDC_ISSUER=http://local-oidc:9998
           LOCAL_OIDC_CLIENT_ID=local-oidc-ci-client
+
+          # Outbox
+          # Must be different from MFA_ENCRYPTION_KEY_BASE64.
           OUTBOX_ENC_DEFAULT_VERSION=v1
-          OUTBOX_ENC_KEY_V1=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          OUTBOX_ENC_KEY_V1=pjVKt5jeXMDX5YJkbDc1dDFW4ztqO1iRyHiAHi/9TjM=
           OUTBOX_POLL_INTERVAL_MS=2000
           OUTBOX_BATCH_SIZE=10
           OUTBOX_MAX_ATTEMPTS=5
+
+          # Email
           EMAIL_PROVIDER=smtp
           SMTP_HOST=mailpit
           SMTP_PORT=1025
           SMTP_SECURE=false
           SMTP_FROM=Hubins <noreply@hubins.local>
           SMTP_PUBLIC_BASE_URL=http://{tenantKey}.lvh.me:3000
+
+          # Dev seed
           SEED_ON_START=true
           SEED_TENANT_KEY=goodwill-ca
           SEED_TENANT_NAME=GoodWill California
           SEED_ADMIN_EMAIL=system_admin@example.com
           SEED_INVITE_TTL_HOURS=168
+
+          # Frontend container runtime / build
           FRONTEND_INTERNAL_API_URL=http://backend:3001
           NEXT_PUBLIC_ENV=development
           ENVEOF
@@ -140,6 +169,10 @@ jobs:
             sleep 3
           done
           echo "❌ Backend did not become healthy within 180s"
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
+            logs --tail=150
           exit 1
 
       - name: Wait for local OIDC server healthy
@@ -157,7 +190,9 @@ jobs:
 
       - name: Seed E2E fixtures
         run: |
-          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml \
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
             exec -T backend \
             yarn workspace @auth-lab/backend db:seed:e2e
 
