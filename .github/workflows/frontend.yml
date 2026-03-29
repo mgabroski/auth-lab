@@ -20,14 +20,15 @@ jobs:
     name: Typecheck + unit tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Enable Corepack and activate repo Yarn
         run: |
@@ -54,12 +55,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Setup Node 20
-        uses: actions/setup-node@v4
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Enable Corepack and activate repo Yarn
         run: |
@@ -72,6 +73,17 @@ jobs:
 
       - name: Install Playwright Chromium
         run: yarn workspace frontend playwright install chromium --with-deps
+
+      - name: Pin tenant hosts for CI
+        run: |
+          {
+            echo "127.0.0.1 goodwill-open.lvh.me"
+            echo "127.0.0.1 goodwill-ca.lvh.me"
+            echo "127.0.0.1 does-not-exist.lvh.me"
+          } | sudo tee -a /etc/hosts
+          getent hosts goodwill-open.lvh.me
+          getent hosts goodwill-ca.lvh.me
+          getent hosts does-not-exist.lvh.me
 
       - name: Write infra/.env.stack for CI
         run: |
@@ -160,8 +172,7 @@ jobs:
       - name: Wait for backend healthy
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://127.0.0.1:3000/api/health \
-              -H 'Host: goodwill-ca.lvh.me' > /dev/null 2>&1; then
+            if curl -sf http://goodwill-ca.lvh.me:3000/api/health > /dev/null 2>&1; then
               echo "✅ Backend healthy through proxy (attempt ${i})"
               exit 0
             fi
@@ -213,7 +224,7 @@ jobs:
 
       - name: Upload traces and screenshots on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-traces
           path: frontend/test-results/
