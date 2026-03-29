@@ -1,689 +1,588 @@
 # Prompt Usage Guide
 
-**Status:** Draft for lock
+**Status:** Locked
 **Version:** 1.2
-**Scope:** Repo-level guidance for when and how to use AI review and decision-support prompts
+**Scope:** Repo-level operating guide for when and how to use approved prompt artifacts
 **Audience:** Engineers, reviewers, technical leads, and architecture owners
-**Owner:** Review / architecture owner
+**Owner Role:** Lead Architect or Designated Quality Owner
 **Last Updated:** 2026-03-29
 
 ---
 
 ## 1. What This Document Is
 
-This document defines **when to use each AI prompt or review mode** in this repository.
+This document explains **when to use the repo’s approved prompt artifacts and how to use them well**.
 
-It exists to turn prompt usage into an operational workflow instead of informal chat habit.
+It exists so prompt usage becomes part of repo workflow instead of relying on memory, habit, or improvised chat behavior.
 
-This document answers:
+This file explains:
 
-- which prompt to use
-- when to use it
-- who should use it
-- what context must be attached
+- when to use each approved prompt
+- when not to use it
+- what minimum context to attach
 - what kind of output to expect
 - whether the result is advisory or merge/release-relevant
-- what smallest validation should follow it
+- what validation should normally follow
+
+This file is the **usage guide**.
+It is not the prompt catalog.
+It is not the review contract.
+It is not a product roadmap.
 
 ---
 
-## 2. What This Document Is Not
+## 2. Read These Together
 
-This document is **not**:
+Use this document together with:
 
-- the root repo law for AI routing
-- the full review contract
-- the architecture source of truth
-- the place to store full prompt bodies
-- a substitute for tests, CI, QA, or runtime proof
-
-Those concerns belong in other repo files.
-
-This file is only the **usage guide** for prompt timing and prompt selection.
-
----
-
-## 3. How To Use This Guide
-
-Use this guide in four steps:
-
-1. Identify the current stage of work.
-2. Choose the prompt that matches the main risk.
-3. Attach the minimum required context.
-4. Run the smallest validation that actually proves the changed area.
-
-If more than one prompt seems applicable:
-
-- choose **one primary prompt** tied to the highest-risk decision
-- add **one specialized prompt** only if the change is materially high-risk
-- do not stack many prompts for normal work
-
----
-
-## 4. General Rules
-
-### 4.1 Repo Truth First
-
-A prompt is only as good as the repo context attached to it.
-
-### 4.2 Review Output Is Not Proof
-
-A strong answer does not replace tests, CI, topology validation, QA, or production-readiness proof.
-
-### 4.3 Smallest Effective Prompt
-
-Do not use a whole-codebase audit when a pre-push review is enough.
-
-### 4.4 Escalate For Risk
-
-If a change affects auth, topology, sessions, tenant boundaries, migrations, or release behavior, use the more specialized review prompt.
-
-### 4.5 Prompt Use Should Be Visible
-
-For meaningful review work, the author or reviewer should be able to say which prompt/review mode was used and what inputs were attached.
-
----
-
-## 5. Required Context By Area
-
-When choosing a prompt, attach the area-specific repo context that governs the work.
-
-### Backend work
-
-Attach the relevant backend files and, when they exist:
-
-- `backend/AGENTS.md`
-- backend API docs
-- backend engineering rules
-- backend tests for the affected area
-
-### Frontend work
-
-Attach the relevant frontend files and, when they exist:
-
-- `frontend/AGENTS.md`
-- relevant backend contract/API docs
-- auth/bootstrap/topology-related docs when the change touches those areas
-- frontend tests for the affected area
-
-### Review / audit / risk work
-
-Attach, when they exist:
-
+- `docs/quality-bar.md`
 - `AGENTS.md`
 - `code_review.md`
-- the relevant backend/frontend AGENTS file
-- the relevant source-of-truth docs for the affected area
+- `docs/prompts/catalog.md`
+- `backend/AGENTS.md` when backend work is involved
+- `frontend/AGENTS.md` when frontend work is involved
 
-### High-risk changes
+These files work together as one system:
 
-Also attach, when relevant:
-
-- tests already run
-- rollout plan
-- screenshots
-- logs
-- migration notes
-- topology-sensitive behavior notes
+- `docs/quality-bar.md` defines what quality means
+- `AGENTS.md` routes repo-aware work
+- `code_review.md` defines how review is performed
+- `docs/prompts/catalog.md` defines which prompt artifacts are approved
+- this file explains how to apply those artifacts at the right time
 
 ---
 
-## 6. Prompt Usage Checklist
+## 3. Core Usage Rules
 
-Use the prompt that matches the **current stage of work**.
+### 3.1 Repo truth comes first
 
----
+A prompt should help apply repo truth, not replace it.
 
-### 6.1 Before Coding
+### 3.2 Prompt output is not proof
 
-#### Design challenge
+A strong answer does not replace tests, CI, runtime checks, topology proof, QA, or signoff.
 
-**Use when:** you want to pressure-test a proposed design before implementation starts.
-**Primary file:** `docs/prompts/design-challenge.md`
+### 3.3 Use the smallest prompt that fits the job
 
-**Best for:** engineer, tech lead, architect.
+Do not stack many prompts when one well-chosen prompt is enough.
 
-**Attach:**
+### 3.4 High-risk changes need higher-risk prompts
 
-- proposed approach
-- affected docs
-- affected files or areas
-- constraints
+Auth, tenant isolation, sessions, topology, migrations, rollout, and rollback-sensitive work should use specialized prompts rather than only generic review prompts.
 
-**Expect:**
+### 3.5 Attach real context
 
-- tradeoff critique
-- boundary risks
-- recommendation on whether the approach is sound
+If the review is about a real change, attach the real diff, files, and governing docs.
 
-**Do not use when:**
+### 3.6 Prompts do not waive the quality bar
 
-- the change is routine and low-risk
-- you already know the design is fixed and only need implementation review
+For major-module work, prompt usage does not replace the mandatory gates, evidence, or signoff path defined in `docs/quality-bar.md`.
+
+### 3.7 Prefer stage-appropriate usage
+
+Use design prompts before coding, audit prompts during coding, and review prompts when the change is concrete enough to inspect.
 
 ---
 
-#### Better architecture
+## 4. Workflow Map
 
-**Use when:** you want to know whether there is a cleaner, safer, or more durable architectural direction.
-**Primary file:** `docs/prompts/better-architecture.md`
+Use prompts according to the stage of work.
 
-**Best for:** engineer, tech lead, architect.
+### Before coding
 
-**Attach:**
+Use:
 
-- current approach
-- goal
-- constraints
-- affected areas
+- `docs/prompts/design-challenge.md`
+- `docs/prompts/better-architecture.md`
 
-**Optional:**
+### During coding / while shaping a module
 
-- alternative idea you are considering
-- migration concerns
+Use:
 
-**Expect:**
+- `docs/prompts/module-audit.md`
 
-- keep / adapt / replace recommendation
-- explanation of tradeoffs
+### Before push
 
-**Do not use when:**
+Use:
 
-- the task is purely mechanical
-- there is no real design choice to make
+- `docs/prompts/pre-push-self-review.md`
 
----
+### Before or during PR review
 
-### 6.2 During Coding
+Use:
 
-#### Module audit
+- `docs/prompts/pr-review.md`
 
-**Use when:** implementation is in progress and you want a quality check before the work is finished.
-**Primary file:** `docs/prompts/module-audit.md`
+### For security / topology / tenant-boundary-sensitive work
 
-**Best for:** engineer, reviewer.
+Use:
 
-**Attach:**
+- `docs/prompts/security-tenant-review.md`
 
-- working files
-- current docs
-- known uncertainties
+### For schema / rollout / rollback / migration-sensitive work
 
-**Optional:**
+Use:
 
-- tests already written
-- intended next changes
+- `docs/prompts/migration-change-risk.md`
 
-**Expect:**
+### For structured generation work
 
-- ownership review
-- missing proof
-- missing docs
-- coupling concerns
+Use:
 
-**Do not use when:**
-
-- you need a whole-repo review
-- you need final PR-level judgment on a finished diff
+- `docs/prompts/module-generation-fullstack.md`
 
 ---
 
-#### Failure-mode / admin misuse review
+## 5. Prompt-by-Prompt Guidance
 
-**Use when:** the feature has meaningful workflow, retry, replay, state, or admin-misuse risk.
-**Primary mode:** guided by this usage guide and `code_review.md`
+## 5.1 `docs/prompts/design-challenge.md`
 
-**Best for:** engineer, reviewer, lead.
+### Use it when
 
-**Attach:**
+- a design exists but should be pressure-tested before coding
+- the cost of choosing the wrong approach is meaningful
+- you want to expose missing assumptions, weak boundaries, or hidden complexity early
 
-- flow summary
-- affected files
-- tests
-- state transitions
+### Do not use it when
 
-**Optional:**
+- the work is already implemented and you need changed-files review
+- you mainly need a security/topology review
+- you mainly need migration or rollback-risk review
 
-- screenshots
-- sequence notes
-- known edge cases
+### Minimum context to attach
 
-**Expect:**
+- the proposed design or plan
+- relevant source-of-truth docs
+- architecture/topology docs if boundaries matter
+- known constraints and non-goals
 
-- state-gap analysis
-- misuse paths
-- retry/idempotency concerns
+### Expected output
 
-**Do not use when:**
+- pressure-tested design feedback
+- hidden risks
+- boundary concerns
+- likely drift paths
+- concrete questions or required corrections
 
-- there is no meaningful workflow or state risk
-- the change is simple and non-behavioral
+### Output type
+
+Advisory, but often high-value before implementation.
+
+### Validation that should follow
+
+- design decision update
+- doc alignment
+- later concrete code review once implementation exists
 
 ---
 
-### 6.3 Before Push
+## 5.2 `docs/prompts/better-architecture.md`
 
-#### Pre-push self-review
+### Use it when
 
-**Use when:** you want to catch obvious issues before the branch leaves your machine.
-**Primary file:** `docs/prompts/pre-push-self-review.md`
+- the current design may work but you want to compare it with safer or cleaner alternatives
+- you suspect boundary placement, coupling, or structure is not ideal
+- you want a serious alternatives analysis before committing further
 
-**Best for:** author.
+### Do not use it when
 
-**Attach:**
+- you already need concrete changed-files review
+- the decision is purely local and low-risk
+- the question is mainly about migration or security policy rather than architecture shape
 
-- changed files
-- summary of intent
-- commands already run
+### Minimum context to attach
 
-**Optional:**
+- the current design or current implementation slice
+- relevant architecture docs
+- constraints, non-goals, and tradeoffs already known
 
-- screenshots
-- logs
-- known unresolved items
+### Expected output
 
-**Expect:**
+- alternative structures
+- tradeoff analysis
+- safer default recommendation
+- explicit risk of staying with current design
 
-- exact gaps to close before push
-- missing docs/tests
+### Output type
+
+Advisory.
+Use it to improve design quality before or during implementation.
+
+### Validation that should follow
+
+- architecture decision update if the direction changes materially
+- code review after implementation exists
+
+---
+
+## 5.3 `docs/prompts/module-audit.md`
+
+### Use it when
+
+- implementation is in progress and you want structural review before it sprawls
+- a module boundary feels messy or unclear
+- a feature is growing and you want an audit before it becomes harder to change
+
+### Do not use it when
+
+- the change is tiny and local
+- you only need final changed-files review
+- you are mainly reviewing migration/rollback risk or security/topology risk
+
+### Minimum context to attach
+
+- relevant module files
+- current governing docs
+- known goals and non-goals
+- any open risks already suspected
+
+### Expected output
+
+- boundary audit
+- ownership/coupling findings
+- structural weaknesses
+- missing proof or missing doc coupling
+
+### Output type
+
+Advisory, but often strong enough to affect merge readiness for in-progress module work.
+
+### Validation that should follow
+
+- targeted refactor or design correction
+- pre-push or PR review once the diff stabilizes
+
+---
+
+## 5.4 `docs/prompts/pre-push-self-review.md`
+
+### Use it when
+
+- you are about to push a real change
+- you want a last pass for missing docs, missing tests, coupling issues, or obvious drift
+
+### Do not use it when
+
+- the work is only at idea stage
+- you need a formal PR-level verdict with severity handling across a stable diff
+
+### Minimum context to attach
+
+- the changed files or diff
+- relevant docs for the affected area
+- what validation you already ran
+
+### Expected output
+
+- likely missing doc updates
+- likely missing tests or validation
 - obvious boundary mistakes
+- obvious risk items to fix before push
 
-**Do not use when:**
+### Output type
 
-- you are trying to replace PR review
-- you have not gathered the changed files yet
+Advisory, but very practical.
 
-**Validation after use:**
+### Validation that should follow
 
-- run the smallest checks that prove the changed area
-
----
-
-### 6.4 Before Opening A PR
-
-#### Changed-files / PR review
-
-**Use when:** the diff is stable enough to be reviewed as a real merge candidate.
-**Primary file:** `docs/prompts/pr-review.md`
-
-**Best for:** reviewer, author, lead.
-
-**Attach:**
-
-- diff or changed file list
-- change summary
-- relevant docs
-
-**Optional:**
-
-- test results
-- screenshots
-- rollout notes
-
-**Expect:**
-
-- severity-ranked findings
-- merge recommendation
-- doc drift callouts
-
-**Do not use when:**
-
-- the diff is incomplete or unstable
-- you cannot provide the actual changed files
-
-**Validation after use:**
-
-- run the smallest checks that prove the reviewed area
+- run the smallest meaningful checks for the area
+- correct obvious drift before pushing
 
 ---
 
-### 6.5 Before Merge
+## 5.5 `docs/prompts/pr-review.md`
 
-#### Security / authz / tenant-isolation review
+### Use it when
 
-**Use when:** the change affects auth, sessions, topology, permissions, or tenant boundaries.
-**Primary file:** `docs/prompts/security-tenant-review.md`
+- a diff or PR is stable enough for real review
+- you want severity-aware changed-files review
+- you want a merge-readiness signal grounded in the repo
 
-**Best for:** reviewer, security-minded engineer, lead.
+### Do not use it when
 
-**Attach:**
+- the design is still too early and fluid
+- the main concern is a specialized security or migration review that deserves its own prompt first
 
-- final diff
-- security-sensitive files
-- tests already run
+### Minimum context to attach
 
-**Optional:**
+- the diff or changed files
+- relevant source-of-truth docs
+- what validation was actually run
+- any known risk areas or constraints
 
-- threat assumptions
-- incident history
+### Expected output
 
-**Expect:**
+- what appears correct
+- findings by severity
+- boundary verdict
+- trust/security verdict when relevant
+- doc/proof gaps
+- final merge-readiness position
 
-- blocker-level security findings
-- isolation risks
-- unsafe defaults or escalation paths
+### Output type
 
-**Do not use when:**
+Merge-relevant when grounded in the real diff and accompanied by real validation context.
 
-- the change is purely cosmetic
-- there is no meaningful security or boundary impact
+### Validation that should follow
 
-**Validation after use:**
-
-- run security-sensitive area checks
-- run topology proof when relevant
+- fix blocking items
+- run missing checks
+- escalate to specialized review prompts for high-risk areas if needed
 
 ---
 
-#### Migration / change-risk review
+## 5.6 `docs/prompts/migration-change-risk.md`
 
-**Use when:** the change affects schema, data shape, rollout, rollback, or partial deployment behavior.
-**Primary file:** `docs/prompts/migration-change-risk.md`
+### Use it when
 
-**Best for:** reviewer, backend owner, lead.
+- a change affects schema or data shape
+- rollout/rollback safety matters
+- partial deploy or state skew could break behavior
+- backward compatibility or migration sequencing matters
 
-**Attach:**
+### Do not use it when
 
+- there is no real migration or rollout risk
+- the main issue is general code quality rather than change safety
+
+### Minimum context to attach
+
+- migration files or schema changes
+- rollout assumptions
+- backward-compat expectations
+- relevant code paths and docs
+
+### Expected output
+
+- rollout and rollback risks
+- ordering concerns
+- partial deploy hazards
+- stale-data and backward-compat findings
+- safer sequencing recommendations
+
+### Output type
+
+Merge/release-relevant for migration-sensitive work.
+
+### Validation that should follow
+
+- explicit migration test or dry-run where applicable
+- release/runbook updates where needed
+- concrete rollout/rollback plan
+
+---
+
+## 5.7 `docs/prompts/security-tenant-review.md`
+
+### Use it when
+
+- auth, session, cookies, permissions, topology, SSR/browser boundaries, tenant resolution, or trust boundaries are touched
+- a change could weaken isolation, identity, or security posture
+
+### Do not use it when
+
+- the change is clearly unrelated to trust boundaries
+- you only need generic changed-files review on low-risk code
+
+### Minimum context to attach
+
+- changed files or design under review
+- security/topology docs
+- relevant route or flow docs
+- what was actually validated
+
+### Expected output
+
+- trust-boundary findings
+- tenant/session/auth concerns
+- topology or SSR/browser drift risks
+- unsafe assumptions
+- explicit severity judgment
+
+### Output type
+
+Merge-relevant for security- or isolation-sensitive work.
+
+### Validation that should follow
+
+- stronger runtime or end-to-end proof where relevant
+- contract or topology validation
+- doc updates if trust-boundary rules changed or were clarified
+
+---
+
+## 5.8 `docs/prompts/module-generation-fullstack.md`
+
+### Use it when
+
+- you are generating a new repo-aligned module scaffold or structured feature slice
+- you need implementation help that should follow repo architecture and standard patterns
+
+### Do not use it when
+
+- you need a review verdict rather than generation help
+- the task is mainly design challenge, migration risk, or security review
+
+### Minimum context to attach
+
+- governing architecture docs
+- current module skeleton / engineering rules
+- relevant product truth docs
+- any route/API/persistence expectations already locked
+
+### Expected output
+
+- generated implementation guidance or scaffolding aligned to repo law
+- repo-consistent structure
+- doc/test reminders tied to the change
+
+### Output type
+
+Build-support and implementation-support.
+It is not a substitute for review.
+
+### Validation that should follow
+
+- normal code review
+- doc coupling updates
+- tests and checks appropriate to the generated work
+
+---
+
+## 6. How To Combine Prompts Safely
+
+Use one primary prompt by default.
+
+Only add a second prompt when the risk profile truly justifies it.
+
+Good combinations:
+
+- design challenge + better architecture
+- module audit + security/tenant review
+- PR review + migration/change-risk
+- PR review + security/tenant review
+
+Avoid stacking many prompts for normal work.
+Too many prompts increase noise, repetition, and false confidence.
+
+---
+
+## 7. Major-Module Rule
+
+If the change introduces or substantially expands a major module, prompt usage must respect the repo quality bar.
+
+That means prompt usage does **not** replace:
+
+- architecture fit and boundary review
+- required API or contract documentation
+- minimum test coverage at the right levels
+- failure-mode and security review proportional to risk
+- observability touchpoints appropriate to the module
+- runbook and ops impact review
+- migration safety review when schema or data-shape changes are involved
+- explicit Track A signoff
+
+### Practical rule
+
+For major-module work:
+
+- use prompts to improve the work
+- use prompts to surface missing gates
+- do not present prompt output as module closure by itself
+
+---
+
+## 8. What To Attach To A Prompt Request
+
+For the prompt system to be useful, the requester should attach the smallest real context that makes a grounded answer possible.
+
+Usually that means some combination of:
+
+- changed files or PR diff
+- architecture docs
+- product or module source-of-truth docs
+- API docs
 - migration files
-- schema/data changes
-- rollout plan
-- tests already run
+- test results
+- what validation was actually run
+- known constraints or non-goals
 
-**Optional:**
+### Required behavior
 
-- rollback notes
-- sample data assumptions
-
-**Expect:**
-
-- failure modes
-- rollback risk
-- data integrity concerns
-
-**Do not use when:**
-
-- there is no data, schema, or rollout risk
-
-**Validation after use:**
-
-- run migration-related tests
-- run affected backend checks
+- Do not ask for strong review on an abstract summary if the real diff exists.
+- Do not omit governing docs for high-risk work.
+- Do not imply validation that was not actually performed.
 
 ---
 
-#### Performance / scalability review
+## 9. How To Read Prompt Output
 
-**Use when:** the change touches hot paths, repeated queries, scaling assumptions, or performance-sensitive behavior.
-**Primary mode:** guided by this usage guide and `code_review.md`
+Prompt output should be treated as one of these:
 
-**Best for:** engineer, reviewer, lead.
+### 9.1 Advisory
 
-**Attach:**
+Useful guidance that improves design or implementation quality, but does not directly decide merge or release readiness.
 
-- affected hot-path code
-- data access patterns
-- scale assumptions
+### 9.2 Merge-relevant
 
-**Optional:**
+A grounded review result that should influence whether a change is ready to merge.
 
-- metrics
-- profiler notes
-- prior incidents
+### 9.3 Release-relevant
 
-**Expect:**
+A grounded review result for migration, security, topology, rollout, or operationally sensitive changes that should influence release readiness.
 
-- likely bottlenecks
-- acceptable-now vs risky-later guidance
-- recommended next hardening steps
+### Required behavior
 
-**Do not use when:**
+Always separate:
 
-- the change is trivial
-- the change is docs-only or UI-copy-only
-
-**Validation after use:**
-
-- run affected area checks
-- run any targeted performance validation available
+- what the prompt found
+- what was actually validated
+- what still remains unproven
 
 ---
 
-### 6.6 Before Release
+## 10. Anti-Patterns
 
-#### Whole-codebase weak-spot audit
+Avoid these prompt-usage failures:
 
-**Use when:** you want a broad review of repo weaknesses before release or during periodic health checks.
-**Primary mode:** guided by this usage guide and `code_review.md`
-
-**Best for:** lead, architect, senior reviewer.
-
-**Attach:**
-
-- repo truth docs
-- relevant codebase areas
-- current risk focus
-
-**Optional:**
-
-- CI state
-- recent incident history
-
-**Expect:**
-
-- strengths
-- top risks
-- drift
-- recommended next actions
-
-**Do not use when:**
-
-- you only need single-file or PR review
+- using review prompts without the real diff when the real diff exists
+- treating prompt output as proof of runtime correctness
+- using design prompts as if they were final PR review
+- using generic review where a security or migration prompt is clearly needed
+- stacking too many prompts for one low-risk change
+- letting prompts drift away from repo docs
+- using prompts to bypass the major-module quality bar or Track A signoff
+- using unofficial prompt files that are not in the catalog
 
 ---
 
-#### Observability / operability review
-
-**Use when:** you want to judge diagnosability, runbook readiness, and operational supportability.
-**Primary mode:** guided by this usage guide and `code_review.md`
-
-**Best for:** lead, platform owner, reviewer.
-
-**Attach:**
-
-- docs/runbooks
-- relevant flows
-- logging/diagnostic surfaces
-- release scope
-
-**Optional:**
-
-- incident examples
-- monitoring gaps
-
-**Expect:**
-
-- operational blind spots
-- missing runbooks
-- supportability gaps
-
-**Do not use when:**
-
-- the change has no operational impact
-
-**Validation after use:**
-
-- run area checks
-- run stack/proxy/topology proof where relevant
-
----
-
-### 6.7 During Refactors
-
-#### Module audit
-
-**Use when:** refactoring a module and you want to catch hidden coupling, ownership drift, or missing doc/test updates.
-**Primary file:** `docs/prompts/module-audit.md`
-
-**Best for:** engineer, reviewer.
-
-**Attach:**
-
-- old/new boundary shape
-- affected files
-- current docs
-- known risk areas
-
-**Optional:**
-
-- tests already written
-- design notes
-
-**Expect:**
-
-- hidden coupling findings
-- ownership drift callouts
-- missing doc/test follow-up
-
-**Do not use when:**
-
-- the change is still too early to explain clearly
-- you need final merge judgment on the complete diff
-
----
-
-#### Performance / scalability review
-
-**Use when:** a refactor could affect hot paths, repeated work, query behavior, or scaling assumptions.
-**Primary mode:** guided by this usage guide and `code_review.md`
-
-**Best for:** engineer, reviewer, lead.
-
-**Attach:**
-
-- affected performance-sensitive areas
-- old/new approach summary
-- scale assumptions
-
-**Optional:**
-
-- metrics
-- profiler notes
-- prior incidents
-
-**Expect:**
-
-- performance regression risk
-- hidden cost callouts
-- recommended follow-up validation
-
-**Do not use when:**
-
-- the refactor is trivial and has no meaningful performance implications
-
----
-
-### 6.8 Quick Selection Guide
-
-Use this shortcut when you are unsure:
-
-- **I am choosing a design** → `design-challenge.md`
-- **I think there may be a cleaner architecture** → `better-architecture.md`
-- **I am halfway through implementation** → `module-audit.md`
-- **I am about to push** → `pre-push-self-review.md`
-- **I am about to open or review a PR** → `pr-review.md`
-- **The change touches security or tenant boundaries** → `security-tenant-review.md`
-- **The change touches DB, schema, rollout, or rollback** → `migration-change-risk.md`
-- **The change may create replay/retry/state issues** → failure-mode / misuse review mode
-- **The change may affect performance or scale** → performance / scalability review mode
-- **I want a broad release-level review** → whole-codebase weak-spot audit mode
-- **I want to check supportability and diagnosis readiness** → observability / operability review mode
-
----
-
-## 7. Validation Principle
-
-After a prompt is used, run the **smallest validation that actually proves the affected area**.
-
-Examples:
-
-- backend-only change → backend typecheck/tests
-- frontend-only change → frontend typecheck/unit tests
-- topology-sensitive change → stack/proxy/topology proof where relevant
-- migration-risk change → migration-related tests and affected backend checks
-
-Do not hide behind prompt output when validation should be run.
-
----
-
-## 8. Bad Usage Patterns
-
-Do not use prompts as a substitute for:
-
-- reading the actual diff
-- reading the governing docs
-- running required validation
-- performing human judgment on product tradeoffs
-- confirming runtime behavior
-
-Bad prompt usage usually looks like:
-
-- vague request
-- no diff
-- no files
-- no docs
-- expecting a precise answer anyway
-
-Also do not escalate into heavyweight prompts when the change is tiny and low-risk.
-
----
-
-## 9. How To Interpret Outputs
-
-### 9.1 Advisory Output
-
-Advisory output helps the author think better, but does not directly block merge.
-
-### 9.2 Merge-Relevant Output
-
-Merge-relevant output should be taken seriously during review and may require fixes or proof.
-
-### 9.3 Release-Relevant Output
-
-Release-relevant output affects readiness, supportability, or rollback confidence.
-
-### 9.4 Blocker-Level Output
-
-Security, tenant-isolation, migration, or operational findings may be blocker-level when the risk is serious and unproven.
-
----
-
-## 10. How This Document Should Evolve
+## 11. When To Update This File
 
 Update this file when:
 
-- a new stable review mode is added
-- prompt timing guidance changes materially
-- the repo’s review workflow changes materially
-- the meaning of advisory vs merge/release relevance changes materially
+- a new approved prompt artifact is added and needs usage guidance
+- the recommended timing for an approved prompt changes materially
+- the expected input or output model for a prompt changes materially
+- the major-module or quality-bar relationship to prompt usage changes materially
+- the prompt workflow itself changes materially
 
 Do not update this file for:
 
-- temporary prompt experiments
-- one-off chat usage
-- ordinary feature delivery
-- ordinary module implementation changes
+- ordinary product feature work
+- one-off chat experiments
+- normal code changes that do not change how the prompt pack should be used
 
 ---
 
-## 11. Final Position
+## 12. Final Position
 
-This document exists to make prompt usage:
+This file exists so approved prompt artifacts are used at the right time, with the right inputs, and with the right expectations.
 
-- visible
-- consistent
-- operational
-- reviewable
+Its job is to make prompt usage:
 
-It is not meant to make the repo prompt-heavy.
-
-It is meant to make prompt usage disciplined enough to support real engineering work.
+- repo-aware
+- stage-aware
+- risk-aware
+- smaller and cleaner
+- harder to misuse
+- clearly subordinate to real proof and the repo quality bar

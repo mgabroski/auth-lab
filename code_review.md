@@ -1,10 +1,10 @@
 # Code Review Guide
 
-**Status:** Draft for lock
-**Version:** 1.1
+**Status:** Locked
+**Version:** 1.2
 **Scope:** Repo-wide review contract for AI-assisted and human code review
 **Audience:** Engineers, reviewers, technical leads, architecture owners, and release owners
-**Owner:** Review / architecture owner
+**Owner Role:** Lead Architect or Designated Quality Owner
 **Last Updated:** 2026-03-29
 
 ---
@@ -114,7 +114,7 @@ A good review should identify:
 When sources disagree, use this order:
 
 1. active locked product/module source-of-truth documents
-2. current foundation / shipped-scope truth docs
+2. repo quality bar and current foundation / shipped-scope truth docs
 3. architecture and decision records
 4. security model and topology law
 5. contract and API docs
@@ -267,6 +267,7 @@ Look for doc coupling when the change affects:
 - operational procedures
 - QA-visible flows
 - AI/review operating behavior
+- quality gates, module completion expectations, or signoff rules
 
 ### Required behavior
 
@@ -387,7 +388,30 @@ Expected review depth:
 
 ---
 
-## 13. What Good Review Looks Like
+## 13. Major-Module Review Expectations
+
+When a PR introduces or substantially expands a major module, review must check it against the repo quality bar rather than treating “code exists” as completion.
+
+The reviewer should explicitly check whether the PR includes or links the applicable evidence for:
+
+- architecture fit and boundary review
+- required API or contract documentation
+- minimum test coverage at the right levels
+- failure-mode and security review proportional to risk
+- observability touchpoints appropriate to the module
+- runbook and ops impact review
+- migration safety review when schema or data-shape changes are involved
+- explicit Track A signoff
+
+### Required behavior
+
+- Do not mark a major module “done” if mandatory gates are missing.
+- Do not confuse a Module Quality Gate checklist with proof that the gates are actually satisfied.
+- If required evidence is deferred, verify that it is treated as explicit debt only where the quality bar allows it.
+
+---
+
+## 14. What Good Review Looks Like
 
 A good review in this repo is:
 
@@ -402,7 +426,7 @@ A good review does **not** need to be long. It needs to be correct, scoped, and 
 
 ---
 
-## 14. What Bad Review Looks Like
+## 15. What Bad Review Looks Like
 
 Bad review patterns include:
 
@@ -417,7 +441,7 @@ Bad review patterns include:
 
 ---
 
-## 15. When To Escalate Review
+## 16. When To Escalate Review
 
 Escalate review depth when the change affects:
 
@@ -430,12 +454,13 @@ Escalate review depth when the change affects:
 - setup/bootstrap behavior
 - release-critical operational behavior
 - hot paths or scale-sensitive areas
+- major-module introduction or expansion
 
 If one of these is in play, generic review is not enough.
 
 ---
 
-## 16. AI-Assisted Review Rules
+## 17. AI-Assisted Review Rules
 
 When AI is used during review:
 
@@ -454,7 +479,7 @@ AI-assisted review is acceptable in this repo only when it remains:
 
 ---
 
-## 17. When To Update This Document
+## 18. When To Update This Document
 
 Update this file when:
 
@@ -463,6 +488,7 @@ Update this file when:
 - severity handling changes materially
 - the expected review output structure changes materially
 - AI-assisted review rules change materially
+- major-module review expectations or quality-gate review behavior changes materially
 
 Do not update this file for:
 
@@ -473,7 +499,7 @@ Do not update this file for:
 
 ---
 
-## 18. Final Position
+## 19. Final Position
 
 This document is the repo-wide review contract.
 

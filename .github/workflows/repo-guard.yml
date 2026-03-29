@@ -1,0 +1,56 @@
+name: Repo Guard
+
+on:
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - 'code_review.md'
+      - 'docs/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - '.github/pull_request_template.md'
+      - '.github/workflows/repo-guard.yml'
+  push:
+    paths:
+      - 'AGENTS.md'
+      - 'code_review.md'
+      - 'docs/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'scripts/**'
+      - '.github/pull_request_template.md'
+      - '.github/workflows/repo-guard.yml'
+  workflow_dispatch:
+
+jobs:
+  repo-guard:
+    name: Stage 1A minimum viable enforcement
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run repo guard
+        run: node scripts/repo-guard.mjs
+
+      - name: Explain failure context
+        if: failure()
+        run: |
+          echo "Repo guard failed."
+          echo "Review the job output for the exact enforcement failure."
+          echo "Common causes:"
+          echo "- prompt file missing from docs/prompts/catalog.md"
+          echo "- backend route change without required API-doc update"
+          echo "- import-boundary violation"
+          echo "- protected law/governance file changed without linked update context"
+          echo "- missing or incorrectly completed Module Quality Gate section in the PR body"

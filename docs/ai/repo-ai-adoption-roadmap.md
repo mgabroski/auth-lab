@@ -1,10 +1,10 @@
 # Repo AI Adoption Roadmap
 
-**Status:** Draft for lock
-**Version:** 1.1
-**Scope:** Repo-level AI operating model, review system, prompt usage, and rollout plan
+**Status:** Locked
+**Version:** 1.2
+**Scope:** Repo-level AI operating model, review system, prompt usage, and enforcement direction
 **Audience:** Engineering, architecture, review owners, and technical leads
-**Owner:** Repo / platform owner
+**Owner Role:** Lead Architect or Designated Quality Owner
 **Last Updated:** 2026-03-29
 
 ---
@@ -15,10 +15,10 @@ This document is the **global repo-level roadmap and operating guide for AI adop
 
 It defines:
 
-- why AI-related repo files are being introduced
+- why AI-related repo files exist
 - what those files are
 - what each file owns
-- rollout order
+- how the AI/review system is structured
 - what is in scope now
 - what is intentionally deferred
 - when the AI operating model itself must be updated
@@ -44,8 +44,9 @@ This repo already has strong engineering discipline:
 - proof and readiness matter
 - product/design work is being locked before implementation drift
 - documentation structure is being treated deliberately rather than casually
+- the repo now has an explicit quality bar for what counts as done
 
-What is still missing without this layer is a fully formalized **repo-native AI operating model**.
+What still needs to stay explicit is the **repo-native AI operating model**.
 
 Without that, AI usage usually drifts into weak patterns:
 
@@ -55,6 +56,7 @@ Without that, AI usage usually drifts into weak patterns:
 - AI suggestions that ignore architecture law
 - false confidence from polished but ungrounded reviews
 - weak coupling between code changes and documentation changes
+- prompt sprawl without clear entrypoints or ownership
 
 This document exists to stop that drift before it becomes normal.
 
@@ -68,7 +70,7 @@ Its practical uses are:
 
 ### 3.1 Rollout Control
 
-It defines the order in which AI-related repo files are introduced.
+It defines the shape of the AI/review operating model and the order in which the core repo files are introduced or stabilized.
 
 ### 3.2 Scope Control
 
@@ -100,7 +102,7 @@ This document does **not** track:
 
 Those belong in their own source-of-truth documents.
 
-This document may refer to those areas only when needed to explain **boundaries** or **why the AI operating model must stay global**.
+This document may refer to those areas only when needed to explain **boundaries**, **ownership**, or **why the AI operating model must stay global**.
 
 ---
 
@@ -155,6 +157,10 @@ The root repo needs global AI/review law. Backend and frontend need their own fo
 
 AI may improve thinking and review quality, but tests, CI, topology proof, QA, and release evidence remain mandatory.
 
+### 6.8 Quality Bar Comes Before Convenience
+
+AI assistance must not weaken the repo quality bar or create fake closure around major-module work.
+
 ---
 
 ## 7. Truth Ladder For AI Work
@@ -162,7 +168,7 @@ AI may improve thinking and review quality, but tests, CI, topology proof, QA, a
 When AI is used for planning, review, challenge, or audit work, it must follow this truth order:
 
 1. active locked product/module source-of-truth documents
-2. current foundation / shipped-scope truth docs
+2. repo quality bar and current foundation / shipped-scope truth docs
 3. architecture and decision records
 4. security model and topology law
 5. contract and API docs
@@ -175,26 +181,28 @@ When AI is used for planning, review, challenge, or audit work, it must follow t
 
 - If a lower-truth source conflicts with a higher-truth source, the conflict must be called out explicitly.
 - If a code change affects a higher-truth artifact, that artifact should be reviewed or updated in the same change.
+- Passing tests alone do not override higher-truth documentation drift.
 
 ---
 
 ## 8. Current Starting Position
 
-This roadmap starts from the following reality:
+This operating model starts from the following reality:
 
 - the repo already has strong architecture/topology discipline
 - the repo already values proof, QA readiness, and explicit closure
 - product/design master-context documents are already being treated as real truth sources
-- AI usage is still partly implicit and needs to become repo-governed
-- the best first move is documentation and operating-model alignment, not advanced automation
+- the repo now has an explicit quality bar
+- AI usage needs to be repo-governed instead of remaining partly implicit
+- the best first move is durable documentation plus lean enforcement, not advanced tooling sprawl
 
-That means the first adoption wave should focus on a **small set of durable repo files**, not on advanced AI tooling.
+That means the first adoption wave should focus on a **small set of durable repo files and minimum viable enforcement**, not on advanced AI integrations.
 
 ---
 
 ## 9. Target End State
 
-When this operating model is complete, the repo should have all of the following properties:
+When this operating model is healthy, the repo should have all of the following properties:
 
 ### 9.1 Repo-Aware AI Behavior
 
@@ -236,10 +244,11 @@ Advanced AI integrations remain intentionally deferred until the core system is 
 
 ## 10. Operating Rollout
 
-### Foundation Documents
+### 10.1 Foundation Documents
 
 These are the core repo-native AI/review files:
 
+- `docs/quality-bar.md`
 - `AGENTS.md`
 - `backend/AGENTS.md`
 - `frontend/AGENTS.md`
@@ -249,15 +258,27 @@ These are the core repo-native AI/review files:
 - `docs/prompts/catalog.md`
 - reusable prompt files under `docs/prompts/`
 
-### Enforcement
+### 10.2 Minimum Enforcement Layer
 
-The repo should rely on the existing validation/protection mechanisms where they already cover the intent. New enforcement should only be added when it fills a real gap instead of duplicating current protections.
+The first enforcement layer should stay lean and repo-useful.
 
-### Usage Model
+Its job is to reduce obvious drift in areas where AI/review behavior and repo law can silently decay.
+
+The minimum layer includes:
+
+- prompt catalog completeness checks for approved prompt artifacts
+- linked update context for changes to protected law/governance files
+- module-quality gate path presence for new major-module work
+- lean coupling between changed route surfaces and required API-doc updates where practical
+
+This is not meant to replace human review or branch protection.
+It exists to block the most common silent-failure paths.
+
+### 10.3 Usage Model
 
 Prompt usage should be visible, reusable, and tied to actual workflow stages instead of scattered chat habits.
 
-### Advanced Expansion
+### 10.4 Advanced Expansion
 
 Advanced GitHub-level automation, MCP, Skills, subagents, and similar additions remain later decisions, not day-one requirements.
 
@@ -267,6 +288,7 @@ Advanced GitHub-level automation, MCP, Skills, subagents, and similar additions 
 
 ### Root / repo-wide files
 
+- `docs/quality-bar.md`
 - `AGENTS.md`
 - `code_review.md`
 
@@ -291,11 +313,33 @@ Advanced GitHub-level automation, MCP, Skills, subagents, and similar additions 
 - `docs/prompts/security-tenant-review.md`
 - `docs/prompts/better-architecture.md`
 
+### Minimum enforcement surfaces
+
+- `.github/pull_request_template.md`
+- `.github/CODEOWNERS`
+- repo-guard workflow and supporting scripts where present
+
 ---
 
 ## 12. File Responsibilities
 
-### 12.1 `docs/ai/repo-ai-adoption-roadmap.md`
+### 12.1 `docs/quality-bar.md`
+
+Owns:
+
+- the repo-wide definition of major-module done
+- mandatory gates vs quality targets
+- stage completion rules
+- debt acceptance rules
+- Track A signoff expectations
+
+Does not own:
+
+- architecture truth
+- product truth
+- module implementation details
+
+### 12.2 `docs/ai/repo-ai-adoption-roadmap.md`
 
 Owns:
 
@@ -303,6 +347,7 @@ Owns:
 - what is in scope now vs deferred
 - ownership model for AI/review repo artifacts
 - when the AI operating model must be updated
+- how lightweight enforcement fits into the operating model
 
 Does not own:
 
@@ -311,7 +356,7 @@ Does not own:
 - architecture truth
 - ordinary feature implementation planning
 
-### 12.2 `AGENTS.md`
+### 12.3 `AGENTS.md`
 
 Owns:
 
@@ -322,7 +367,7 @@ Owns:
 - validation routing
 - topology-sensitive change escalation
 
-### 12.3 `backend/AGENTS.md`
+### 12.4 `backend/AGENTS.md`
 
 Owns:
 
@@ -332,7 +377,7 @@ Owns:
 - backend doc coupling reminders
 - backend validation routing
 
-### 12.4 `frontend/AGENTS.md`
+### 12.5 `frontend/AGENTS.md`
 
 Owns:
 
@@ -341,7 +386,7 @@ Owns:
 - frontend auth/bootstrap reminders
 - frontend validation routing
 
-### 12.5 `code_review.md`
+### 12.6 `code_review.md`
 
 Owns:
 
@@ -350,8 +395,9 @@ Owns:
 - evidence rules
 - required review output
 - doc-drift checking rules
+- major-module review expectations against the quality bar
 
-### 12.6 `docs/prompts/usage-guide.md`
+### 12.7 `docs/prompts/usage-guide.md`
 
 Owns:
 
@@ -361,12 +407,13 @@ Owns:
 - expected outputs
 - advisory vs merge/release relevance
 
-### 12.7 `docs/prompts/catalog.md`
+### 12.8 `docs/prompts/catalog.md`
 
 Owns:
 
 - the index of reusable prompt files
 - entrypoint guidance into the prompt pack
+- the authoritative catalog list for approved prompt artifacts
 
 ---
 
@@ -392,6 +439,8 @@ The usage guide should answer:
 
 The catalog should point to actual prompt artifacts, not abstract prompt names.
 
+Approved prompt artifacts should not silently appear outside the catalog.
+
 ---
 
 ## 14. Resolved And Deferred Decisions
@@ -403,10 +452,11 @@ The following decisions are locked for the current operating model:
 1. Root `AGENTS.md` exists and is the authoritative repo-level AI routing document.
 2. Only two area-specific AGENTS files are used: backend and frontend.
 3. `code_review.md` exists as the repo-wide review contract.
-4. `.codex/config.toml` remains minimal.
+4. `docs/quality-bar.md` exists and governs major-module completion expectations.
 5. Prompts remain repo-grounded and documentation-coupled.
 6. Local-first review workflow is the primary operating mode during the active development/rebuild phase.
 7. The first system remains small, explicit, and enforceable.
+8. A minimum repo guard layer is valid where it blocks real drift without heavy process overhead.
 
 ### 14.2 Deferred intentionally
 
@@ -415,10 +465,10 @@ The following remain deferred until there is a strong reason to add them:
 - MCP
 - Skills
 - subagents
-- CODEOWNERS changes specifically for AI workflow
-- PR-template expansions specifically for AI workflow
-- extra security automation layers
+- advanced AI-specific GitHub automation
+- extra security automation layers beyond the current minimum repo guard layer
 - GitHub-level automatic PR reviewer setup
+- broad AI evaluation systems beyond the current prompt/review operating model
 
 ### 14.3 External / organization-level decisions
 
@@ -428,18 +478,20 @@ The following are outside the normal scope of this repo document and may require
 - branch protection policy
 - reviewer assignment policy
 - who owns final release signoff
+- the exact GitHub team or username bindings used in CODEOWNERS
 
 ---
 
 ## 15. Ownership Model
 
-### 15.1 Repo / Architecture Owner
+### 15.1 Lead Architect / Designated Quality Owner
 
 Owns:
 
 - root AI operating model
 - truth ladder alignment
 - approval of repo-level AI files
+- quality-bar alignment for major-module review behavior
 - approval or deferral of advanced AI capabilities
 
 ### 15.2 Backend Owner(s)
@@ -471,8 +523,9 @@ Own:
 
 Owns:
 
-- existing repo protection and workflow alignment where relevant
-- ensuring checks remain realistic and useful
+- repo guard workflow alignment where relevant
+- keeping enforcement useful, realistic, and low-noise
+- ensuring automation does not pretend to replace review judgment
 
 ---
 
@@ -487,6 +540,7 @@ Update `docs/ai/repo-ai-adoption-roadmap.md` only when the **AI operating model 
 - a deferred AI capability moves into active scope
 - the AI/review workflow changes materially
 - the enforcement model changes materially
+- the quality-bar relationship to AI/review operation changes materially
 
 ### Do not update this document when:
 
@@ -498,7 +552,7 @@ Update `docs/ai/repo-ai-adoption-roadmap.md` only when the **AI operating model 
 
 ### Practical rule
 
-If the change affects **how AI is governed, routed, reviewed, or enforced in the repo**, update this file.
+If the change affects **how AI is governed, routed, reviewed, cataloged, or lightly enforced in the repo**, update this file.
 
 If the change affects only **product/domain/module implementation**, do not update this file.
 
@@ -514,6 +568,8 @@ The most likely failure modes for this operating model are:
 - drift between prompt habits and repo files
 - generic review language replacing repo-specific review
 - wrong-layer contamination, where governance docs start becoming product docs
+- enforcement that is noisy enough to be ignored
+- checklist theater replacing actual proof
 
 The prevention strategy is:
 
@@ -521,19 +577,22 @@ The prevention strategy is:
 - keep the system small
 - tie guidance to validation
 - treat prompt and review docs as real repo assets
+- keep enforcement lean and targeted
 - update this file only when the operating model changes
 
 ---
 
 ## 18. Done Criteria
 
-The AI/review operating model is in good final shape when all of the following are true:
+The AI/review operating model is in good shape when all of the following are true:
 
 - root and area-specific instruction files exist and are clear
 - review contract exists and is usable
+- quality bar exists and is referenced by the AI/review system
 - prompt usage guide exists and is operational
 - prompt catalog exists and points to real prompt files
 - reusable prompt files exist for the core review/decision modes
+- minimum enforcement blocks common drift without creating heavyweight process noise
 - deferred complexity remains explicitly deferred unless intentionally approved
 - the system is grounded in repo truth rather than chat habit
 - no file duplicates another file’s role without a reason

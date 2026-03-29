@@ -24,12 +24,13 @@ This file is the **root router**, not the full backend guide, frontend guide, or
 
 Before doing any non-trivial task, review these in this order when present:
 
-1. `docs/ai/repo-ai-adoption-roadmap.md`
-2. `docs/current-foundation-status.md`
-3. `ARCHITECTURE.md`
-4. `docs/decision-log.md`
-5. `docs/security-model.md`
-6. `docs/prompts/usage-guide.md`
+1. `docs/quality-bar.md`
+2. `docs/ai/repo-ai-adoption-roadmap.md`
+3. `docs/current-foundation-status.md`
+4. `ARCHITECTURE.md`
+5. `docs/decision-log.md`
+6. `docs/security-model.md`
+7. `docs/prompts/usage-guide.md`
 
 Then route by area:
 
@@ -47,7 +48,7 @@ If one of these files does not exist yet, do not invent it. Continue with the fi
 When sources disagree, use this order:
 
 1. active locked product/module source-of-truth documents
-2. current foundation / shipped-scope truth docs
+2. repo quality bar and current foundation / shipped-scope truth docs
 3. architecture and decision records
 4. security model and topology law
 5. contract and API docs
@@ -68,7 +69,7 @@ When sources disagree, use this order:
 
 ### 1. Do not improvise system truth
 
-If the repo already defines architecture, topology, security, or product behavior, use that definition.
+If the repo already defines architecture, topology, security, product behavior, or quality gates, use that definition.
 
 ### 2. Keep diffs minimal
 
@@ -84,7 +85,7 @@ Do not edit `.env` files, secrets, or secret-bearing config unless the task expl
 
 ### 5. Keep code and docs coupled
 
-If a change affects architecture, contracts, runbooks, review behavior, or user-visible workflows, update or review the matching docs in the same change.
+If a change affects architecture, contracts, runbooks, review behavior, quality gates, or user-visible workflows, update or review the matching docs in the same change.
 
 ### 6. AI output is not proof
 
@@ -93,6 +94,10 @@ Reasoning, summaries, and reviews do not replace tests, CI, topology checks, QA,
 ### 7. Keep AI repo-aware
 
 Prefer repo-specific review and guidance over generic best-practice commentary when the repo can answer the question more precisely.
+
+### 8. Respect the repo quality bar
+
+Do not treat major-module work as complete unless it satisfies the current repo quality bar and the required signoff path defined there.
 
 ---
 
@@ -105,6 +110,7 @@ Review or update the matching docs when code changes affect:
 * request/response or behavioral contracts → relevant API/contract docs
 * operational recovery, setup, deployment, or support behavior → `docs/ops/runbooks.md`
 * QA-visible flows, redirects, user messages, or test behavior → relevant QA docs
+* quality gates, module completion rules, or signoff expectations → `docs/quality-bar.md`
 * AI/review operating behavior → `AGENTS.md`, `code_review.md`, `docs/ai/repo-ai-adoption-roadmap.md`, `docs/prompts/usage-guide.md`, `docs/prompts/catalog.md`
 
 Do not create silent documentation drift.
@@ -218,6 +224,12 @@ When reporting results, say what was actually run. Do not imply runtime proof if
 ### Consult `docs/prompts/catalog.md` and `docs/prompts/usage-guide.md` when:
 
 * you need to choose the right prompt or review mode for the stage of work
+
+### Consult `docs/quality-bar.md` when:
+
+* the task introduces or substantially expands a major module
+* you are deciding whether work is actually complete
+* you are reviewing signoff readiness, debt acceptance, or mandatory gates
 
 ---
 

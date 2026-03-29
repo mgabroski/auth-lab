@@ -1,0 +1,35 @@
+# Stage 1A minimum viable ownership surface
+#
+# Purpose:
+# - protect core law and governance files
+# - protect the minimum prompt-law surface
+# - bind the Lead Architect / Designated Quality Owner role to a real owner
+#
+# Owner for Stage 1A:
+# - @mgabroski
+#
+# Notes:
+# - This is intentionally narrow.
+# - It does not attempt to define full repo ownership yet.
+# - Branch protection / required review configuration remains a GitHub settings concern,
+#   not a CODEOWNERS-only concern.
+
+# Core repo law / governance
+/AGENTS.md @mgabroski
+/code_review.md @mgabroski
+/docs/quality-bar.md @mgabroski
+/docs/ai/repo-ai-adoption-roadmap.md @mgabroski
+
+# Area instruction law
+/backend/AGENTS.md @mgabroski
+/frontend/AGENTS.md @mgabroski
+
+# Prompt-law surface
+/docs/prompts/catalog.md @mgabroski
+/docs/prompts/usage-guide.md @mgabroski
+/docs/prompts/*.md @mgabroski
+
+# Stage 1A enforcement surfaces
+/.github/pull_request_template.md @mgabroski
+/.github/workflows/repo-guard.yml @mgabroski
+/scripts/repo-guard.mjs @mgabroski
