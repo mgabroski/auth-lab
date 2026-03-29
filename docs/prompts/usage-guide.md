@@ -1,10 +1,10 @@
 # Prompt Usage Guide
 
-**Status:** Draft for lock  
-**Version:** 1.0  
-**Scope:** Repo-level guidance for when and how to use AI review and decision-support prompts  
-**Audience:** Engineers, reviewers, technical leads, and architecture owners  
-**Owner:** Review / architecture owner  
+**Status:** Draft for lock
+**Version:** 1.1
+**Scope:** Repo-level guidance for when and how to use AI review and decision-support prompts
+**Audience:** Engineers, reviewers, technical leads, and architecture owners
+**Owner:** Review / architecture owner
 **Last Updated:** 2026-03-29
 
 ---
@@ -23,7 +23,7 @@ This document answers:
 - what context must be attached
 - what kind of output to expect
 - whether the result is advisory or merge/release-relevant
-- what smallest validation commands should follow it
+- what smallest validation should follow it
 
 ---
 
@@ -45,13 +45,18 @@ This file is only the **usage guide** for prompt timing and prompt selection.
 
 ## 3. How To Use This Guide
 
-Use this guide in three steps:
+Use this guide in four steps:
 
-1. Identify the type of work you are doing.
-2. Choose the matching prompt or review mode from the checklist below.
-3. Attach the minimum required inputs before trusting the result.
+1. Identify the current stage of work.
+2. Choose the prompt that matches the main risk.
+3. Attach the minimum required context.
+4. Run the smallest validation that actually proves the changed area.
 
-If multiple prompts seem applicable, prefer the one tied to the **highest-risk decision** you are making.
+If more than one prompt seems applicable:
+
+- choose **one primary prompt** tied to the highest-risk decision
+- add **one specialized prompt** only if the change is meaningfully high-risk
+- do not stack many prompts for normal work
 
 ---
 
@@ -69,7 +74,7 @@ A strong answer does not replace tests, CI, topology validation, QA, or producti
 
 Do not use a whole-codebase audit when a pre-push review is enough.
 
-### 4.4 Escalate for Risk
+### 4.4 Escalate For Risk
 
 If a change affects auth, topology, sessions, tenant boundaries, migrations, or release behavior, use the more specialized review prompt.
 
@@ -79,17 +84,61 @@ For meaningful review work, the author or reviewer should be able to say which p
 
 ---
 
-## 5. Prompt Usage Checklist
+## 5. Required Context By Area
+
+When choosing a prompt, attach the area-specific repo context that governs the work.
+
+### Backend work
+
+Attach the relevant backend files and, when they exist:
+
+- `backend/AGENTS.md`
+- backend API docs
+- backend engineering rules
+- backend tests for the affected area
+
+### Frontend work
+
+Attach the relevant frontend files and, when they exist:
+
+- `frontend/AGENTS.md`
+- relevant backend contract/API docs
+- auth/bootstrap/topology-related docs when the change touches those areas
+- frontend tests for the affected area
+
+### Review / audit / risk work
+
+Attach, when they exist:
+
+- `AGENTS.md`
+- `code_review.md`
+- the relevant backend/frontend AGENTS file
+- the relevant source-of-truth docs for the affected area
+
+### High-risk changes
+
+Also attach, when relevant:
+
+- tests already run
+- rollout notes
+- migration notes
+- screenshots
+- logs
+- topology-sensitive behavior notes
+
+---
+
+## 6. Prompt Usage Checklist
 
 Use the prompt that matches the **current stage of work**.
 
 ---
 
-### 5.1 Before Coding
+### 6.1 Before Coding
 
 #### Design decision / challenge-this-approach
 
-**Use when:** you want to pressure-test a proposed design before implementation starts.  
+**Use when:** you want to pressure-test a proposed design before implementation starts.
 **Best for:** engineer, tech lead, architect.
 
 **Attach:**
@@ -114,7 +163,7 @@ Use the prompt that matches the **current stage of work**.
 
 #### Better approach?
 
-**Use when:** you want to know whether there is a simpler, safer, or cleaner solution.  
+**Use when:** you want to know whether there is a simpler, safer, or cleaner solution.
 **Best for:** engineer, tech lead, architect.
 
 **Attach:**
@@ -141,11 +190,11 @@ Use the prompt that matches the **current stage of work**.
 
 ---
 
-### 5.2 During Coding
+### 6.2 During Coding
 
 #### Module-level audit
 
-**Use when:** implementation is in progress and you want a quality check before the work is finished.  
+**Use when:** implementation is in progress and you want a quality check before the work is finished.
 **Best for:** engineer, reviewer.
 
 **Attach:**
@@ -175,7 +224,7 @@ Use the prompt that matches the **current stage of work**.
 
 #### Failure-mode / admin misuse review
 
-**Use when:** the feature has meaningful workflow, retry, replay, state, or admin-misuse risk.  
+**Use when:** the feature has meaningful workflow, retry, replay, state, or admin-misuse risk.
 **Best for:** engineer, reviewer, lead.
 
 **Attach:**
@@ -204,11 +253,11 @@ Use the prompt that matches the **current stage of work**.
 
 ---
 
-### 5.3 Before Push
+### 6.3 Before Push
 
 #### Pre-push self-review
 
-**Use when:** you want to catch obvious issues before the branch leaves your machine.  
+**Use when:** you want to catch obvious issues before the branch leaves your machine.
 **Best for:** author.
 
 **Attach:**
@@ -240,11 +289,11 @@ Use the prompt that matches the **current stage of work**.
 
 ---
 
-### 5.4 Before Opening a PR
+### 6.4 Before Opening A PR
 
 #### Changed-files / PR review
 
-**Use when:** the diff is stable enough to be reviewed as a real merge candidate.  
+**Use when:** the diff is stable enough to be reviewed as a real merge candidate.
 **Best for:** reviewer, author, lead.
 
 **Attach:**
@@ -276,11 +325,11 @@ Use the prompt that matches the **current stage of work**.
 
 ---
 
-### 5.5 Before Merge
+### 6.5 Before Merge
 
 #### Security / authz / tenant-isolation review
 
-**Use when:** the change affects auth, sessions, topology, permissions, or tenant boundaries.  
+**Use when:** the change affects auth, sessions, topology, permissions, or tenant boundaries.
 **Best for:** reviewer, security-minded engineer, lead.
 
 **Attach:**
@@ -314,7 +363,7 @@ Use the prompt that matches the **current stage of work**.
 
 #### Migration / change-risk review
 
-**Use when:** the change affects schema, data shape, rollout, rollback, or partial deployment behavior.  
+**Use when:** the change affects schema, data shape, rollout, rollback, or partial deployment behavior.
 **Best for:** reviewer, backend owner, lead.
 
 **Attach:**
@@ -348,7 +397,7 @@ Use the prompt that matches the **current stage of work**.
 
 #### Performance / scalability review
 
-**Use when:** the change touches hot paths, repeated queries, scaling assumptions, or performance-sensitive behavior.  
+**Use when:** the change touches hot paths, repeated queries, scaling assumptions, or performance-sensitive behavior.
 **Best for:** engineer, reviewer, lead.
 
 **Attach:**
@@ -381,11 +430,11 @@ Use the prompt that matches the **current stage of work**.
 
 ---
 
-### 5.6 Before Release
+### 6.6 Before Release
 
 #### Whole-codebase weak-spot audit
 
-**Use when:** you want a broad review of repo weaknesses before release or during periodic health checks.  
+**Use when:** you want a broad review of repo weaknesses before release or during periodic health checks.
 **Best for:** lead, architect, senior reviewer.
 
 **Attach:**
@@ -414,7 +463,7 @@ Use the prompt that matches the **current stage of work**.
 
 #### Observability / operability review
 
-**Use when:** you want to judge diagnosability, runbook readiness, and operational supportability.  
+**Use when:** you want to judge diagnosability, runbook readiness, and operational supportability.
 **Best for:** lead, platform owner, reviewer.
 
 **Attach:**
@@ -446,19 +495,68 @@ Use the prompt that matches the **current stage of work**.
 
 ---
 
-### 5.7 During Refactors
+### 6.7 During Refactors
 
 #### Module-level audit
 
-**Use when:** refactoring a module and you want to catch hidden coupling or ownership drift.
+**Use when:** refactoring a module and you want to catch hidden coupling, ownership drift, or missing doc/test updates.
+**Best for:** engineer, reviewer.
 
-#### Performance / scalability review
+**Attach:**
 
-**Use when:** refactoring could affect hot paths, queries, or scaling assumptions.
+- old/new boundary shape
+- affected files
+- current docs
+- known risk areas
+
+**Optional:**
+
+- tests already written
+- design notes
+
+**Expect:**
+
+- hidden coupling findings
+- ownership drift callouts
+- missing doc/test follow-up
+
+**Do not use when:**
+
+- the change is still too early to explain clearly
+- you need final merge judgment on the complete diff
 
 ---
 
-### 5.8 Quick Selection Guide
+#### Performance / scalability review
+
+**Use when:** a refactor could affect hot paths, repeated work, query behavior, or scaling assumptions.
+**Best for:** engineer, reviewer, lead.
+
+**Attach:**
+
+- affected performance-sensitive areas
+- old/new approach summary
+- scale assumptions
+
+**Optional:**
+
+- metrics
+- profiler notes
+- prior incidents
+
+**Expect:**
+
+- performance regression risk
+- hidden cost callouts
+- recommended follow-up validation
+
+**Do not use when:**
+
+- the refactor is trivial and has no meaningful performance implications
+
+---
+
+### 6.8 Quick Selection Guide
 
 Use this shortcut when you are unsure:
 
@@ -476,134 +574,9 @@ Use this shortcut when you are unsure:
 
 ---
 
-## 6. Recommended Timing By Workflow Stage
+## 7. Validation Principle
 
-### 6.1 Before Coding
-
-Preferred prompts:
-
-- Design decision / challenge-this-approach
-- Better approach?
-
-Use these when the biggest risk is choosing the wrong direction before implementation starts.
-
-### 6.2 During Coding
-
-Preferred prompts:
-
-- Module-level audit
-- Failure-mode / admin misuse review (when flows are stateful or risky)
-
-Use these when code exists but the change is not ready for PR yet.
-
-### 6.3 Before Push
-
-Preferred prompt:
-
-- Pre-push self-review
-
-Use this to catch missing docs, missing tests, and obvious boundary mistakes before code leaves the branch.
-
-### 6.4 Before Opening a PR
-
-Preferred prompt:
-
-- Changed-files / PR review
-
-Use this when the diff is stable enough to be judged as a candidate merge unit.
-
-### 6.5 Before Merge
-
-Preferred prompts when relevant:
-
-- Security / authz / tenant-isolation review
-- Migration / change-risk review
-- Performance / scalability review
-- Failure-mode / admin misuse review
-
-Use specialized prompts when the change is high risk and a generic PR review is not enough.
-
-### 6.6 Before Release
-
-Preferred prompts:
-
-- Whole-codebase weak-spot audit
-- Observability / operability review
-- Migration / change-risk review if relevant
-
-Use these to judge readiness, not just correctness.
-
-### 6.7 During Refactors
-
-Preferred prompts:
-
-- Module-level audit
-- Performance / scalability review
-
-Use these when the danger is hidden coupling or regression rather than feature correctness alone.
-
----
-
-## 7. Minimum Input Quality Rules
-
-Before trusting any prompt output, make sure the input includes enough repo context.
-
-### 7.1 Required Minimum
-
-At minimum, attach:
-
-- the actual files or diff under review
-- the intent of the change
-- any repo docs that directly govern the area
-
-### 7.2 For High-Risk Changes
-
-Also attach, when relevant:
-
-- tests already run
-- rollout plan
-- screenshots
-- logs
-- migration notes
-- topology-sensitive behavior notes
-
-### 7.3 Bad Usage Pattern
-
-Bad prompt usage looks like this:
-
-- vague request
-- no diff
-- no files
-- no docs
-- expecting a precise answer anyway
-
-That kind of usage should not be treated as trustworthy review.
-
----
-
-## 8. How To Interpret Outputs
-
-### 8.1 Advisory Output
-
-Advisory output helps the author think better, but does not directly block merge.
-
-### 8.2 Merge-Relevant Output
-
-Merge-relevant output should be taken seriously during review and may require fixes or proof.
-
-### 8.3 Release-Relevant Output
-
-Release-relevant output affects readiness, supportability, or rollback confidence.
-
-### 8.4 Blocker-Level Output
-
-Security, tenant-isolation, migration, or operational findings may be blocker-level when the risk is serious and unproven.
-
----
-
-## 9. Smallest Validation Principle
-
-After a prompt is used, run the **smallest validation commands that actually prove the affected area**.
+After a prompt is used, run the **smallest validation that actually proves the affected area**.
 
 Examples:
 
@@ -616,9 +589,9 @@ Do not hide behind prompt output when validation should be run.
 
 ---
 
-## 10. When Not To Use AI Review Prompts
+## 8. Bad Usage Patterns
 
-Do not use these prompts as a substitute for:
+Do not use prompts as a substitute for:
 
 - reading the actual diff
 - reading the governing docs
@@ -626,11 +599,39 @@ Do not use these prompts as a substitute for:
 - performing human judgment on product tradeoffs
 - confirming runtime behavior
 
+Bad prompt usage usually looks like:
+
+- vague request
+- no diff
+- no files
+- no docs
+- expecting a precise answer anyway
+
 Also do not escalate into heavyweight prompts when the change is tiny and low-risk.
 
 ---
 
-## 11. How This Document Should Evolve
+## 9. How To Interpret Outputs
+
+### 9.1 Advisory Output
+
+Advisory output helps the author think better, but does not directly block merge.
+
+### 9.2 Merge-Relevant Output
+
+Merge-relevant output should be taken seriously during review and may require fixes or proof.
+
+### 9.3 Release-Relevant Output
+
+Release-relevant output affects readiness, supportability, or rollback confidence.
+
+### 9.4 Blocker-Level Output
+
+Security, tenant-isolation, migration, or operational findings may be blocker-level when the risk is serious and unproven.
+
+---
+
+## 10. How This Document Should Evolve
 
 Update this file when:
 
@@ -648,7 +649,7 @@ Do not update this file for:
 
 ---
 
-## 12. Final Position
+## 11. Final Position
 
 This document exists to make prompt usage:
 
