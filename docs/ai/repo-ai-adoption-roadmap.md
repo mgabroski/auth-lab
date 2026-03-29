@@ -1,10 +1,10 @@
 # Repo AI Adoption Roadmap
 
-**Status:** Draft for lock  
-**Version:** 1.0  
-**Scope:** Repo-level AI operating model, review system, prompt usage, and rollout plan  
-**Audience:** Engineering, architecture, review owners, and technical leads  
-**Owner:** Repo / platform owner  
+**Status:** Draft for lock
+**Version:** 1.0
+**Scope:** Repo-level AI operating model, review system, prompt usage, and rollout plan
+**Audience:** Engineering, architecture, review owners, and technical leads
+**Owner:** Repo / platform owner
 **Last Updated:** 2026-03-29
 
 ---
@@ -88,7 +88,7 @@ It prevents repo-level AI guidance from turning into duplicate product truth, du
 
 ---
 
-## 4. What This Document Does **Not** Track
+## 4. What This Document Does Not Track
 
 This document does **not** track:
 
@@ -114,7 +114,7 @@ The repo should adopt AI the same way it adopts architecture, review discipline,
 - with clear ownership
 - with small enforceable first steps
 
-The goal is not to make the repo "AI-heavy."
+The goal is not to make the repo “AI-heavy.”
 The goal is to make AI:
 
 - grounded
@@ -237,85 +237,65 @@ Advanced AI integrations remain intentionally deferred until the core system is 
 
 ---
 
-## 10. Phase Plan
+## 10. Rollout Phases
 
-## Phase 1 — Foundation Documents
+### Phase 1 — Foundation Documents
 
 **Goal:** Establish the repo-native AI operating model in documentation before adding enforcement.
 
-### Deliverables
+**Deliverables:**
 
-1. `docs/ai/repo-ai-adoption-roadmap.md`  
-   This file. Control document for the rollout.
+1. `docs/ai/repo-ai-adoption-roadmap.md`
+2. `AGENTS.md`
+3. `backend/AGENTS.md`
+4. `frontend/AGENTS.md`
+5. `code_review.md`
+6. `docs/prompts/usage-guide.md`
 
-2. `AGENTS.md`  
-   Root repo AI/router law.
-
-3. `backend/AGENTS.md`  
-   Backend-specific AI/review law.
-
-4. `frontend/AGENTS.md`  
-   Frontend-specific AI/review law.
-
-5. `code_review.md`  
-   Repo-wide review contract.
-
-6. `docs/prompts/usage-guide.md`  
-   Prompt timing, usage, required inputs, and expected outputs.
-
-### Exit Criteria
+**Exit Criteria:**
 
 - all six files exist or are updated
 - each file has a clear, non-overlapping role
 - root truth routing is explicit
 - prompt usage is documented in repo form
 
----
-
-## Phase 2 — Lightweight Enforcement
+### Phase 2 — Lightweight Enforcement
 
 **Goal:** Add a minimal but real enforcement layer.
 
-### Deliverables
+**Deliverables:**
 
-1. `.github/workflows/repo-guard.yml`  
-   Repo-wide format/lint/typecheck guard.
-
+1. `.github/workflows/repo-guard.yml`
 2. doc-coupling rules confirmed in repo instructions
-
 3. review flow aligned to the new repo files
 
-### Exit Criteria
+**Exit Criteria:**
 
 - repo guard runs in CI
 - AI/review guidance is connected to actual checks
 - the repo has at least one lightweight enforcement mechanism for the AI/review operating model
 
----
-
-## Phase 3 — Working Usage Model
+### Phase 3 — Working Usage Model
 
 **Goal:** Make the system usable in daily engineering flow.
 
-### Deliverables
+**Deliverables:**
 
 1. prompt usage guidance finalized
 2. review timing clarified
 3. team usage expectations documented
 
-### Exit Criteria
+**Exit Criteria:**
 
 - engineers know which prompt/review mode to use when
 - prompt usage is not ambiguous
 - review outputs are standardized enough to be useful across the repo
 
----
-
-## Phase 4 — Advanced Capability Evaluation
+### Phase 4 — Advanced Capability Evaluation
 
 **Goal:** Evaluate higher-complexity AI infrastructure only after the core system is stable.
 
-### Candidate Areas
+**Candidate Areas:**
 
 - MCP
 - Skills
@@ -325,7 +305,7 @@ Advanced AI integrations remain intentionally deferred until the core system is 
 - security automation additions
 - deeper GitHub integration
 
-### Exit Criteria
+**Exit Criteria:**
 
 - deferred items are revisited intentionally
 - no advanced feature is adopted without clear ROI
@@ -349,7 +329,7 @@ Advanced AI integrations remain intentionally deferred until the core system is 
 
 ## 12. File Responsibilities
 
-## 12.1 `docs/ai/repo-ai-adoption-roadmap.md`
+### 12.1 `docs/ai/repo-ai-adoption-roadmap.md`
 
 Owns:
 
@@ -366,7 +346,7 @@ Does not own:
 - architecture truth
 - implementation details for normal feature work
 
-## 12.2 `AGENTS.md`
+### 12.2 `AGENTS.md`
 
 Owns:
 
@@ -383,7 +363,7 @@ Does not own:
 - detailed frontend law
 - full review output format
 
-## 12.3 `backend/AGENTS.md`
+### 12.3 `backend/AGENTS.md`
 
 Owns:
 
@@ -399,7 +379,7 @@ Does not own:
 - frontend rules
 - full review contract
 
-## 12.4 `frontend/AGENTS.md`
+### 12.4 `frontend/AGENTS.md`
 
 Owns:
 
@@ -414,7 +394,7 @@ Does not own:
 - backend rules
 - full review contract
 
-## 12.5 `code_review.md`
+### 12.5 `code_review.md`
 
 Owns:
 
@@ -430,7 +410,7 @@ Does not own:
 - implementation rules themselves
 - CI configuration
 
-## 12.6 `docs/prompts/usage-guide.md`
+### 12.6 `docs/prompts/usage-guide.md`
 
 Owns:
 
@@ -450,7 +430,7 @@ Does not own:
 
 ## 13. Prompt Usage Guide Scope
 
-The earlier "When To Use Each Prompt" guidance must become a repo artifact rather than remaining chat-only guidance.
+The earlier “When To Use Each Prompt” guidance must become a repo artifact rather than remaining chat-only guidance.
 
 The dedicated file will be:
 
@@ -470,55 +450,9 @@ The usage guide must remain short, operational, and deterministic.
 
 ---
 
-## 14. Resolved vs Deferred Decisions
+## 14. Ownership Model
 
-## 14.1 Resolved Now
-
-The following decisions are locked for the first adoption wave:
-
-1. The repo **will** update root `AGENTS.md`.
-2. The repo **will** add `backend/AGENTS.md`.
-3. The repo **will** add `frontend/AGENTS.md`.
-4. The repo **will** add `code_review.md`.
-5. The repo **will** add `docs/prompts/usage-guide.md`.
-6. The repo **will** add `.github/workflows/repo-guard.yml`.
-7. The repo **will keep** `.codex/config.toml` minimal for now.
-8. The repo **will not** solve repo awareness through config alone.
-9. The repo **will start** with local-first AI/review workflows.
-10. The first rollout **must remain small and enforceable**.
-
-## 14.2 Intentionally Deferred
-
-The following items are intentionally deferred until the foundation is stable:
-
-- MCP
-- Skills
-- subagents
-- PR template additions
-- CODEOWNERS redesign/expansion
-- advanced security automation
-- richer GitHub bot behavior
-- runtime-aware AI integrations
-
-Deferral is intentional. These items are not rejected forever; they are simply not required in the first rollout.
-
-## 14.3 External / Organization Decisions
-
-The following decisions may exist outside the repo or require later owner confirmation:
-
-- branch protection settings
-- required GitHub checks
-- reviewer assignment policy
-- release signoff ownership
-- whether AI-generated review comments become part of the formal PR process
-
-These do not block the current roadmap.
-
----
-
-## 15. Ownership Model
-
-## 15.1 Repo / Architecture Owner
+### 14.1 Repo / Architecture Owner
 
 Owns:
 
@@ -527,7 +461,7 @@ Owns:
 - final approval of repo-level AI files
 - approval or deferral of advanced AI capabilities
 
-## 15.2 Backend Owner(s)
+### 14.2 Backend Owner(s)
 
 Own:
 
@@ -535,7 +469,7 @@ Own:
 - backend validation routing
 - backend review alignment
 
-## 15.3 Frontend Owner(s)
+### 14.3 Frontend Owner(s)
 
 Own:
 
@@ -543,7 +477,7 @@ Own:
 - SSR/browser/topology rule alignment
 - frontend review alignment
 
-## 15.4 Review Owner(s)
+### 14.4 Review Owner(s)
 
 Own:
 
@@ -551,7 +485,7 @@ Own:
 - prompt usage guide quality
 - keeping review expectations specific and non-generic
 
-## 15.5 CI / Platform Owner
+### 14.5 CI / Platform Owner
 
 Owns:
 
@@ -561,7 +495,99 @@ Owns:
 
 ---
 
-## 16. When To Update This Document
+## 15. Section 15 Usage Checklist Direction
+
+The old Section 15 content was guidance about **when to use each prompt**.
+
+That content should not remain only in chat form. It must become a real repo artifact in a later step.
+
+The preferred target file is:
+
+**`docs/prompts/usage-guide.md`**
+
+That checklist should include these columns:
+
+- Prompt name
+- Purpose
+- Use before / during / after
+- Who uses it
+- Required inputs
+- Optional inputs
+- Expected output
+- Merge blocker or advisory only
+- Smallest validation commands to run after it
+- When not to use it
+
+This keeps prompt usage operational instead of informal.
+
+---
+
+## 16. Resolved Adoption Decision Matrix
+
+This section closes the initial open questions for the first AI adoption wave.
+
+It defines:
+
+- what is decided now
+- what is intentionally deferred
+- what remains outside normal repo-document scope and needs organization-level confirmation
+
+This section is a decision register, not a brainstorming appendix.
+
+### 16.1 Resolve Now
+
+The following decisions are locked for the first adoption wave:
+
+1. Root `AGENTS.md` will exist and be the authoritative repo-level AI routing document.
+2. Only two directory-level AGENTS files will be added in the first rollout:
+   - `backend/AGENTS.md`
+   - `frontend/AGENTS.md`
+
+3. `code_review.md` will be added as the repo-wide review contract.
+4. `.github/workflows/repo-guard.yml` will be added as the first lightweight repo-wide enforcement workflow.
+5. `.codex/config.toml` will remain minimal for now.
+6. Prompts must remain repo-grounded and documentation-coupled.
+7. Local-first review workflow is the starting point for adoption.
+8. The first rollout must stay small, explicit, and enforceable.
+
+### 16.2 Defer Intentionally
+
+The following items are intentionally deferred until the first adoption wave is stable:
+
+- MCP
+- Skills
+- subagents
+- CODEOWNERS
+- PR template
+- security automation extras
+- branch-protection refinements if not yet ready
+
+These items are not rejected. They are deferred by design so the repo can stabilize the core AI operating model before introducing additional complexity.
+
+### 16.3 External / Organization-Level Decisions
+
+The following items are outside the normal scope of this repo document and may require organization-level confirmation:
+
+- exact required GitHub status checks
+- branch protection policy
+- reviewer assignment policy
+- who owns final release signoff
+
+These do not block the first adoption wave, but they should be clarified before later-stage governance or automation expansion.
+
+### 16.4 Update Rule For This Section
+
+Update this section only when:
+
+- a deferred item is moved into active scope
+- a resolved-now item is reversed or materially changed
+- a new organization-level dependency becomes important enough to track here
+
+Do not update this section for normal feature delivery, module work, or ordinary implementation changes.
+
+---
+
+## 17. When To Update This Document
 
 Update `docs/ai/repo-ai-adoption-roadmap.md` only when the **AI operating model itself** changes.
 
@@ -574,7 +600,7 @@ Update `docs/ai/repo-ai-adoption-roadmap.md` only when the **AI operating model 
 - the AI/review workflow changes materially
 - the enforcement model changes materially
 
-### Do **not** update this document when:
+### Do not update this document when:
 
 - a normal feature is implemented
 - a module roadmap changes
@@ -590,31 +616,31 @@ If the change affects only **product/domain/module implementation**, do not upda
 
 ---
 
-## 17. Risks and Failure Modes
+## 18. Risks and Failure Modes
 
 The most likely failure modes for this rollout are:
 
-### 17.1 Over-Engineering Too Early
+### 18.1 Over-Engineering Too Early
 
 Adding too many advanced AI features before the foundation files are stable.
 
-### 17.2 Duplicate Guidance
+### 18.2 Duplicate Guidance
 
 Allowing root instructions, area instructions, review contract, and usage guide to repeat each other.
 
-### 17.3 Fake Closure
+### 18.3 Fake Closure
 
 Declaring the repo AI-ready before the rules are actually used and tied to enforcement.
 
-### 17.4 Drift Between Repo Law and Prompt Usage
+### 18.4 Drift Between Repo Law and Prompt Usage
 
 Allowing prompt habits to evolve separately from repo files.
 
-### 17.5 Generic Review Regression
+### 18.5 Generic Review Regression
 
 Writing polished but non-specific AI/review files that stop reflecting the actual repo.
 
-### 17.6 Wrong-Layer Contamination
+### 18.6 Wrong-Layer Contamination
 
 Letting this roadmap become a product roadmap or module truth document.
 
@@ -628,7 +654,7 @@ The prevention strategy is:
 
 ---
 
-## 18. Done Criteria
+## 19. Done Criteria
 
 This roadmap is considered complete only when all of the following are true:
 
@@ -640,29 +666,6 @@ This roadmap is considered complete only when all of the following are true:
 - the AI operating model is small, understandable, and enforceable
 - no file duplicates another file’s role
 - the system is grounded in repo truth rather than chat habit
-
----
-
-## 19. Rollout Sequence
-
-Implementation should occur in this order unless a strong reason is documented otherwise:
-
-1. `docs/ai/repo-ai-adoption-roadmap.md`
-2. `AGENTS.md`
-3. `backend/AGENTS.md`
-4. `frontend/AGENTS.md`
-5. `code_review.md`
-6. `docs/prompts/usage-guide.md`
-7. `.github/workflows/repo-guard.yml`
-
-This order is deliberate:
-
-- first define the rollout
-- then define repo law
-- then define area law
-- then define review law
-- then define usage law
-- then add enforcement
 
 ---
 
