@@ -1,7 +1,7 @@
 # Prompt Usage Guide
 
 **Status:** Draft for lock
-**Version:** 1.1
+**Version:** 1.2
 **Scope:** Repo-level guidance for when and how to use AI review and decision-support prompts
 **Audience:** Engineers, reviewers, technical leads, and architecture owners
 **Owner:** Review / architecture owner
@@ -55,7 +55,7 @@ Use this guide in four steps:
 If more than one prompt seems applicable:
 
 - choose **one primary prompt** tied to the highest-risk decision
-- add **one specialized prompt** only if the change is meaningfully high-risk
+- add **one specialized prompt** only if the change is materially high-risk
 - do not stack many prompts for normal work
 
 ---
@@ -120,10 +120,10 @@ Attach, when they exist:
 Also attach, when relevant:
 
 - tests already run
-- rollout notes
-- migration notes
+- rollout plan
 - screenshots
 - logs
+- migration notes
 - topology-sensitive behavior notes
 
 ---
@@ -136,9 +136,11 @@ Use the prompt that matches the **current stage of work**.
 
 ### 6.1 Before Coding
 
-#### Design decision / challenge-this-approach
+#### Design challenge
 
 **Use when:** you want to pressure-test a proposed design before implementation starts.
+**Primary file:** `docs/prompts/design-challenge.md`
+
 **Best for:** engineer, tech lead, architect.
 
 **Attach:**
@@ -161,9 +163,11 @@ Use the prompt that matches the **current stage of work**.
 
 ---
 
-#### Better approach?
+#### Better architecture
 
-**Use when:** you want to know whether there is a simpler, safer, or cleaner solution.
+**Use when:** you want to know whether there is a cleaner, safer, or more durable architectural direction.
+**Primary file:** `docs/prompts/better-architecture.md`
+
 **Best for:** engineer, tech lead, architect.
 
 **Attach:**
@@ -192,9 +196,11 @@ Use the prompt that matches the **current stage of work**.
 
 ### 6.2 During Coding
 
-#### Module-level audit
+#### Module audit
 
 **Use when:** implementation is in progress and you want a quality check before the work is finished.
+**Primary file:** `docs/prompts/module-audit.md`
+
 **Best for:** engineer, reviewer.
 
 **Attach:**
@@ -225,6 +231,8 @@ Use the prompt that matches the **current stage of work**.
 #### Failure-mode / admin misuse review
 
 **Use when:** the feature has meaningful workflow, retry, replay, state, or admin-misuse risk.
+**Primary mode:** guided by this usage guide and `code_review.md`
+
 **Best for:** engineer, reviewer, lead.
 
 **Attach:**
@@ -258,6 +266,8 @@ Use the prompt that matches the **current stage of work**.
 #### Pre-push self-review
 
 **Use when:** you want to catch obvious issues before the branch leaves your machine.
+**Primary file:** `docs/prompts/pre-push-self-review.md`
+
 **Best for:** author.
 
 **Attach:**
@@ -294,6 +304,8 @@ Use the prompt that matches the **current stage of work**.
 #### Changed-files / PR review
 
 **Use when:** the diff is stable enough to be reviewed as a real merge candidate.
+**Primary file:** `docs/prompts/pr-review.md`
+
 **Best for:** reviewer, author, lead.
 
 **Attach:**
@@ -330,6 +342,8 @@ Use the prompt that matches the **current stage of work**.
 #### Security / authz / tenant-isolation review
 
 **Use when:** the change affects auth, sessions, topology, permissions, or tenant boundaries.
+**Primary file:** `docs/prompts/security-tenant-review.md`
+
 **Best for:** reviewer, security-minded engineer, lead.
 
 **Attach:**
@@ -364,6 +378,8 @@ Use the prompt that matches the **current stage of work**.
 #### Migration / change-risk review
 
 **Use when:** the change affects schema, data shape, rollout, rollback, or partial deployment behavior.
+**Primary file:** `docs/prompts/migration-change-risk.md`
+
 **Best for:** reviewer, backend owner, lead.
 
 **Attach:**
@@ -398,6 +414,8 @@ Use the prompt that matches the **current stage of work**.
 #### Performance / scalability review
 
 **Use when:** the change touches hot paths, repeated queries, scaling assumptions, or performance-sensitive behavior.
+**Primary mode:** guided by this usage guide and `code_review.md`
+
 **Best for:** engineer, reviewer, lead.
 
 **Attach:**
@@ -435,6 +453,8 @@ Use the prompt that matches the **current stage of work**.
 #### Whole-codebase weak-spot audit
 
 **Use when:** you want a broad review of repo weaknesses before release or during periodic health checks.
+**Primary mode:** guided by this usage guide and `code_review.md`
+
 **Best for:** lead, architect, senior reviewer.
 
 **Attach:**
@@ -464,6 +484,8 @@ Use the prompt that matches the **current stage of work**.
 #### Observability / operability review
 
 **Use when:** you want to judge diagnosability, runbook readiness, and operational supportability.
+**Primary mode:** guided by this usage guide and `code_review.md`
+
 **Best for:** lead, platform owner, reviewer.
 
 **Attach:**
@@ -497,9 +519,11 @@ Use the prompt that matches the **current stage of work**.
 
 ### 6.7 During Refactors
 
-#### Module-level audit
+#### Module audit
 
 **Use when:** refactoring a module and you want to catch hidden coupling, ownership drift, or missing doc/test updates.
+**Primary file:** `docs/prompts/module-audit.md`
+
 **Best for:** engineer, reviewer.
 
 **Attach:**
@@ -530,6 +554,8 @@ Use the prompt that matches the **current stage of work**.
 #### Performance / scalability review
 
 **Use when:** a refactor could affect hot paths, repeated work, query behavior, or scaling assumptions.
+**Primary mode:** guided by this usage guide and `code_review.md`
+
 **Best for:** engineer, reviewer, lead.
 
 **Attach:**
@@ -560,17 +586,17 @@ Use the prompt that matches the **current stage of work**.
 
 Use this shortcut when you are unsure:
 
-- **I am choosing a design** → `Design decision / challenge-this-approach`
-- **I think there may be a cleaner solution** → `Better approach?`
-- **I am halfway through implementation** → `Module-level audit`
-- **I am about to push** → `Pre-push self-review`
-- **I am about to open or review a PR** → `Changed-files / PR review`
-- **The change touches security or tenant boundaries** → `Security / authz / tenant-isolation review`
-- **The change touches DB, schema, rollout, or rollback** → `Migration / change-risk review`
-- **The change may create replay/retry/state issues** → `Failure-mode / admin misuse review`
-- **The change may affect performance or scale** → `Performance / scalability review`
-- **I want a broad release-level review** → `Whole-codebase weak-spot audit`
-- **I want to check supportability and diagnosis readiness** → `Observability / operability review`
+- **I am choosing a design** → `design-challenge.md`
+- **I think there may be a cleaner architecture** → `better-architecture.md`
+- **I am halfway through implementation** → `module-audit.md`
+- **I am about to push** → `pre-push-self-review.md`
+- **I am about to open or review a PR** → `pr-review.md`
+- **The change touches security or tenant boundaries** → `security-tenant-review.md`
+- **The change touches DB, schema, rollout, or rollback** → `migration-change-risk.md`
+- **The change may create replay/retry/state issues** → failure-mode / misuse review mode
+- **The change may affect performance or scale** → performance / scalability review mode
+- **I want a broad release-level review** → whole-codebase weak-spot audit mode
+- **I want to check supportability and diagnosis readiness** → observability / operability review mode
 
 ---
 

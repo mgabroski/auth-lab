@@ -4,34 +4,41 @@
 
 Applies to the repository root.
 
-## Mission
+## Purpose
 
-This repository is a multi-tenant Hubins/Auth-Lab codebase with a strong documentation and proof discipline.
+This file is the **root repo instruction layer** for AI-assisted work and repo-aware engineering support.
 
-The current repo focus is not generic product sprawl. It is a controlled foundation with locked topology, locked tenant/session boundaries, and a repo-native documentation model where architecture, security, contracts, QA, and review behavior must stay aligned.
+Its job is to keep work in this repository:
 
-Use AI to improve engineering quality, review quality, and decision quality — never to bypass repo truth.
+* grounded in repo truth
+* aligned with documentation
+* aware of tenant, session, and topology boundaries
+* coupled to the right validation
+* resistant to generic or persuasive-but-ungrounded output
+
+This file is the **root router**, not the full backend guide, frontend guide, or review contract.
 
 ---
 
 ## Read This First
 
-Before doing any non-trivial work, read these in this order:
+Before doing any non-trivial task, review these in this order when present:
 
 1. `docs/ai/repo-ai-adoption-roadmap.md`
-2. `ARCHITECTURE.md` if present
-3. `docs/current-foundation-status.md` if present
-4. `docs/decision-log.md` if present
-5. `docs/security-model.md` if present
-6. `docs/prompts/usage-guide.md` if present
+2. `docs/current-foundation-status.md`
+3. `ARCHITECTURE.md`
+4. `docs/decision-log.md`
+5. `docs/security-model.md`
+6. `docs/prompts/usage-guide.md`
 
 Then route by area:
 
-* backend work → read `backend/AGENTS.md` when it exists
-* frontend work → read `frontend/AGENTS.md` when it exists
-* review/audit work → read `code_review.md` when it exists
+* backend work → `backend/AGENTS.md`
+* frontend work → `frontend/AGENTS.md`
+* review / audit / risk work → `code_review.md`
+* prompt selection questions → `docs/prompts/catalog.md` and `docs/prompts/usage-guide.md`
 
-If one of the files above does not exist yet, do not invent its content. Continue with the files that do exist.
+If one of these files does not exist yet, do not invent it. Continue with the files that do exist.
 
 ---
 
@@ -47,21 +54,21 @@ When sources disagree, use this order:
 6. implementation code
 7. tests and CI workflows
 8. runbooks, QA docs, and developer guides
-9. chat summaries, temporary prompts, and scratch notes
+9. temporary notes, chat summaries, and scratch prompts
 
-### Required Behavior
+### Required behavior
 
 * If a lower-truth source conflicts with a higher-truth source, call it out explicitly.
-* Do not silently resolve contradictions.
+* Do not silently smooth over contradictions.
 * Do not let polished wording override repo evidence.
 
 ---
 
 ## Repo-Wide Hard Rules
 
-### 1. Do not improvise architecture truth
+### 1. Do not improvise system truth
 
-If the repo already has architecture, topology, security, or product-law documentation, use it.
+If the repo already defines architecture, topology, security, or product behavior, use that definition.
 
 ### 2. Keep diffs minimal
 
@@ -73,62 +80,60 @@ Do not switch package managers.
 
 ### 4. Do not modify environment files casually
 
-Do not edit `.env` files or secret-bearing config unless the task explicitly requires it.
+Do not edit `.env` files, secrets, or secret-bearing config unless the task explicitly requires it.
 
-### 5. Code changes and doc changes must stay coupled
+### 5. Keep code and docs coupled
 
-If a change affects architecture, contracts, runbooks, or review law, update the matching doc in the same change or call out the missing update.
+If a change affects architecture, contracts, runbooks, review behavior, or user-visible workflows, update or review the matching docs in the same change.
 
 ### 6. AI output is not proof
 
-Tests, CI, runtime validation, QA, and operational evidence still matter.
+Reasoning, summaries, and reviews do not replace tests, CI, topology checks, QA, or runtime evidence.
 
 ### 7. Keep AI repo-aware
 
-Do not produce generic reviews or generic architecture advice when the repo can answer the question more precisely.
+Prefer repo-specific review and guidance over generic best-practice commentary when the repo can answer the question more precisely.
 
 ---
 
 ## Documentation Coupling Rules
 
-Update or review the relevant docs when code changes affect these areas:
+Review or update the matching docs when code changes affect:
 
-* architecture or cross-cutting system rules → `ARCHITECTURE.md`, `docs/decision-log.md`
-* security/session/tenant rules → `docs/security-model.md`
-* API behavior or request/response contracts → relevant `docs/api/*.md`
-* operational behavior or recovery procedures → `docs/ops/runbooks.md`
-* QA-visible behavior or manual test flows → relevant QA docs
-* AI/review operating model → `docs/ai/repo-ai-adoption-roadmap.md`, `docs/prompts/usage-guide.md`, `code_review.md`, `AGENTS.md`
+* architecture or cross-cutting behavior → `ARCHITECTURE.md`, `docs/decision-log.md`
+* security, sessions, tenant rules, trust boundaries → `docs/security-model.md`
+* request/response or behavioral contracts → relevant API/contract docs
+* operational recovery, setup, deployment, or support behavior → `docs/ops/runbooks.md`
+* QA-visible flows, redirects, user messages, or test behavior → relevant QA docs
+* AI/review operating behavior → `AGENTS.md`, `code_review.md`, `docs/ai/repo-ai-adoption-roadmap.md`, `docs/prompts/usage-guide.md`, `docs/prompts/catalog.md`
 
-Do not duplicate the same rule into many files unless that duplication is intentional and justified.
+Do not create silent documentation drift.
 
 ---
 
 ## Topology-Sensitive Change Rules
 
-This repo has load-bearing topology and tenant-boundary rules.
-
 Treat a change as topology-sensitive if it touches any of the following:
 
 * reverse proxy behavior
 * host-derived tenant behavior
-* `/api/*` browser routing
-* SSR backend calling path
+* browser `/api/*` routing
+* SSR/backend calling path
 * `INTERNAL_API_URL`
 * forwarded header behavior
 * cookie/session behavior
 * auth bootstrap behavior
 * SSO start/callback behavior
 
-### Required Behavior For Topology-Sensitive Changes
+### Required behavior for topology-sensitive changes
 
-* Do not treat browser and SSR calls as interchangeable.
+* Do not treat browser and SSR requests as interchangeable.
 * Do not hardcode direct browser calls to backend origins.
-* Do not break host-derived tenant routing.
+* Do not weaken host-derived tenant routing.
 * Do not weaken tenant/session isolation assumptions.
-* Do not replace browser-native SSO navigation with `fetch()` flows.
+* Do not replace navigation-based auth flows with inappropriate `fetch()` flows.
 
-If you are touching one of these areas, be stricter than usual about validation and review.
+If a task touches one of these areas, use stricter review and stronger validation than usual.
 
 ---
 
@@ -136,8 +141,8 @@ If you are touching one of these areas, be stricter than usual about validation 
 
 These rules are repo-wide because they affect correctness across the stack:
 
-* browser calls must stay same-origin through `/api/*`
-* SSR/server-side calls may use direct backend access only through the internal backend path and only with the correct forwarded headers
+* browser API calls must stay same-origin through `/api/*`
+* SSR/server-side code may use direct backend access only through the approved internal path and with the correct forwarded headers
 * tenant identity must remain host-derived, not client-selected
 * auth/bootstrap truth must remain backend-authoritative
 * session and setup state must not become frontend-only truth
@@ -148,9 +153,9 @@ If a task changes frontend auth/bootstrap, SSR fetch wrappers, SSO flows, or pro
 
 ## Validation Routing
 
-Run the smallest meaningful checks for the area you changed.
+Run the smallest meaningful checks that actually prove the area you changed.
 
-### Repo-wide
+### Repo-wide baseline
 
 * `yarn fmt:check`
 * `yarn lint`
@@ -158,19 +163,19 @@ Run the smallest meaningful checks for the area you changed.
 
 ### Backend-focused changes
 
-Use backend-focused typecheck and tests.
+Run the backend-focused checks relevant to the affected area.
 
 ### Frontend-focused changes
 
-Use frontend-focused typecheck and unit tests.
+Run the frontend-focused checks relevant to the affected area.
 
 ### Topology/auth/session/proxy-sensitive changes
 
 Run the higher-confidence stack or end-to-end proof relevant to the change.
 
-### Important Rule
+### Required behavior
 
-Do not claim a change is proven if you only reasoned about it. Say what was actually run.
+When reporting results, say what was actually run. Do not imply runtime proof if you only reasoned about the change.
 
 ---
 
@@ -179,7 +184,7 @@ Do not claim a change is proven if you only reasoned about it. Say what was actu
 ### For implementation work
 
 * start from repo truth
-* keep the scope narrow
+* keep scope narrow
 * avoid hidden side effects
 * preserve architecture and documentation boundaries
 
@@ -210,7 +215,7 @@ Do not claim a change is proven if you only reasoned about it. Say what was actu
 
 * the task is review, audit, risk assessment, or merge/release evaluation
 
-### Consult `docs/prompts/usage-guide.md` when:
+### Consult `docs/prompts/catalog.md` and `docs/prompts/usage-guide.md` when:
 
 * you need to choose the right prompt or review mode for the stage of work
 

@@ -1,9 +1,9 @@
 # Prompt Catalog
 
 **Status:** Draft for lock
-**Version:** 1.0
+**Version:** 1.1
 **Scope:** Repo-level catalog of reusable AI review and decision-support prompts
-**Audience:** Engineers, reviewers, technical leads, architecture owners
+**Audience:** Engineers, reviewers, technical leads, and architecture owners
 **Owner:** Review / architecture owner
 **Last Updated:** 2026-03-29
 
@@ -11,14 +11,14 @@
 
 ## 1. What This Document Is
 
-This document is the entry point for the repo’s reusable AI prompts.
+This document is the **entry point for the repo’s reusable prompt pack**.
 
 It tells you:
 
 - which prompt files exist
 - what each one is for
-- when to use each one
-- where to look for timing and usage rules
+- when to use each one at a high level
+- where to look for detailed timing and usage rules
 
 This file is the **index**, not the full usage guide and not the review contract.
 
@@ -36,7 +36,7 @@ Use this file together with:
 
 ---
 
-## 3. Available Prompt Files
+## 3. Prompt Files In This Pack
 
 ### `docs/prompts/design-challenge.md`
 
@@ -68,17 +68,28 @@ Use when a change affects auth, session, topology, permissions, or tenant bounda
 
 ---
 
-## 4. How To Choose The Right Prompt
+## 4. Related Prompt Files Outside This Review Pack
 
-Use `docs/prompts/usage-guide.md` for timing and selection rules.
+### `docs/prompts/module-generation-fullstack.md`
+
+This file is a separate build/generation prompt, not one of the core review/decision prompts in this pack.
+
+It belongs in the broader prompts area, but it is intentionally not treated as one of the main review-mode prompts listed above.
+
+---
+
+## 5. How To Choose The Right Prompt
+
+Use `docs/prompts/usage-guide.md` for the detailed timing and selection rules.
 
 Short version:
 
-- before coding → design / architecture prompts
+- before coding → design/architecture prompts
 - during coding → module audit
 - before push → pre-push self-review
 - before or during PR → PR review
 - before merge on high-risk changes → security or migration prompt
+- before release or health checks → whole-repo / operability guidance from the usage guide
 
 If more than one prompt seems applicable:
 
@@ -88,18 +99,20 @@ If more than one prompt seems applicable:
 
 ---
 
-## 5. General Prompt Quality Rules
+## 6. Prompt Quality Rules
 
 Every prompt in this catalog assumes:
 
 - repo truth comes first
 - AI output is not proof
 - the real diff/files must be attached when review is concrete
-- the reviewer must say what was actually validated
-- docs that govern the area must be included when relevant
+- the reviewer should say what was actually validated
+- governing docs should be included when relevant
 
 ---
 
-## 6. Final Position
+## 7. Final Position
 
-This catalog exists so the repo has a durable set of reusable prompt artifacts instead of relying on scattered chat history.
+This catalog exists so the repo has a durable, reusable prompt system instead of relying on scattered chat history.
+
+It is the index for the prompt pack, not the usage guide and not the review contract.

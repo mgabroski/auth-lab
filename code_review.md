@@ -1,7 +1,7 @@
 # Code Review Guide
 
 **Status:** Draft for lock
-**Version:** 1.0
+**Version:** 1.1
 **Scope:** Repo-wide review contract for AI-assisted and human code review
 **Audience:** Engineers, reviewers, technical leads, architecture owners, and release owners
 **Owner:** Review / architecture owner
@@ -11,7 +11,7 @@
 
 ## 1. What This Document Is
 
-This document defines **how code review should be performed in this repository**.
+This document defines **how review should be performed in this repository**.
 
 It is the repo-wide review contract for:
 
@@ -30,11 +30,12 @@ It applies to both:
 - human review
 - AI-assisted review
 
-The purpose of this file is not to replace engineering judgment. Its purpose is to make review behavior:
+The goal is not to replace engineering judgment. The goal is to make review behavior:
 
 - consistent
 - grounded
 - evidence-based
+- severity-aware
 - harder to misuse
 
 ---
@@ -100,7 +101,7 @@ A good review should identify:
 - whether the review is static-only or backed by executed validation
 - any missing context that limits confidence
 
-### Required Behavior
+### Required behavior
 
 - Do not review from memory when the repo can answer the question.
 - Do not imply proof that was not actually run.
@@ -122,7 +123,7 @@ When sources disagree, use this order:
 8. runbooks, QA docs, and developer guides
 9. temporary notes, chat summaries, and scratch prompts
 
-### Required Behavior
+### Required behavior
 
 - If a lower-truth source conflicts with a higher-truth source, call it out explicitly.
 - Do not silently smooth over contradictions.
@@ -156,7 +157,7 @@ Use when the issue is real and worth fixing, but does not normally require block
 
 Use for maintainability, naming, readability, consistency, and other lower-risk improvements.
 
-### Required Behavior
+### Required behavior
 
 - Do not hide P0/P1 issues inside general commentary.
 - Do not inflate every nit into a blocker.
@@ -267,7 +268,7 @@ Look for doc coupling when the change affects:
 - QA-visible flows
 - AI/review operating behavior
 
-### Required Behavior
+### Required behavior
 
 If a change affects one of these areas but no doc update or doc review happened, call that out.
 
@@ -293,7 +294,7 @@ A review should distinguish between:
 - static validation
 - runtime proof
 
-### Required Behavior
+### Required behavior
 
 Do not say “looks good” in a way that implies runtime proof if runtime proof was never run.
 
@@ -324,9 +325,9 @@ Recommended structure:
    Missing doc updates, missing tests, missing validation, or unclear rollout details.
 
 7. **Final verdict**
-   Clear summary: safe / safe with fixes / not ready.
+   Safe / safe with fixes / not ready.
 
-### Required Behavior
+### Required behavior
 
 - Keep blocker findings prominent.
 - Keep advisory cleanup separate from risky issues.
