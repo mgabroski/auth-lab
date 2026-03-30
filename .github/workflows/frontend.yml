@@ -152,22 +152,26 @@ jobs:
 
       - name: Start Docker Compose stack (with local OIDC overlay)
         run: |
+          set +e
           docker compose --env-file infra/.env.stack \
             -f infra/docker-compose.yml \
             -f infra/docker-compose-ci-oidc.yml \
-            up --build -d || {
-              echo "❌ Docker Compose startup failed"
-              docker compose --env-file infra/.env.stack \
-                -f infra/docker-compose.yml \
-                -f infra/docker-compose-ci-oidc.yml \
-                ps || true
-              docker logs auth-lab-local-oidc --tail=100 || true
-              docker compose --env-file infra/.env.stack \
-                -f infra/docker-compose.yml \
-                -f infra/docker-compose-ci-oidc.yml \
-                logs local-oidc backend frontend proxy --tail=100 || true
-              exit 1
-            }
+            up --build -d
+          compose_exit=$?
+          set -e
+
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
+            ps || true
+
+          if [ "$compose_exit" -ne 0 ]; then
+            echo "::warning::docker compose up returned exit code ${compose_exit}; continuing to explicit readiness checks."
+            docker compose --env-file infra/.env.stack \
+              -f infra/docker-compose.yml \
+              -f infra/docker-compose-ci-oidc.yml \
+              logs local-oidc backend frontend proxy --tail=100 || true
+          fi
 
       - name: Wait for backend healthy
         run: |
@@ -179,6 +183,26 @@ jobs:
             sleep 3
           done
           echo "❌ Backend did not become healthy within 180s"
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
+            ps || true
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            -f infra/docker-compose-ci-oidc.yml \
+            logs proxy backend frontend local-oidc --tail=150 || true
+          exit 1
+
+      - name: Wait for frontend healthy through proxy
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://goodwill-open.lvh.me:3000/auth/login > /dev/null 2>&1; then
+              echo "✅ Frontend healthy through tenant host (attempt ${i})"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "❌ Frontend did not become healthy through proxy within 180s"
           docker compose --env-file infra/.env.stack \
             -f infra/docker-compose.yml \
             -f infra/docker-compose-ci-oidc.yml \
