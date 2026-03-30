@@ -13,8 +13,26 @@ services:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
     networks: [hubins_net]
     depends_on:
-      frontend:
-        condition: service_started
+      # WHY: proxy depends only on backend being healthy, not on frontend being started.
+      #
+      # The previous dependency was:
+      #   frontend: condition: service_started
+      #   backend:  condition: service_healthy
+      #
+      # That was the root cause of CI "Wait for backend healthy" timing out.
+      # Caddy only binds port 3000 after ALL depends_on conditions are satisfied.
+      # The frontend Docker image build (yarn install + next build --standalone)
+      # takes 5–15 minutes in a cold GitHub Actions runner. The CI health-check
+      # step polls goodwill-ca.lvh.me:3000/api/health (through this proxy) with a
+      # 180s ceiling — it always timed out before the frontend build completed and
+      # Caddy started.
+      #
+      # The fix: remove the frontend condition entirely. Caddy starts as soon as the
+      # backend is healthy. Caddy's reverse_proxy handles an unreachable frontend
+      # gracefully — it returns 502 for /* and /_next/* routes while the frontend
+      # container is still building, but /api/* routes to the backend work
+      # immediately. This is the correct behaviour: the proxy is a network component,
+      # not a readiness gate for the frontend application layer.
       backend:
         condition: service_healthy
     restart: unless-stopped

@@ -1,3 +1,5 @@
+name: Frontend
+
 on:
   push:
     paths:
@@ -83,38 +85,29 @@ jobs:
           getent hosts goodwill-ca.lvh.me
           getent hosts does-not-exist.lvh.me
 
-      - name: Force tenant hosts to stay local in CI
-        run: |
-          {
-            echo "NO_PROXY=localhost,127.0.0.1,::1,.lvh.me,lvh.me,goodwill-open.lvh.me,goodwill-ca.lvh.me,does-not-exist.lvh.me"
-            echo "no_proxy=localhost,127.0.0.1,::1,.lvh.me,lvh.me,goodwill-open.lvh.me,goodwill-ca.lvh.me,does-not-exist.lvh.me"
-            echo "HTTP_PROXY="
-            echo "http_proxy="
-            echo "HTTPS_PROXY="
-            echo "https_proxy="
-            echo "ALL_PROXY="
-            echo "all_proxy="
-          } >> "$GITHUB_ENV"
-          echo "Configured proxy bypass for tenant hosts."
-
       - name: Write infra/.env.stack for CI
         run: |
           cat > infra/.env.stack << 'ENVEOF'
           NODE_ENV=development
           PORT=3001
+
           POSTGRES_DB=auth_lab
           POSTGRES_USER=auth_lab
           POSTGRES_PASSWORD=auth_lab
           DATABASE_URL=postgres://auth_lab:auth_lab@postgres:5432/auth_lab
           REDIS_URL=redis://redis:6379
+
           LOG_LEVEL=info
           SERVICE_NAME=auth-lab-backend
+
           BCRYPT_COST=4
           SESSION_TTL_SECONDS=86400
+
           # MFA
           MFA_ISSUER=Hubins
           MFA_ENCRYPTION_KEY_BASE64=N0uFFqX7KeFnhghnTMaeBdLKsn+W2Q9WJE1D2Aqdf14=
           MFA_HMAC_KEY_BASE64=ygcc6Pr65aoBSF469cwcsVj+ARz1Pb2voHHHtt3bbCQ=
+
           # SSO
           # Must NOT be all-zeros outside NODE_ENV=test.
           SSO_STATE_ENCRYPTION_KEY=g+0YvJfzVdIgM+eoUUQ5UW3JKuGktJbtA6mvi3DcZDQ=
@@ -123,10 +116,12 @@ jobs:
           GOOGLE_CLIENT_SECRET=ci-placeholder-google-client-secret
           MICROSOFT_CLIENT_ID=ci-placeholder-microsoft-client-id
           MICROSOFT_CLIENT_SECRET=ci-placeholder-microsoft-client-secret
+
           # Local OIDC (CI only)
           LOCAL_OIDC_ENABLED=true
           LOCAL_OIDC_ISSUER=http://local-oidc:9998
           LOCAL_OIDC_CLIENT_ID=local-oidc-ci-client
+
           # Outbox
           # Must be different from MFA_ENCRYPTION_KEY_BASE64.
           OUTBOX_ENC_DEFAULT_VERSION=v1
@@ -134,6 +129,7 @@ jobs:
           OUTBOX_POLL_INTERVAL_MS=2000
           OUTBOX_BATCH_SIZE=10
           OUTBOX_MAX_ATTEMPTS=5
+
           # Email
           EMAIL_PROVIDER=smtp
           SMTP_HOST=mailpit
@@ -141,12 +137,14 @@ jobs:
           SMTP_SECURE=false
           SMTP_FROM=Hubins <noreply@hubins.local>
           SMTP_PUBLIC_BASE_URL=http://{tenantKey}.lvh.me:3000
+
           # Dev seed
           SEED_ON_START=true
           SEED_TENANT_KEY=goodwill-ca
           SEED_TENANT_NAME=GoodWill California
           SEED_ADMIN_EMAIL=system_admin@example.com
           SEED_INVITE_TTL_HOURS=168
+
           # Frontend container runtime / build
           FRONTEND_INTERNAL_API_URL=http://backend:3001
           NEXT_PUBLIC_ENV=development
@@ -176,15 +174,22 @@ jobs:
           fi
 
       - name: Wait for backend healthy
+        # WHY 90 iterations (270s):
+        # The proxy no longer waits on the frontend to start (see docker-compose.yml),
+        # so Caddy binds port 3000 as soon as the backend is healthy. However, in a
+        # cold CI runner the backend image build (yarn install + TypeScript compile)
+        # plus postgres/redis startup plus DB migrations can consume 3–4 minutes.
+        # 270s gives comfortable headroom without needing to expose backend port 3001
+        # directly to the host.
         run: |
-          for i in $(seq 1 60); do
-            if curl --noproxy '*' -sf http://goodwill-ca.lvh.me:3000/api/health > /dev/null 2>&1; then
+          for i in $(seq 1 90); do
+            if curl -sf http://goodwill-ca.lvh.me:3000/api/health > /dev/null 2>&1; then
               echo "✅ Backend healthy through proxy (attempt ${i})"
               exit 0
             fi
             sleep 3
           done
-          echo "❌ Backend did not become healthy within 180s"
+          echo "❌ Backend did not become healthy within 270s"
           docker compose --env-file infra/.env.stack \
             -f infra/docker-compose.yml \
             -f infra/docker-compose-ci-oidc.yml \
@@ -196,15 +201,24 @@ jobs:
           exit 1
 
       - name: Wait for frontend healthy through proxy
+        # WHY 120 iterations (360s):
+        # The frontend Docker image build (yarn install for the full workspace +
+        # next build --standalone) runs in parallel with the backend build during
+        # `docker compose up --build -d`. On a cold GitHub Actions runner with no
+        # layer cache, this build can take 5–10 minutes. The backend health check
+        # above passes at ~3–4 minutes. The additional 360s window here means the
+        # frontend has up to ~9–10 minutes total from stack start to be ready —
+        # sufficient for the worst-case cold build on standard GitHub-hosted runners.
+        # The overall job timeout-minutes: 30 is the outer bound.
         run: |
-          for i in $(seq 1 60); do
-            if curl --noproxy '*' -sf http://goodwill-open.lvh.me:3000/auth/login > /dev/null 2>&1; then
+          for i in $(seq 1 120); do
+            if curl -sf http://goodwill-open.lvh.me:3000/auth/login > /dev/null 2>&1; then
               echo "✅ Frontend healthy through tenant host (attempt ${i})"
               exit 0
             fi
             sleep 3
           done
-          echo "❌ Frontend did not become healthy through proxy within 180s"
+          echo "❌ Frontend did not become healthy through proxy within 360s"
           docker compose --env-file infra/.env.stack \
             -f infra/docker-compose.yml \
             -f infra/docker-compose-ci-oidc.yml \
@@ -218,7 +232,7 @@ jobs:
       - name: Wait for local OIDC server healthy
         run: |
           for i in $(seq 1 30); do
-            if curl --noproxy '*' -sf http://127.0.0.1:9998/.well-known/jwks.json > /dev/null 2>&1; then
+            if curl -sf http://127.0.0.1:9998/.well-known/jwks.json > /dev/null 2>&1; then
               echo "✅ Local OIDC server healthy (attempt ${i})"
               exit 0
             fi
@@ -247,10 +261,6 @@ jobs:
           MAILPIT_API_URL: http://localhost:8025
           CI: 'true'
           LOCAL_OIDC_ENABLED: 'true'
-          NO_PROXY: 'localhost,127.0.0.1,::1,.lvh.me,lvh.me,goodwill-open.lvh.me,goodwill-ca.lvh.me,does-not-exist.lvh.me'
-          HTTP_PROXY: ''
-          HTTPS_PROXY: ''
-          ALL_PROXY: ''
 
       - name: Upload traces and screenshots on failure
         if: failure()
