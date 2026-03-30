@@ -12,6 +12,8 @@
  * 3. Minimum import-boundary violations are blocked.
  * 4. Protected law/governance file changes require linked update context in the PR body.
  * 5. PRs must keep the Module Quality Gate section present and mark applicability.
+ * 6. Frontend same-origin discipline: browser/client code must not hardcode private backend
+ *    origins or pull SSR-only transport into client components.
  *
  * Notes:
  * - This is intentionally lean. It blocks common silent-drift paths without pretending
@@ -49,6 +51,30 @@ const BACKEND_SHARED_TO_MODULE_ALLOWLIST = new Set([
   'backend/src/shared/http/require-auth-context.ts -> backend/src/modules/memberships/membership.types.ts',
 ]);
 
+const FRONTEND_PRIVATE_BACKEND_ALLOWLIST = new Set([
+  'frontend/src/shared/ssr-api-client.ts',
+  'frontend/src/app/api/[...path]/route.ts',
+]);
+
+const FRONTEND_PRIVATE_BACKEND_PATTERNS = [
+  {
+    label: 'localhost:3001 backend origin',
+    regex: /https?:\/\/localhost:3001\b/,
+  },
+  {
+    label: '127.0.0.1:3001 backend origin',
+    regex: /https?:\/\/127\.0\.0\.1:3001\b/,
+  },
+  {
+    label: 'backend:3001 Docker-internal origin',
+    regex: /https?:\/\/backend:3001\b/,
+  },
+  {
+    label: 'INTERNAL_API_URL usage',
+    regex: /process\.env\.INTERNAL_API_URL\b/,
+  },
+];
+
 main();
 
 function main() {
@@ -63,6 +89,7 @@ function main() {
   failures.push(...checkPromptCatalog());
   failures.push(...checkRouteDocCoupling(changedFiles));
   failures.push(...checkImportBoundaries());
+  failures.push(...checkFrontendSameOriginDiscipline());
 
   const linkedUpdateContextResult = checkLinkedUpdateContext(changedFiles, prBody, event);
   failures.push(...linkedUpdateContextResult.failures);
@@ -195,6 +222,34 @@ function checkImportBoundaries() {
           `Frontend boundary violation: frontend/src/shared/ must not import from frontend/src/app/ (${relFile} -> ${relResolved}).`,
         );
       }
+    }
+  }
+
+  return failures;
+}
+
+function checkFrontendSameOriginDiscipline() {
+  const failures = [];
+  const frontendFiles = walkCodeFiles(abs('frontend/src'));
+
+  for (const file of frontendFiles) {
+    const relFile = toRepoPath(file);
+    const content = fs.readFileSync(file, 'utf8');
+
+    if (!FRONTEND_PRIVATE_BACKEND_ALLOWLIST.has(relFile)) {
+      for (const pattern of FRONTEND_PRIVATE_BACKEND_PATTERNS) {
+        if (pattern.regex.test(content)) {
+          failures.push(
+            `Frontend same-origin violation: ${relFile} must not reference ${pattern.label}. Browser/client-facing code must stay on same-origin /api/* paths.`,
+          );
+        }
+      }
+    }
+
+    if (isClientComponentFile(content) && importsSsrApiClient(content)) {
+      failures.push(
+        `Frontend topology violation: client component ${relFile} must not import ssr-api-client. Client/browser code must use api-client.ts and same-origin /api/* paths.`,
+      );
     }
   }
 
@@ -462,6 +517,14 @@ function resolveImportTarget(fromFile, specifier) {
   }
 
   return null;
+}
+
+function isClientComponentFile(content) {
+  return /^\s*['"]use client['"]\s*;?/m.test(content);
+}
+
+function importsSsrApiClient(content) {
+  return /(?:import|export)\s+(?:[^'"()]*?\s+from\s+)?['"][^'"]*ssr-api-client['"]/.test(content);
 }
 
 function git(args) {

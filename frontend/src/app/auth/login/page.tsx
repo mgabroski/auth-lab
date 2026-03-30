@@ -11,6 +11,11 @@
  *   signupAllowed = publicSignupEnabled && !adminInviteRequired.
  *   Using publicSignupEnabled alone would show a "Create account" link that
  *   the backend would reject when adminInviteRequired=true.
+ *
+ * RETURN-TO RULE:
+ * - Only pass through a real safe returnTo from the URL.
+ * - Do NOT default to '/' here. Plain login with no returnTo must let the
+ *   post-auth redirect logic choose the correct role landing (/app or /admin).
  */
 
 import { redirect } from 'next/navigation';
@@ -21,12 +26,7 @@ import { AuthShell } from '@/shared/auth/components/auth-shell';
 import { AuthNote } from '@/shared/auth/components/auth-form-ui';
 import { LoginForm } from '@/shared/auth/components/login-form';
 import { getRouteStateRedirectPath } from '@/shared/auth/redirects';
-import {
-  getReturnToPath,
-  normalizeReturnToPath,
-  readQueryParam,
-  type SearchParamsRecord,
-} from '@/shared/auth/url-tokens';
+import { getReturnToPath, readQueryParam, type SearchParamsRecord } from '@/shared/auth/url-tokens';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +69,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
   }
 
   const { tenant } = bootstrap.config;
-  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/');
+  const returnTo = getReturnToPath(resolvedSearchParams);
   const inviteNotice = getInviteContinuationNotice(readQueryParam(resolvedSearchParams, 'invite'));
 
   return (

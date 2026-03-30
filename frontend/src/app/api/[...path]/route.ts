@@ -124,6 +124,10 @@ function buildDownstreamHeaders(upstream: Response): Headers {
   return headers;
 }
 
+function mustNotHaveBody(status: number): boolean {
+  return status === 204 || status === 205 || status === 304;
+}
+
 async function proxy(request: NextRequest, context: RouteContext): Promise<Response> {
   const { path } = await context.params;
   const url = buildUpstreamUrl(request, path);
@@ -141,7 +145,11 @@ async function proxy(request: NextRequest, context: RouteContext): Promise<Respo
   });
 
   const responseHeaders = buildDownstreamHeaders(upstream);
-  const responseBody = request.method === 'HEAD' ? null : await upstream.arrayBuffer();
+
+  const responseBody =
+    request.method === 'HEAD' || mustNotHaveBody(upstream.status)
+      ? null
+      : await upstream.arrayBuffer();
 
   return new Response(responseBody, {
     status: upstream.status,
