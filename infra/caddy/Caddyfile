@@ -16,7 +16,11 @@
 # - CORS is intentionally NOT configured here (same-origin architecture eliminates it)
 #
 # LOCAL DEV:
-# - auto_https off — HTTP only (sid cookie is NOT Secure in dev; __Host- not used)
+# - Caddy defaults hostname-based site addresses to HTTPS, even on custom ports.
+# - auto_https off disables automatic certificate management and redirects,
+#   but it does NOT change a hostname site address from HTTPS to HTTP.
+# - This site block therefore uses an explicit http:// scheme so port 3000 is
+#   plaintext HTTP in local dev (sid cookie is NOT Secure in dev; __Host- not used).
 # - lvh.me wildcard — goodwill-ca.lvh.me resolves to 127.0.0.1, zero config
 # - Stack mode runs the standalone Next build, not `next dev`, so this file does
 #   NOT represent a proxy-mediated HMR environment.
@@ -29,10 +33,10 @@
 
 {
   admin off
-  auto_https off # HTTP only in local dev (Secure=false for sid cookie)
+  auto_https off # Explicit http:// site address below makes local dev plaintext HTTP.
 }
 
-*.lvh.me:3000 {
+http://*.lvh.me:3000 {
   # ── API routes → backend (strip /api prefix) ──────────────────────────
   @api path /api/*
 
