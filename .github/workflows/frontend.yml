@@ -85,6 +85,20 @@ jobs:
           getent hosts goodwill-ca.lvh.me
           getent hosts does-not-exist.lvh.me
 
+      - name: Force tenant hosts to stay local in CI
+        run: |
+          {
+            echo "NO_PROXY=localhost,127.0.0.1,::1,.lvh.me,lvh.me,goodwill-open.lvh.me,goodwill-ca.lvh.me,does-not-exist.lvh.me"
+            echo "no_proxy=localhost,127.0.0.1,::1,.lvh.me,lvh.me,goodwill-open.lvh.me,goodwill-ca.lvh.me,does-not-exist.lvh.me"
+            echo "HTTP_PROXY="
+            echo "http_proxy="
+            echo "HTTPS_PROXY="
+            echo "https_proxy="
+            echo "ALL_PROXY="
+            echo "all_proxy="
+          } >> "$GITHUB_ENV"
+          echo "Configured proxy bypass for tenant hosts."
+
       - name: Write infra/.env.stack for CI
         run: |
           cat > infra/.env.stack << 'ENVEOF'
@@ -176,7 +190,7 @@ jobs:
       - name: Wait for backend healthy
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://goodwill-ca.lvh.me:3000/api/health > /dev/null 2>&1; then
+            if curl --noproxy '*' -sf http://goodwill-ca.lvh.me:3000/api/health > /dev/null 2>&1; then
               echo "✅ Backend healthy through proxy (attempt ${i})"
               exit 0
             fi
@@ -196,7 +210,7 @@ jobs:
       - name: Wait for frontend healthy through proxy
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://goodwill-open.lvh.me:3000/auth/login > /dev/null 2>&1; then
+            if curl --noproxy '*' -sf http://goodwill-open.lvh.me:3000/auth/login > /dev/null 2>&1; then
               echo "✅ Frontend healthy through tenant host (attempt ${i})"
               exit 0
             fi
@@ -216,7 +230,7 @@ jobs:
       - name: Wait for local OIDC server healthy
         run: |
           for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:9998/.well-known/jwks.json > /dev/null 2>&1; then
+            if curl --noproxy '*' -sf http://127.0.0.1:9998/.well-known/jwks.json > /dev/null 2>&1; then
               echo "✅ Local OIDC server healthy (attempt ${i})"
               exit 0
             fi
@@ -245,6 +259,14 @@ jobs:
           MAILPIT_API_URL: http://localhost:8025
           CI: 'true'
           LOCAL_OIDC_ENABLED: 'true'
+          NO_PROXY: 'localhost,127.0.0.1,::1,.lvh.me,lvh.me,goodwill-open.lvh.me,goodwill-ca.lvh.me,does-not-exist.lvh.me'
+          no_proxy: 'localhost,127.0.0.1,::1,.lvh.me,lvh.me,goodwill-open.lvh.me,goodwill-ca.lvh.me,does-not-exist.lvh.me'
+          HTTP_PROXY: ''
+          http_proxy: ''
+          HTTPS_PROXY: ''
+          https_proxy: ''
+          ALL_PROXY: ''
+          all_proxy: ''
 
       - name: Upload traces and screenshots on failure
         if: failure()
