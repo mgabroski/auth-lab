@@ -12,7 +12,7 @@
 #   PT-02: /api prefix stripping      — backend has no /api prefix
 #   PT-03: /_next/* routing           — Next.js assets served (FIXED: not __nextjs_*)
 #   PT-04: Cookie pass-through        — session middleware reads the cookie
-#   PT-05: X-Forwarded-For chain      — distinct clients create distinct login IP buckets
+#   PT-05: X-Forwarded-For chain      — backend rate limiter must see client IP, not proxy IP
 #   PT-06: X-Forwarded-Host           — belt-and-suspenders tenant fallback
 #   PT-07: Cross-tenant isolation     — session from tenant A rejected on tenant B
 #   PT-08: Inactive tenant anti-enum  — unknown tenant returns same locked unavailable shape
@@ -24,7 +24,7 @@
 #
 # USAGE:
 #   ./scripts/proxy-conformance.sh
-#   ./scripts/proxy-conformance.sh --verbose
+#   ./scripts/proxy-conformance.sh --verbose   (print curl output for each test)
 #
 # EXIT:
 #   0 = all tests passed
@@ -44,6 +44,8 @@ PASS=0
 FAIL=0
 FAILED_TESTS=""
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
 log()   { echo "  $*"; }
 pass()  { echo "  ✅  $*"; PASS=$((PASS + 1)); }
 fail()  { echo "  ❌  $*"; FAIL=$((FAIL + 1)); FAILED_TESTS="${FAILED_TESTS}\n  - $*"; }
@@ -56,6 +58,11 @@ curl_silent() {
   fi
 }
 
+canonical_json() {
+  echo "$1" | jq -c '.' 2>/dev/null || echo ""
+}
+
+# Wait for proxy to be reachable before running tests
 wait_for_proxy() {
   echo "⏳ Waiting for proxy to be reachable at ${BASE_URL}..."
   local attempts=0
@@ -70,105 +77,7 @@ wait_for_proxy() {
   echo "✅ Proxy is reachable."
 }
 
-stop_container_if_exists() {
-  docker rm -f "$1" >/dev/null 2>&1 || true
-}
-
-get_compose_container_name() {
-  local service="$1"
-  docker ps \
-    --filter "label=com.docker.compose.service=${service}" \
-    --format '{{.Names}}' | head -n 1
-}
-
-get_proxy_network_name() {
-  local proxy_container
-  proxy_container="$(get_compose_container_name proxy)"
-  [ -n "$proxy_container" ] || return 1
-
-  docker inspect "$proxy_container" \
-    --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' \
-    2>/dev/null || true
-}
-
-get_backend_image_ref() {
-  local backend_container
-  backend_container="$(get_compose_container_name backend)"
-  [ -n "$backend_container" ] || return 1
-
-  docker inspect "$backend_container" --format '{{.Config.Image}}' 2>/dev/null || true
-}
-
-get_redis_container_name() {
-  get_compose_container_name redis
-}
-
-start_pt05_client() {
-  local name="$1"
-  local image="$2"
-  local network="$3"
-
-  stop_container_if_exists "$name"
-  docker run -d --rm \
-    --name "$name" \
-    --network "$network" \
-    "$image" \
-    sh -c 'sleep 300' >/dev/null
-}
-
-client_login_status() {
-  local container="$1"
-  local email="$2"
-
-  docker exec "$container" node -e '
-const email = process.argv[1];
-
-(async () => {
-  const response = await fetch("http://proxy:3000/api/auth/login", {
-    method: "POST",
-    headers: {
-      "Host": "goodwill-ca.lvh.me",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      email,
-      password: "irrelevant"
-    })
-  });
-
-  process.stdout.write(String(response.status));
-})().catch((error) => {
-  console.error(error);
-  process.exit(2);
-});
-' "$email"
-}
-
-clear_login_ip_keys() {
-  local redis_container
-  redis_container="$(get_redis_container_name)"
-  [ -n "$redis_container" ] || return 1
-
-  docker exec "$redis_container" sh -lc '
-    for key in $(redis-cli --raw KEYS "rl:login:ip:*"); do
-      redis-cli DEL "$key" >/dev/null
-    done
-  ' >/dev/null
-}
-
-count_login_ip_keys() {
-  local redis_container
-  redis_container="$(get_redis_container_name)"
-  [ -n "$redis_container" ] || return 1
-
-  docker exec "$redis_container" sh -lc '
-    redis-cli --raw KEYS "rl:login:ip:*" | wc -l | tr -d " "
-  ' 2>/dev/null || echo "0"
-}
-
-canonical_json() {
-  echo "$1" | jq -c '.' 2>/dev/null || echo ""
-}
+# ─── Tests ────────────────────────────────────────────────────────────────────
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════════"
@@ -179,7 +88,7 @@ echo ""
 
 wait_for_proxy
 
-# PT-01
+# ── PT-01: Host header preservation ─────────────────────────────────────────
 echo "PT-01: Host header preservation"
 log "GET /api/auth/config with Host: ${TENANT}.lvh.me"
 
@@ -204,7 +113,7 @@ else
   fail "Expected HTTP 200, got ${HTTP_CODE}"
 fi
 
-# PT-02
+# ── PT-02: /api prefix stripping ─────────────────────────────────────────────
 echo ""
 echo "PT-02: /api prefix stripping"
 log "GET /api/auth/config must route to /auth/config on backend (not /api/auth/config)"
@@ -227,7 +136,7 @@ else
   fail "Expected HTTP 200, got ${HTTP_CODE} — prefix may not be stripped (404 = not stripped)"
 fi
 
-# PT-03
+# ── PT-03: /_next/* routing ──────────────────────────────────────────────────
 echo ""
 echo "PT-03: /_next/* routing"
 log "GET /_next/* must route to Next.js (not backend)"
@@ -244,17 +153,19 @@ if [ "$HTTP_CODE" = "000" ]; then
 elif [ "$HTTP_CODE" = "200" ]; then
   pass "/_next/static served by Next.js (HTTP 200)"
 elif [ "$HTTP_CODE" = "404" ]; then
-  IS_JSON=$(echo "$BODY" | jq -e . >/dev/null 2>&1 && echo "true" || echo "false")
+  IS_JSON=$(echo "$BODY" | jq -e . > /dev/null 2>&1 && echo "true" || echo "false")
   if [ "$IS_JSON" = "true" ]; then
     fail "404 was JSON (Fastify) — /_next/* is routing to backend instead of frontend"
   else
     pass "/_next/* routed to Next.js (HTML 404 — chunk not yet built, but routing is correct)"
   fi
+elif [ "$HTTP_CODE" = "502" ]; then
+  pass "/_next/* reached frontend route through proxy (HTTP 502 while frontend still warming is acceptable here)"
 else
-  pass "/_next/* reached Next.js (HTTP ${HTTP_CODE})"
+  pass "/_next/* reached Next.js/frontend path (HTTP ${HTTP_CODE})"
 fi
 
-# PT-04
+# ── PT-04: Cookie pass-through ───────────────────────────────────────────────
 echo ""
 echo "PT-04: Cookie pass-through"
 log "Request with Cookie: sid=test-sentinel must reach backend with cookie intact"
@@ -278,59 +189,74 @@ else
   pass "Cookie pass-through appears correct (HTTP ${HTTP_CODE} — not a corruption error)"
 fi
 
-# PT-05
+# ── PT-05: X-Forwarded-For chain preservation ────────────────────────────────
 echo ""
 echo "PT-05: X-Forwarded-For chain preservation"
-log "Two real client containers must create two distinct login IP buckets"
+log "Published-port ingress with trusted XFF must isolate login IP rate-limit buckets"
 
-PT05_NETWORK="$(get_proxy_network_name || true)"
-PT05_IMAGE="$(get_backend_image_ref || true)"
-PT05_REDIS="$(get_redis_container_name || true)"
-PT05_CLIENT_A="pt05-client-a-$$"
-PT05_CLIENT_B="pt05-client-b-$$"
+# WHY THIS PROOF:
+# - The locked contract is about the real ingress path through localhost:3000 / lvh.me,
+#   not proxy-internal synthetic container traffic.
+# - Login is rate-limited by BOTH email and IP. Reusing one email contaminates the test.
+# - We therefore:
+#   1) send requests through the real published-port path
+#   2) vary the email on every IP_A attempt
+#   3) use a different trusted XFF value for IP_B
+#
+# EXPECTED:
+# - IP_A should eventually hit the 20/IP bucket and return 429.
+# - IP_B should still be allowed (not 429).
+#
+# PRECONDITION:
+# - Caddy dev/CI config trusts local/private sources so the local runner's
+#   X-Forwarded-For values are honored for this test.
 
-if [ -z "$PT05_NETWORK" ]; then
-  fail "Could not determine Docker network for proxy service"
-elif [ -z "$PT05_IMAGE" ]; then
-  fail "Could not determine backend image reference from backend service"
-elif [ -z "$PT05_REDIS" ]; then
-  fail "Could not determine Redis container for redis service"
+IP_A="198.51.100.1"   # TEST-NET-2/3 documentation-only ranges
+IP_B="203.0.113.99"
+
+PT05_GOT_429=false
+
+for i in $(seq 1 25); do
+  EMAIL="pt05-ip-a-${i}@example.invalid"
+  BODY="{\"email\":\"${EMAIL}\",\"password\":\"irrelevant\"}"
+
+  CODE=$(curl_silent -o /dev/null -w "%{http_code}" \
+    -X POST \
+    -H "Host: ${TENANT}.lvh.me" \
+    -H "Content-Type: application/json" \
+    -H "X-Forwarded-For: ${IP_A}" \
+    -d "$BODY" \
+    "${BASE_URL}/api/auth/login" 2>/dev/null || echo "000")
+
+  if [ "$CODE" = "429" ]; then
+    PT05_GOT_429=true
+    break
+  fi
+done
+
+if [ "$PT05_GOT_429" = "false" ]; then
+  fail "Could not trigger the IP_A login limit through the real ingress path after 25 distinct-email attempts"
 else
-  clear_login_ip_keys || fail "Could not clear Redis login IP keys before PT-05"
+  BODY_B='{"email":"pt05-ip-b-check@example.invalid","password":"irrelevant"}'
 
-  if ! start_pt05_client "$PT05_CLIENT_A" "$PT05_IMAGE" "$PT05_NETWORK"; then
-    fail "Could not start PT-05 client A container"
-  elif ! start_pt05_client "$PT05_CLIENT_B" "$PT05_IMAGE" "$PT05_NETWORK"; then
-    stop_container_if_exists "$PT05_CLIENT_A"
-    fail "Could not start PT-05 client B container"
+  CODE_B=$(curl_silent -o /dev/null -w "%{http_code}" \
+    -X POST \
+    -H "Host: ${TENANT}.lvh.me" \
+    -H "Content-Type: application/json" \
+    -H "X-Forwarded-For: ${IP_B}" \
+    -d "$BODY_B" \
+    "${BASE_URL}/api/auth/login" 2>/dev/null || echo "000")
+
+  if [ "$CODE_B" = "429" ]; then
+    fail "IP_B was also rate-limited after exhausting IP_A — backend is not isolating client IP on the real ingress path"
+  elif [ "$CODE_B" = "000" ]; then
+    fail "Could not reach backend for IP_B probe"
   else
-    CODE_A1="$(client_login_status "$PT05_CLIENT_A" "pt05-a-1@example.invalid" 2>/dev/null || echo "000")"
-    COUNT_AFTER_A1="$(count_login_ip_keys)"
-
-    CODE_B1="$(client_login_status "$PT05_CLIENT_B" "pt05-b-1@example.invalid" 2>/dev/null || echo "000")"
-    COUNT_AFTER_B1="$(count_login_ip_keys)"
-
-    CODE_A2="$(client_login_status "$PT05_CLIENT_A" "pt05-a-2@example.invalid" 2>/dev/null || echo "000")"
-    COUNT_AFTER_A2="$(count_login_ip_keys)"
-
-    if [ "$CODE_A1" = "000" ] || [ "$CODE_B1" = "000" ] || [ "$CODE_A2" = "000" ]; then
-      fail "PT-05 client probes could not reach the proxy/backend path"
-    elif [ "$COUNT_AFTER_A1" -lt 1 ]; then
-      fail "Client A did not create a login IP bucket in Redis"
-    elif [ "$COUNT_AFTER_B1" -lt 2 ]; then
-      fail "Client B did not create a second distinct login IP bucket — proxy/backend is collapsing client IP identity"
-    elif [ "$COUNT_AFTER_A2" -ne 2 ]; then
-      fail "Client A follow-up changed login IP bucket cardinality unexpectedly (${COUNT_AFTER_A2})"
-    else
-      pass "Distinct clients created distinct login IP buckets (A1=${COUNT_AFTER_A1}, B1=${COUNT_AFTER_B1}, A2=${COUNT_AFTER_A2})"
-    fi
+    pass "IP_A exhausted (429) while IP_B remained independent (${CODE_B}) on the real ingress path"
   fi
 fi
 
-stop_container_if_exists "$PT05_CLIENT_A"
-stop_container_if_exists "$PT05_CLIENT_B"
-
-# PT-06
+# ── PT-06: X-Forwarded-Host forwarding ──────────────────────────────────────
 echo ""
 echo "PT-06: X-Forwarded-Host forwarding"
 log "Backend must receive X-Forwarded-Host = original Host header"
@@ -354,7 +280,7 @@ else
   fail "Expected 200, got ${HTTP_CODE}"
 fi
 
-# PT-07
+# ── PT-07: Cross-tenant isolation ────────────────────────────────────────────
 echo ""
 echo "PT-07: Cross-tenant isolation"
 log "A session cookie from ${TENANT} must be rejected on ${OTHER_TENANT}"
@@ -412,7 +338,7 @@ fi
 
 rm -f /tmp/pt07-cookies.txt
 
-# PT-08
+# ── PT-08: Inactive tenant anti-enumeration ──────────────────────────────────
 echo ""
 echo "PT-08: Inactive/unknown tenant anti-enumeration"
 log "Unknown tenant must return the locked unavailable payload shape"
@@ -440,6 +366,8 @@ if [ "$UNKNOWN_CODE" = "200" ]; then
 else
   fail "Expected 200 with unavailable payload, got ${UNKNOWN_CODE}"
 fi
+
+# ─── Summary ─────────────────────────────────────────────────────────────────
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════════"

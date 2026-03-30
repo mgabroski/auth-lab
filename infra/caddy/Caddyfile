@@ -11,19 +11,20 @@
 # - /*       → frontend:3000
 # - Host header forwarded EXACTLY as received (tenant resolution depends on this)
 # - X-Forwarded-Host forwarded explicitly (belt-and-suspenders for tenant fallback)
-# - X-Forwarded-For left to Caddy default append behaviour
+# - X-Forwarded-For must preserve client identity for rate limiting / audit fidelity
 # - X-Forwarded-Proto forwarded (backend uses this for public-origin reconstruction)
 # - CORS is intentionally NOT configured here (same-origin architecture eliminates it)
 #
-# LOCAL DEV:
+# LOCAL DEV / CI:
 # - Caddy defaults hostname-based site addresses to HTTPS, even on custom ports.
 # - auto_https off disables automatic certificate management and redirects,
 #   but it does NOT change a hostname site address from HTTPS to HTTP.
 # - This site block therefore uses an explicit http:// scheme so port 3000 is
 #   plaintext HTTP in local dev (sid cookie is NOT Secure in dev; __Host- not used).
-# - lvh.me wildcard — goodwill-ca.lvh.me resolves to 127.0.0.1, zero config
-# - Stack mode runs the standalone Next build, not `next dev`, so this file does
-#   NOT represent a proxy-mediated HMR environment.
+# - PT-05 must exercise the real published-port path (runner/browser -> localhost:3000 -> Caddy).
+# - For that proof, Caddy must trust loopback + Docker-private source ranges so
+#   synthetic X-Forwarded-For values from the local runner/CI can be parsed as
+#   client IP in dev/CI. This is DEV-ONLY behaviour; production uses nginx, not this file.
 #
 # TENANT RESOLUTION:
 # - Browser navigates to goodwill-ca.lvh.me:3000
@@ -33,7 +34,17 @@
 
 {
   admin off
-  auto_https off # Explicit http:// site address below makes local dev plaintext HTTP.
+  auto_https off
+
+  servers {
+    # WHY:
+    # - Enables client-IP parsing from X-Forwarded-For for trusted local/private sources.
+    # - private_ranges includes 127.0.0.1/8, ::1, and Docker bridge ranges such as 172.16.0.0/12.
+    # - PT-05 uses the real localhost:3000 ingress path in CI and needs Caddy to
+    #   honor the synthetic XFF value from the trusted local runner.
+    trusted_proxies static private_ranges
+    trusted_proxies_strict
+  }
 }
 
 http://*.lvh.me:3000 {
@@ -46,14 +57,16 @@ http://*.lvh.me:3000 {
       header_up Host {host}
       header_up X-Forwarded-Host {host}
       header_up X-Forwarded-Proto {scheme}
-      # WHY: X-Forwarded-For is intentionally NOT set here.
-      # Caddy's reverse_proxy directive already appends the real client IP
-      # to the X-Forwarded-For chain by default.
+      # WHY:
+      # - With trusted_proxies configured globally above, Caddy will parse client IP
+      #   from trusted X-Forwarded-For on the real ingress path and reverse_proxy will
+      #   proxy/augment the sensitive X-Forwarded-* headers accordingly.
+      # - Do not manually overwrite X-Forwarded-For here unless we are intentionally
+      #   changing the trust model.
     }
   }
 
   # ── Next.js assets → frontend ──────────────────────────────────────────
-  # Handles static chunks and runtime asset requests for the standalone build.
   @nextAssets path /_next/*
 
   handle @nextAssets {
