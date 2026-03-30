@@ -4,12 +4,20 @@ on:
   push:
     paths:
       - 'infra/**'
-      - 'packages/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'scripts/proxy-conformance.sh'
       - '.github/workflows/proxy-conformance.yml'
   pull_request:
     paths:
       - 'infra/**'
-      - 'packages/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - 'scripts/proxy-conformance.sh'
       - '.github/workflows/proxy-conformance.yml'
 
 jobs:
@@ -20,16 +28,9 @@ jobs:
 
     steps:
       - name: Checkout
-        # WHY:
-        # - actions/checkout@v4 is still on the deprecated Node 20 action runtime.
-        # - v6 is the current supported line and removes the warning in this workflow.
         uses: actions/checkout@v6
 
       - name: Pin tenant hosts for CI
-        # WHY: PT-01..PT-08 use curl with full URLs (e.g. http://goodwill-ca.lvh.me:3000/...).
-        # Playwright does the same in the frontend workflow. lvh.me is a public
-        # wildcard DNS, but it's more reliable to pin these in /etc/hosts so we
-        # don't depend on external DNS resolution in CI.
         run: |
           {
             echo "127.0.0.1 goodwill-ca.lvh.me"
@@ -114,19 +115,6 @@ jobs:
           fi
 
       - name: Wait for backend healthy
-        # WHY docker inspect instead of curl-through-proxy:
-        #
-        # curl http://goodwill-ca.lvh.me:3000/api/health fails in GH Actions
-        # even when all containers are up and docker ps shows the port bound.
-        # Caddy has zero access log entries — the runner's request never reaches
-        # the container. This is an iptables/userland-proxy issue in the runner
-        # kernel: hostname-resolved requests to Docker-published ports fail
-        # silently. Docker's own healthcheck runs inside the container and is
-        # unaffected. We query it directly via docker inspect.
-        #
-        # WHY 90 iterations (270s):
-        # Cold CI runner: backend image build + postgres/redis startup + migrations
-        # can take 3–4 minutes. 270s gives comfortable headroom.
         run: |
           for i in $(seq 1 90); do
             STATUS=$(docker inspect --format='{{.State.Health.Status}}' hubins-backend-1 2>/dev/null || echo "not-found")
@@ -147,10 +135,6 @@ jobs:
           exit 1
 
       - name: Verify proxy routes /api to backend
-        # WHY: docker inspect only confirms backend internal health. This step
-        # confirms Caddy is actually routing /api/* to the backend before PT-01..08
-        # run. Using localhost:3000 + explicit Host header bypasses the
-        # DNS→iptables path that was failing, while still exercising Caddy routing.
         run: |
           STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
             -H "Host: goodwill-ca.lvh.me" \
@@ -167,12 +151,6 @@ jobs:
           fi
 
       - name: Run proxy conformance tests (PT-01..PT-08)
-        # WHY localhost + explicit Host headers in the conformance script:
-        # The same iptables issue that breaks direct hostname curl applies here.
-        # scripts/proxy-conformance.sh must use:
-        #   curl -H "Host: goodwill-ca.lvh.me" http://localhost:3000/api/...
-        # NOT:
-        #   curl http://goodwill-ca.lvh.me:3000/api/...
         run: ./scripts/proxy-conformance.sh
 
       - name: Tear down
