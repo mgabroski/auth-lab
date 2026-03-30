@@ -174,19 +174,34 @@ jobs:
           fi
 
       - name: Wait for backend healthy
+        # WHY docker inspect instead of curl-through-proxy:
+        #
+        # Previously this step polled http://goodwill-ca.lvh.me:3000/api/health,
+        # which routes through the Caddy proxy. Even after fixing the proxy
+        # depends_on (docker-compose.yml), the curl still failed — Caddy had zero
+        # access log entries, meaning the runner's HTTP request never reached the
+        # container. This is a known iptables/userland-proxy behaviour in GitHub
+        # Actions: the host→Docker port forwarding path for hostname-resolved
+        # requests is unreliable in some runner kernel configurations, even when
+        # `docker ps` shows `0.0.0.0:3000->3000/tcp` bound and the Docker
+        # healthcheck is passing.
+        #
+        # Docker is already tracking backend health correctly via its own
+        # internal healthcheck (wget localhost:${PORT}/health inside the container).
+        # Querying that state via `docker inspect` completely bypasses the
+        # hostname-resolution → iptables → userland-proxy chain that was failing.
+        #
         # WHY 90 iterations (270s):
-        # The proxy no longer waits on the frontend to start (see docker-compose.yml),
-        # so Caddy binds port 3000 as soon as the backend is healthy. However, in a
-        # cold CI runner the backend image build (yarn install + TypeScript compile)
-        # plus postgres/redis startup plus DB migrations can consume 3–4 minutes.
-        # 270s gives comfortable headroom without needing to expose backend port 3001
-        # directly to the host.
+        # Cold CI runner: backend image build (yarn install + tsc) + postgres/redis
+        # startup + DB migrations can approach 3–4 minutes. 270s is safe headroom.
         run: |
           for i in $(seq 1 90); do
-            if curl -sf http://goodwill-ca.lvh.me:3000/api/health > /dev/null 2>&1; then
-              echo "✅ Backend healthy through proxy (attempt ${i})"
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' hubins-backend-1 2>/dev/null || echo "not-found")
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ Backend Docker-healthy (attempt ${i})"
               exit 0
             fi
+            echo "  backend health status: ${STATUS} (attempt ${i}/90)"
             sleep 3
           done
           echo "❌ Backend did not become healthy within 270s"
@@ -200,22 +215,59 @@ jobs:
             logs proxy backend frontend local-oidc --tail=150 || true
           exit 1
 
+      - name: Verify proxy routes /api to backend
+        # WHY a separate step: the docker inspect above confirms the backend is
+        # healthy inside Docker. This step confirms Caddy is actually routing
+        # /api/* to the backend correctly before Playwright runs.
+        #
+        # WHY localhost + explicit Host header instead of the hostname URL:
+        # curl http://localhost:3000 connects directly to the bound port without
+        # going through DNS resolution. Setting Host: manually gives Caddy the
+        # tenant context it needs to match the *.lvh.me:3000 site block and route
+        # /api/health to the backend. This sidesteps the iptables/userland-proxy
+        # issue that caused the previous curl-via-hostname approach to fail silently.
+        run: |
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -H "Host: goodwill-ca.lvh.me" \
+            http://localhost:3000/api/health 2>/dev/null || echo "000")
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Proxy routing verified — /api/health returned HTTP ${STATUS}"
+          else
+            echo "❌ Proxy routing check failed — HTTP ${STATUS}"
+            echo "--- verbose curl output ---"
+            curl -v -H "Host: goodwill-ca.lvh.me" http://localhost:3000/api/health || true
+            echo "--- Caddy logs ---"
+            docker compose --env-file infra/.env.stack \
+              -f infra/docker-compose.yml \
+              -f infra/docker-compose-ci-oidc.yml \
+              logs proxy --tail=50 || true
+            exit 1
+          fi
+
       - name: Wait for frontend healthy through proxy
+        # WHY localhost + explicit Host header (not hostname URL):
+        # Same iptables/userland-proxy issue as the backend check — curl via a
+        # hostname that resolves to 127.0.0.1 fails to reach Docker's bound port
+        # in this GH Actions runner environment. Using localhost:3000 with an
+        # explicit Host header connects directly and lets Caddy route correctly.
+        #
         # WHY 120 iterations (360s):
         # The frontend Docker image build (yarn install for the full workspace +
-        # next build --standalone) runs in parallel with the backend build during
-        # `docker compose up --build -d`. On a cold GitHub Actions runner with no
-        # layer cache, this build can take 5–10 minutes. The backend health check
-        # above passes at ~3–4 minutes. The additional 360s window here means the
-        # frontend has up to ~9–10 minutes total from stack start to be ready —
-        # sufficient for the worst-case cold build on standard GitHub-hosted runners.
+        # next build --standalone) runs in parallel with the backend build. On a
+        # cold runner with no layer cache this can take 5–10 minutes. The backend
+        # check above passes at ~3–4 minutes. 360s means the frontend has up to
+        # ~9–10 minutes total from stack start — sufficient for worst-case cold builds.
         # The overall job timeout-minutes: 30 is the outer bound.
         run: |
           for i in $(seq 1 120); do
-            if curl -sf http://goodwill-open.lvh.me:3000/auth/login > /dev/null 2>&1; then
-              echo "✅ Frontend healthy through tenant host (attempt ${i})"
+            STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+              -H "Host: goodwill-open.lvh.me" \
+              http://localhost:3000/auth/login 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "307" ] || [ "$STATUS" = "302" ]; then
+              echo "✅ Frontend healthy through proxy — /auth/login returned HTTP ${STATUS} (attempt ${i})"
               exit 0
             fi
+            echo "  frontend status: HTTP ${STATUS} (attempt ${i}/120)"
             sleep 3
           done
           echo "❌ Frontend did not become healthy through proxy within 360s"

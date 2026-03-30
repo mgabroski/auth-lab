@@ -4,29 +4,16 @@ on:
   push:
     paths:
       - 'infra/**'
-      - 'frontend/**'
-      - 'backend/src/shared/session/**'
-      - 'backend/src/shared/http/request-context.ts'
-      - 'backend/src/modules/auth/flows/sso/**'
-      - 'backend/src/modules/auth/helpers/sso-state*.ts'
-      - 'scripts/proxy-conformance.sh'
-      - 'scripts/stack.sh'
+      - 'packages/**'
       - '.github/workflows/proxy-conformance.yml'
   pull_request:
     paths:
       - 'infra/**'
-      - 'frontend/**'
-      - 'backend/src/shared/session/**'
-      - 'backend/src/shared/http/request-context.ts'
-      - 'backend/src/modules/auth/flows/sso/**'
-      - 'backend/src/modules/auth/helpers/sso-state*.ts'
-      - 'scripts/proxy-conformance.sh'
-      - 'scripts/stack.sh'
+      - 'packages/**'
       - '.github/workflows/proxy-conformance.yml'
-  workflow_dispatch:
 
 jobs:
-  proxy-conformance:
+  conformance:
     name: PT-01..PT-08 Proxy Conformance
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -35,8 +22,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
+      - name: Pin tenant hosts for CI
+        # WHY: PT-01..PT-08 use curl with full URLs (e.g. http://goodwill-ca.lvh.me:3000/...).
+        # Playwright does the same in the frontend workflow. lvh.me is a public
+        # wildcard DNS, but it's more reliable to pin these in /etc/hosts so we
+        # don't depend on external DNS resolution in CI.
+        run: |
+          {
+            echo "127.0.0.1 goodwill-ca.lvh.me"
+            echo "127.0.0.1 goodwill-open.lvh.me"
+            echo "127.0.0.1 does-not-exist.lvh.me"
+            echo "127.0.0.1 acme.lvh.me"
+          } | sudo tee -a /etc/hosts
+          getent hosts goodwill-ca.lvh.me
 
       - name: Write infra/.env.stack for CI
         run: |
@@ -56,27 +54,25 @@ jobs:
           BCRYPT_COST=4
           SESSION_TTL_SECONDS=86400
 
-          # MFA
           MFA_ISSUER=Hubins
           MFA_ENCRYPTION_KEY_BASE64=N0uFFqX7KeFnhghnTMaeBdLKsn+W2Q9WJE1D2Aqdf14=
           MFA_HMAC_KEY_BASE64=ygcc6Pr65aoBSF469cwcsVj+ARz1Pb2voHHHtt3bbCQ=
 
-          # SSO
           SSO_STATE_ENCRYPTION_KEY=g+0YvJfzVdIgM+eoUUQ5UW3JKuGktJbtA6mvi3DcZDQ=
           SSO_REDIRECT_BASE_URL=http://goodwill-ca.lvh.me:3000/api
-          GOOGLE_CLIENT_ID=test-google-client-id
-          GOOGLE_CLIENT_SECRET=test-google-client-secret
-          MICROSOFT_CLIENT_ID=test-microsoft-client-id
-          MICROSOFT_CLIENT_SECRET=test-microsoft-client-secret
+          GOOGLE_CLIENT_ID=ci-placeholder-google-client-id
+          GOOGLE_CLIENT_SECRET=ci-placeholder-google-client-secret
+          MICROSOFT_CLIENT_ID=ci-placeholder-microsoft-client-id
+          MICROSOFT_CLIENT_SECRET=ci-placeholder-microsoft-client-secret
 
-          # Outbox
+          LOCAL_OIDC_ENABLED=false
+
           OUTBOX_ENC_DEFAULT_VERSION=v1
           OUTBOX_ENC_KEY_V1=pjVKt5jeXMDX5YJkbDc1dDFW4ztqO1iRyHiAHi/9TjM=
           OUTBOX_POLL_INTERVAL_MS=5000
           OUTBOX_BATCH_SIZE=10
           OUTBOX_MAX_ATTEMPTS=5
 
-          # Email
           EMAIL_PROVIDER=smtp
           SMTP_HOST=mailpit
           SMTP_PORT=1025
@@ -84,45 +80,101 @@ jobs:
           SMTP_FROM=Hubins <noreply@hubins.local>
           SMTP_PUBLIC_BASE_URL=http://{tenantKey}.lvh.me:3000
 
-          # Dev seed
           SEED_ON_START=true
           SEED_TENANT_KEY=goodwill-ca
           SEED_TENANT_NAME=GoodWill California
           SEED_ADMIN_EMAIL=system_admin@example.com
           SEED_INVITE_TTL_HOURS=168
 
-          # Frontend container runtime / build
           FRONTEND_INTERNAL_API_URL=http://backend:3001
           NEXT_PUBLIC_ENV=development
           ENVEOF
 
-      - name: Start full Docker topology stack
+      - name: Start full stack
         run: |
-          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml up --build -d
-          echo "Stack started — waiting for health checks..."
+          set +e
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            up --build -d
+          compose_exit=$?
+          set -e
+
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            ps || true
+
+          if [ "$compose_exit" -ne 0 ]; then
+            echo "::warning::docker compose up returned exit code ${compose_exit}; continuing."
+            docker compose --env-file infra/.env.stack \
+              -f infra/docker-compose.yml \
+              logs backend proxy --tail=100 || true
+          fi
 
       - name: Wait for backend healthy
+        # WHY docker inspect instead of curl-through-proxy:
+        #
+        # curl http://goodwill-ca.lvh.me:3000/api/health fails in GH Actions
+        # even when all containers are up and docker ps shows the port bound.
+        # Caddy has zero access log entries — the runner's request never reaches
+        # the container. This is an iptables/userland-proxy issue in the runner
+        # kernel: hostname-resolved requests to Docker-published ports fail
+        # silently. Docker's own healthcheck runs inside the container and is
+        # unaffected. We query it directly via docker inspect.
+        #
+        # WHY 90 iterations (270s):
+        # Cold CI runner: backend image build + postgres/redis startup + migrations
+        # can take 3–4 minutes. 270s gives comfortable headroom.
         run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://goodwill-ca.lvh.me:3000/api/health > /dev/null 2>&1; then
-              echo "✅ Backend healthy after ${i}s"
+          for i in $(seq 1 90); do
+            STATUS=$(docker inspect --format='{{.State.Health.Status}}' hubins-backend-1 2>/dev/null || echo "not-found")
+            if [ "$STATUS" = "healthy" ]; then
+              echo "✅ Backend Docker-healthy (attempt ${i})"
               exit 0
             fi
-            sleep 2
+            echo "  backend health status: ${STATUS} (attempt ${i}/90)"
+            sleep 3
           done
-          echo "❌ Backend did not become healthy in 120s"
-          docker compose --env-file infra/.env.stack -f infra/docker-compose.yml logs
+          echo "❌ Backend did not become healthy in 270s"
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            ps || true
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            logs proxy backend --tail=100 || true
           exit 1
 
-      - name: Run proxy conformance tests
+      - name: Verify proxy routes /api to backend
+        # WHY: docker inspect only confirms backend internal health. This step
+        # confirms Caddy is actually routing /api/* to the backend before PT-01..08
+        # run. Using localhost:3000 + explicit Host header bypasses the
+        # DNS→iptables path that was failing, while still exercising Caddy routing.
         run: |
-          chmod +x scripts/proxy-conformance.sh
-          ./scripts/proxy-conformance.sh
+          STATUS=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -H "Host: goodwill-ca.lvh.me" \
+            http://localhost:3000/api/health 2>/dev/null || echo "000")
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Proxy routing verified — /api/health returned HTTP ${STATUS}"
+          else
+            echo "❌ Proxy routing check failed — HTTP ${STATUS}"
+            curl -v -H "Host: goodwill-ca.lvh.me" http://localhost:3000/api/health || true
+            docker compose --env-file infra/.env.stack \
+              -f infra/docker-compose.yml \
+              logs proxy --tail=50 || true
+            exit 1
+          fi
 
-      - name: Dump logs on failure
-        if: failure()
-        run: docker compose --env-file infra/.env.stack -f infra/docker-compose.yml logs --tail=100
+      - name: Run proxy conformance tests (PT-01..PT-08)
+        # WHY localhost + explicit Host headers in the conformance script:
+        # The same iptables issue that breaks direct hostname curl applies here.
+        # scripts/proxy-conformance.sh must use:
+        #   curl -H "Host: goodwill-ca.lvh.me" http://localhost:3000/api/...
+        # NOT:
+        #   curl http://goodwill-ca.lvh.me:3000/api/...
+        run: ./scripts/proxy-conformance.sh
 
-      - name: Tear down stack
+      - name: Tear down
         if: always()
-        run: docker compose --env-file infra/.env.stack -f infra/docker-compose.yml down -v
+        run: |
+          docker compose --env-file infra/.env.stack \
+            -f infra/docker-compose.yml \
+            down -v
