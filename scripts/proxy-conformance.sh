@@ -74,14 +74,33 @@ stop_container_if_exists() {
   docker rm -f "$1" >/dev/null 2>&1 || true
 }
 
+get_compose_container_name() {
+  local service="$1"
+  docker ps \
+    --filter "label=com.docker.compose.service=${service}" \
+    --format '{{.Names}}' | head -n 1
+}
+
 get_proxy_network_name() {
-  docker inspect hubins-proxy-1 \
+  local proxy_container
+  proxy_container="$(get_compose_container_name proxy)"
+  [ -n "$proxy_container" ] || return 1
+
+  docker inspect "$proxy_container" \
     --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' \
     2>/dev/null || true
 }
 
 get_backend_image_ref() {
-  docker inspect hubins-backend-1 --format '{{.Config.Image}}' 2>/dev/null || true
+  local backend_container
+  backend_container="$(get_compose_container_name backend)"
+  [ -n "$backend_container" ] || return 1
+
+  docker inspect "$backend_container" --format '{{.Config.Image}}' 2>/dev/null || true
+}
+
+get_redis_container_name() {
+  get_compose_container_name redis
 }
 
 start_pt05_client() {
@@ -126,7 +145,11 @@ const email = process.argv[1];
 }
 
 clear_login_ip_keys() {
-  docker exec hubins-redis-1 sh -lc '
+  local redis_container
+  redis_container="$(get_redis_container_name)"
+  [ -n "$redis_container" ] || return 1
+
+  docker exec "$redis_container" sh -lc '
     for key in $(redis-cli --raw KEYS "rl:login:ip:*"); do
       redis-cli DEL "$key" >/dev/null
     done
@@ -134,7 +157,11 @@ clear_login_ip_keys() {
 }
 
 count_login_ip_keys() {
-  docker exec hubins-redis-1 sh -lc '
+  local redis_container
+  redis_container="$(get_redis_container_name)"
+  [ -n "$redis_container" ] || return 1
+
+  docker exec "$redis_container" sh -lc '
     redis-cli --raw KEYS "rl:login:ip:*" | wc -l | tr -d " "
   ' 2>/dev/null || echo "0"
 }
@@ -256,17 +283,20 @@ echo ""
 echo "PT-05: X-Forwarded-For chain preservation"
 log "Two real client containers must create two distinct login IP buckets"
 
-PT05_NETWORK="$(get_proxy_network_name)"
-PT05_IMAGE="$(get_backend_image_ref)"
+PT05_NETWORK="$(get_proxy_network_name || true)"
+PT05_IMAGE="$(get_backend_image_ref || true)"
+PT05_REDIS="$(get_redis_container_name || true)"
 PT05_CLIENT_A="pt05-client-a-$$"
 PT05_CLIENT_B="pt05-client-b-$$"
 
 if [ -z "$PT05_NETWORK" ]; then
-  fail "Could not determine Docker network for hubins-proxy-1"
+  fail "Could not determine Docker network for proxy service"
 elif [ -z "$PT05_IMAGE" ]; then
-  fail "Could not determine backend image reference from hubins-backend-1"
+  fail "Could not determine backend image reference from backend service"
+elif [ -z "$PT05_REDIS" ]; then
+  fail "Could not determine Redis container for redis service"
 else
-  clear_login_ip_keys
+  clear_login_ip_keys || fail "Could not clear Redis login IP keys before PT-05"
 
   if ! start_pt05_client "$PT05_CLIENT_A" "$PT05_IMAGE" "$PT05_NETWORK"; then
     fail "Could not start PT-05 client A container"
