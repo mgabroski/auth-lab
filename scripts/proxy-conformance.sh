@@ -60,6 +60,65 @@ curl_silent() {
   fi
 }
 
+stop_container_if_exists() {
+  docker rm -f "$1" > /dev/null 2>&1 || true
+}
+
+get_proxy_network_name() {
+  docker inspect hubins-proxy-1 \
+    --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' \
+    2>/dev/null || true
+}
+
+get_backend_image_ref() {
+  docker inspect hubins-backend-1 --format '{{.Config.Image}}' 2>/dev/null || true
+}
+
+start_pt05_client() {
+  local name="$1"
+  local image="$2"
+  local network="$3"
+
+  stop_container_if_exists "$name"
+  docker run -d --rm \
+    --name "$name" \
+    --network "$network" \
+    "$image" \
+    sh -c 'sleep 300' > /dev/null
+}
+
+client_login_status() {
+  local container="$1"
+  local email="$2"
+
+  docker exec "$container" node -e '
+const email = process.argv[1];
+
+(async () => {
+  const response = await fetch("http://proxy:3000/api/auth/login", {
+    method: "POST",
+    headers: {
+      "Host": "goodwill-ca.lvh.me",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      password: "irrelevant",
+    }),
+  });
+
+  process.stdout.write(String(response.status));
+})().catch((error) => {
+  console.error(error);
+  process.exit(2);
+});
+' "$email"
+}
+
+canonical_json() {
+  echo "$1" | jq -c '.' 2>/dev/null || echo ""
+}
+
 # Wait for proxy to be reachable before running tests
 wait_for_proxy() {
   echo "⏳ Waiting for proxy to be reachable at ${BASE_URL}..."
@@ -192,60 +251,71 @@ else
   pass "Cookie pass-through appears correct (HTTP ${HTTP_CODE} — not a corruption error)"
 fi
 
-# ── PT-05: X-Forwarded-For chain preservation ─────────────────────────────────
+# ── PT-05: X-Forwarded-For chain preservation ────────────────────────────────
 echo ""
 echo "PT-05: X-Forwarded-For chain preservation"
-log "Different spoofed X-Forwarded-For IPs must not share a rate-limit bucket"
+log "Two real client containers must not share a login rate-limit bucket"
 
-# HOW THIS PROVES CHAIN PRESERVATION:
-# If Caddy collapses X-Forwarded-For to the proxy's own IP, then every request
-# arrives at the backend with the same "client IP" (the proxy), and all requests
-# share a single rate-limit bucket regardless of the original client IP.
+# WHY THIS APPROACH:
+# - The login flow is rate-limited per email (5/15m) AND per IP (20/15m).
+#   Using the same email repeatedly cannot prove IP isolation because the email
+#   bucket trips first.
+# - Caddy ignores incoming X-Forwarded-* values by default to prevent spoofing.
+#   So sending fake X-Forwarded-For values from curl is not a valid test of
+#   backend-visible client IP isolation.
+# - Instead, we create two real client containers on the same Docker network.
+#   They have distinct source IPs when they talk to the proxy service.
+# - We exhaust the login IP bucket from client A using fresh emails each time,
+#   then verify a fresh email from client B is NOT rate-limited.
 #
-# We exhaust the rate-limit bucket for IP_A, then verify IP_B is NOT blocked.
-# If the proxy were collapsing XFF, IP_B would already be rate-limited.
+# If client B is still 429 after client A exhausts its bucket, the backend is
+# not seeing distinct client IPs through the proxy path.
 
-IP_A="198.51.100.1"   # TEST-NET-3, documentation-only range (RFC 5737)
-IP_B="203.0.113.99"   # TEST-NET-3, documentation-only range (RFC 5737)
+PT05_NETWORK="$(get_proxy_network_name)"
+PT05_IMAGE="$(get_backend_image_ref)"
+PT05_CLIENT_A="pt05-client-a-$$"
+PT05_CLIENT_B="pt05-client-b-$$"
 
-DUMMY_BODY='{"email":"pt05-probe@example.invalid","password":"irrelevant"}'
-
-# Step 1: Hammer IP_A until we get a 429 (or exhaust attempts)
-PT05_GOT_429=false
-for i in $(seq 1 20); do
-  CODE=$(curl_silent -o /dev/null -w "%{http_code}" \
-    -X POST \
-    -H "Host: ${TENANT}.lvh.me" \
-    -H "Content-Type: application/json" \
-    -H "X-Forwarded-For: ${IP_A}" \
-    -d "$DUMMY_BODY" \
-    "${BASE_URL}/api/auth/login" 2>/dev/null || echo "000")
-  if [ "$CODE" = "429" ]; then
-    PT05_GOT_429=true
-    break
-  fi
-done
-
-if [ "$PT05_GOT_429" = "false" ]; then
-  fail "PT-05: Could not trigger 429 for IP_A after 20 attempts — rate limit may not be active"
+if [ -z "$PT05_NETWORK" ]; then
+  fail "Could not determine Docker network for hubins-proxy-1"
+elif [ -z "$PT05_IMAGE" ]; then
+  fail "Could not determine backend image reference from hubins-backend-1"
 else
-  # Step 2: Verify IP_B is NOT rate-limited
-  CODE_B=$(curl_silent -o /dev/null -w "%{http_code}" \
-    -X POST \
-    -H "Host: ${TENANT}.lvh.me" \
-    -H "Content-Type: application/json" \
-    -H "X-Forwarded-For: ${IP_B}" \
-    -d "$DUMMY_BODY" \
-    "${BASE_URL}/api/auth/login" 2>/dev/null || echo "000")
-
-  if [ "$CODE_B" = "429" ]; then
-    fail "IP_B was rate-limited after exhausting IP_A — proxy is collapsing X-Forwarded-For chain (ISOLATION FAILURE)"
-  elif [ "$CODE_B" = "000" ]; then
-    fail "Could not reach backend for IP_B probe"
+  if ! start_pt05_client "$PT05_CLIENT_A" "$PT05_IMAGE" "$PT05_NETWORK"; then
+    fail "Could not start PT-05 client A container"
+  elif ! start_pt05_client "$PT05_CLIENT_B" "$PT05_IMAGE" "$PT05_NETWORK"; then
+    stop_container_if_exists "$PT05_CLIENT_A"
+    fail "Could not start PT-05 client B container"
   else
-    pass "IP_A exhausted (429) but IP_B is not rate-limited (${CODE_B}) — XFF chain isolation proven"
+    PT05_GOT_429=false
+
+    for i in $(seq 1 25); do
+      EMAIL="pt05-client-a-${i}@example.invalid"
+      CODE="$(client_login_status "$PT05_CLIENT_A" "$EMAIL" 2>/dev/null || echo "000")"
+      if [ "$CODE" = "429" ]; then
+        PT05_GOT_429=true
+        break
+      fi
+    done
+
+    if [ "$PT05_GOT_429" = "false" ]; then
+      fail "PT-05: Could not trigger an IP-based 429 for client A after 25 distinct-email attempts"
+    else
+      CODE_B="$(client_login_status "$PT05_CLIENT_B" "pt05-client-b-check@example.invalid" 2>/dev/null || echo "000")"
+
+      if [ "$CODE_B" = "429" ]; then
+        fail "Client B was rate-limited after exhausting client A — backend is not seeing distinct client IPs through proxy"
+      elif [ "$CODE_B" = "000" ]; then
+        fail "Could not reach backend for client B probe"
+      else
+        pass "Client A exhausted its IP bucket (429) while client B remained independent (${CODE_B})"
+      fi
+    fi
   fi
 fi
+
+stop_container_if_exists "$PT05_CLIENT_A"
+stop_container_if_exists "$PT05_CLIENT_B"
 
 # ── PT-06: X-Forwarded-Host forwarding ──────────────────────────────────────
 echo ""
@@ -332,7 +402,7 @@ rm -f /tmp/pt07-cookies.txt
 # ── PT-08: Inactive tenant anti-enumeration ──────────────────────────────────
 echo ""
 echo "PT-08: Inactive/unknown tenant anti-enumeration"
-log "unknown-tenant.lvh.me must return same response shape as an inactive tenant"
+log "Unknown tenant must return the locked unavailable payload shape"
 
 UNKNOWN_RESPONSE=$(curl_silent -w "\n%{http_code}" \
   -H "Host: unknown-xyz-does-not-exist.lvh.me" \
@@ -341,14 +411,18 @@ UNKNOWN_RESPONSE=$(curl_silent -w "\n%{http_code}" \
 UNKNOWN_CODE=$(echo "$UNKNOWN_RESPONSE" | tail -1)
 UNKNOWN_BODY=$(echo "$UNKNOWN_RESPONSE" | head -n -1)
 
+EXPECTED_UNAVAILABLE='{"tenant":{"name":"","isActive":false,"publicSignupEnabled":false,"signupAllowed":false,"allowedSso":[],"setupCompleted":false}}'
+
 if [ "$UNKNOWN_CODE" = "200" ]; then
-  IS_ACTIVE=$(echo "$UNKNOWN_BODY" | jq -r '.tenant.isActive // empty' 2>/dev/null || echo "")
-  if [ "$IS_ACTIVE" = "false" ]; then
-    pass "Unknown tenant returns { tenant: { isActive: false } } — anti-enumeration correct"
-  elif [ "$IS_ACTIVE" = "true" ]; then
-    fail "Unknown tenant returned tenant.isActive:true — anti-enumeration FAIL"
+  CANONICAL_UNKNOWN="$(canonical_json "$UNKNOWN_BODY")"
+  CANONICAL_EXPECTED="$(canonical_json "$EXPECTED_UNAVAILABLE")"
+
+  if [ -z "$CANONICAL_UNKNOWN" ]; then
+    fail "Unknown tenant response was not valid JSON: ${UNKNOWN_BODY}"
+  elif [ "$CANONICAL_UNKNOWN" = "$CANONICAL_EXPECTED" ]; then
+    pass "Unknown tenant returned the locked unavailable payload shape"
   else
-    fail "Response missing 'tenant.isActive' field: ${UNKNOWN_BODY}"
+    fail "Unknown tenant payload drifted from locked unavailable shape: ${UNKNOWN_BODY}"
   fi
 else
   fail "Expected 200 with unavailable payload, got ${UNKNOWN_CODE}"

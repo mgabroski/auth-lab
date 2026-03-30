@@ -20,7 +20,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # WHY:
+        # - actions/checkout@v4 is still on the deprecated Node 20 action runtime.
+        # - v6 is the current supported line and removes the warning in this workflow.
+        uses: actions/checkout@v6
 
       - name: Pin tenant hosts for CI
         # WHY: PT-01..PT-08 use curl with full URLs (e.g. http://goodwill-ca.lvh.me:3000/...).
