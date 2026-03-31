@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -47,7 +47,7 @@ jobs:
           GITLEAKS_CONFIG: .gitleaks.toml
 
       - name: Dependency vulnerability scan (filesystem)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -66,7 +66,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Build backend image for scan
         run: docker build -f backend/Dockerfile -t auth-lab/backend:security-scan .
@@ -75,7 +75,7 @@ jobs:
         run: docker build -f frontend/Dockerfile -t auth-lab/frontend:security-scan .
 
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: 'image'
           image-ref: 'auth-lab/backend:security-scan'
@@ -86,7 +86,7 @@ jobs:
           hide-progress: true
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.29.0
         with:
           scan-type: 'image'
           image-ref: 'auth-lab/frontend:security-scan'
