@@ -16,10 +16,10 @@
 # - INTERNAL_API_URL is injected at container runtime (docker-compose.yml).
 #   It is NOT baked in at build time — Next.js SSR reads it at request time.
 
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
 RUN corepack enable
 
-# ── Stage 1: install workspace deps from the repo root lockfile ──────────────
+# ── Stage 1: install focused frontend workspace deps from the repo root ───────
 FROM base AS deps
 WORKDIR /repo
 
@@ -27,9 +27,9 @@ COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY frontend/package.json frontend/package.json
 COPY backend/package.json backend/package.json
-RUN yarn install --immutable
+RUN yarn workspaces focus frontend
 
-# ── Stage 2: build the Next.js app ───────────────────────────────────────────
+# ── Stage 2: build the Next.js app ────────────────────────────────────────────
 FROM base AS builder
 WORKDIR /repo
 
@@ -52,8 +52,8 @@ ENV INTERNAL_API_URL=${INTERNAL_API_URL}
 WORKDIR /repo/frontend
 RUN yarn build
 
-# ── Stage 3: minimal production image ────────────────────────────────────────
-FROM base AS runner
+# ── Stage 3: minimal production image ─────────────────────────────────────────
+FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -61,6 +61,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+
+# npm/corepack are not needed in the standalone runtime image.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm \
+    /usr/local/bin/npx \
+    /usr/local/bin/corepack
 
 COPY --from=builder /repo/frontend/public ./public
 COPY --from=builder --chown=nextjs:nodejs /repo/frontend/.next/standalone ./
