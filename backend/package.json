@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsx scripts/build.ts",
     "dev": "tsx watch src/index.ts",
     "start:container": "tsx src/index.ts",
     "db:make": "tsx src/shared/db/make-migration.ts",
@@ -34,6 +35,7 @@
     "@types/node": "^20.11.30",
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.10",
+    "esbuild": "^0.25.12",
     "kysely-codegen": "0.20.0",
     "tsx": "^4.19.2",
     "typescript": "^5.4.5",

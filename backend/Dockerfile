@@ -34,7 +34,16 @@ FROM deps AS build
 
 COPY backend ./backend
 
-RUN ./node_modules/.bin/tsc -p backend/tsconfig.json
+# WHY esbuild instead of tsc:
+# tsconfig.json uses "moduleResolution": "Bundler" — correct, but means a real
+# bundler must resolve local imports at build time. tsc only transpiles; it emits
+# bare imports like `from './db'` unchanged. Node.js ESM (strict, Node 20+)
+# requires explicit .js extensions, and --experimental-specifier-resolution=node
+# which previously papered this over was removed in Node 20. esbuild resolves and
+# inlines all local src/ imports, producing self-contained output. node_modules
+# are kept external (packages:'external') — they are installed separately in the
+# prod-deps stage. tsc --noEmit continues to enforce types in CI independently.
+RUN ./node_modules/.bin/tsx backend/scripts/build.ts
 
 # ── Stage 3: install production-only backend deps ──────────────────────────────
 FROM base AS prod-deps
@@ -51,6 +60,15 @@ FROM node:20-bookworm-slim AS runner
 
 WORKDIR /repo/backend
 
+# WHY non-root user:
+# - Running as root in a container means a process escape grants root on the host.
+# - CIS Docker Benchmark §4.1 requires containers to not run as root.
+# - The frontend runner already follows this pattern (nextjs:nodejs, uid/gid 1001).
+#   The backend must be consistent — same uid/gid prevents permission conflicts
+#   if a shared volume is ever mounted across both containers.
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 backend --ingroup nodejs
+
 RUN rm -rf /usr/local/lib/node_modules/npm \
     /usr/local/lib/node_modules/corepack \
     /usr/local/bin/npm \
@@ -59,9 +77,19 @@ RUN rm -rf /usr/local/lib/node_modules/npm \
 
 COPY --from=prod-deps /repo/node_modules /repo/node_modules
 COPY --from=prod-deps /repo/backend/package.json ./package.json
-COPY --from=build /repo/backend/dist ./dist
+# WHY --chown: dist/ and its .map files must be readable by the backend user.
+# node_modules remain root-owned (755/644 defaults) — readable by all users.
+COPY --chown=backend:nodejs --from=build /repo/backend/dist ./dist
+
+USER backend
 
 ENV PORT=3001
 ENV NODE_ENV=production
 
-CMD ["sh", "-c", "node --experimental-specifier-resolution=node dist/shared/db/migrate.js && node --experimental-specifier-resolution=node dist/index.js"]
+# WHY no flags: esbuild bundles all local src/ imports at build time. dist/migrate.js
+# and dist/index.js are fully self-contained — Node.js ESM resolves them without
+# --experimental-specifier-resolution=node (removed in Node 20).
+# WHY migrate first: migrations run to completion before the server binds its port.
+# The healthcheck only starts polling after the CMD process starts, so the server
+# never receives traffic against a stale schema.
+CMD ["sh", "-c", "node dist/shared/db/migrate.js && node dist/index.js"]
