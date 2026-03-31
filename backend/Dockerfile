@@ -49,20 +49,19 @@ RUN yarn workspaces focus @auth-lab/backend --production
 # ── Stage 4: runtime image ─────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS runner
 
-WORKDIR /repo
+WORKDIR /repo/backend
 
-# npm/corepack are not needed at runtime.
 RUN rm -rf /usr/local/lib/node_modules/npm \
     /usr/local/lib/node_modules/corepack \
     /usr/local/bin/npm \
     /usr/local/bin/npx \
     /usr/local/bin/corepack
 
-COPY --from=prod-deps /repo/node_modules ./node_modules
-COPY --from=prod-deps /repo/backend/package.json backend/package.json
-COPY --from=build /repo/backend/dist ./backend/dist
+COPY --from=prod-deps /repo/node_modules /repo/node_modules
+COPY --from=prod-deps /repo/backend/package.json ./package.json
+COPY --from=build /repo/backend/dist ./dist
 
 ENV PORT=3001
 ENV NODE_ENV=production
 
-CMD ["sh", "-c", "node backend/dist/shared/db/migrate.js && node backend/dist/index.js"]
+CMD ["sh", "-c", "node --experimental-specifier-resolution=node dist/shared/db/migrate.js && node --experimental-specifier-resolution=node dist/index.js"]

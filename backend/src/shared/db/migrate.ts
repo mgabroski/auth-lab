@@ -2,22 +2,17 @@
  * backend/src/shared/db/migrate.ts
  *
  * WHY:
- * - Run migrations in DEV reliably.
- * - TS migrations live in: src/shared/db/migrations
- * - We run this file with `tsx`, so dynamic imports of `.ts` migrations work.
- *
- * HOW TO USE:
- * - yarn workspace @auth-lab/backend db:migrate
- * - root `yarn dev` calls this automatically via scripts/dev.sh
+ * - Run migrations in both DEV (tsx + TS source migrations) and container runtime
+ *   (plain node + compiled JS migrations).
  */
 
 import 'dotenv/config';
 
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readdir } from 'node:fs/promises';
 
-import { Migrator } from 'kysely';
+import { Migrator, type Migration, type MigrationProvider } from 'kysely';
 import { createDb } from './db';
 import { buildConfig } from '../../app/config';
 import { logger } from '../logger/logger';
@@ -26,29 +21,37 @@ async function runMigrations(): Promise<void> {
   const config = buildConfig();
   const db = createDb(config.databaseUrl);
 
-  // IMPORTANT:
-  // We point directly to the SOURCE migrations folder.
-  // This avoids any dist/path confusion.
-  const migrationsDir = path.join(process.cwd(), 'src/shared/db/migrations');
+  const thisFilePath = fileURLToPath(import.meta.url);
+  const runningCompiledJs = thisFilePath.includes(`${path.sep}dist${path.sep}`);
 
-  // Provider that loads TS migrations reliably in dev via tsx.
-  const provider = {
-    async getMigrations() {
-      const files = (await readdir(migrationsDir)).filter((f) => f.endsWith('.ts')).sort();
+  const migrationsDir = runningCompiledJs
+    ? path.join(process.cwd(), 'dist/shared/db/migrations')
+    : path.join(process.cwd(), 'src/shared/db/migrations');
 
-      logger.info('Found migration files', { count: files.length, files });
+  const expectedExtension = runningCompiledJs ? '.js' : '.ts';
 
-      const migrations: Record<string, { up: any; down: any }> = {};
+  const provider: MigrationProvider = {
+    async getMigrations(): Promise<Record<string, Migration>> {
+      const files = (await readdir(migrationsDir))
+        .filter((file) => file.endsWith(expectedExtension))
+        .sort();
+
+      logger.info('Found migration files', {
+        count: files.length,
+        files,
+        migrationsDir,
+        expectedExtension,
+      });
+
+      const migrations: Record<string, Migration> = {};
 
       for (const file of files) {
         const fullPath = path.join(migrationsDir, file);
         const url = pathToFileURL(fullPath).href;
+        const mod = (await import(url)) as Migration;
 
-        // tsx will allow importing TS here
-        const mod: any = await import(url);
-
-        const name = file.replace(/\.ts$/, '');
-        migrations[name] = { up: mod.up, down: mod.down };
+        const name = file.slice(0, -expectedExtension.length);
+        migrations[name] = mod;
       }
 
       return migrations;
@@ -59,9 +62,14 @@ async function runMigrations(): Promise<void> {
 
   const { error, results } = await migrator.migrateToLatest();
 
-  results?.forEach((r) => {
-    if (r.status === 'Success') logger.info('migration success', { migration: r.migrationName });
-    if (r.status === 'Error') logger.error('migration error', { migration: r.migrationName });
+  results?.forEach((result) => {
+    if (result.status === 'Success') {
+      logger.info('migration success', { migration: result.migrationName });
+    }
+
+    if (result.status === 'Error') {
+      logger.error('migration error', { migration: result.migrationName });
+    }
   });
 
   if (error) {
