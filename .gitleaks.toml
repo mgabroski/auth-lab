@@ -1,0 +1,115 @@
+title = "Auth-Lab gitleaks config"
+
+[extend]
+useDefault = true
+
+# Allow only exact known fake/example values in exact known repo locations.
+# Do not broaden without review.
+
+[[allowlists]]
+description = "Allow current fake MFA encryption example key in workflows and example env files"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''N0uFFqX7KeFnhghnTMaeBdLKsn\+W2Q9WJE1D2Aqdf14=''']
+paths = [
+    '''^\.github/workflows/frontend\.yml$''',
+    '''^\.github/workflows/proxy-conformance\.yml$''',
+    '''^backend/\.env\.example$''',
+    '''^infra/\.env\.stack\.example$''',
+]
+
+[[allowlists]]
+description = "Allow current fake MFA HMAC example key in workflows and example env files"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''ygcc6Pr65aoBSF469cwcsVj\+ARz1Pb2voHHHtt3bbCQ=''']
+paths = [
+    '''^\.github/workflows/frontend\.yml$''',
+    '''^\.github/workflows/proxy-conformance\.yml$''',
+    '''^backend/\.env\.example$''',
+    '''^infra/\.env\.stack\.example$''',
+]
+
+[[allowlists]]
+description = "Allow current fake SSO state example key in workflows and example env files"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''g\+0YvJfzVdIgM\+eoUUQ5UW3JKuGktJbtA6mvi3DcZDQ=''']
+paths = [
+    '''^\.github/workflows/backend-tests\.yml$''',
+    '''^\.github/workflows/frontend\.yml$''',
+    '''^\.github/workflows/proxy-conformance\.yml$''',
+    '''^backend/\.env\.example$''',
+    '''^infra/\.env\.stack\.example$''',
+]
+
+[[allowlists]]
+description = "Allow current fake outbox example key in workflows, example env files, and startup guard tests"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''pjVKt5jeXMDX5YJkbDc1dDFW4ztqO1iRyHiAHi/9TjM=''']
+paths = [
+    '''^\.github/workflows/frontend\.yml$''',
+    '''^\.github/workflows/proxy-conformance\.yml$''',
+    '''^backend/\.env\.example$''',
+    '''^infra/\.env\.stack\.example$''',
+    '''^backend/test/unit/startup-guards\.spec\.ts$''',
+]
+
+[[allowlists]]
+description = "Allow legacy fake shared example key in workflows, docker compose, example env files, and unit fixtures"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX\+cnszDyXvq0=''']
+paths = [
+    '''^\.github/workflows/backend-tests\.yml$''',
+    '''^\.github/workflows/frontend\.yml$''',
+    '''^\.github/workflows/proxy-conformance\.yml$''',
+    '''^backend/\.env\.example$''',
+    '''^infra/\.env\.stack\.example$''',
+    '''^infra/docker-compose\.yml$''',
+    '''^backend/test/unit/auth/sso/sso-state-validate\.spec\.ts$''',
+    '''^backend/test/unit/startup-guards\.spec\.ts$''',
+]
+
+[[allowlists]]
+description = "Allow legacy fake MFA HMAC example key in workflows, docker compose, and example env files"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''8Emt6e4gn6r8rgRGSuYTVQ\+D/3upFEckXRoMQYKJRJ8=''']
+paths = [
+    '''^\.github/workflows/backend-tests\.yml$''',
+    '''^\.github/workflows/frontend\.yml$''',
+    '''^\.github/workflows/proxy-conformance\.yml$''',
+    '''^backend/\.env\.example$''',
+    '''^infra/\.env\.stack\.example$''',
+    '''^infra/docker-compose\.yml$''',
+]
+
+[[allowlists]]
+description = "Allow legacy fake outbox example key in docker compose and example env files"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''Kj3mN8vP2qR5sT7wX1yZ4aB6cD9eF0gH3iJ5kL7mN9=''']
+paths = [
+    '''^backend/\.env\.example$''',
+    '''^infra/\.env\.stack\.example$''',
+    '''^infra/docker-compose\.yml$''',
+]
+
+[[allowlists]]
+description = "Allow fake frontend OTP test secret"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''ABCDEF123456''']
+paths = [
+    '''^frontend/test/unit/shared/auth/otpauth\.spec\.ts$''',
+    '''^frontend/test/e2e/mock-auth-backend\.mjs$''',
+]
+
+[[allowlists]]
+description = "Allow fake backend outbox token fixture"
+condition = "AND"
+regexTarget = "match"
+regexes = ['''tok_1234567890''']
+paths = ['''^backend/test/unit/outbox-encryption\.spec\.ts$''']

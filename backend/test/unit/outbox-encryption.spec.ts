@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   OutboxEncryption,
@@ -10,7 +10,10 @@ import {
  *
  * WHY:
  * - Ensures raw token + raw email are never stored in outbox payload.
- * - Ensures rotation behavior is explicit (unknown version / missing key => throw).
+ * - Ensures rotation behavior is explicit and durable:
+ *   - old ciphertext stays decryptable after rotation
+ *   - new writes use the new default version
+ *   - unknown/missing versions still fail closed
  *
  * RULES:
  * - Raw email must never appear in JSON.stringify(encryptedPayload).
@@ -18,7 +21,6 @@ import {
  */
 
 function base64Key32(char = 'a'): string {
-  // 32 bytes -> base64
   return Buffer.from(char.repeat(32), 'utf8').toString('base64');
 }
 
@@ -27,6 +29,16 @@ function cfgV1Only(): OutboxEncryptionConfig {
     defaultVersion: 'v1',
     keysByVersion: {
       v1: base64Key32('a'),
+    },
+  };
+}
+
+function cfgV1V2(defaultVersion: 'v1' | 'v2' = 'v2'): OutboxEncryptionConfig {
+  return {
+    defaultVersion,
+    keysByVersion: {
+      v1: base64Key32('a'),
+      v2: base64Key32('b'),
     },
   };
 }
@@ -60,27 +72,92 @@ describe('OutboxEncryption', () => {
     expect(decrypted.inviteId).toBe(raw.inviteId);
     expect(decrypted.role).toBe(raw.role);
 
-    // PII rule: raw email must not appear
     const serialized = JSON.stringify(encrypted);
     expect(serialized.includes('User@Example.com')).toBe(false);
     expect(serialized.includes('user@example.com')).toBe(false);
-
-    // Token must not appear either
     expect(serialized.includes(raw.token)).toBe(false);
+  });
+
+  it('decrypts legacy v1 ciphertext after rotation and uses v2 for new writes', () => {
+    const legacyEnc = new OutboxEncryption(cfgV1Only());
+    const rotatedEnc = new OutboxEncryption(cfgV1V2('v2'));
+
+    const raw = {
+      token: 'tok_rotation_123',
+      toEmail: 'RotateMe@Example.com',
+      tenantKey: 'goodwill-open',
+      userId: 'u-rotation',
+      inviteId: 'i-rotation',
+      role: 'ADMIN',
+    };
+
+    const legacyCipher = legacyEnc.encryptPayload(raw);
+
+    expect(legacyCipher.tokenEnc.startsWith('v1:')).toBe(true);
+    expect(legacyCipher.toEmailEnc.startsWith('v1:')).toBe(true);
+
+    const decryptedLegacy = rotatedEnc.decryptPayload(legacyCipher);
+
+    expect(decryptedLegacy).toEqual({
+      token: raw.token,
+      toEmail: 'rotateme@example.com',
+      tenantKey: raw.tenantKey,
+      userId: raw.userId,
+      inviteId: raw.inviteId,
+      role: raw.role,
+    });
+
+    const rotatedCipher = rotatedEnc.encryptPayload(raw);
+
+    expect(rotatedCipher.tokenEnc.startsWith('v2:')).toBe(true);
+    expect(rotatedCipher.toEmailEnc.startsWith('v2:')).toBe(true);
+
+    const decryptedRotated = rotatedEnc.decryptPayload(rotatedCipher);
+
+    expect(decryptedRotated).toEqual({
+      token: raw.token,
+      toEmail: 'rotateme@example.com',
+      tenantKey: raw.tenantKey,
+      userId: raw.userId,
+      inviteId: raw.inviteId,
+      role: raw.role,
+    });
+  });
+
+  it('supports explicit version selection during a staged rotation window', () => {
+    const enc = new OutboxEncryption(cfgV1V2('v2'));
+
+    const raw = {
+      token: 'tok_explicit_v1',
+      toEmail: 'Compat@Example.com',
+    };
+
+    const encrypted = enc.encryptPayload(raw, 'v1');
+
+    expect(encrypted.tokenEnc.startsWith('v1:')).toBe(true);
+    expect(encrypted.toEmailEnc.startsWith('v1:')).toBe(true);
+
+    const decrypted = enc.decryptPayload(encrypted);
+
+    expect(decrypted).toEqual({
+      token: raw.token,
+      toEmail: 'compat@example.com',
+    });
   });
 
   it('throws when ciphertext has unknown version prefix', () => {
     const enc = new OutboxEncryption(cfgV1Only());
+
     expect(() => enc.decryptField('v9:AAAA')).toThrow(/missing key for version v9/i);
   });
 
   it('throws when ciphertext is missing version prefix', () => {
     const enc = new OutboxEncryption(cfgV1Only());
+
     expect(() => enc.decryptField('AAAA')).toThrow(/missing version prefix/i);
   });
 
   it('throws if defaultVersion has no configured key', () => {
-    // This is a *runtime* invalid config (types allow v2, but key is missing).
     const bad: OutboxEncryptionConfig = {
       defaultVersion: 'v2',
       keysByVersion: { v1: base64Key32('x') },

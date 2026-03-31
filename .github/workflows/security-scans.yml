@@ -1,0 +1,97 @@
+name: Security Scans
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'infra/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.gitleaks.toml'
+      - '.github/workflows/security-scans.yml'
+      - 'backend/Dockerfile'
+      - 'frontend/Dockerfile'
+  push:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'infra/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.gitleaks.toml'
+      - '.github/workflows/security-scans.yml'
+      - 'backend/Dockerfile'
+      - 'frontend/Dockerfile'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repo-security:
+    name: Secret + dependency scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+      - name: Dependency vulnerability scan (filesystem)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          vuln-type: 'library'
+          scanners: 'vuln'
+          hide-progress: true
+
+  container-security:
+    name: Container image scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build backend image for scan
+        run: docker build -f backend/Dockerfile -t auth-lab/backend:security-scan .
+
+      - name: Build frontend image for scan
+        run: docker build -f frontend/Dockerfile -t auth-lab/frontend:security-scan .
+
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'image'
+          image-ref: 'auth-lab/backend:security-scan'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          hide-progress: true
+
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'image'
+          image-ref: 'auth-lab/frontend:security-scan'
+          format: 'table'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          hide-progress: true

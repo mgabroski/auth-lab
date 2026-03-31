@@ -9,43 +9,43 @@ It exists to keep four things aligned:
 - what the repository actually implements now
 - what the active documentation claims
 - what future implementation sessions assume
-- what is intentionally deferred to later hardening phases
+- what is intentionally deferred to later hardening stages
 
-If another active document disagrees with this file about shipped scope, this file wins until the lower document is repaired.
+If another active document overclaims shipped scope compared with this file, this file wins until the lower document is repaired.
 
 ---
 
 ## 1. High-level status
 
-The repository is no longer only a topology or backend-foundation sandbox.
+The repository is no longer only a topology or auth-foundation sandbox.
+It now contains a real Auth + User Provisioning slice with real browser surfaces, real backend behavior, real test proof, and real operability foundations.
 
-Today the repo contains all of the following as real implemented surfaces:
+At the time of this snapshot, the repo status is:
 
-- the locked single-origin topology and FE/BE wiring
-- the backend Auth + User Provisioning module
-- the frontend Auth + User Provisioning route and UI surface for the current module scope
-- the current admin invite-management surface
-- a repeatable local auth test environment contract with committed Mailpit-based local email capture and a canonical dev seed entry point
-- an explicit operator-safe tenant bootstrap command that queues the first admin invite through the real outbox + SMTP path without raw token logging
-- a documented manual bootstrap proof runbook for invite onboarding through session creation and MFA continuation
-- a documented Phase 4 runbook for public signup, email verification, resend verification, and password recovery proof
-- a real MFA setup page that now renders a scannable QR from the backend `otpauth://` URI plus issuer/account preview for manual Phase 5 proof
-- a documented Phase 5 runbook for real authenticator-app setup, MFA login verification, and recovery-code single-use proof
-- backend/frontend example env files now exist and document the Google + Microsoft SSO staging keys engineers must set before live-provider proof
-- a documented Phase 6 runbook for real Google SSO staging proof, including redirect URI, JWKS reachability, expired-invite rejection, MFA continuation, and audit/session validation
-- a documented Phase 7 runbook for real Microsoft SSO staging proof, including Azure portal app-registration steps, claim fallback and issuer resolution proof, expired-invite rejection, MFA continuation, and audit/session validation
-- a workspace setup banner on the admin dashboard (Phase 9): when `setup_completed_at IS NULL` on the tenant, a non-blocking banner on `/admin` prompts any admin to open `/admin/settings`; once any admin visits it the banner disappears for the entire workspace
-- a real `/admin/settings` SSR route gated by ADMIN session; calls `POST /auth/workspace-setup-ack` on first visit to mark setup complete tenant-wide
-- role-aware `NONE` routing (Phase 9 fix): `NONE + ADMIN` → `/admin`, `NONE + MEMBER` → `/app`
+- Before Stage 1 quality-bar work: completed
+- Stage 1A minimum enforcement: completed
+- Stage 1B deeper enforcement: still parallel / not fully closed
+- Stage 2 architecture-invariant proof: completed
+- Stage 3 operability baseline: completed
+- Stage 4 security-system baseline: established, with some deeper implementation work still deferred
 
-That does **not** mean the broader Hubins product UI is finished.
-It means the **Auth + User Provisioning slice is implemented at feature-surface level**, while later phases still own confidence hardening, broader product expansion, and additional non-auth modules.
+That means the repository now has:
+
+- real topology invariants and topology proof
+- real auth/provisioning flows
+- real observability/operability baseline
+- explicit threat-model and security ADR foundation
+- runnable security scanning in CI
+- explicit abuse-regression proof for the highest-risk callback boundary
+
+It does **not** mean the broader Hubins product is finished.
+It means the current repo has moved from “careful auth implementation” to “maintained auth platform baseline” for its current scope.
 
 ---
 
 ## 2. What is implemented now
 
-### 2.1 Repository and infrastructure foundation
+## 2.1 Repository and infrastructure foundation
 
 The following are real and load-bearing:
 
@@ -53,391 +53,277 @@ The following are real and load-bearing:
 - backend application
 - frontend application
 - proxy/container topology for full-stack local testing
-- host-run development path using local backend + local frontend + infrastructure services
 - Postgres and Redis infrastructure
-- Mailpit local email capture for non-production-safe email proof
+- Mailpit local email capture for non-production email proof
+- same-origin browser API model under `/api/*`
+- SSR direct-backend model with forwarded headers
 
-### 2.2 Locked topology and request model
+## 2.2 Locked topology and request model
 
-The topology decisions remain unchanged:
+The topology decisions remain unchanged and are now continuously provable:
 
-- one public origin
-- browser requests use same-origin `/api/*`
-- SSR/server-side frontend access goes directly to backend via internal base URL and forwarded headers
+- one public origin from the browser's perspective
+- browser calls use same-origin `/api/*`
+- SSR/server-side frontend calls use internal backend URL plus explicit forwarded headers
+- tenant identity is derived from request host
 - backend owns session/auth truth
-- tenant identity is derived from host
 - session cookies remain backend-owned and host-scoped
 - SSO state handling remains separate from session-cookie handling
 
-### 2.3 Backend auth/provisioning implementation
+## 2.3 Backend auth/provisioning implementation
 
-The backend currently implements the Auth + User Provisioning module foundation, including:
+The backend currently implements:
 
 - login
 - logout
-- current-user/session bootstrap surface
-- forgot-password / reset-password flow
+- current-user/session bootstrap
+- invite creation and acceptance
+- verify-email / resend verification
+- forgot-password / reset-password
+- MFA setup / verify / recovery
+- Google SSO start/callback surfaces
+- Microsoft SSO start/callback surfaces
+- outbox-backed email sending for auth flows
+- startup guards for dangerous production-like misconfiguration
+- local dev seed and operator bootstrap support for auth onboarding proof
+
+## 2.4 Frontend auth/provisioning implementation
+
+The frontend currently contains the real user-facing surface for the implemented module scope, including:
+
+- public auth routes
+- invite acceptance and invite-driven registration
 - verify-email flow
-- invite creation and acceptance flow
-- role-aware continuation / next-action contract
-- MFA setup / verify / recovery support already present in the module scope
-- SSO initiation/callback surfaces currently present for Google and Microsoft under the existing locked topology
-- outbox-backed email sending through the backend SMTP adapter
-- SMTP classification behavior for retryable vs permanent provider failures
-- a local dev seed that prepares bootstrap invite proof fixtures
-- an explicit tenant-bootstrap CLI for shared QA/staging/production-style operator bootstrap
-
-### 2.4 Frontend auth/provisioning implementation
-
-The frontend currently contains the real UI surface for the implemented Auth + User Provisioning module scope, including:
-
-- public auth entry routes
-- continuation/bootstrap handling
-- invite-email landing at `/accept-invite`
-- invite-driven registration at `/auth/register`
+- reset-password flow
+- MFA setup/verify/recovery surfaces
 - role-aware authenticated landing behavior
-- current invite-management/admin UI surface already shipped in prior phases
-- logout behavior wired to backend-owned session truth
-- real browser-facing verify-email and reset-password continuation pages for email-delivered links
-- a real MFA setup page that can render a scannable QR from the backend `qrCodeUri`
+- admin invite-management surface already shipped in earlier phases
+- workspace setup banner and `/admin/settings` acknowledgement surface
 
-### 2.5 Current local developer contract
+## 2.5 Current local developer contract
 
-The repository now supports a repeatable local non-production email proof contract:
+The repository supports a repeatable local proof contract:
 
-- Mailpit runs locally as the default SMTP sink
-- backend host-run mode can send real SMTP messages to Mailpit
-- frontend host-run mode can be used against backend host-run mode
-- canonical seed data can enqueue a bootstrap invite email
-- invite / verify-email / reset-password flows can be visually verified through Mailpit
-- resend verification and reset-token failure behavior can be manually proven through the documented browser runbook
-- tenant-based link construction can be verified using local hostnames
-- MFA setup can be prepared with a visible QR code and expected issuer/account presentation before the real-device proof step
-
-### 2.6 Current operator bootstrap contract
-
-The repository now supports an explicit operator bootstrap flow for non-local environments:
-
-- tenant bootstrap is an explicit command, not an automatic production startup side effect
-- the bootstrap command creates or ensures the target tenant and a pending ADMIN invite only
-- the bootstrap invite is queued into the outbox and delivered by the normal SMTP worker path
-- raw invite tokens are not logged in operator mode
-- the exact operator/browser validation sequence lives in `docs/ops/runbooks.md`
+- Mailpit receives auth emails locally
+- canonical local hosts represent different tenant policies
+- canonical seed/bootstrap flows support invite onboarding proof
+- local browser proof can validate signup, verification, reset-password, MFA, and invite lifecycle behavior
 
 ---
 
-## 3. What Phase 2 added
+## 3. What is already locked and operating as law
 
-Phase 2 added proof-oriented email delivery infrastructure and documentation, not a topology rewrite.
+The following remain repo law for the current foundation:
 
-Specifically it added:
+- host-derived tenant identity
+- same-origin browser contract
+- backend-authoritative session truth
+- SSR forwarded-header contract
+- separate session cookie vs SSO-state cookie contract
+- token hashing at rest for invite/verification/reset tokens
+- encrypted TOTP secrets at rest
+- hashed MFA recovery codes
+- encrypted outbox payload fields for auth-delivered email material
+- startup guards that fail closed for unsafe production-like config
 
-- Mailpit wiring in infra compose files
-- canonical seed-driven invite email proof support
-- local proof instructions for invite, verify-email, and password-reset mail arrival
-- staging sandbox SMTP proof guidance in `docs/ops/runbooks.md`
-- status/doc truth updates so the repository contract matches actual shipped local behavior
-
-Phase 2 did **not** change:
-
-- browser-to-backend request topology
-- SSR/backend forwarding model
-- tenant identity derivation
-- auth/session ownership
-- invite lifecycle semantics
-- SSO architecture
-- MFA architecture
+These are not optional implementation preferences.
+They are architecture/security invariants.
 
 ---
 
-## 4. What Phase 3 added
+## 4. What Stage 2 established
 
-Phase 3 added bootstrap proof closure and operator-safe bootstrap behavior.
+Stage 2 made the architecture invariants continuously provable.
 
-Specifically it added:
+That includes proof for:
 
-- a shared tenant-bootstrap helper separating local-dev convenience seeding from operator bootstrap
-- a backend bootstrap command for staging/QA/production-style operator use
-- local proof coverage for seed invite -> accept -> register -> authenticated session -> MFA continuation
-- documented bootstrap/operator procedures in `docs/ops/runbooks.md`
-- explicit runbook coverage for invite replay, expiry, and cancellation handling during onboarding
+- same-origin browser contract
+- SSR header forwarding
+- host-derived tenant resolution
+- tenant/session mismatch fail-closed behavior
+- cookie/session contract behavior
+- no browser path to a private backend origin
+- route-state and redirect truth behavior
+- proxy/topology conformance
 
-Phase 3 did **not** change:
-
-- workspace setup banner and `/admin/settings` scope
-- public signup proof scope
-- password-reset proof scope
-- real browser CI scope
-- Google or Microsoft provider-live proof scope
-
-## 5. What Phase 4 added
-
-Phase 4 added public signup, email-verification, and password-recovery proof closure.
-
-Specifically it added:
-
-- a real frontend reset-password page that can consume email-delivered reset links in the browser
-- mock-backed browser E2E coverage for signup verification, resend verification, blocked signup, forgot-password, reset-password, expired reset-token behavior, and reused reset-token behavior
-- documented local proof procedures in `docs/ops/runbooks.md` for public signup + verification and forgot-password + reset-password
-- explicit status truth that these flows are now proven at the repository/browser-proof level without claiming the later Phase 8 real-stack CI work is already done
-
-Phase 4 did **not** change:
-
-- MFA provider-live proof scope
-- Google or Microsoft provider-live proof scope
-- workspace setup banner and `/admin/settings` scope
-- Phase 8 real-stack browser CI scope
-- broader non-auth Hubins product scope
-
-## 6. What Phase 5 added
-
-Phase 5 adds the repository surfaces and proof procedure needed for real MFA validation.
-
-Specifically it adds:
-
-- a scannable QR on the real MFA setup page generated from the backend-provided `qrCodeUri`
-- explicit issuer/account preview on the setup page so the expected authenticator-app presentation is visible before scan
-- stronger recovery-code test coverage proving single-use enforcement across a fresh login session, not only within an already-elevated session
-- a dedicated Phase 5 proof runbook in `docs/ops/runbooks.md` covering real authenticator enrollment, login verification, and recovery-code reuse rejection
-
-Phase 5 does **not** automatically turn mocked/unit coverage into real-device proof by itself.
-The final authenticator-app scan and reuse evidence remain a manual runbook execution step in the target environment.
-
-## 7. What Phase 6 added
-
-Phase 6 adds the repository-side readiness items for real Google live-provider validation.
-
-Specifically it adds:
-
-- committed backend/frontend `.env.example` files so the documented local/staging config contract now exists in the repo
-- explicit Google SSO secrets/config checklist guidance in `docs/developer-guide.md`
-- a dedicated Phase 6 runbook in `docs/ops/runbooks.md` covering configuration proof, active-member success proof, expired-invite rejection, MFA continuation, audit validation, and JWKS reachability
-- stronger Google callback regression coverage for session payload correctness and the `MFA_REQUIRED` continuation when Google SSO is used by an admin who already has verified MFA
-
-Phase 6 still requires a real staging execution with real Google credentials before it can be claimed as operationally proven.
-The repository now contains the required proof procedure and regression coverage, but the live-provider round-trip itself remains an environment execution step.
-
-## 8. What Phase 7 added
-
-Phase 7 adds the repository-side readiness items for real Microsoft live-provider validation.
-
-Specifically it adds:
-
-- explicit Microsoft SSO secrets/config checklist guidance in `docs/developer-guide.md`, including exact env file/variable wiring and the note that this repo does not use a `MICROSOFT_TENANT_ID` env var
-- a dedicated Phase 7 runbook in `docs/ops/runbooks.md` covering Azure portal app-registration steps, configuration proof, claim fallback proof, issuer resolution proof, active-member success proof, expired-invite rejection, MFA continuation, audit validation, and JWKS reachability
-- stronger Microsoft callback regression coverage for session payload correctness, claim fallback resolution, and the `MFA_REQUIRED` continuation when Microsoft SSO is used by an admin who already has verified MFA
-
-Phase 7 still requires a real staging execution with real Microsoft credentials before it can be claimed as operationally proven.
-The repository now contains the required proof procedure and regression coverage, but the live-provider round-trip itself remains an environment execution step.
-
-## 9. What Phase 8 added
-
-Phase 8 adds real-stack browser E2E coverage and the CI job that proves it.
-
-Specifically it adds:
-
-- `backend/src/shared/db/seed/seed-e2e-fixtures.ts` — seeds a dedicated ADMIN persona (`e2e-admin@example.com`) in `goodwill-open` with no MFA configured, so the admin login continuation path returns `MFA_SETUP_REQUIRED` predictably in real-stack tests
-- `backend/src/shared/db/seed/run-seed-e2e-fixtures.ts` — CLI runner: `yarn workspace @auth-lab/backend db:seed:e2e`
-- `frontend/playwright.config.mts` — Playwright config targeting the real Caddy proxy at `*.lvh.me:3000`; no mock backend, no `next dev` web server block
-- `frontend/test/e2e/helpers/mailpit.ts` — Mailpit HTTP API helper (`purgeMailpit`, `waitForEmailToRecipient`, `extractLinkFromText`) for email-driven real-stack tests
-- `frontend/test/e2e/auth.spec.ts` — 17 smoke tests covering all required journeys (15 original + 2 SSO callback tests added in closure work)
-- `.github/workflows/frontend.yml` — CI job (e2e job inside): builds Docker stack with local OIDC overlay, seeds E2E fixtures, runs Playwright real-stack suite, uploads failure artifacts, tears down
-- `scripts/seed-e2e-fixtures.sh` — local convenience wrapper for `docker compose exec` seed
-- `frontend/package.json` and `backend/package.json` — `test:e2e:real-stack` and `db:seed:e2e` scripts added
-- `docs/developer-guide.md` — updated frontend checks section with real-stack E2E instructions
-
-**Drift fixed in this phase:**
-
-- Mock (`acme` tenant) vs real stack (`goodwill-open`/`goodwill-ca`) tenant and persona mismatch now documented and resolved
-- `frontend-tests.yml` stale "not yet" comment replaced with correct pointer to the new real-stack job
-- Mailpit API helper created so real-stack tests never depend on mock backend `/__mail/messages` endpoint
-
-**Boundary:**
-Phase 8 proves the topology and session model in a real browser. Real OAuth round-trips (Google, Microsoft) remain Phase 6/7 operator proof — the SSO topology probe in Phase 8 stops at the 302 redirect + state cookie check without requiring live OAuth credentials.
-
-Phase 8 does **not** change:
-
-- backend auth flows or policies
-- frontend auth forms or components
-- session or cookie contracts
-- proxy topology or Caddy/nginx configuration
-- workspace setup banner and `/admin/settings` scope (Phase 9)
+Operational meaning:
+The repo now has executable proof for the assumptions that matter most for tenant isolation and auth correctness.
 
 ---
 
-## 10. What Phase 9 added
+## 5. What Stage 3 established
 
-Phase 9 closes the auth module's dependency on initial Settings routing and
-creates the real tenant-scoped workspace setup UX.
+Stage 3 added the current operability baseline.
 
-**Design decision (ADR 0003):** workspace setup state belongs to the tenant,
-not to individual users. A per-membership redirect would create a race
-condition when multiple admins complete onboarding simultaneously. Instead,
-a non-blocking banner on the admin dashboard surfaces the setup call to action
-for any admin, and the acknowledgement is tenant-scoped.
+That includes:
 
-Specifically Phase 9 adds:
+- structured logging
+- request correlation
+- metrics export
+- operability smoke checks
+- observability docs and incident-triage material
 
-**ADR and design gate:**
-
-- `backend/docs/adr/0003-workspace-setup-banner.md` — documents the workspace
-  setup banner approach, the rejected per-membership `FIRST_TIME_SETUP`
-  alternative, and the role-aware `NONE` routing fix
-
-**Backend:**
-
-- migration `0013_tenants_setup_completed_at` — `setup_completed_at TIMESTAMPTZ NULL`
-  on `tenants`
-- `tenant.types.ts` — `setupCompletedAt: Date | null`
-- `tenant.queries.ts` — maps `setup_completed_at` in `rowToTenant`
-- `auth.types.ts` `ConfigResponse.tenant` gains `setupCompleted: boolean`. `AuthNextAction` is
-  unchanged — workspace setup is not an auth continuation state
-- `get-auth-config.ts` — derives `setupCompleted = setupCompletedAt !== null`
-- `workspace-setup-ack-flow.ts` — idempotent
-  `UPDATE tenants SET setup_completed_at = now() WHERE id = ? AND setup_completed_at IS NULL`
-- `POST /auth/workspace-setup-ack` — ADMIN + emailVerified + mfaVerified gated; tenant-scoped
-
-**Frontend:**
-
-- `contracts.ts` — `ConfigResponse.tenant.setupCompleted: boolean` added;
-  `AuthNextAction` unchanged
-- `route-state.ts` — unchanged; all admins resolve to `AUTHENTICATED_ADMIN`;
-  `setupCompleted` passes through `config` for the page to read
-- `redirects.ts` — `getPathForNextAction(nextAction, role)` now requires `role`;
-  `NONE + ADMIN` → `/admin`, `NONE + MEMBER` → `/app`; `ADMIN_SETTINGS_PATH` exported
-- all callers of `getPathForNextAction` and `getPostAuthRedirectPath` updated with
-  `role` parameter: `login-form`, `signup-form`, `invite-register-form`,
-  `mfa-setup-flow`, `mfa-verify-flow`, `verify-email-flow`, `auth/mfa/setup/page.tsx`,
-  `auth/mfa/verify/page.tsx`
-- `workspace-setup-banner.tsx` — new client component; renders when
-  `setupCompleted === false`; links to `/admin/settings`; returns null when complete
-- `/admin/page.tsx` — renders `WorkspaceSetupBanner` conditional on
-  `routeState.config.tenant.setupCompleted`
-- `/admin/settings/page.tsx` — new SSR-gated page; calls
-  `POST /auth/workspace-setup-ack` on load when `!setupCompleted`
-
-**Tests:**
-
-- `redirects.spec.ts` — `role` param throughout; `NONE + ADMIN → /admin`,
-  `NONE + MEMBER → /app`; `setupCompleted` in test helpers
-- `route-state.spec.ts` — `setupCompleted` passthrough tests; no setup-specific
-  route state (correct by design)
-- `auth.spec.ts` (E2E) — 5 Phase 9 smoke tests: route existence, unauthenticated
-  gate, role-aware member routing, member `/admin` gate, MFA continuation unchanged
-
-**Docs:**
-
-- `docs/ops/runbooks.md` — Phase 9 section with final destination chain,
-  endpoint contracts, troubleshooting guide
-- `docs/current-foundation-status.md` — Phase 9 completion recorded
-
-Phase 9 does **not** change:
-
-- `AuthNextAction` — no new continuation states
-- auth flows (login, register, MFA, SSO) — unchanged
-- session or cookie contracts
-- proxy topology
-- invite lifecycle semantics
+Operational meaning:
+The repo can now answer the first serious operational questions under pressure instead of relying on developer intuition alone.
 
 ---
 
-## 11. What the latest hardening pass added
+## 6. What Stage 4 established
 
-The latest hardening pass did not redesign the module.
-It closed three practical quality gaps that mattered for final signoff confidence:
+Stage 4 did **not** redesign auth flows.
+It established the security-system baseline around the current implementation.
 
-- `LOCAL_OIDC_ENABLED` is now explicitly rejected at startup in production so the CI-only local OIDC server cannot silently replace the real Google/Microsoft adapters in a shared environment
-- decrypted SSO state now re-validates `returnTo` as an app-relative path before it can re-enter application control flow; absolute, scheme-relative, and backslash-based values are dropped
-- shared tenant provisioning is now conflict-safe under concurrency; membership creation no longer relies on a plain read-then-insert path and instead converges on a single membership row under race
+### Stage 4 baseline additions
 
-This hardening pass improves signoff confidence, but it does **not** by itself convert the module into a fully locked operational slice.
-The lock still requires:
+The repository now has, or expects as part of the active baseline:
 
-- TC-09 executed and passed in staging with a real Google account and evidence captured
-- TC-10 executed and passed in staging with a real Microsoft account and evidence captured
-- the real-stack browser CI job green on the committed topology path
+- an explicit platform threat model
+- security ADR coverage for the highest-risk SSO callback trust boundary
+- an explicit secrets-management foundation ADR for future tenant-configured integrations
+- explicit abuse-regression tests for SSO state tampering paths
+- stronger outbox key-rotation test proof
+- CI security scanning for:
+  - secret leakage
+  - dependency vulnerabilities
+  - container-image vulnerabilities
 
-The repository can now truthfully claim stronger config hardening, stronger redirect hygiene, and stronger provisioning idempotency.
-It still must not claim live-provider closure before the staging runbooks are actually executed.
+- runbook coverage for:
+  - key rotation realities
+  - startup-guard failures
+  - adversarial pre-release security review
 
----
+### What Stage 4 means here
 
-## 12. What is intentionally deferred or out of scope here
-
-This file is not claiming completion of every future hardening concern.
-The following remain outside the scope of this status snapshot unless separately marked shipped:
-
-- production email-provider rollout
-- real browser E2E coverage for all auth flows in CI
-- broader non-auth Hubins product surfaces
-- workspace settings configuration content (placeholder at Phase 9 — content belongs to later product phases)
-- future settings/account-management modules not already shipped
-- later operational hardening beyond the current documented runbooks and checks
+Security in this repo is no longer only “careful code plus good intentions.”
+The main trust boundaries are now named, documented, and attached to proof and process.
 
 ---
 
-## 13. Active truth-chain rule
+## 7. What remains intentionally deferred after the Stage 4 baseline
 
-The current truth-chain is:
+The Stage 4 baseline does **not** mean every deeper security capability is already built.
+The following remain intentionally deferred or limited:
 
-1. repository code
-2. active `/docs` truth/status documents
-3. route/API/module docs
-4. historical planning material
+## 7.1 Tenant integration secrets runtime implementation
 
-If an older planning document implies a behavior that the repository no longer follows, the code plus current `/docs` truth documents win.
+The foundation decision is now explicit, but the repo does **not** yet ship a full runtime secret-store implementation for tenant-configured secret-bearing integrations.
 
----
+Consequence:
 
-## 14. Quick reality checklist
+Secret-bearing tenant integrations remain blocked/deferred until that implementation exists.
 
-As of the current foundation state, all of the following should be true:
+## 7.2 Server-side used-state ledger for SSO callbacks
 
-- backend starts with valid local or environment-specific config
-- frontend starts with its current local config
-- infra can run Postgres + Redis + Mailpit for local proof
-- local invite email can be captured in Mailpit
-- local verify-email can be captured in Mailpit
-- local forgot-password/reset email can be captured in Mailpit
-- public signup + verification can be manually proven through the documented browser runbook
-- forgot-password + reset-password can be manually proven through the documented browser runbook
-- MFA setup page can render a real scannable QR from the backend `otpauth://` URI
-- Phase 5 real-device MFA proof can be executed through the documented runbook
-- Google SSO staging config can be prepared from the committed `.env.example` files and the documented config checklist
-- Microsoft SSO staging config can be prepared from the committed `.env.example` files and the documented config checklist
-- Phase 6 live Google proof can be executed through the documented runbook once real staging credentials are available
-- Phase 7 live Microsoft proof can be executed through the documented runbook once real staging credentials are available
-- staging / production startup must reject `LOCAL_OIDC_ENABLED=true`; the local OIDC server remains CI-only
-- decrypted SSO-state `returnTo` values are constrained to app-relative paths before they re-enter app control flow
-- concurrent provisioning of the same `(tenant, user)` identity converges on one membership row instead of surfacing a unique-constraint race to the caller
-- real-stack Playwright smoke tests pass against the full Docker Compose topology: `yarn workspace frontend test:e2e:real-stack`
-- the Phase 8 CI job (e2e job inside `.github/workflows/frontend.yml`) runs the real-stack smoke suite on push/PR
-- the E2E fixture seed (`yarn workspace @auth-lab/backend db:seed:e2e`) creates the required admin persona in `goodwill-open` with no MFA
-- Google and Microsoft SSO callback flows are proven end-to-end in real browser CI via the local OIDC server (`infra/docker-compose-ci-oidc.yml`) — jose jwtVerify(), JWKS fetch, RSA-256 signature, nonce enforcement, session creation, and /auth/me confirmation are all exercised by tests 8 and 9 in `frontend/test/e2e/auth.spec.ts`
-- Mailpit HTTP API is reachable at port 8025 when running the full stack (used by real-stack E2E email-verification test)
-- generated email links target the tenant-aware frontend host shape
-- operator bootstrap can create a tenant-scoped pending ADMIN invite without logging a raw token
-- invite acceptance can continue into registration, authenticated session creation, and MFA setup entry for a first admin bootstrap path
-- all admins land on `/admin` after full authentication; `NONE + ADMIN` routes to `/admin` (Phase 9 role-aware fix)
-- when `tenants.setup_completed_at IS NULL`, the admin dashboard shows a `WorkspaceSetupBanner` prompting setup
-- any admin visiting `/admin/settings` triggers `POST /auth/workspace-setup-ack`, setting `setup_completed_at` tenant-wide
-- after ack, `GET /auth/config` returns `setupCompleted: true` and the banner is gone for all admins
-- members always land on `/app` (`NONE + MEMBER`)
-- current docs point to `/docs` as the repo truth home
+The current accepted SSO baseline uses:
 
-If one of these statements stops being true, this file must be updated or the repo must be repaired.
+- encrypted short-lived state
+- exact cookie/query equality
+- host/provider coherence checks
+- return-path validation
+- immediate cookie clearing
+
+The repo does **not** currently add a server-side consumed-state ledger for SSO callback state.
+That is a conscious Stage 4 boundary decision, not an accidental omission.
+
+## 7.3 Non-disruptive multi-version rotation for all auth crypto materials
+
+Outbox encryption now has the clearest multi-version rotation support.
+Other auth crypto materials are still more operationally disruptive to rotate.
+
+Consequence:
+
+- rotating SSO state key is operationally acceptable but invalidates in-flight starts
+- rotating MFA encryption/HMAC keys requires more deliberate maintenance handling and may require re-enrollment/reset strategies
+
+## 7.4 Stage 1B broader enforcement still remains parallel work
+
+The repo has the minimum executable governance baseline, but not every deeper enforcement coupling is fully closed yet.
 
 ---
 
-## 15. Current foundation score intent
+## 8. Practical evidence map
 
-The repository should now be understood as:
+This snapshot is supported by three classes of proof.
 
-- beyond topology-only
-- beyond backend-foundation-only
-- functionally implemented for the current Auth + User Provisioning slice
-- supported by local and operator bootstrap proof procedures
-- materially stronger after config-hardening, redirect-hardening, and concurrency-hardening updates
-- still subject to live-provider staging proof execution, operational proof expansion, and broader product work
+## 8.1 Code/runtime proof
 
-That is the correct practical reading of the repo at this point.
+- topology/proxy config
+- SSR API client and forwarding contract
+- session middleware tenant binding
+- auth module flows
+- startup guards
+- cookie/state handling
+
+## 8.2 Test proof
+
+- backend unit/integration/E2E auth coverage
+- frontend unit/E2E auth coverage
+- proxy conformance checks
+- tenant-isolation regressions
+- token lifecycle and replay/reuse regressions
+- SSO state validation and abuse regressions
+- outbox encryption rotation tests
+
+## 8.3 Documentation/process proof
+
+- current architecture docs
+- security model
+- threat model
+- ADRs
+- runbooks
+- quality-bar/governance docs
+- observability docs
+
+---
+
+## 9. What this repo is ready for next
+
+Given the current status, the repo is ready to continue with later roadmap work **without pretending earlier foundations are still missing**.
+
+Practical meaning:
+
+- new major modules must still obey Cross-Cutting Track A
+- Stage 1B can continue in parallel where deeper enforcement is still needed
+- later stages may build on a now-explicit security-system baseline instead of inheriting undocumented assumptions
+
+What should **not** happen next:
+
+- re-litigating topology
+- re-litigating backend-authoritative auth/session truth
+- weakening tenant isolation for convenience
+- pretending secret-bearing tenant integrations are ready before the secrets foundation runtime exists
+- treating Stage 4 docs/tests as optional polish
+
+---
+
+## 10. Change triggers for this file
+
+This file must be updated whenever any of the following materially changes:
+
+- stage-completion truth for active roadmap stages
+- shipped auth/provisioning feature scope
+- security baseline truth
+- topology or tenant-isolation guarantees
+- startup guard behavior
+- CI security scanning behavior
+- tenant integration secrets readiness status
+
+---
+
+## 11. Bottom-line truth
+
+The current repository is now stronger than a typical “auth feature implementation” repo.
+It has:
+
+- architecture proof
+- operability proof
+- security boundary documentation
+- security scanning
+- concrete abuse regressions
+- operator-facing security/process runbooks
+
+That is a serious foundation.
+
+It is also honest about what is **not** done yet.
+
+That honesty is part of the quality bar.
