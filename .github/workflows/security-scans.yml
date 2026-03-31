@@ -47,17 +47,17 @@ jobs:
           GITLEAKS_CONFIG: .gitleaks.toml
 
       - name: Dependency vulnerability scan (filesystem)
-        uses: aquasecurity/trivy-action@v0.31.0
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'
-          exit-code: '0'
-          severity: 'HIGH,CRITICAL'
-          ignore-unfixed: true
-          vuln-type: 'library'
-          scanners: 'vuln'
-          hide-progress: true
+        run: |
+          docker run --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            ghcr.io/aquasecurity/trivy:0.63.0 \
+            fs \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            .
 
   container-security:
     name: Container image scan
@@ -75,23 +75,25 @@ jobs:
         run: docker build -f frontend/Dockerfile -t auth-lab/frontend:security-scan .
 
       - name: Scan backend image
-        uses: aquasecurity/trivy-action@v0.31.0
-        with:
-          scan-type: 'image'
-          image-ref: 'auth-lab/backend:security-scan'
-          format: 'table'
-          exit-code: '0'
-          severity: 'HIGH,CRITICAL'
-          ignore-unfixed: true
-          hide-progress: true
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            ghcr.io/aquasecurity/trivy:0.63.0 \
+            image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            auth-lab/backend:security-scan
 
       - name: Scan frontend image
-        uses: aquasecurity/trivy-action@v0.31.0
-        with:
-          scan-type: 'image'
-          image-ref: 'auth-lab/frontend:security-scan'
-          format: 'table'
-          exit-code: '0'
-          severity: 'HIGH,CRITICAL'
-          ignore-unfixed: true
-          hide-progress: true
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            ghcr.io/aquasecurity/trivy:0.63.0 \
+            image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            auth-lab/frontend:security-scan
