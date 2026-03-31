@@ -34,7 +34,7 @@
     "@types/node": "^20.11.30",
     "@types/nodemailer": "^6.4.17",
     "@types/pg": "^8.11.10",
-    "kysely-codegen": "^0.16.0",
+    "kysely-codegen": "0.20.0",
     "tsx": "^4.19.2",
     "typescript": "^5.4.5",
     "vitest": "^2.1.0"

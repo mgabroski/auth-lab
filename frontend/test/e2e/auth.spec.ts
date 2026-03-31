@@ -1126,9 +1126,12 @@ test.describe('auth smoke', () => {
     await page.getByLabel('Password').fill(MEMBER_PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    await expect(
-      page.getByText(/invalid credentials|incorrect|wrong/i).or(page.getByRole('alert')),
-    ).toBeVisible({ timeout: 10_000 });
+    const loginError = page
+      .locator('[role="alert"]')
+      .filter({ hasText: /invalid credentials|incorrect|wrong|something went wrong/i })
+      .first();
+
+    await expect(loginError).toBeVisible({ timeout: 10_000 });
 
     await expect(page).not.toHaveURL(`${OPEN_ORIGIN}/app`);
     // No restore needed — the seed resets e2e-reset-member's password to
