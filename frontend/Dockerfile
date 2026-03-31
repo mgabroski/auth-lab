@@ -29,7 +29,7 @@ COPY frontend/package.json frontend/package.json
 COPY backend/package.json backend/package.json
 RUN yarn workspaces focus frontend
 
-# ── Stage 2: build the Next.js app ────────────────────────────────────────────
+# ── Stage 2: build the Next.js app ───────────────────────────────────────────
 FROM base AS builder
 WORKDIR /repo
 
