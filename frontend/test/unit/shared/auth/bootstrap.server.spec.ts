@@ -3,12 +3,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiHttpError } from '../../../../src/shared/auth/api-errors';
 import type { ConfigResponse, MeResponse } from '../../../../src/shared/auth/contracts';
 
-const { ssrFetchMock } = vi.hoisted(() => ({
-  ssrFetchMock: vi.fn(),
-}));
+const { ssrFetchMock, serverLoggerErrorMock, serverLoggerInfoMock, serverLoggerWarnMock } =
+  vi.hoisted(() => ({
+    ssrFetchMock: vi.fn(),
+    serverLoggerErrorMock: vi.fn(),
+    serverLoggerInfoMock: vi.fn(),
+    serverLoggerWarnMock: vi.fn(),
+  }));
 
 vi.mock('@/shared/ssr-api-client', () => ({
   ssrFetch: ssrFetchMock,
+}));
+
+vi.mock('@/shared/server/logger', () => ({
+  serverLogger: {
+    error: serverLoggerErrorMock,
+    info: serverLoggerInfoMock,
+    warn: serverLoggerWarnMock,
+  },
 }));
 
 import { loadAuthBootstrap } from '../../../../src/shared/auth/bootstrap.server';
@@ -30,11 +42,8 @@ function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigRe
       name: 'Acme',
       isActive: true,
       publicSignupEnabled: true,
-      // signupAllowed is now a required field (publicSignupEnabled && !adminInviteRequired).
-      // Default to true in tests — override explicitly when testing the blocked-signup case.
       signupAllowed: true,
       allowedSso: ['google'],
-      // Phase 9: setupCompleted is a required field. Default to true in tests.
       setupCompleted: true,
       ...overrides,
     },
@@ -68,6 +77,9 @@ function makeMe(overrides: Partial<MeResponse> = {}): MeResponse {
 
 afterEach(() => {
   ssrFetchMock.mockReset();
+  serverLoggerErrorMock.mockReset();
+  serverLoggerInfoMock.mockReset();
+  serverLoggerWarnMock.mockReset();
 });
 
 describe('loadAuthBootstrap', () => {
@@ -86,8 +98,16 @@ describe('loadAuthBootstrap', () => {
 
     const result = await loadAuthBootstrap();
 
-    expect(ssrFetchMock).toHaveBeenNthCalledWith(1, '/auth/config');
-    expect(ssrFetchMock).toHaveBeenNthCalledWith(2, '/auth/me');
+    expect(ssrFetchMock).toHaveBeenNthCalledWith(1, '/auth/config', {
+      headers: {
+        'X-Auth-Bootstrap': '1',
+      },
+    });
+    expect(ssrFetchMock).toHaveBeenNthCalledWith(2, '/auth/me', {
+      headers: {
+        'X-Auth-Bootstrap': '1',
+      },
+    });
     expect(result.ok).toBe(true);
 
     if (!result.ok) {
@@ -146,7 +166,11 @@ describe('loadAuthBootstrap', () => {
     const result = await loadAuthBootstrap();
 
     expect(ssrFetchMock).toHaveBeenCalledTimes(1);
-    expect(ssrFetchMock).toHaveBeenCalledWith('/auth/config');
+    expect(ssrFetchMock).toHaveBeenCalledWith('/auth/config', {
+      headers: {
+        'X-Auth-Bootstrap': '1',
+      },
+    });
     expect(result.ok).toBe(true);
 
     if (!result.ok) {
@@ -180,5 +204,16 @@ describe('loadAuthBootstrap', () => {
 
     expect(result.error).toBeInstanceOf(ApiHttpError);
     expect(result.error.message).toBe('Upstream unavailable');
+    expect(serverLoggerErrorMock).toHaveBeenCalledWith(
+      'auth.bootstrap.config_failed',
+      expect.objectContaining({
+        event: 'auth.bootstrap.config_failed',
+        flow: 'ssr.bootstrap',
+        target: 'config',
+        status: 503,
+        code: 'HTTP_503',
+        error: 'Upstream unavailable',
+      }),
+    );
   });
 });

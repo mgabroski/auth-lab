@@ -1424,6 +1424,426 @@ in any artifact, log, or commit.
 
 ---
 
+## Observability and Incident Triage Runbooks
+
+This section adds the Stage 3 incident-response layer to the existing runbook set.
+
+Use these runbooks when the question is not merely “does the flow work,” but:
+
+- what failed
+- when it started
+- who is affected
+- whether a release likely caused it
+- how to triage it
+
+### Operator starting point
+
+Before diving into a specific failure mode, do this first:
+
+1. confirm `/api/health` through the real proxy path
+2. confirm `/api/metrics` through the real proxy path
+3. confirm whether `x-request-id` is being returned on normal requests
+4. identify whether the issue is broad or isolated to one flow
+5. check whether a recent release or config change happened just before the issue started
+
+If either `/api/health` or `/api/metrics` is unavailable, treat that as a real operability incident before debugging product flows.
+
+---
+
+## Request correlation runbook
+
+### Symptom: an operator can reproduce the problem but cannot connect frontend/server behavior to backend logs
+
+Check:
+
+1. whether the response includes `x-request-id`
+2. whether the frontend SSR/server path logged the failure event
+3. whether the backend request emitted `request.started` and `request.completed`
+4. whether the same `requestId` appears in backend error logs
+5. whether the failure happens before the backend is reached, which would mean it only exists in frontend server-path logs
+
+### What counts as a likely cause
+
+- request ID propagation regressed in SSR/server fetches
+- backend stopped echoing `x-request-id`
+- the failure occurs before the backend request is made
+- the operator is looking at the wrong tenant host or wrong time window
+
+### Immediate triage action
+
+- reproduce once with a fresh request
+- capture the returned `x-request-id`
+- search frontend server-path logs first if the backend has no matching request entry
+- search backend logs using the same request ID if the request reached the backend
+
+---
+
+## Login failure spike runbook
+
+### Symptom: users report they cannot log in or login failures spike unexpectedly
+
+Primary signals:
+
+- `auth_login_failures_total`
+- `http_requests_total` for `/auth/login`
+- `http_request_duration_ms` for `/auth/login`
+
+Structured log events:
+
+- `app_error`
+- `unhandled_error`
+- `request.completed`
+
+### Check
+
+1. whether failures are mostly `401` / `UNAUTHORIZED` or whether `5xx` is involved
+2. whether the failures affect one tenant host or many
+3. whether request latency changed at the same time
+4. whether a deployment or auth config change happened near the start of the spike
+5. whether Redis, database, or session middleware problems are visible through health and logs
+
+### Likely interpretations
+
+- mostly `401` with stable latency often means user-credential or tenant-context issue, not total platform outage
+- `5xx` or strong latency increase suggests backend regression or dependency problem
+- one-tenant-only spike suggests tenant routing/config issue rather than global outage
+
+### Immediate triage action
+
+- confirm `/api/health`
+- inspect `/api/metrics`
+- compare current `auth_login_failures_total` against recent baseline
+- correlate one failed login using `x-request-id`
+- if the spike began immediately after deployment, evaluate rollback risk quickly
+
+---
+
+## Tenant-resolution failure runbook
+
+### Symptom: users hit the app on a tenant host but auth/bootstrap fails because tenant context cannot be resolved
+
+Primary signals:
+
+- `tenant_resolution_failures_total`
+- `http_requests_total` for affected routes
+- request logs containing `tenantKey: null` or tenant-resolution error metadata
+
+### Check
+
+1. whether the browser or SSR request used the correct host
+2. whether proxy forwarding still preserves `Host` and `X-Forwarded-Host`
+3. whether the tenant is missing, inactive, or not available
+4. whether the issue affects all requests for that tenant or only some flows
+5. whether the issue started right after proxy, config, or seed changes
+
+### Likely interpretations
+
+- missing tenant host context
+- forwarded-host regression in SSR/direct backend calls
+- tenant inactive or missing in database
+- proxy topology drift
+
+### Immediate triage action
+
+- reproduce via the real tenant host
+- confirm response `x-request-id`
+- inspect backend request context for host, public origin, and tenantKey
+- verify tenant state in the database
+- if many tenants are affected, escalate quickly because this can behave like a platform-wide outage
+
+---
+
+## SSR/bootstrap failure runbook
+
+### Symptom: pages fail to load correctly, bootstrap loops, or SSR cannot establish auth/config truth
+
+Primary signals:
+
+- `ssr_bootstrap_failures_total`
+- `http_requests_total` for `/auth/config` and `/auth/me`
+- frontend server-path logs:
+  - `ssr.api.transport_failed`
+  - `auth.bootstrap.config_failed`
+  - `auth.bootstrap.config_transport_failed`
+  - `auth.bootstrap.me_failed`
+  - `auth.bootstrap.me_transport_failed`
+  - `auth.bootstrap.unknown_failure`
+
+### Check
+
+1. whether `/auth/config` is failing, `/auth/me` is failing, or both
+2. whether the problem is a backend response error or a frontend-to-backend transport failure
+3. whether the issue affects all tenant hosts or one tenant host
+4. whether `401` on `/auth/me` is expected for the current session state
+5. whether the issue began after a release or topology/config change
+
+### Important rule
+
+Do not treat every `/auth/me` `401` as a Stage 3 incident.
+`401` is expected for unauthenticated sessions.
+Focus on unexpected bootstrap failures and degraded rates.
+
+### Immediate triage action
+
+- reproduce on the affected tenant host
+- capture the frontend-visible failure and any returned `x-request-id`
+- inspect frontend server-path logs first
+- then inspect backend request/error logs for `/auth/config` and `/auth/me`
+- confirm whether the issue is transport, auth state, tenant resolution, or backend regression
+
+---
+
+## SSO provider failure runbook
+
+### Symptom: Google or Microsoft sign-in starts or callbacks begin failing
+
+Primary signals:
+
+- `sso_failures_total`
+- `http_requests_total` for `/auth/sso/:provider` and `/auth/sso/:provider/callback`
+- `http_request_duration_ms` for callback route
+
+### Check
+
+1. whether failures happen during SSO start or callback
+2. whether only one provider is affected
+3. whether provider credentials or redirect URI configuration changed recently
+4. whether callback errors coincide with tenant-resolution or bootstrap failures
+5. whether the issue started after deployment or provider-side credential changes
+
+### Likely interpretations
+
+- provider misconfiguration
+- redirect URI mismatch
+- callback handling regression
+- tenant-specific host issue
+- state or session coupling problem
+
+### Immediate triage action
+
+- identify provider and failing step from metrics
+- reproduce once with a fresh request
+- capture `x-request-id`
+- check backend callback logs and error classification
+- if only one provider is affected, treat it as flow-specific degradation before escalating to platform-wide outage
+
+---
+
+## Invite and reset degradation runbook
+
+### Symptom: invite acceptance or password reset starts failing more often, or users report not receiving mail
+
+Primary signals:
+
+- `invite_failures_total`
+- `password_reset_failures_total`
+- `email_delivery_failures_total`
+
+### Check
+
+1. whether the failure is in the HTTP flow, the token lifecycle, or email delivery
+2. whether invite/reset requests are failing at the backend before delivery is attempted
+3. whether email delivery failures are retryable, non-retryable, decrypt-related, or max-attempt failures
+4. whether the issue affects one message type or all outbox-delivered mail
+5. whether Mailpit or the staging sandbox provider is healthy in the target environment
+
+### Immediate triage action
+
+- inspect the relevant failure counters
+- inspect outbox worker logs
+- confirm whether the message was queued, retried, dead-lettered, or never created
+- if email delivery is broadly failing, treat that as a real Sev 2 user-facing incident
+
+---
+
+## Email / outbox delivery failure runbook
+
+### Symptom: invite, reset, or verification emails stop arriving or outbox failures spike
+
+Primary signals:
+
+- `email_delivery_failures_total`
+
+Structured log events:
+
+- `outbox.tick.failed`
+- `outbox.retry_scheduled`
+- `outbox.dead_lettered`
+- `outbox.finalize_lost_claim`
+
+### Check
+
+1. whether failures are concentrated in one `message_type` or all message types
+2. whether failures are `decrypt_failed`, `retryable`, `non_retryable`, or `max_attempts_exceeded`
+3. whether the outbox worker is running normally
+4. whether the SMTP provider or local Mailpit path is reachable
+5. whether the issue began after encryption-key or email-provider config changes
+
+### Likely interpretations
+
+- outbox encryption/decryption issue
+- SMTP provider outage or credential/config issue
+- application-side formatting or adapter regression
+- worker ownership/finalization issue
+
+### Immediate triage action
+
+- confirm health of the email path for the environment
+- inspect outbox worker logs around the first spike
+- identify affected message types
+- determine whether messages are retrying or permanently dead-lettering
+- if the spike aligns with deployment, evaluate rollback or config restoration quickly
+
+---
+
+## Critical auth-route latency regression runbook
+
+### Symptom: auth flows still work but become noticeably slower or unstable
+
+Primary signals:
+
+- `http_request_duration_ms`
+- `http_requests_total`
+
+Suggested focus routes:
+
+- `/auth/login`
+- `/auth/config`
+- `/auth/me`
+- `/auth/sso/:provider/callback`
+
+### Check
+
+1. whether latency increase is isolated to one route or broad across auth routes
+2. whether latency increase also coincides with higher failure rate
+3. whether dependency health changed at the same time
+4. whether a release introduced new slow behavior
+5. whether only one tenant host is affected
+
+### Immediate triage action
+
+- compare current route latency against recent baseline
+- inspect request-completion logs for the affected route
+- inspect dependency health and any recent migrations/config changes
+- if latency is high enough to create user-visible failure or queueing, escalate severity accordingly
+
+---
+
+## Release-correlation runbook
+
+### Symptom: a real failure pattern has appeared and operators need to decide whether the latest release likely caused it
+
+Check:
+
+1. exact time the metric or log spike began
+2. deployment timeline for backend, frontend, proxy, or env/config changes
+3. whether the new failure rate appeared immediately after the release
+4. whether logs from the failing window show the current release value
+5. whether the problem affects only the latest path touched by the release
+
+### Immediate triage action
+
+- do not guess
+- compare pre-release and post-release signal levels
+- if the timing aligns tightly, mark the release as a likely contributing factor
+- decide quickly whether rollback, revert, or targeted fix is the safer first move
+
+---
+
+## Minimum Stage 3 incident evidence checklist
+
+For any real incident that touches auth/bootstrap/tenant/email operability, capture at least:
+
+1. start time of degradation
+2. affected routes or flows
+3. relevant metric names and observed changes
+4. one or more correlated `x-request-id` values if available
+5. whether one tenant or many were affected
+6. whether a release or config change likely caused it
+7. triage action taken
+8. final mitigation or rollback decision
+
+---
+
+## Operability smoke runbook
+
+### Goal
+
+Prove that Stage 3 observability is still real in CI or during manual deploy validation.
+
+### Script
+
+Use:
+
+```bash
+./scripts/operability-smoke.sh
+```
+
+### What the script proves
+
+- `/api/health` works through the proxy
+- `x-request-id` is returned on a normal request
+- `/api/metrics` works through the proxy
+- `/api/metrics` returns Prometheus text
+- a deterministic failed login increments `auth_login_failures_total`
+
+### If the smoke fails
+
+Treat it as a real regression in operability.
+
+Check:
+
+1. whether proxy routing still sends `/api/*` to backend
+2. whether `/metrics` is still registered
+3. whether response header `x-request-id` is still set
+4. whether the login failure path still emits `auth_login_failures_total`
+5. whether the stack is healthy enough for the script to be meaningful
+
+Do not dismiss a smoke failure just because the application still appears to work manually.
+A broken smoke means operator visibility has degraded.
+
+---
+
+## Severity guidance for these runbooks
+
+### Escalate as Sev 1 when
+
+- tenant resolution fails broadly
+- SSR/bootstrap failures block most users from loading the app
+- login failures spike across most tenants
+- `/api/health` or `/api/metrics` is unavailable in a deploy candidate or active environment
+
+### Escalate as Sev 2 when
+
+- one critical auth flow is degraded for a meaningful user segment
+- one SSO provider begins failing significantly
+- invite/reset/email delivery path is materially degraded
+- critical auth-route latency becomes user-visible or destabilizing
+
+### Track as Sev 3 when
+
+- low-rate failure trends begin appearing without major user impact yet
+- one new error class is emerging but not yet causing broad disruption
+
+---
+
+## Boundary reminder
+
+These Stage 3 runbooks do **not** replace the existing flow-specific runbooks already in `docs/ops/runbooks.md`.
+
+Use the existing sections for:
+
+- invite onboarding flow proof
+- password reset flow proof
+- MFA setup / verify / recovery proof
+- Google live-provider proof
+- Microsoft live-provider proof
+- tenant bootstrap flow
+
+Use the Stage 3 additions in this block when the question is specifically about operability, incident detection, blast radius, release correlation, and triage.
+
+---
+
 ## Deferred Operational Items
 
 The following operational items are explicitly deferred from the Auth + User Provisioning

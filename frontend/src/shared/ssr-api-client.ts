@@ -1,5 +1,5 @@
 /**
- * src/shared/ssr-api-client.ts
+ * frontend/src/shared/ssr-api-client.ts
  *
  * WHY:
  * - SSR server components call the backend directly via INTERNAL_API_URL
@@ -11,27 +11,21 @@
  * - Used ONLY in Server Components, layouts, Route Handlers.
  * - Never used in Client Components (use api-client.ts there).
  * - cache: 'no-store' — session data is never cacheable.
- * - Callers may add extra headers, but must never override the forwarded
- *   topology/session headers required for tenant resolution.
+ *
+ * STAGE 3:
+ * - Propagates x-request-id across frontend SSR/server → backend.
+ * - Logs upstream transport failures from frontend server paths.
  */
 
-import { cookies, headers } from 'next/headers';
+import { randomUUID } from 'node:crypto';
+import { headers, cookies } from 'next/headers';
 
-function buildInvariantHeaders(args: {
-  host: string;
-  cookie: string;
-  forwardedFor: string;
-  forwardedProto: string;
-}): Headers {
-  const result = new Headers();
+import { serverLogger } from '@/shared/server/logger';
 
-  result.set('Host', args.host);
-  result.set('Cookie', args.cookie);
-  result.set('X-Forwarded-For', args.forwardedFor);
-  result.set('X-Forwarded-Proto', args.forwardedProto);
-  result.set('X-Forwarded-Host', args.host);
-
-  return result;
+function resolveRequestId(incomingHeaders: Headers): string {
+  return (
+    incomingHeaders.get('x-request-id') ?? incomingHeaders.get('x-correlation-id') ?? randomUUID()
+  );
 }
 
 export async function ssrFetch(path: string, init?: RequestInit): Promise<Response> {
@@ -39,36 +33,75 @@ export async function ssrFetch(path: string, init?: RequestInit): Promise<Respon
   const incomingCookies = await cookies();
 
   const host = incomingHeaders.get('host') ?? '';
+  const forwardedHost = incomingHeaders.get('x-forwarded-host') ?? host;
   const forwardedFor = incomingHeaders.get('x-forwarded-for') ?? '';
-  const forwardedProto = incomingHeaders.get('x-forwarded-proto') ?? 'http';
+  const proto = incomingHeaders.get('x-forwarded-proto') ?? 'http';
+  const userAgent = incomingHeaders.get('user-agent') ?? '';
+  const requestId = resolveRequestId(incomingHeaders);
 
-  const cookieHeader = incomingCookies
+  const cookieStr = incomingCookies
     .getAll()
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .map((c) => `${c.name}=${c.value}`)
     .join('; ');
+
+  const internalUrl = (process.env.INTERNAL_API_URL ?? 'http://backend:3001').replace(/\/+$/g, '');
+  const targetUrl = `${internalUrl}${path}`;
 
   const outgoingHeaders = new Headers(init?.headers);
 
-  if (init?.body !== undefined && !outgoingHeaders.has('Content-Type')) {
+  if (host) {
+    outgoingHeaders.set('Host', host);
+  }
+
+  if (cookieStr) {
+    outgoingHeaders.set('Cookie', cookieStr);
+  }
+
+  if (forwardedFor) {
+    outgoingHeaders.set('X-Forwarded-For', forwardedFor);
+  }
+
+  outgoingHeaders.set('X-Forwarded-Proto', proto);
+
+  if (forwardedHost) {
+    outgoingHeaders.set('X-Forwarded-Host', forwardedHost);
+  }
+
+  if (userAgent) {
+    outgoingHeaders.set('User-Agent', userAgent);
+  }
+
+  outgoingHeaders.set('X-Request-Id', requestId);
+
+  if (!outgoingHeaders.has('Accept')) {
+    outgoingHeaders.set('Accept', 'application/json');
+  }
+
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const hasBody = init?.body !== undefined && init?.body !== null;
+
+  if (hasBody && !outgoingHeaders.has('Content-Type')) {
     outgoingHeaders.set('Content-Type', 'application/json');
   }
 
-  const invariantHeaders = buildInvariantHeaders({
-    host,
-    cookie: cookieHeader,
-    forwardedFor,
-    forwardedProto,
-  });
+  try {
+    return await fetch(targetUrl, {
+      ...init,
+      method,
+      headers: outgoingHeaders,
+      cache: 'no-store',
+    });
+  } catch (error) {
+    serverLogger.error('ssr.api.transport_failed', {
+      event: 'ssr.api.transport_failed',
+      flow: 'ssr.api',
+      requestId,
+      method,
+      path,
+      targetUrl,
+      error,
+    });
 
-  for (const [name, value] of invariantHeaders.entries()) {
-    outgoingHeaders.set(name, value);
+    throw error;
   }
-
-  const internalUrl = process.env.INTERNAL_API_URL ?? 'http://backend:3001';
-
-  return fetch(`${internalUrl}${path}`, {
-    ...init,
-    headers: outgoingHeaders,
-    cache: 'no-store',
-  });
 }

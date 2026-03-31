@@ -3,10 +3,10 @@
  *
  * WHY:
  * - Resolves the request-scoped truth the backend relies on:
- *   - requestId
- *   - effective host
- *   - effective public origin
- *   - tenantKey
+ * - requestId
+ * - effective host
+ * - effective public origin
+ * - tenantKey
  * - Multi-tenancy depends on host/subdomain-derived tenant identity.
  * - Topology-aware flows such as SSO start need the effective public origin.
  *
@@ -18,9 +18,16 @@
  * HOST RESOLUTION:
  * - Prefer Host when it already contains tenant context.
  * - Fall back to X-Forwarded-Host when SSR/direct backend calls do not preserve
- *   a tenant-bearing Host header.
+ * a tenant-bearing Host header.
  * - If forwarded host is absent, retain the original Host so request context
- *   still has a truthful authority/publicOrigin for non-tenant cases.
+ * still has a truthful authority/publicOrigin for non-tenant cases.
+ *
+ * REQUEST ID / CORRELATION:
+ * - Accept a sanitized inbound request id from X-Request-Id or X-Correlation-Id.
+ * - This lets the frontend SSR/server path propagate a stable correlation key
+ * into the backend without redesigning the existing requestId plumbing.
+ * - If neither header is present (or they are malformed), generate a UUID.
+ * - Never trust arbitrary header values blindly: normalize shape/length first.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -40,8 +47,20 @@ declare module 'fastify' {
   }
 }
 
-function firstHeaderValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+const REQUEST_ID_MAX_LENGTH = 128;
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:/=-]+$/;
+
+function firstHeaderValue(value: string | string[] | number | undefined): string | undefined {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return typeof first === 'number' ? String(first) : first;
+  }
+
+  if (typeof value === 'number') {
+    return String(value);
+  }
+
+  return value;
 }
 
 function parseAuthority(rawHost: unknown): string | null {
@@ -92,6 +111,27 @@ function extractTenantKey(host: string | null): string | null {
   return null;
 }
 
+function normalizeRequestId(rawValue: unknown): string | null {
+  if (typeof rawValue !== 'string') return null;
+
+  const candidate = rawValue.split(',')[0]?.trim();
+  if (!candidate) return null;
+  if (candidate.length > REQUEST_ID_MAX_LENGTH) return null;
+  if (!REQUEST_ID_PATTERN.test(candidate)) return null;
+
+  return candidate;
+}
+
+function resolveRequestId(req: FastifyRequest): string {
+  const xRequestId = normalizeRequestId(firstHeaderValue(req.headers['x-request-id']));
+  if (xRequestId) return xRequestId;
+
+  const xCorrelationId = normalizeRequestId(firstHeaderValue(req.headers['x-correlation-id']));
+  if (xCorrelationId) return xCorrelationId;
+
+  return randomUUID();
+}
+
 export function registerRequestContext(app: FastifyInstance): void {
   app.decorateRequest('requestContext', null as unknown as RequestContext);
 
@@ -118,7 +158,7 @@ export function registerRequestContext(app: FastifyInstance): void {
     const proto = parseForwardedProto(rawForwardedProto);
 
     req.requestContext = {
-      requestId: randomUUID(),
+      requestId: resolveRequestId(req),
       host: effectiveHost,
       proto,
       publicOrigin: effectiveAuthority ? `${proto}://${effectiveAuthority}` : null,

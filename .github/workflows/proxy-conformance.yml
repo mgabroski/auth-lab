@@ -9,6 +9,7 @@ on:
       - 'package.json'
       - 'yarn.lock'
       - 'scripts/proxy-conformance.sh'
+      - 'scripts/operability-smoke.sh'
       - '.github/workflows/proxy-conformance.yml'
   pull_request:
     paths:
@@ -18,11 +19,12 @@ on:
       - 'package.json'
       - 'yarn.lock'
       - 'scripts/proxy-conformance.sh'
+      - 'scripts/operability-smoke.sh'
       - '.github/workflows/proxy-conformance.yml'
 
 jobs:
   conformance:
-    name: PT-01..PT-08 Proxy Conformance
+    name: PT-01..PT-08 Proxy Conformance + Operability Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -150,8 +152,14 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure operability smoke script is executable
+        run: chmod +x ./scripts/operability-smoke.sh
+
       - name: Run proxy conformance tests (PT-01..PT-08)
         run: ./scripts/proxy-conformance.sh
+
+      - name: Run operability smoke (OS-01..OS-05)
+        run: ./scripts/operability-smoke.sh
 
       - name: Tear down
         if: always()

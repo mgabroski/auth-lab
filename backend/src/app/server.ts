@@ -20,6 +20,12 @@
  * - trustProxy: true is required so Fastify resolves req.ip from the
  *   forwarded chain rather than the proxy/container socket address.
  * - This is load-bearing for request context, rate limiting, and audit fidelity.
+ *
+ * STAGE 3:
+ * - Emits x-request-id on every response so operators can correlate browser/SSR
+ *   failures with backend logs.
+ * - Adds request.started / request.completed structured logs.
+ * - Records low-cardinality request totals + duration metrics.
  */
 
 import Fastify from 'fastify';
@@ -31,9 +37,21 @@ import type { AppDeps } from './di';
 import { registerAuthContext } from '../shared/http/auth-context';
 import { registerErrorHandler } from '../shared/http/error-handler';
 import { registerRequestContext } from '../shared/http/request-context';
+import {
+  normalizeMetricRouteFromUrl,
+  recordHttpRequestCompleted,
+} from '../shared/observability/metrics';
 import { withRequestContext } from '../shared/logger/with-context';
 import { registerSessionMiddleware } from '../shared/session/session.middleware';
 import { getSessionCookieName } from '../shared/session/session.types';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    observedAtMs: number;
+  }
+}
+
+const serviceVersion = process.env.SERVICE_VERSION ?? 'dev';
 
 export async function buildServer(opts: { config: AppConfig; deps: AppDeps }) {
   const { config, deps } = opts;
@@ -43,7 +61,7 @@ export async function buildServer(opts: { config: AppConfig; deps: AppDeps }) {
     Sentry.init({
       dsn: config.sentryDsn,
       environment: config.nodeEnv,
-      release: process.env.SERVICE_VERSION,
+      release: serviceVersion,
     });
   }
 
@@ -52,17 +70,55 @@ export async function buildServer(opts: { config: AppConfig; deps: AppDeps }) {
     trustProxy: true,
   });
 
+  app.decorateRequest('observedAtMs', 0);
+
   registerRequestContext(app);
   registerAuthContext(app);
   registerSessionMiddleware(app, deps.sessionStore, getSessionCookieName(isProduction));
   registerErrorHandler(app);
 
-  app.addHook('onRequest', (req, _reply, done) => {
-    withRequestContext(req).info('request', {
+  app.addHook('onRequest', (req, reply, done) => {
+    req.observedAtMs = Date.now();
+
+    const requestId = req.requestContext?.requestId;
+    if (requestId) {
+      reply.header('x-request-id', requestId);
+    }
+
+    withRequestContext(req).info('request.started', {
+      event: 'request.started',
       flow: 'http.request',
       method: req.method,
-      url: req.url,
+      path: req.url,
+      route: normalizeMetricRouteFromUrl(req.url),
+      release: serviceVersion,
     });
+
+    done();
+  });
+
+  app.addHook('onResponse', (req, reply, done) => {
+    const durationMs = Math.max(0, Date.now() - (req.observedAtMs || Date.now()));
+    const route = normalizeMetricRouteFromUrl(req.url);
+
+    recordHttpRequestCompleted({
+      method: req.method,
+      route,
+      statusCode: reply.statusCode,
+      durationMs,
+    });
+
+    withRequestContext(req).info('request.completed', {
+      event: 'request.completed',
+      flow: 'http.request',
+      method: req.method,
+      path: req.url,
+      route,
+      statusCode: reply.statusCode,
+      durationMs,
+      release: serviceVersion,
+    });
+
     done();
   });
 

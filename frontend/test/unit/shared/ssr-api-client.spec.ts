@@ -1,8 +1,19 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { cookiesMock, headersMock } = vi.hoisted(() => ({
+const {
+  headersMock,
+  cookiesMock,
+  randomUUIDMock,
+  serverLoggerErrorMock,
+  serverLoggerInfoMock,
+  serverLoggerWarnMock,
+} = vi.hoisted(() => ({
   headersMock: vi.fn(),
   cookiesMock: vi.fn(),
+  randomUUIDMock: vi.fn(),
+  serverLoggerErrorMock: vi.fn(),
+  serverLoggerInfoMock: vi.fn(),
+  serverLoggerWarnMock: vi.fn(),
 }));
 
 vi.mock('next/headers', () => ({
@@ -10,129 +21,160 @@ vi.mock('next/headers', () => ({
   cookies: cookiesMock,
 }));
 
+vi.mock('node:crypto', () => ({
+  randomUUID: randomUUIDMock,
+}));
+
+vi.mock('@/shared/server/logger', () => ({
+  serverLogger: {
+    error: serverLoggerErrorMock,
+    info: serverLoggerInfoMock,
+    warn: serverLoggerWarnMock,
+  },
+}));
+
 import { ssrFetch } from '../../../src/shared/ssr-api-client';
 
-function makeRequestHeaders(values: Record<string, string>): Headers {
-  return new Headers(values);
-}
-
-function makeCookieStore(values: Array<{ name: string; value: string }>) {
-  return {
-    getAll: () => values,
-  };
-}
+beforeEach(() => {
+  process.env.INTERNAL_API_URL = 'http://internal-backend:3001';
+  randomUUIDMock.mockReturnValue('generated-request-id-001');
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+
   headersMock.mockReset();
   cookiesMock.mockReset();
+  randomUUIDMock.mockReset();
+  serverLoggerErrorMock.mockReset();
+  serverLoggerInfoMock.mockReset();
+  serverLoggerWarnMock.mockReset();
+
   delete process.env.INTERNAL_API_URL;
 });
 
 describe('ssrFetch', () => {
-  it('forwards tenant + session headers to the default internal backend URL with cache disabled', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('forwards topology headers, cookies, user-agent, and inbound x-request-id', async () => {
     headersMock.mockResolvedValue(
-      makeRequestHeaders({
-        host: 'goodwill-open.lvh.me:3000',
-        'x-forwarded-for': '203.0.113.5',
+      new Headers({
+        host: 'goodwill-ca.lvh.me:3000',
+        'x-forwarded-for': '10.0.0.1',
         'x-forwarded-proto': 'https',
+        'user-agent': 'VitestAgent/1.0',
+        'x-request-id': 'existing-request-id-001',
       }),
     );
-    cookiesMock.mockResolvedValue(
-      makeCookieStore([
-        { name: 'sid', value: 'session-123' },
-        { name: 'csrf', value: 'csrf-456' },
-      ]),
-    );
+
+    cookiesMock.mockResolvedValue({
+      getAll: () => [
+        { name: 'sid', value: 'session-cookie' },
+        { name: 'theme', value: 'dark' },
+      ],
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
 
     await ssrFetch('/auth/me');
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const calledHeaders = new Headers(calledInit.headers);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://internal-backend:3001/auth/me');
+    expect(init.method).toBe('GET');
+    expect(init.cache).toBe('no-store');
 
-    expect(calledUrl).toBe('http://backend:3001/auth/me');
-    expect(calledInit.cache).toBe('no-store');
-    expect(calledHeaders.get('Host')).toBe('goodwill-open.lvh.me:3000');
-    expect(calledHeaders.get('Cookie')).toBe('sid=session-123; csrf=csrf-456');
-    expect(calledHeaders.get('X-Forwarded-For')).toBe('203.0.113.5');
-    expect(calledHeaders.get('X-Forwarded-Proto')).toBe('https');
-    expect(calledHeaders.get('X-Forwarded-Host')).toBe('goodwill-open.lvh.me:3000');
-    expect(calledHeaders.get('Content-Type')).toBeNull();
+    const forwardedHeaders = init.headers as Headers;
+
+    expect(forwardedHeaders.get('Host')).toBe('goodwill-ca.lvh.me:3000');
+    expect(forwardedHeaders.get('Cookie')).toBe('sid=session-cookie; theme=dark');
+    expect(forwardedHeaders.get('X-Forwarded-For')).toBe('10.0.0.1');
+    expect(forwardedHeaders.get('X-Forwarded-Proto')).toBe('https');
+    expect(forwardedHeaders.get('X-Forwarded-Host')).toBe('goodwill-ca.lvh.me:3000');
+    expect(forwardedHeaders.get('User-Agent')).toBe('VitestAgent/1.0');
+    expect(forwardedHeaders.get('X-Request-Id')).toBe('existing-request-id-001');
+    expect(forwardedHeaders.get('Accept')).toBe('application/json');
+    expect(forwardedHeaders.get('Content-Type')).toBeNull();
+
+    expect(randomUUIDMock).not.toHaveBeenCalled();
   });
 
-  it('uses INTERNAL_API_URL when provided', async () => {
-    process.env.INTERNAL_API_URL = 'http://backend-internal:4000';
-
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('generates a request id when none is present and sets Content-Type when body is present', async () => {
     headersMock.mockResolvedValue(
-      makeRequestHeaders({
-        host: 'goodwill-ca.lvh.me:3000',
+      new Headers({
+        host: 'goodwill-open.lvh.me:3000',
       }),
     );
-    cookiesMock.mockResolvedValue(makeCookieStore([]));
 
-    await ssrFetch('/auth/config');
+    cookiesMock.mockResolvedValue({
+      getAll: () => [],
+    });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const calledHeaders = new Headers(calledInit.headers);
-
-    expect(calledUrl).toBe('http://backend-internal:4000/auth/config');
-    expect(calledHeaders.get('Host')).toBe('goodwill-ca.lvh.me:3000');
-    expect(calledHeaders.get('Cookie')).toBe('');
-    expect(calledHeaders.get('X-Forwarded-Proto')).toBe('http');
-  });
-
-  it('preserves caller headers but does not allow overriding forwarded topology headers', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    headersMock.mockResolvedValue(
-      makeRequestHeaders({
-        host: 'tenant-a.lvh.me:3000',
-        'x-forwarded-for': '198.51.100.10',
-        'x-forwarded-proto': 'https',
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }),
     );
-    cookiesMock.mockResolvedValue(makeCookieStore([{ name: 'sid', value: 'real-session' }]));
+    vi.stubGlobal('fetch', fetchMock);
 
-    await ssrFetch('/auth/workspace-setup-ack', {
+    await ssrFetch('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ acknowledged: true }),
-      headers: {
-        'X-Test-Header': 'kept',
-        'Content-Type': 'application/merge-patch+json',
-        Host: 'malicious-host.example.com',
-        Cookie: 'sid=fake-session',
-        'X-Forwarded-For': '10.0.0.1',
-        'X-Forwarded-Proto': 'http',
-        'X-Forwarded-Host': 'malicious-host.example.com',
-      },
+      body: JSON.stringify({
+        email: 'user@example.com',
+        password: 'Password123!',
+      }),
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const [, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const calledHeaders = new Headers(calledInit.headers);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('http://internal-backend:3001/auth/login');
+    expect(init.method).toBe('POST');
+    expect(init.cache).toBe('no-store');
 
-    expect(calledInit.method).toBe('POST');
-    expect(calledInit.body).toBe(JSON.stringify({ acknowledged: true }));
-    expect(calledInit.cache).toBe('no-store');
-    expect(calledHeaders.get('X-Test-Header')).toBe('kept');
-    expect(calledHeaders.get('Content-Type')).toBe('application/merge-patch+json');
-    expect(calledHeaders.get('Host')).toBe('tenant-a.lvh.me:3000');
-    expect(calledHeaders.get('Cookie')).toBe('sid=real-session');
-    expect(calledHeaders.get('X-Forwarded-For')).toBe('198.51.100.10');
-    expect(calledHeaders.get('X-Forwarded-Proto')).toBe('https');
-    expect(calledHeaders.get('X-Forwarded-Host')).toBe('tenant-a.lvh.me:3000');
+    const forwardedHeaders = init.headers as Headers;
+
+    expect(forwardedHeaders.get('Host')).toBe('goodwill-open.lvh.me:3000');
+    expect(forwardedHeaders.get('X-Forwarded-Proto')).toBe('http');
+    expect(forwardedHeaders.get('X-Forwarded-Host')).toBe('goodwill-open.lvh.me:3000');
+    expect(forwardedHeaders.get('X-Request-Id')).toBe('generated-request-id-001');
+    expect(forwardedHeaders.get('Content-Type')).toBe('application/json');
+    expect(randomUUIDMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs and rethrows backend transport failures from SSR paths', async () => {
+    headersMock.mockResolvedValue(
+      new Headers({
+        host: 'goodwill-ca.lvh.me:3000',
+        'x-request-id': 'transport-request-id-001',
+      }),
+    );
+
+    cookiesMock.mockResolvedValue({
+      getAll: () => [],
+    });
+
+    const transportError = new Error('backend down');
+    const fetchMock = vi.fn().mockRejectedValue(transportError);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(ssrFetch('/auth/config')).rejects.toThrow('backend down');
+
+    expect(serverLoggerErrorMock).toHaveBeenCalledWith(
+      'ssr.api.transport_failed',
+      expect.objectContaining({
+        event: 'ssr.api.transport_failed',
+        flow: 'ssr.api',
+        requestId: 'transport-request-id-001',
+        method: 'GET',
+        path: '/auth/config',
+        targetUrl: 'http://internal-backend:3001/auth/config',
+        error: transportError,
+      }),
+    );
   });
 });

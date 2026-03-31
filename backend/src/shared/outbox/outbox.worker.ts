@@ -14,11 +14,16 @@
  *   be finalized by a stale worker.
  * - Backoff: now + 2^attempt minutes. Unknown errors treated as retryable.
  * - No `any` and no unsafe casts; validate payload at boundaries.
+ *
+ * STAGE 3:
+ * - Emits email delivery failure metrics for retryable, non-retryable, decrypt,
+ *   and max-attempt-exceeded outcomes.
  */
 
 import { randomUUID } from 'node:crypto';
 import type { DbExecutor } from '../db/db';
 import type { Logger } from '../logger/logger';
+import { recordEmailDeliveryFailure } from '../observability/metrics';
 import type { TokenHasher } from '../security/token-hasher';
 
 import type { EmailAdapter } from './email.adapter';
@@ -188,6 +193,12 @@ export class OutboxWorker {
         return;
       }
 
+      recordEmailDeliveryFailure({
+        messageType: msg.type,
+        stage: 'decrypt',
+        reason: 'decrypt_failed',
+      });
+
       this.deps.logger.error({
         msg: 'outbox.dead_lettered',
         event: 'outbox.dead_lettered',
@@ -249,6 +260,12 @@ export class OutboxWorker {
           return;
         }
 
+        recordEmailDeliveryFailure({
+          messageType: msg.type,
+          stage: 'send',
+          reason: 'non_retryable',
+        });
+
         this.deps.logger.error({
           msg: 'outbox.dead_lettered',
           event: 'outbox.dead_lettered',
@@ -276,6 +293,12 @@ export class OutboxWorker {
           this.logLostClaim(msg.id, msg.type, 'max_attempts_dead');
           return;
         }
+
+        recordEmailDeliveryFailure({
+          messageType: msg.type,
+          stage: 'send',
+          reason: 'max_attempts_exceeded',
+        });
 
         this.deps.logger.error({
           msg: 'outbox.dead_lettered',
@@ -305,6 +328,12 @@ export class OutboxWorker {
         this.logLostClaim(msg.id, msg.type, 'schedule_retry');
         return;
       }
+
+      recordEmailDeliveryFailure({
+        messageType: msg.type,
+        stage: 'send',
+        reason: 'retryable',
+      });
 
       this.deps.logger.warn({
         msg: 'outbox.retry_scheduled',

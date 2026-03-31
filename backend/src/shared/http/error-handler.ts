@@ -8,9 +8,9 @@
  *
  * RESPONSIBILITIES:
  * - AppError → map .status and .code to structured HTTP response.
- * - Zod validation errors → 400 (safety net if controller misses).
  * - Unexpected errors → 500 with generic message.
  * - Log all errors with request context for debugging.
+ * - Record Stage 3 failure metrics with disciplined, reusable names.
  *
  * RULES:
  * - No business logic here.
@@ -19,22 +19,17 @@
  * - Always use withRequestContext(req) so requestId, tenantKey, userId,
  *   and role are automatically included in every log line.
  *
- * X10 — Sentry capture for unhandled 500 errors only:
- * - AppError instances are EXPECTED application behavior (auth failures,
- *   validation errors, rate limits, etc.). They are NOT bugs. They must
- *   NOT be sent to Sentry — capturing them would create noise that drowns
- *   out real incidents.
- * - Only the "unexpected errors" branch (non-AppError, non-ZodError)
- *   captures to Sentry. This is the branch that indicates a real bug.
- * - If SENTRY_DSN is unset (dev, CI, test), Sentry.init() is never called
- *   (see server.ts) and Sentry.captureException() is a safe no-op.
- *   Zero behavior or test changes in those environments.
+ * SENTRY:
+ * - AppError instances are EXPECTED application behavior and must NOT go to Sentry.
+ * - Only unexpected errors are captured to Sentry.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as Sentry from '@sentry/node';
+
 import { AppError } from './errors';
 import { withRequestContext } from '../logger/with-context';
+import { recordHttpFailure } from '../observability/metrics';
 
 type ErrorResponseBody = {
   error: {
@@ -59,17 +54,6 @@ const SENSITIVE_META_KEYS = new Set([
   'code',
 ]);
 
-/**
- * Redacts sensitive fields in meta recursively.
- *
- * WHY:
- * - Meta objects often contain nested payloads (eg. { token: { raw: '...' } }).
- * - A shallow redact leaks nested secrets during unexpected failures.
- *
- * RULES:
- * - Preserve shape; only replace values.
- * - Depth-limited to avoid pathological objects.
- */
 function redactMeta(meta: unknown, depth = 0): unknown {
   if (depth > 6) return '[REDACTED:DEPTH]';
   if (meta === null || meta === undefined) return meta;
@@ -95,11 +79,19 @@ export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((err: Error, req: FastifyRequest, reply: FastifyReply) => {
     const log = withRequestContext(req);
 
-    // 1) Known application errors (includes rate limit — AppError.rateLimited())
-    //    AppError = expected application behavior, NOT a bug.
-    //    Must NOT be sent to Sentry — would create noise that drowns out real incidents.
     if (err instanceof AppError) {
+      recordHttpFailure({
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        statusCode: err.status,
+        code: err.code,
+        message: err.message,
+        meta: err.meta,
+      });
+
       log.warn('app_error', {
+        event: 'app_error',
         flow: 'http.error',
         code: err.code,
         status: err.status,
@@ -110,9 +102,15 @@ export function registerErrorHandler(app: FastifyInstance): void {
       return reply.status(err.status).send(buildResponse(err.code, err.message));
     }
 
-    // 2) Unexpected errors — a real bug reached the handler.
-    //    X10: Capture to Sentry so on-call gets an immediate signal.
-    //    When SENTRY_DSN is unset, captureException() is a no-op (Sentry never initialised).
+    recordHttpFailure({
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+      statusCode: 500,
+      code: 'INTERNAL',
+      message: err.message,
+    });
+
     Sentry.captureException(err, {
       extra: {
         requestId: req.requestContext?.requestId,
@@ -123,6 +121,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
     });
 
     log.error('unhandled_error', {
+      event: 'unhandled_error',
       flow: 'http.error',
       message: err.message,
       stack: err.stack,
