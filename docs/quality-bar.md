@@ -1,11 +1,11 @@
 # Repo Quality Bar
 
 **Status:** Locked
-**Version:** 1.0
+**Version:** 1.1
 **Scope:** Repo-level delivery and signoff standard for major-module work and stage completion
 **Audience:** Engineers, reviewers, technical leads, architecture owners, and release owners
 **Owner Role:** Lead Architect or Designated Quality Owner
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-04-01
 
 ---
 
@@ -17,7 +17,7 @@ This document defines the repo-wide quality bar for:
 - what “done” means for a module
 - what “done” means for a stage
 - what is mandatory vs deferrable
-- how debt is accepted
+- how debt, refused signoff, and explicit exceptions are handled
 - what happens when signoff is blocked
 - how authoritative governance artifacts are changed and retired
 
@@ -112,6 +112,7 @@ Expected evidence is one or more of:
 - linked runbook or QA updates
 - linked migration notes
 - explicit signoff record
+- ADR or decision-log update when architecture law or a lasting trust-boundary decision changed
 
 “Reviewed mentally” is not sufficient evidence for a mandatory gate.
 
@@ -148,6 +149,16 @@ Quality targets may be deferred only with an explicit debt record that includes:
 A quality target may be deferred once.
 Repeated defer without escalation is not allowed.
 
+### 6.1 Repo-visible record location
+
+Repo-visible deferred quality targets must be recorded in:
+
+- `docs/quality-exceptions.md`
+
+The PR that introduces, updates, or closes the defer must update that file in the same change.
+
+A private note, chat thread, spreadsheet, or reviewer memory is not an authoritative debt record for this repository.
+
 ---
 
 ## 7. Track A Signoff Rules
@@ -166,6 +177,9 @@ Track A signoff must come from:
 
 That owner role must be bound to a real owner in repo ownership rules and CODEOWNERS.
 
+A checked box in a PR template is not, by itself, signoff.
+The PR must contain signoff evidence or a linked owner review.
+
 ### 7.2 If Track A signoff is refused
 
 Refusal cannot be informal.
@@ -178,13 +192,57 @@ It must produce:
 - the target resolution timeline
 - the named owner
 
+That refusal must also be recorded in:
+
+- `docs/quality-exceptions.md`
+
 Override is allowed only through an explicit documented decision by the owner role above.
 
 No silent bypass is allowed.
 
+### 7.3 Overrides and waivers
+
+Mandatory gates themselves are not waivable.
+
+The only acceptable exception shape is an explicit, time-bounded, owner-bound record for one of the following:
+
+- a deferred quality target allowed by this document
+- a documented refusal awaiting remediation
+- a narrowly scoped process exception that does not weaken architecture, security, tenant isolation, or mandatory gate truth
+
+Any such record must live in:
+
+- `docs/quality-exceptions.md`
+
+Silent reviewer tolerance is not a waiver.
+
 ---
 
-## 8. Deprecation / Removal Standard
+## 8. Architecture-Law / ADR Linkage
+
+Changes that alter or materially pressure repo law must not be documented only in code or review comments.
+
+This applies when a PR changes or meaningfully pressures:
+
+- topology assumptions
+- tenant-isolation rules
+- auth/session trust boundaries
+- module or engineering law
+- security-foundation rules
+- other decisions already governed by ADRs or the decision log
+
+For those changes, the PR must do one of the following:
+
+- update the relevant ADR
+- add a new ADR
+- update the decision log
+- explicitly state why no ADR or decision-log update is required
+
+The exact enforcement mechanism may be partial and repo-native, but the linkage expectation itself is repo law.
+
+---
+
+## 9. Deprecation / Removal Standard
 
 Parallel authoritative documents are not allowed.
 
@@ -197,19 +255,22 @@ If a document is superseded:
 
 No stale prompt, law, governance, or review artifact may silently remain authoritative.
 
+Parallel debt, waiver, or signoff records are also not allowed.
+`docs/quality-exceptions.md` is the authoritative repo-visible register for those records.
+
 ---
 
-## 9. Pressure Policy
+## 10. Pressure Policy
 
 This rule exists before deadline pressure appears.
 
 - Mandatory gates are non-negotiable.
 - Quality targets may be deferred only through the debt process in this document.
-- Deadline pressure does not authorize silent bypass of required review, testing, or documentation coupling.
+- Deadline pressure does not authorize silent bypass of required review, testing, documentation coupling, or signoff evidence.
 
 ---
 
-## 10. Change Control
+## 11. Change Control
 
 This document may change only through:
 
@@ -219,23 +280,31 @@ This document may change only through:
 - any required downstream updates to checklists, guardrails, or docs
 
 If this document changes, any executable enforcement surface that depends on it must be reviewed in the same PR.
-That includes PR templates, repo guards, and linked governance docs where relevant.
+That includes:
+
+- `.github/pull_request_template.md`
+- `scripts/repo-guard.mjs`
+- `.github/CODEOWNERS`
+- `docs/current-foundation-status.md`
+- `docs/quality-exceptions.md`
+- linked governance docs where relevant
 
 ---
 
-## 11. Review Cadence
+## 12. Review Cadence
 
 This document must be reviewed:
 
 - whenever mandatory gates change
 - whenever a new major module type is introduced
+- whenever exception handling rules change
 - during recurring architecture and quality review cycles
 
 If the repo’s quality bar changes but this file does not, the repo is in governance drift.
 
 ---
 
-## 12. Definition of Done
+## 13. Definition of Done
 
 ### For a module
 
@@ -257,8 +326,8 @@ A stage is done only when:
 
 ---
 
-## 13. Final Position
+## 14. Final Position
 
 This document is the repo’s quality bar.
 
-It exists so “done” cannot be redefined under pressure, and so new major modules do not grow outside the same standard the repo claims to hold.
+It exists so “done” cannot be redefined under pressure, new major modules do not grow outside the same standard the repo claims to hold, and exceptions become visible records instead of silent reviewer folklore.

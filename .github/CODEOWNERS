@@ -1,4 +1,4 @@
-# Stage 5 baseline ownership surface
+# Stage 1B + Track A ownership surface
 
 #
 
@@ -6,7 +6,7 @@
 
 # - keep the existing governance protections intact
 
-# - expand ownership metadata to the major repo areas
+# - expand ownership metadata to explicit high-risk repo surfaces
 
 # - bind the Lead Architect / Designated Quality Owner role to a real owner
 
@@ -22,18 +22,21 @@
 
 # - This remains intentionally simple for the current team size.
 
-# - Branch protection / required-review behavior still depends on GitHub settings.
+# - Branch protection / required-review merge blocking still depends on GitHub settings.
 
-# - Multiple major areas may map to the same owner at this stage; that is acceptable.
+# - Explicit high-risk paths remain listed even when broader globs map to the same owner.
 
-# - What is not acceptable is leaving major repo areas with no ownership surface at all.
+# - CODEOWNERS uses last-match precedence, so keep high-risk entries visible and deliberate.
 
 # Core repo law / governance
 
 /AGENTS.md @mgabroski
 /code_review.md @mgabroski
+/ARCHITECTURE.md @mgabroski
 /docs/quality-bar.md @mgabroski
+/docs/quality-exceptions.md @mgabroski
 /docs/current-foundation-status.md @mgabroski
+/docs/decision-log.md @mgabroski
 /docs/ops/release-engineering.md @mgabroski
 /docs/ai/repo-ai-adoption-roadmap.md @mgabroski
 /CHANGELOG.md @mgabroski
@@ -49,28 +52,40 @@
 /docs/prompts/usage-guide.md @mgabroski
 /docs/prompts/\*.md @mgabroski
 
-# Backend application surface
+# PR / review / CI / guard surfaces
 
-/backend/\*\* @mgabroski
-
-# Frontend application surface
-
-/frontend/\*\* @mgabroski
-
-# Infra / topology surface
-
-/infra/\*\* @mgabroski
-
-# Workflow / CI / guard surfaces
-
-/.github/workflows/\*\* @mgabroski
+/.github/CODEOWNERS @mgabroski
 /.github/pull_request_template.md @mgabroski
+/.github/workflows/\*\* @mgabroski
 /scripts/repo-guard.mjs @mgabroski
 
-# Security documentation and models
+# Architecture / ADR / contract surfaces
 
-/docs/security/\*\* @mgabroski
+/backend/docs/adr/** @mgabroski
+/backend/docs/api/** @mgabroski
+/docs/security/** @mgabroski
+/docs/ops/** @mgabroski
+/infra/\*\* @mgabroski
 
-# Ops / release / runbook documentation
+# High-risk backend trust-boundary surfaces
 
-/docs/ops/\*\* @mgabroski
+/backend/src/modules/auth/** @mgabroski
+/backend/src/modules/invites/** @mgabroski
+/backend/src/modules/tenants/** @mgabroski
+/backend/src/modules/memberships/** @mgabroski
+/backend/src/shared/http/** @mgabroski
+/backend/src/shared/session/** @mgabroski
+/backend/src/shared/security/** @mgabroski
+/backend/src/shared/db/migrations/** @mgabroski
+
+# High-risk frontend topology / auth surfaces
+
+/frontend/src/app/api/** @mgabroski
+/frontend/src/shared/api-client.ts @mgabroski
+/frontend/src/shared/ssr-api-client.ts @mgabroski
+/frontend/src/shared/auth/** @mgabroski
+
+# Broad application ownership surface
+
+/backend/** @mgabroski
+/frontend/** @mgabroski

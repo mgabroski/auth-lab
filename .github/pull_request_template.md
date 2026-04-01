@@ -57,6 +57,18 @@ If this PR does not change protected law/governance files, say:
 
 `Not applicable.`
 
+## Drift / exception notes
+
+List any known drift, temporary mismatch, or reviewer-visible exception introduced or resolved by this PR.
+
+If none, say:
+
+`None.`
+
+If this PR introduces or updates a quality exception record, point to:
+
+- `docs/quality-exceptions.md`
+
 ---
 
 # Validation
@@ -125,6 +137,49 @@ If not applicable, say:
 
 `Not applicable.`
 
+## ADR / architecture-law linkage
+
+Fill this section when the PR changes or materially pressures any of the following:
+
+- topology assumptions
+- tenant-isolation rules
+- auth/session trust boundaries
+- security-foundation rules
+- repo law / engineering law
+- other lasting architectural decisions already governed by ADRs or the decision log
+
+Choose exactly one:
+
+- [ ] ADR updated in this PR
+- [ ] New ADR added in this PR
+- [ ] Decision log updated in this PR
+- [ ] No ADR or decision-log update required
+
+If the last option is checked, explain why no ADR or decision-log update is required.
+
+If not applicable, say:
+
+`Not applicable.`
+
+## Track A signoff evidence
+
+When applicable, provide the exact signoff evidence for the required owner review.
+
+Examples:
+
+- approving review from Lead Architect
+- approving review from Designated Quality Owner
+- linked review thread with explicit signoff language
+- linked comment confirming signoff conditions are satisfied
+
+If signoff is still pending, say:
+
+`Pending owner signoff.`
+
+If not applicable, say:
+
+`Not applicable.`
+
 ## Deferred quality targets
 
 List any explicitly deferred quality targets allowed by `docs/quality-bar.md`, including:
@@ -137,6 +192,39 @@ List any explicitly deferred quality targets allowed by `docs/quality-bar.md`, i
 If none, say:
 
 `None.`
+
+## Quality exception record
+
+Fill this section if this PR introduces, updates, or closes any deferred quality target, refused signoff record, or explicit time-bounded exception.
+
+Required fields when applicable:
+
+- record type: deferred quality target / refused signoff / explicit exception / closure
+- record location in `docs/quality-exceptions.md`
+- owner
+- target resolution date
+- reviewer-visible impact
+
+If not applicable, say:
+
+`Not applicable.`
+
+## Refusal / escalation notes
+
+Fill this section only if Track A signoff was refused or merge is proceeding with a documented, time-bounded exception path.
+
+Required when applicable:
+
+- unmet gate
+- reason it is unmet
+- required remediation
+- named owner
+- target resolution timeline
+- linked record in `docs/quality-exceptions.md`
+
+If not applicable, say:
+
+`Not applicable.`
 
 ---
 

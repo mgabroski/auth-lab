@@ -18,6 +18,7 @@ It exists to keep these things aligned:
 - what future implementation sessions assume
 - what is intentionally deferred to later hardening stages
 - what is baseline-only versus what is fully closed
+- what is enforceable in-repo versus what still depends on external GitHub settings or human review behavior
 
 This file is not a roadmap and not a wish list.
 It is the current-state truth for the repository as it exists now.
@@ -33,11 +34,11 @@ At the time of this snapshot, the repo status is:
 
 - **Before Stage 1 quality-bar work:** completed
 - **Stage 1A minimum enforcement:** completed
-- **Stage 1B deeper enforcement:** still open / parallel
+- **Stage 1B deeper enforcement:** completed in-repo
 - **Stage 2 architecture-invariant proof:** completed and strong
 - **Stage 3 operability baseline:** completed as a baseline, not yet a fully mature ops system
 - **Stage 4 security-system baseline:** completed as a baseline, not yet a fully mature security program
-- **Cross-Cutting Track A:** present and active, but still partial in enforcement depth
+- **Cross-Cutting Track A:** completed to the strongest honest repo-native enforcement depth
 - **Stage 5 release-engineering baseline:** established in-repo, but not yet fully closed in practice until external branch-protection settings and ongoing usage match the documented contract
 
 That means the repository now has:
@@ -48,19 +49,20 @@ That means the repository now has:
 - explicit threat-model and security ADR foundation
 - runnable security scanning in CI
 - explicit abuse-regression proof for the highest-risk callback boundary
-- a real minimum-governance layer for PRs and repo law
+- a real governance layer for PRs and repo law
+- a stronger Stage 1B enforcement layer for drift, exceptions, ADR linkage, and high-risk review surfaces
+- a real Track A enforcement surface for major-module quality expectations, signoff evidence, and visible deferred-quality handling
 - a real release-engineering baseline for lanes, migration safety, rollback expectations, post-change verification, hotfix handling, and changelog discipline
 
 It does **not** mean:
 
-- Stage 1B is closed
-- Track A is fully enforced end to end
 - Stage 3 has full dashboard/alert/SLO maturity
 - Stage 4 has fully closed every deeper security concern
 - Stage 5 is fully operationalized beyond repo-visible process and enforcement surfaces
+- GitHub required-review merge blocking can be fully enforced from repository files alone
 
 This distinction is intentional.
-The repo is strong because the current state is real, and because the remaining gaps are named instead of hidden.
+The repo is strong because the current state is real, and because the remaining limits are named instead of hidden.
 
 ---
 
@@ -150,9 +152,12 @@ The following remain repo law for the current foundation:
 - hashed MFA recovery codes
 - encrypted outbox payload fields for auth-delivered email material
 - startup guards that fail closed for unsafe production-like config
+- repo-visible quality-bar authority
+- repo-visible quality-exception authority
+- explicit ADR / architecture-law linkage expectations for sensitive boundary changes
 
 These are not optional implementation preferences.
-They are architecture and security invariants.
+They are architecture, governance, and security invariants.
 
 ---
 
@@ -169,13 +174,14 @@ That foundation includes:
 - deprecation and removal expectations
 - pressure-policy expectations
 - named ownership for protected governance surfaces
+- a single authoritative repo-visible location for deferred quality targets, refused signoff records, and explicit time-bounded quality exceptions
 
 Operational meaning:
 The repo no longer depends only on memory or verbal standards to define what “done” means.
 
 Limit:
-This does **not** mean every downstream enforcement mechanism is already complete.
-That is why Stage 1A and Stage 1B are separated.
+This does **not** mean every downstream enforcement mechanism can be expressed purely through prose.
+That is why Stage 1A and Stage 1B exist.
 
 ---
 
@@ -198,23 +204,49 @@ Common drift paths are now blocked automatically instead of being left to review
 
 Limit:
 Stage 1A is the minimum viable enforcement layer.
-It is real and load-bearing, but it is not the same thing as full Stage 1B depth.
+It is real and load-bearing, but it is not the same thing as Stage 1B depth.
 
 ---
 
-## 6. What Stage 1B has not closed yet
+## 6. What Stage 1B now establishes
 
-Stage 1B remains open / parallel.
+Stage 1B is now treated as completed **in-repo**.
 
-The repository does **not** yet claim full closure for:
+The repository now has a deeper enforcement layer for:
 
-- deeper doc/code truth-coupling across all critical contracts
-- broader ADR-linked enforcement
-- stronger required-review patterns for all high-risk areas
-- richer drift, waiver, and exception reporting
+- stronger doc/code truth-coupling on critical route and contract surfaces
+- stronger ADR / architecture-law linkage expectations for sensitive changes
+- stronger review-surface protection for high-risk files and directories
+- selective error-message audit coupling for user-visible auth/invite message surfaces
+- CI-visible drift, exception, and waiver reporting
+- stronger major-module applicability enforcement through repo guard
+- stronger PR evidence expectations for signoff, documentation, release notes, and exception handling
 
 Operational meaning:
-The repo has real governance now, but it is still the baseline layer, not the fully matured law-enforcement system described by Stage 1B.
+Repo law is now broadly executable.
+Important drift is harder to hide, exceptions are harder to keep informal, and sensitive changes require more explicit reviewer-visible context.
+
+Important limit:
+This file does **not** claim that Stage 1B can force every external hosting-platform behavior from inside the repo.
+
+In particular, the repository can define:
+
+- ownership metadata
+- PR structure
+- repo guard failure conditions
+- required update surfaces
+- exception visibility
+- stronger evidence rules
+
+But it cannot, by repository files alone, guarantee:
+
+- GitHub branch-protection configuration
+- GitHub required-review merge blocking
+- actual reviewer diligence
+
+Correct reading:
+**Stage 1B is completed in-repo.**
+External review-enforcement depth still depends on platform settings and review practice outside the repository itself.
 
 ---
 
@@ -367,7 +399,7 @@ Any stronger blocking posture must be stated explicitly in release/process docs 
 
 ## 11. What Track A means in the repo right now
 
-Cross-Cutting Track A is active in this repository, but its current enforcement depth is still partial.
+Cross-Cutting Track A is now treated as completed to the **strongest honest repo-native enforcement depth**.
 
 ### 11.1 What is real now
 
@@ -375,21 +407,59 @@ The repo currently has:
 
 - Track A defined in the quality bar
 - a Module Quality Gate section in the PR template
-- repo-guard checks that require the relevant PR structure to exist
+- stronger repo-guard checks that require:
+  - applicability classification
+  - stronger evidence sections
+  - signoff-evidence visibility
+  - deferred-quality visibility
+  - refusal/escalation visibility
+  - stronger release/change-management structure
+- stronger major-module / major-surface detection heuristics
 - a named owner role for the protected governance surface
+- a repo-visible quality-exception register for:
+  - deferred quality targets
+  - refused Track A signoff records
+  - explicit time-bounded process exceptions
+  - closures
 
-### 11.2 What is not fully closed yet
+### 11.2 What this means
 
-The repo does **not** yet claim full Track A maturity for:
+New major-module work is no longer merely asked to “follow the standard.”
+It is now required to present reviewer-visible evidence for the standard inside the normal repo workflow.
 
-- hard machine-enforced signoff by the quality owner role
-- strong automatic major-module detection
-- debt-record enforcement depth
-- full release/migration-safety coupling for all future module expansion
+That means the repo now has meaningful enforcement for:
+
+- architecture fit
+- contract/doc updates
+- minimum test expectation visibility
+- security/failure-mode review visibility
+- observability/runbook review visibility
+- migration-safety visibility
+- owner signoff evidence
+- explicit deferred-quality tracking
+- explicit refusal/escalation recording
+
+### 11.3 Important Track A limit
+
+This file does **not** claim that the repository can fully replace external review controls.
+
+The repo can strongly enforce:
+
+- PR structure
+- exception visibility
+- evidence expectations
+- ownership metadata
+- stronger major-module applicability pressure
+
+The repo cannot, by itself, fully guarantee:
+
+- actual human signoff quality
+- GitHub required-review blocking behavior
+- branch-protection correctness outside repo files
 
 Correct reading:
-Track A is **present and active**, but still **partial in enforcement depth**.
-That is stronger than “just an idea,” but weaker than “fully locked enforcement.”
+**Track A is completed to the strongest honest repo-native depth.**
+Final merge authority still depends in part on review behavior and GitHub settings outside the repository.
 
 ---
 
@@ -438,7 +508,7 @@ It is stronger than “not started,” but still not the same as a fully institu
 
 ## 13. Practical evidence map
 
-This snapshot is supported by three classes of proof.
+This snapshot is supported by four classes of proof.
 
 ### 13.1 Code and runtime proof
 
@@ -468,9 +538,19 @@ This snapshot is supported by three classes of proof.
 - ADRs and decision log
 - runbooks
 - quality-bar and governance docs
+- quality-exception register
 - observability docs
 - release-engineering docs
 - PR/repo-guard governance surfaces
+
+### 13.4 Review and drift-control proof
+
+- CODEOWNERS coverage for high-risk surfaces
+- protected-law file review context requirements
+- route-to-doc coupling checks
+- architecture-law linkage expectations
+- selective auth/invite message-audit coupling
+- CI-visible summary output for drift, exceptions, and enforcement warnings
 
 ---
 
@@ -480,7 +560,8 @@ This file intentionally distinguishes between:
 
 - fully completed stages
 - stages completed as baselines
-- active but partial governance/enforcement layers
+- in-repo-closed governance layers
+- repo-native enforcement depth versus externally enforced review controls
 - work that remains deferred
 
 That distinction matters.
@@ -490,10 +571,13 @@ This file should be read together with a simple rule:
 
 - do not describe baseline-complete work as fully mature if the repo does not prove that maturity yet
 - do not downgrade real completed work just because later hardening stages still exist
+- do not describe Stage 1B or Track A as “still open” once the in-repo enforcement layer is actually in place
 - do not describe Stage 5 as absent now that the baseline has been established in-repo
+- do not describe CODEOWNERS as equivalent to external branch protection when that platform enforcement is outside the repository
 
 Practical implication:
-If another document says or implies that Stage 3, Stage 4, Track A, or Stage 5 are stronger than stated here, that lower document must be corrected.
+If another document says or implies that Stage 3, Stage 4, Track A, Stage 1B, or Stage 5 are stronger than stated here, that lower document must be corrected.
+If another document says Stage 1B or Track A are still merely partial after the stronger in-repo enforcement layer lands, that lower document must also be corrected.
 
 ---
 
@@ -503,10 +587,11 @@ Given the current status, the repo is ready to continue with later roadmap work 
 
 Practical meaning:
 
-- new major modules must still obey Cross-Cutting Track A
-- Stage 1B can continue in parallel where deeper enforcement is still needed
+- new major modules must obey Cross-Cutting Track A
+- Stage 1B should now be maintained, not reopened casually
 - Stage 5 baseline should continue to harden through real usage and external required-check alignment
 - later stages may build on an explicit security-system baseline and release baseline instead of inheriting undocumented assumptions
+- future governance changes should extend the current system, not create a parallel one
 
 What should **not** happen next:
 
@@ -515,50 +600,6 @@ What should **not** happen next:
 - weakening tenant isolation for convenience
 - pretending secret-bearing tenant integrations are ready before the secrets foundation runtime exists
 - treating Stage 3 and Stage 4 baseline docs/tests as optional polish
+- pretending CODEOWNERS alone equals GitHub-required review enforcement
 - pretending Stage 5 is already fully institutionalized beyond the repo-visible baseline
 - overclaiming operational or security maturity that the repo does not yet prove
-
----
-
-## 16. Change triggers for this file
-
-This file must be updated whenever any of the following materially changes:
-
-- stage-completion truth for active roadmap stages
-- shipped auth/provisioning feature scope
-- governance or Track A enforcement truth
-- security baseline truth
-- topology or tenant-isolation guarantees
-- startup guard behavior
-- CI security scanning behavior
-- tenant integration secrets readiness status
-- release-engineering maturity that materially changes how the foundation should be described
-
----
-
-## 17. Bottom-line truth
-
-The current repository is stronger than a typical “auth feature implementation” repo.
-It has:
-
-- architecture proof
-- governance baseline
-- operability baseline
-- security boundary documentation
-- security scanning
-- concrete abuse regressions
-- operator-facing runbooks and process material
-- a real release-engineering baseline
-
-That is a serious foundation.
-
-It is also honest about what is **not** done yet:
-
-- Stage 1B remains open
-- Stage 3 is baseline-complete, not full ops maturity
-- Stage 4 is baseline-complete, not full security-program maturity
-- Track A is active, but still partial in enforcement depth
-- Stage 5 baseline exists, but full practical closure still depends on external required-check settings and continued disciplined use
-
-That honesty is part of the quality bar.
-It is one of the reasons this foundation is trustworthy.
