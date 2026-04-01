@@ -1,32 +1,46 @@
 # Hubins Auth-Lab — Developer Guide
 
-> **Document validation (Phase 10 requirement)**
-> Last reviewed by: Engineering lead
-> Review date: 2026-03
-> Review method: Independent read-through against the running local stack, confirming
-> all commands, paths, and environment instructions match the current repo state.
-> This document was reviewed by someone other than its original author as required
-> by the Phase 10 module lock exit criteria.
+**Status:** Active local-development truth
+**Scope:** Current repo only
+**Audience:** Engineers working in the repo today
+**Last Updated:** 2026-04-01
+
+---
 
 ## Purpose
 
-This guide is the repo's operational setup and repeatability document for the current Auth + User Provisioning module.
+This guide is the repo's practical setup and repeatability document for the current foundation.
 
 Use it to answer:
 
-- how to start the current stack
+- how to start the current local stack
+- which URLs are canonical today
 - how to confirm health/status
-- how to reset and reseed to a known state
-- what canonical local fixtures exist today
-- which personas are seed-backed versus later-phase/external
-- which config and secrets each later phase depends on
-- how to run the current backend, frontend, Playwright, and proxy checks
+- how to stop or reset local state safely
+- how to run checks and tests
+- how to seed or bootstrap known local data intentionally
+- which env files are used in each local mode
+- what staging-only proof still depends on external credentials or infrastructure
 
-This guide is intentionally **scope-constrained**:
+This guide is intentionally scoped to:
 
-- it covers local setup, reset, test-running, and environment expectations
-- it does **not** replace deployment or rollback runbooks
-- production operator/runbook detail belongs in `docs/ops/runbooks.md`
+- local development
+- local topology validation
+- current test-running truth
+- current seed/bootstrap truth
+- current repo env/config truth
+
+It does **not** replace:
+
+- release engineering rules
+- deployment / rollback process
+- incident response policy
+- full operator runbooks
+
+Those belong in:
+
+- `docs/ops/release-engineering.md`
+- `docs/ops/runbooks.md`
 
 ---
 
@@ -34,13 +48,12 @@ This guide is intentionally **scope-constrained**:
 
 Keep these invariants unchanged while using this guide:
 
-- one public origin
 - browser requests use same-origin `/api/*`
-- SSR/server-side frontend code uses `INTERNAL_API_URL` and forwards `Host`, `Cookie`, and `X-Forwarded-*`
-- backend owns session/auth truth
+- SSR/server-side frontend code uses `INTERNAL_API_URL`
+- SSR forwards `Host`, `Cookie`, and `X-Forwarded-*`
+- backend owns auth/session truth
 - tenant identity is host-derived
-
-When testing tenant-aware behavior, always use the correct host, not plain `localhost`.
+- tenant-aware browser behavior must be tested on the correct tenant host, not plain `localhost`
 
 ---
 
@@ -50,9 +63,9 @@ Install or confirm:
 
 - Docker
 - Node.js 20+
-- Corepack / Yarn 4
-- Playwright browsers for frontend E2E (`npx playwright install` if not already installed)
-- `jq` for proxy conformance checks (`brew install jq` or equivalent)
+- Corepack
+- Playwright browsers
+- `jq` for proxy conformance checks
 
 Enable Corepack once:
 
@@ -60,603 +73,696 @@ Enable Corepack once:
 corepack enable
 ```
 
-Install workspace dependencies:
+Install dependencies:
 
 ```bash
 yarn install
 ```
 
+Install Playwright browsers if needed:
+
+```bash
+npx playwright install
+```
+
+Install `jq` if needed:
+
+```bash
+brew install jq
+```
+
+or your platform equivalent.
+
 ---
 
-## Repository layout at a glance
+## Repo layout at a glance
 
 Main working areas:
 
-- `backend/` — Node/TypeScript backend
-- `frontend/` — Next.js frontend
-- `infra/` — Docker Compose topology and infra services
-- `docs/` — active repo truth docs and runbooks
+- `backend/` — Fastify backend, DB migrations, seed/bootstraps, auth logic
+- `frontend/` — Next.js App Router frontend, browser proxy handlers, auth UI, Playwright tests
+- `infra/` — Docker Compose files, Caddy config, reference nginx config
+- `docs/` — active repo truth, quality docs, ops/security docs
+- `scripts/` — startup, verify, stack, reset, and repo utility scripts
 
 Important docs:
 
 - `docs/current-foundation-status.md`
+- `README.md`
+- `infra/README.md`
 - `docs/ops/runbooks.md`
-- this file
+- `docs/ops/release-engineering.md`
+- `docs/security/threat-model.md`
+
+---
+
+## Local development modes
+
+The repo intentionally supports two different local modes.
+
+## Mode 1 — host-run (daily development)
+
+Use this for the normal inner loop.
+
+```bash
+yarn dev
+```
+
+### What `yarn dev` actually does
+
+It:
+
+- ensures `infra/.env.stack` exists
+- starts Docker infra from `infra/docker-compose-infra.yml`
+- waits for Postgres and the local OIDC helper to be ready
+- installs dependencies
+- ensures `backend/.env` exists
+- ensures `frontend/.env.local` exists
+- runs backend migrations
+- generates DB types
+- starts backend on the host
+- starts frontend on the host
+
+### What runs in host-run mode
+
+- Postgres in Docker
+- Redis in Docker
+- Mailpit in Docker
+- local OIDC helper in Docker
+- backend on the host
+- frontend on the host
+
+### Canonical URLs in host-run mode
+
+Use these exact URLs:
+
+- Public app: `http://goodwill-ca.lvh.me:3000`
+- Proxy-style health check: `http://goodwill-ca.lvh.me:3000/api/health`
+- Backend health directly: `http://localhost:3001/health`
+- Mailpit UI: `http://localhost:8025`
+- Local OIDC JWKS: `http://localhost:9998/.well-known/jwks.json`
+
+### Important truth for host-run mode
+
+In host-run mode:
+
+- browser `/api/*` first hits Next.js Route Handlers
+- those Route Handlers proxy to the backend
+- SSR uses `INTERNAL_API_URL=http://localhost:3001`
+- tenant-aware browser behavior still requires the tenant host, not plain `localhost:3000`
+
+Do **not** test tenant-aware browser behavior on plain `localhost:3000`.
+Use `goodwill-ca.lvh.me:3000` or another intended tenant host.
+
+### What host-run mode proves well
+
+- normal daily frontend/backend iteration
+- local auth/provisioning feature work
+- Mailpit local email capture
+- SSR direct-backend behavior
+- browser same-origin behavior through the Route Handler proxy
+
+### What host-run mode does not prove fully
+
+- real Caddy proxy behavior
+- real `/api` prefix stripping through the public proxy layer
+- final proxy header behavior
+- final full-topology cookie/proxy behavior
+
+---
+
+## Mode 2 — full Docker topology
+
+Use this when the actual proxy/topology path matters.
+
+You have two entry paths.
+
+### A. Standard full topology
+
+```bash
+yarn stack
+```
+
+This uses `infra/docker-compose.yml`.
+
+### B. Full topology plus local OIDC helper
+
+```bash
+yarn dev:stack
+```
+
+This uses:
+
+- `infra/docker-compose.yml`
+- `infra/docker-compose-ci-oidc.yml`
+
+Use `yarn dev:stack` when you need the full Docker topology and also want the local OIDC helper available in that stack.
+
+### Canonical URL in full-stack mode
+
+- Public app: `http://goodwill-ca.lvh.me:3000`
+- Health via proxy: `http://goodwill-ca.lvh.me:3000/api/health`
+
+### What full-stack mode proves
+
+- Caddy proxy routing
+- `/api/*` public-origin routing
+- `/api` prefix stripping
+- host-derived tenant routing through the proxy
+- forwarded-header behavior through the proxy path
+- real proxy conformance checks
+
+### What full-stack mode still does not prove
+
+The local full stack is HTTP-only.
+It does **not** fully prove:
+
+- production HTTPS
+- browser-enforced `__Host-` cookie behavior
+- final production TLS termination
+
+That is expected.
 
 ---
 
 ## Environment files
 
-### Backend example env
+The repo uses committed example env files as the safe source of truth.
 
-Copy:
+## Backend env
 
-```bash
-cp backend/.env.example backend/.env
-```
+Primary example file:
 
-Important defaults in the example:
+- `backend/.env.example`
 
-- local Postgres on `localhost:5432`
-- local Redis on `localhost:6379`
-- local Mailpit SMTP on `localhost:1025`
-- frontend public-base-url pattern: `http://{tenantKey}.localhost:3000`
-- `SEED_ON_START=true`
+Local working file:
 
-Update values only as needed for your machine.
+- `backend/.env`
 
-### Frontend example env
+In normal local work, `yarn dev` auto-creates `backend/.env` from the example if it is missing.
 
-Copy:
+### Important backend env notes
 
-```bash
-cp frontend/.env.example frontend/.env.local
-```
+- host-run backend uses `localhost` endpoints for Postgres and Redis
+- Mailpit SMTP is local
+- backend env contains sensitive values in real usage
+- never share real env files in screenshots, zips, or chat threads
 
-Default:
+## Frontend env
 
-```env
-INTERNAL_API_URL=http://localhost:3001
-NEXT_PUBLIC_ENV=development
-```
+Primary example file:
 
-Do not point browser requests directly at backend public ports.
-The browser must continue to use same-origin `/api/*`.
+- `frontend/.env.example`
 
-### Infra stack example env
+Local working file:
 
-If you are running the Docker/local-stack path that reads stack-level env, copy:
+- `frontend/.env.local`
 
-```bash
-cp infra/.env.stack.example infra/.env.stack
-```
+In normal local work, `yarn dev` auto-creates `frontend/.env.local` from the example if it is missing.
 
-This is the right place to wire backend/runtime secrets for the stack-driven environment when you are not using a host-run `backend/.env` directly.
+### Important frontend env notes
 
----
+Frontend env should not contain OAuth secrets.
+Its main job is SSR/backend wiring, for example:
 
-## Secrets hygiene — never share env files
+- `INTERNAL_API_URL`
+- `NEXT_PUBLIC_ENV`
 
-`backend/.env`, `infra/.env.stack`, and `frontend/.env.local` are gitignored for good reason: they contain real credentials.
+## Infra stack env
 
-**Never include these files in:**
+Primary example file:
 
-- review artifacts or zip files sent to reviewers
-- screen recordings or screenshots
-- Slack messages, emails, or issue attachments
-- any shared document or chat thread
+- `infra/.env.stack.example`
 
-These files contain real OAuth client secrets (Google, Microsoft), encryption keys, and SMTP credentials. Once a file leaves your machine you cannot control where it ends up or who can read it.
+Local working file:
 
-**If you have already shared a file containing real credentials:**
+- `infra/.env.stack`
 
-1. Assume the credentials are compromised
-2. Rotate the affected secrets immediately (OAuth secrets in Google Cloud Console / Azure Portal, generate new encryption keys)
-3. Update your local env files with the new values
-
-**The safe way to share env context with another engineer:**
-
-- point them to the `.env.example` or `.env.stack.example` files — these are committed and contain safe placeholders
-- list the env var names they need to set, not the values
-- for OAuth credentials, give them access to the shared secret manager or the cloud console directly
+`yarn dev`, `yarn stack`, and `yarn dev:stack` rely on this file for Docker-backed local modes.
 
 ---
 
-## Phase 6 Google SSO config checklist
+## Secrets hygiene
 
-This is the repo-level secrets/config checklist for the Google live-provider proof.
+`backend/.env`, `frontend/.env.local`, and `infra/.env.stack` are gitignored for a reason.
 
-### Backend env keys used by Google SSO
+Never share these files in:
 
-These keys belong in the backend environment only:
+- review bundles or zips
+- screenshots or recordings
+- issue attachments
+- chat messages
+- email threads
 
-- `GOOGLE_CLIENT_ID` — Google OAuth web application client ID
-- `GOOGLE_CLIENT_SECRET` — Google OAuth client secret
-- `SSO_STATE_ENCRYPTION_KEY` — encrypts the short-lived `sso-state` cookie payload
-- `SSO_REDIRECT_BASE_URL` — fallback only when the real public request origin is unavailable
+If real credentials were shared accidentally:
 
-### Frontend env keys
+1. assume they are compromised
+2. rotate them immediately
+3. update your local files with the rotated values
 
-No Google OAuth client secret belongs in the frontend.
-The frontend only needs:
+Safe sharing rule:
 
-- `INTERNAL_API_URL` for SSR/server-side backend calls
-- `NEXT_PUBLIC_ENV` for environment display/behavior
-
-### Staging Google app registration checklist
-
-For the shared staging environment, document and confirm all of the following before attempting the live round-trip:
-
-1. Google app type is **Web application**
-2. the staging backend env contains the real `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
-3. the Google app has the exact authorized redirect URI for the staging tenant host you are proving, in the form:
-
-```text
-https://<tenant-host>/api/auth/sso/google/callback
-```
-
-4. the staging tenant has `google` in `allowed_sso`
-5. the staging tenant host resolves through the real same-origin `/api/*` topology
-
-### Provider key discovery reachability check
-
-Before the live proof, confirm the staging network can reach Google's JWKS endpoint because backend token validation depends on it:
-
-```bash
-curl -fsS https://www.googleapis.com/oauth2/v3/certs > /dev/null
-```
-
-A zero-exit curl is the minimum pass signal for provider-key reachability.
+- share env var names
+- share `.env.example` files
+- do **not** share real values
 
 ---
 
-## Phase 7 Microsoft SSO config checklist
+## Health and status checks
 
-This is the repo-level secrets/config checklist for the Microsoft live-provider proof.
-
-### Exact env files used by this repo for Microsoft SSO wiring
-
-Use these exact example files as the wiring source of truth:
-
-- `backend/.env.example` → copy into `backend/.env` for host-run backend development
-- `infra/.env.stack.example` → copy into `infra/.env.stack` for Docker/local-stack or staging-style stack wiring
-- `frontend/.env.example` → copy into `frontend/.env.local` for frontend SSR wiring only
-
-### Backend env keys used by Microsoft SSO
-
-These keys belong in the backend environment only:
-
-- `MICROSOFT_CLIENT_ID` — the Microsoft **Application (client) ID** from the app registration Overview page
-- `MICROSOFT_CLIENT_SECRET` — the Microsoft client secret **Value** from **Certificates & secrets**
-- `SSO_STATE_ENCRYPTION_KEY` — encrypts the short-lived `sso-state` cookie payload
-- `SSO_REDIRECT_BASE_URL` — fallback only when the real public request origin is unavailable
-
-Important repo-specific rule:
-
-- this repo does **not** use a `MICROSOFT_TENANT_ID` env var
-- the backend starts against Microsoft `/common` endpoints and resolves the final issuer from the token `tid` claim during verification
-
-### Frontend env keys
-
-No Microsoft OAuth client secret belongs in the frontend.
-The frontend only needs:
-
-- `INTERNAL_API_URL` for SSR/server-side backend calls
-- `NEXT_PUBLIC_ENV` for environment display/behavior
-
-### Microsoft claim fallback behavior confirmed in this repo
-
-The Microsoft callback path resolves the user email in this exact order:
-
-1. `email`
-2. `preferred_username`
-3. `upn`
-
-The resolved value is normalized to lowercase before user lookup / identity linking.
-If none of those claims contains an email-like value, the callback must fail.
-
-### Staging Microsoft app registration checklist
-
-For the shared staging environment, document and confirm all of the following before attempting the live round-trip:
-
-1. Microsoft app platform is **Web**
-2. Supported account types is **Accounts in any organizational directory and personal Microsoft accounts**
-3. the staging backend env contains the real `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`
-4. the Microsoft app has the exact redirect URI for the staging tenant host you are proving, in the form:
-
-```text
-https://<tenant-host>/api/auth/sso/microsoft/callback
-```
-
-5. the staging tenant has `microsoft` in `allowed_sso`
-6. the staging tenant host resolves through the real same-origin `/api/*` topology
-
-### Exact value mapping from Microsoft into repo env
-
-Use these exact mappings:
-
-- Microsoft **Application (client) ID** → `MICROSOFT_CLIENT_ID`
-- Microsoft client secret **Value** → `MICROSOFT_CLIENT_SECRET`
-- Microsoft **Directory (tenant) ID** → operator reference only; do not try to wire it into backend env because this repo does not read a `MICROSOFT_TENANT_ID`
-
-### Provider key discovery reachability check
-
-Before the live proof, confirm the staging network can reach Microsoft's JWKS endpoint because backend token validation depends on it:
+## Quick status command
 
 ```bash
-curl -fsS https://login.microsoftonline.com/common/discovery/v2.0/keys > /dev/null
+yarn status
 ```
 
-A zero-exit curl is the minimum pass signal for provider-key reachability.
+This shows:
 
----
+- Docker container state for local auth-lab/hubins containers
+- health probes for the canonical tenant host
+- `/api/health`
+- direct backend health
+- Mailpit UI reachability
 
-## Supported local run modes
+## Manual health checks
 
-The repo supports two main local paths.
-
-### Mode A — Host-run app + infra services
-
-Use this for fastest inner-loop development.
-
-Infra only:
+### Canonical public health check
 
 ```bash
-docker compose -f infra/docker-compose-infra.yml up -d
+curl -fsS http://goodwill-ca.lvh.me:3000/api/health
 ```
 
-Then start backend:
+### Direct backend health check
 
 ```bash
-yarn workspace @auth-lab/backend dev
+curl -fsS http://localhost:3001/health
 ```
 
-Then start frontend:
-
-```bash
-yarn workspace @auth-lab/frontend dev
-```
-
-What runs in this mode:
-
-- Postgres
-- Redis
-- Mailpit
-- backend on host
-- frontend on host
-
-Recommended URL for tenant-aware testing:
-
-- `http://goodwill-ca.localhost:3000`
-
-Mailpit UI:
-
-- `http://localhost:8025`
-
-### Mode B — Full local stack via Docker Compose
-
-Use this when you want the full proxy/topology path.
-
-```bash
-docker compose -f infra/docker-compose.yml up -d --build
-```
-
-This runs:
-
-- proxy
-- frontend
-- backend
-- Postgres
-- Redis
-- Mailpit
-
-Use the committed proxy host contract from infra/docs or your local host mappings if already established in the repo.
-
----
-
-## Health and basic verification
-
-### Backend health
-
-Check:
-
-```bash
-curl -s http://localhost:3001/health | jq
-```
-
-Expected:
-
-- `ok: true`
-- db check healthy
-- redis check healthy
-
-### Frontend availability
-
-Open the tenant host in the browser, for example:
-
-- `http://goodwill-ca.localhost:3000`
-
-### Mailpit availability
+### Mailpit UI
 
 Open:
 
 - `http://localhost:8025`
 
-You should see captured messages if the outbox poller and SMTP configuration are correct.
-
----
-
-## Canonical seed behavior
-
-The canonical seed now supports both identity/bootstrap data and local email proof.
-
-Relevant example env keys:
-
-```env
-SEED_ON_START=true
-SEED_TENANT_KEY=goodwill-ca
-SEED_TENANT_NAME=GoodWill California
-SEED_ADMIN_EMAIL=system_admin@example.com
-SEED_INVITE_TTL_HOURS=168
-```
-
-### What the seed is expected to create
-
-At minimum, the dev seed is expected to prepare:
-
-- the seed tenant
-- the bootstrap/system admin user path needed by the current module
-- a pending bootstrap invite suitable for local email proof
-- an outbox email message for that invite
-
-### Manual dev-seed entry point
-
-You can run the dedicated seed entry point directly when needed:
+### Local OIDC JWKS
 
 ```bash
-yarn workspace @auth-lab/backend dev:seed
+curl -fsS http://localhost:9998/.well-known/jwks.json
 ```
-
-Use this after clearing data or when you want to refresh the canonical local state without relying on automatic startup seed behavior.
 
 ---
 
-## Local email proof workflow
+## Stop and reset commands
 
-Phase 2 makes email part of the real local contract.
+## Stop Docker-backed local modes
 
-### Expected backend SMTP settings in local
-
-These values should come from `backend/.env` derived from the example:
-
-```env
-EMAIL_PROVIDER=smtp
-SMTP_HOST=localhost
-SMTP_PORT=1025
-SMTP_SECURE=false
-SMTP_FROM=Hubins <noreply@hubins.local>
-SMTP_PUBLIC_BASE_URL=http://{tenantKey}.localhost:3000
+```bash
+yarn stop
 ```
 
-### Proof 1 — Invite email
+This stops:
 
-1. Start infra and app(s)
-2. Ensure seed ran successfully
-3. Open Mailpit
-4. Confirm an invite email exists for `system_admin@example.com`
-5. Open the email and inspect the generated link
-6. Confirm the link host uses the tenant host pattern, for example `http://goodwill-ca.localhost:3000/...`
+- full-stack Docker mode
+- infra-only Docker mode
 
-### Proof 2 — Verify-email flow
+If backend/frontend were started manually in separate host terminals, stop those terminals yourself.
 
-1. Create or trigger a flow that sends verification mail
-2. Open Mailpit
-3. Confirm verification mail arrival
-4. Inspect the verification link host and path
-5. Confirm tenant-based link construction is correct
+## Reset local DB/Redis volumes
 
-### Proof 3 — Forgot-password / reset email
+```bash
+yarn reset-db
+```
 
-1. Trigger forgot-password for a valid seeded/test account
-2. Open Mailpit
-3. Confirm reset mail arrival
-4. Inspect the reset link
-5. Confirm host-derived tenant link construction is correct
+This wipes local Docker volumes for the supported local modes.
+Use it when you need a clean local state.
 
-### What is considered a local pass
+Warning:
 
-Local proof is good only if all of the following are true:
+- this deletes local development data
+- after reset, restart the relevant mode and rerun any intentional seed/bootstrap command you need
 
-- email is actually accepted by SMTP, not mocked
-- email visibly arrives in Mailpit
-- subject/body match the intended flow
-- tokenized link is present
-- link host resolves to the correct tenant-shaped frontend origin
+---
+
+## Seed and bootstrap truth
+
+This is important because old assumptions easily drift here.
+
+## What `yarn dev` does **not** do
+
+`yarn dev` does **not** automatically run repo seed commands.
+It prepares env files, infra, migrations, DB types, and host-run app processes.
+
+Do **not** assume `yarn dev` gives you seeded personas automatically.
+
+## Available seed/bootstrap commands
+
+### Dev seed
+
+```bash
+yarn seed:dev
+```
+
+### E2E fixtures seed
+
+```bash
+yarn seed:e2e
+```
+
+### Tenant bootstrap helper
+
+```bash
+yarn bootstrap:tenant
+```
+
+Use these intentionally when you need:
+
+- canonical dev fixtures
+- E2E fixture accounts/data
+- operator-style tenant bootstrap flow
+
+## Recommended seed usage
+
+- use `yarn seed:dev` when you want known local development fixtures
+- use `yarn seed:e2e` when preparing Playwright-compatible local fixtures
+- use `yarn bootstrap:tenant` when you need the bootstrap operator path
+
+---
+
+## Local email proof
+
+Mailpit is part of the real local proof contract.
+The repo does not treat auth email as purely mocked behavior in local work.
+
+## Mailpit URL
+
+- `http://localhost:8025`
+
+## Typical local email proof flows
+
+- invite email
+- verify-email
+- forgot-password / reset-password
+
+Local proof is considered real only if:
+
+- the backend actually accepts the email for delivery via SMTP
+- the email visibly arrives in Mailpit
+- the expected tokenized link is present
+- the link points to the correct tenant-shaped host contract for the tested flow
 
 ---
 
 ## Running checks and tests
 
-### Repo-wide checks
-
-Run from repo root as applicable:
+## Repo-wide verification
 
 ```bash
-yarn lint
-yarn typecheck
+yarn verify
+```
+
+What `yarn verify` actually runs:
+
+- `yarn fmt:check`
+- `yarn lint`
+- `yarn typecheck`
+- `yarn test`
+
+Important truth:
+
+`yarn verify` does **not** run a frontend production build.
+If you need explicit frontend build proof, run:
+
+```bash
+yarn build:frontend
+```
+
+## Main test command
+
+```bash
 yarn test
 ```
 
-If your workspace uses more granular scripts, prefer the repo-standard package scripts first and fall back to workspace scripts only if needed.
+What `yarn test` actually does:
 
-### Backend-focused checks
+1. ensures `auth_lab_test` exists
+2. runs migrations against `auth_lab_test`
+3. runs backend tests against that isolated test DB
+4. runs frontend unit tests
+5. runs Playwright E2E **only if** the canonical app health endpoint is already reachable
 
-Useful commands:
+If the stack is not reachable at `http://goodwill-ca.lvh.me:3000/api/health`, E2E is skipped.
+
+## Backend-only tests
+
+```bash
+yarn test:backend
+```
+
+or directly:
 
 ```bash
 yarn workspace @auth-lab/backend test
-yarn workspace @auth-lab/backend test --watch
 ```
 
-### Frontend checks
-
-Unit tests and typecheck (no stack required):
+## Frontend unit tests
 
 ```bash
-yarn workspace frontend lint
-yarn workspace frontend typecheck
+yarn test:frontend:unit
+```
+
+or directly:
+
+```bash
 yarn workspace frontend test:unit
 ```
 
-Mock-backed Playwright E2E (fast local loop, no Docker stack required):
+## Playwright E2E
 
 ```bash
-# Requires: nothing running — the playwright.config.mts starts next dev + mock backend
-yarn workspace frontend test:e2e
+yarn test:e2e
 ```
 
-Real-stack Playwright E2E (Phase 8 — requires Docker Compose stack to be running):
+Important truth for Playwright in this repo today:
+
+- Playwright targets the **real running stack**
+- the config does **not** start its own mock server or its own Next server
+- the stack must already be running before E2E begins
+- the canonical base URL is `http://goodwill-open.lvh.me:3000`
+
+That means current E2E is **not** a mock-backed no-Docker path.
+
+## Recommended local test flow
+
+### Daily feature work
 
 ```bash
-# 1. Start the full stack
-./scripts/stack.sh up
-
-# 2. Seed E2E fixtures (admin persona — idempotent, safe to re-run)
-./scripts/seed-e2e-fixtures.sh
-
-# 3. Run real-stack smoke tests
-yarn workspace frontend test:e2e:real-stack
+yarn dev
 ```
 
-The real-stack suite (`test/e2e/auth.spec.ts`) runs 15 smoke tests against the live Caddy proxy at `*.lvh.me:3000`. It uses `playwright.config.mts` (the default config, which already targets the real stack — no mock webServer block). No webServer is started — the Docker stack must already be running.
-
-**What the real-stack suite proves:**
-
-- member login → `/app` + session cookie correct
-- logout clears session + `/api/auth/me` returns 401 + `/app` SSR rejects
-- admin login → `MFA_SETUP_REQUIRED` → `/auth/mfa/setup`
-- signup → Mailpit email delivery → verify link → `/app`
-- signup blocked on invite-only tenant (`goodwill-ca`)
-- host-derived tenant identity via Caddy proxy (two hosts → two tenant names)
-- SSO start sets `sso-state` cookie (SameSite=Lax) + Location → Google
-- cross-tenant session isolation enforced by backend
-
-**Mailpit API:**
-The real-stack tests read email from Mailpit's HTTP API at `http://localhost:8025`.
-If Mailpit is exposed on a different port, set `MAILPIT_API_URL=http://localhost:<port>` before running.
-
-### Proxy conformance / route checks
-
-Run after any change to `infra/`, proxy config, session middleware, or SSO flows:
+### Before push / PR
 
 ```bash
-# Requires full Docker stack running:
-./scripts/stack.sh test
+yarn verify
 ```
 
-This runs PT-01 through PT-08 from the topology document using curl + jq against the live Compose stack.
+### Before merging topology-sensitive changes
+
+```bash
+yarn stack
+yarn stack:test
+```
 
 ---
 
-## Resetting local state
+## Proxy and topology validation
 
-### Stop compose services
+If the change affects any of the following, run the full-stack proof path:
 
-Infra only:
+- `infra/`
+- proxy config
+- request context / tenant resolution
+- session/cookie behavior
+- SSR forwarded-header behavior
+- SSO callback assumptions
+- browser vs SSR request routing assumptions
+- public-origin `/api/*` handling
 
-```bash
-docker compose -f infra/docker-compose-infra.yml down
-```
-
-Full stack:
-
-```bash
-docker compose -f infra/docker-compose.yml down
-```
-
-### Remove volumes when you need a full clean start
-
-Infra only:
+Use:
 
 ```bash
-docker compose -f infra/docker-compose-infra.yml down -v
+yarn stack
+yarn stack:test
 ```
 
-Full stack:
+or, if you need the local OIDC helper in the full stack:
 
 ```bash
-docker compose -f infra/docker-compose.yml down -v
+yarn dev:stack
+yarn stack:test
 ```
-
-Then rerun the chosen stack start flow and reseed.
 
 ---
 
-## Common local pitfalls
+## Staging-only proof boundaries
 
-### 1. Mail is not arriving in Mailpit
+Some proof cannot be honestly completed only on a local machine.
+These remain staging / externally-managed environment concerns.
 
-Check:
+Examples:
 
-- Mailpit is running
-- backend env has `EMAIL_PROVIDER=smtp`
-- SMTP host/port point to Mailpit
-- outbox poller is enabled and running
-- backend logs show successful SMTP send
+- live Google SSO provider proof
+- live Microsoft SSO provider proof
+- real non-local SMTP provider proof
+- any environment-specific provider/network rule that local Mailpit/local OIDC does not cover
 
-### 2. Links use the wrong host
-
-Check:
-
-- `SMTP_PUBLIC_BASE_URL`
-- tenant key in the seeded record
-- whether you are testing with the correct tenant host
-
-Do not “fix” this by bypassing host-derived tenant behavior.
-Repair the base-url/env or seed assumptions instead.
-
-### 3. Browser requests are hitting backend directly
-
-That is a topology regression.
-The browser must use same-origin `/api/*`.
-Do not change the frontend into a direct-browser-to-backend model.
-
-### 4. Seed data exists but no invite email appears
-
-Check whether:
-
-- the seed completed without error
-- the seed created the pending invite
-- the seed enqueued the outbox email message
-- the outbox poller picked up and sent the message
-
-### 5. Plain `localhost` does not reproduce tenant behavior
-
-That is expected.
-Use tenant-shaped hosts like `goodwill-ca.localhost` when verifying host-derived tenant identity.
+Do not call those flows fully proven from local-only testing.
 
 ---
 
-## Staging email note
+## Google SSO config checklist
 
-Staging proof is intentionally sandboxed and documented in `docs/ops/runbooks.md`.
-Do not repurpose local Mailpit instructions as the staging operator procedure.
+Use this for staging/live-provider proof preparation.
+
+### Backend env keys used by Google SSO
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `SSO_STATE_ENCRYPTION_KEY`
+- `SSO_REDIRECT_BASE_URL` (fallback only)
+
+### Frontend env keys
+
+No Google client secret belongs in the frontend.
+Frontend only needs normal SSR wiring such as:
+
+- `INTERNAL_API_URL`
+- `NEXT_PUBLIC_ENV`
+
+### Staging Google app registration checklist
+
+Before live proof, confirm:
+
+1. Google app type is **Web application**
+2. staging backend env contains the real `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+3. the exact redirect URI exists in Google in the form:
+
+```text
+https://<tenant-host>/api/auth/sso/google/callback
+```
+
+4. the staging tenant allows `google`
+5. the staging tenant host resolves through the real same-origin `/api/*` topology
+
+### Provider key reachability check
+
+```bash
+curl -fsS https://www.googleapis.com/oauth2/v3/certs > /dev/null
+```
 
 ---
 
-## Practical day-one setup checklist
+## Microsoft SSO config checklist
 
-For a new machine or a fresh clone:
+Use this for staging/live-provider proof preparation.
 
-1. `corepack enable`
-2. `yarn install`
-3. `cp backend/.env.example backend/.env`
-4. `cp frontend/.env.example frontend/.env.local`
-5. `docker compose -f infra/docker-compose-infra.yml up -d`
-6. start backend and frontend on host
-7. open `http://goodwill-ca.localhost:3000`
-8. open `http://localhost:8025`
-9. confirm backend health
-10. confirm seeded invite email is visible in Mailpit`
+### Backend env keys used by Microsoft SSO
 
-If all ten pass, the current local foundation is behaving as intended.
+- `MICROSOFT_CLIENT_ID`
+- `MICROSOFT_CLIENT_SECRET`
+- `SSO_STATE_ENCRYPTION_KEY`
+- `SSO_REDIRECT_BASE_URL` (fallback only)
+
+Repo-specific note:
+
+- this repo does **not** use `MICROSOFT_TENANT_ID`
+- the backend starts at `/common` and resolves issuer from the token `tid` claim
+
+### Frontend env keys
+
+No Microsoft client secret belongs in the frontend.
+Frontend only needs SSR/runtime wiring such as:
+
+- `INTERNAL_API_URL`
+- `NEXT_PUBLIC_ENV`
+
+### Microsoft claim fallback behavior in this repo
+
+The callback resolves user email in this order:
+
+1. `email`
+2. `preferred_username`
+3. `upn`
+
+The result is normalized to lowercase.
+If no email-like value exists, the callback must fail.
+
+### Staging Microsoft app registration checklist
+
+Before live proof, confirm:
+
+1. Microsoft app platform is **Web**
+2. Supported account types is **Accounts in any organizational directory and personal Microsoft accounts**
+3. staging backend env contains real `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET`
+4. the exact redirect URI exists in the form:
+
+```text
+https://<tenant-host>/api/auth/sso/microsoft/callback
+```
+
+5. the staging tenant allows `microsoft`
+6. the staging tenant host resolves through the real same-origin `/api/*` topology
+
+### Exact Microsoft value mapping
+
+- Application (client) ID → `MICROSOFT_CLIENT_ID`
+- client secret **Value** → `MICROSOFT_CLIENT_SECRET`
+- Directory (tenant) ID → operator reference only, not backend env wiring in this repo
+
+### Provider key reachability check
+
+```bash
+curl -fsS https://login.microsoftonline.com/common/discovery/v2.0/keys > /dev/null
+```
+
+---
+
+## Recommended daily workflow
+
+1. start normal local mode:
+
+```bash
+yarn dev
+```
+
+2. open the canonical tenant host:
+
+```text
+http://goodwill-ca.lvh.me:3000
+```
+
+3. run intentional seed/bootstrap commands only when needed
+4. run `yarn verify` before push / PR
+5. run `yarn stack:test` when the change touches topology-sensitive behavior
+
+---
+
+## Where to look next
+
+- `docs/current-foundation-status.md` — current repo truth
+- `README.md` — top-level entry and command summary
+- `infra/README.md` — local topology modes and infra truth
+- `docs/ops/release-engineering.md` — release gates, migration safety, rollback, hotfix rules
+- `docs/ops/runbooks.md` — operator and incident-facing procedures
+
+---
+
+## Practical truth rules
+
+- do not describe `yarn verify` as if it includes build proof; it does not
+- do not describe Playwright in this repo as mock-backed-by-default; it is not
+- do not assume `yarn dev` auto-seeds data; it does not
+- do not test tenant-aware browser behavior on plain `localhost`
+- do not call local HTTP proof equivalent to production HTTPS proof
+- do not claim local-only proof is enough for live-provider SSO or real external SMTP proof
+
+Those distinctions are part of repo truth, not optional wording.

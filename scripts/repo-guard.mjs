@@ -4,7 +4,7 @@
 /**
  * scripts/repo-guard.mjs
  *
- * Minimum viable Stage 1A repo guard.
+ * Minimum viable Stage 1A repo guard, extended with the Stage 5 baseline PR contract.
  *
  * What it enforces:
  * 1. Approved prompt files must be listed in the prompt catalog.
@@ -14,6 +14,8 @@
  * 5. PRs must keep the Module Quality Gate section present and mark applicability.
  * 6. Frontend same-origin discipline: browser/client code must not hardcode private backend
  *    origins or pull SSR-only transport into client components.
+ * 7. PRs must keep the Stage 5 release/change-management sections present and usable.
+ * 8. Migration-bearing PRs must not omit migration safety, rollback, and verification notes.
  *
  * Notes:
  * - This is intentionally lean. It blocks common silent-drift paths without pretending
@@ -31,6 +33,8 @@ const ROOT = process.cwd();
 
 const PROTECTED_LAW_FILES = [
   'docs/quality-bar.md',
+  'docs/current-foundation-status.md',
+  'docs/ops/release-engineering.md',
   'AGENTS.md',
   'backend/AGENTS.md',
   'frontend/AGENTS.md',
@@ -75,6 +79,15 @@ const FRONTEND_PRIVATE_BACKEND_PATTERNS = [
   },
 ];
 
+const RELEASE_LANE_LABELS = [
+  'Lane A — standard code/doc change',
+  'Lane B — topology / auth / security-sensitive change',
+  'Lane C — migration-bearing change',
+  'Lane D — hotfix',
+];
+
+const MIGRATION_PATH_PATTERNS = [/^backend\/src\/shared\/db\/migrations\//];
+
 main();
 
 function main() {
@@ -98,6 +111,10 @@ function main() {
   const moduleQualityResult = checkModuleQualityGate(changedEntries, prBody, event);
   failures.push(...moduleQualityResult.failures);
   warnings.push(...moduleQualityResult.warnings);
+
+  const releaseManagementResult = checkReleaseManagement(changedEntries, prBody, event);
+  failures.push(...releaseManagementResult.failures);
+  warnings.push(...releaseManagementResult.warnings);
 
   if (failures.length > 0) {
     console.error('\n❌ Repo guard failed.\n');
@@ -347,6 +364,86 @@ function checkModuleQualityGate(changedEntries, prBody, event) {
   return { failures, warnings };
 }
 
+function checkReleaseManagement(changedEntries, prBody, event) {
+  const failures = [];
+  const warnings = [];
+
+  if (!isPullRequestEvent(event)) {
+    warnings.push('Release / Change Management validation skipped: Not a PR event.');
+    return { failures, warnings };
+  }
+
+  if (!prBody) {
+    failures.push(
+      'PR body is empty. The Release / Change Management section must be present in the PR description.',
+    );
+    return { failures, warnings };
+  }
+
+  const releaseManagementSection = extractMarkdownSection(prBody, 'Release / Change Management');
+  if (!releaseManagementSection) {
+    failures.push('PR body is missing the “Release / Change Management” section.');
+    return { failures, warnings };
+  }
+
+  const releaseLaneSection = extractMarkdownSection(prBody, 'Release lane');
+  if (!releaseLaneSection) {
+    failures.push('PR body is missing the “Release lane” section.');
+  } else {
+    const checkedLaneCount = countCheckedReleaseLanes(releaseLaneSection);
+    if (checkedLaneCount === 0) {
+      failures.push('Release lane section exists, but no lane is checked.');
+    }
+    if (checkedLaneCount > 1) {
+      failures.push('Release lane section must have exactly one checked lane.');
+    }
+  }
+
+  const rollbackSection = extractMarkdownSection(prBody, 'Rollback expectation');
+  if (!rollbackSection || isBlank(rollbackSection)) {
+    failures.push('PR body is missing a filled “Rollback expectation” section.');
+  }
+
+  const verificationSection = extractMarkdownSection(prBody, 'Post-change verification');
+  if (!verificationSection || isBlank(verificationSection)) {
+    failures.push('PR body is missing a filled “Post-change verification” section.');
+  }
+
+  const releaseNotesSection = extractMarkdownSection(prBody, 'Deployment / release notes');
+  if (!releaseNotesSection || isBlank(releaseNotesSection)) {
+    failures.push('PR body is missing a filled “Deployment / release notes” section.');
+  }
+
+  const changelogSection = extractMarkdownSection(prBody, 'Changelog impact');
+  if (!changelogSection || isBlank(changelogSection)) {
+    failures.push('PR body is missing a filled “Changelog impact” section.');
+  }
+
+  const migrationChanged = hasMigrationChange(changedEntries);
+  const migrationSection = extractMarkdownSection(prBody, 'Migration safety');
+  const laneCChecked = isReleaseLaneChecked(releaseLaneSection, 'Lane C');
+
+  if (migrationChanged && !laneCChecked) {
+    failures.push(
+      'This PR changes migration files, but “Lane C — migration-bearing change” is not checked.',
+    );
+  }
+
+  if (migrationChanged) {
+    if (!migrationSection || isBlankOrNotApplicable(migrationSection)) {
+      failures.push(
+        'This PR changes migration files, but the “Migration safety” section is blank or marked not applicable.',
+      );
+    }
+  } else if (laneCChecked && (!migrationSection || isBlankOrNotApplicable(migrationSection))) {
+    failures.push(
+      'Release lane is marked as Lane C, but the “Migration safety” section is blank or marked not applicable.',
+    );
+  }
+
+  return { failures, warnings };
+}
+
 function isLikelyMajorModuleWork(changedEntries) {
   return changedEntries.some((entry) => {
     if (
@@ -362,6 +459,32 @@ function isLikelyMajorModuleWork(changedEntries) {
 
     return false;
   });
+}
+
+function hasMigrationChange(changedEntries) {
+  return changedEntries.some((entry) =>
+    MIGRATION_PATH_PATTERNS.some((pattern) => pattern.test(entry.path)),
+  );
+}
+
+function countCheckedReleaseLanes(section) {
+  let count = 0;
+  for (const label of RELEASE_LANE_LABELS) {
+    const regex = new RegExp(`- \\[([xX])\\] ${escapeRegExp(label)}`, 'm');
+    if (regex.test(section)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function isReleaseLaneChecked(section, lanePrefix) {
+  if (!section) {
+    return false;
+  }
+
+  const regex = new RegExp(`- \\[([xX])\\] ${escapeRegExp(lanePrefix)}`);
+  return regex.test(section);
 }
 
 function getChangedEntries() {
@@ -449,6 +572,10 @@ function isBlankOrNotApplicable(value) {
   return (
     normalized.length === 0 || normalized === 'not applicable.' || normalized === 'not applicable'
   );
+}
+
+function isBlank(value) {
+  return value.trim().length === 0;
 }
 
 function walkCodeFiles(startDir) {

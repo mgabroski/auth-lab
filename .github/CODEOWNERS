@@ -1,35 +1,75 @@
-# Stage 1A minimum viable ownership surface
+# Stage 5 baseline ownership surface
+
 #
+
 # Purpose:
-# - protect core law and governance files
-# - protect the minimum prompt-law surface
+
+# - keep the Stage 1A governance protections
+
+# - expand ownership metadata to the major repo areas required by Stage 5
+
 # - bind the Lead Architect / Designated Quality Owner role to a real owner
+
 #
-# Owner for Stage 1A:
+
+# Current owner:
+
 # - @mgabroski
+
 #
+
 # Notes:
-# - This is intentionally narrow.
-# - It does not attempt to define full repo ownership yet.
-# - Branch protection / required review configuration remains a GitHub settings concern,
-#   not a CODEOWNERS-only concern.
+
+# - This remains intentionally simple for the current team size.
+
+# - Branch protection / required-review behavior still depends on GitHub settings.
+
+# - Multiple major areas may map to the same owner at this stage; that is acceptable.
+
+# - What is not acceptable is leaving major repo areas with no ownership surface at all.
 
 # Core repo law / governance
+
 /AGENTS.md @mgabroski
 /code_review.md @mgabroski
 /docs/quality-bar.md @mgabroski
+/docs/current-foundation-status.md @mgabroski
 /docs/ai/repo-ai-adoption-roadmap.md @mgabroski
+/docs/ops/release-engineering.md @mgabroski
 
 # Area instruction law
+
 /backend/AGENTS.md @mgabroski
 /frontend/AGENTS.md @mgabroski
 
 # Prompt-law surface
+
 /docs/prompts/catalog.md @mgabroski
 /docs/prompts/usage-guide.md @mgabroski
-/docs/prompts/*.md @mgabroski
+/docs/prompts/\*.md @mgabroski
 
-# Stage 1A enforcement surfaces
+# Backend application surface
+
+/backend/\*\* @mgabroski
+
+# Frontend application surface
+
+/frontend/\*\* @mgabroski
+
+# Infra / topology surface
+
+/infra/\*\* @mgabroski
+
+# Workflow / CI / guard surfaces
+
+/.github/workflows/\*\* @mgabroski
 /.github/pull_request_template.md @mgabroski
-/.github/workflows/repo-guard.yml @mgabroski
 /scripts/repo-guard.mjs @mgabroski
+
+# Security documentation and models
+
+/docs/security/\*\* @mgabroski
+
+# Ops / release / runbook documentation
+
+/docs/ops/\*\* @mgabroski

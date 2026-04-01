@@ -23,6 +23,9 @@ List the repo-level or area-level docs you reviewed for this PR.
 Examples:
 
 - `docs/quality-bar.md`
+- `docs/current-foundation-status.md`
+- `docs/ops/release-engineering.md`
+- `docs/ops/runbooks.md`
 - `AGENTS.md`
 - `backend/AGENTS.md`
 - `frontend/AGENTS.md`
@@ -30,6 +33,7 @@ Examples:
 - `ARCHITECTURE.md`
 - `docs/decision-log.md`
 - `docs/security-model.md`
+- `docs/security/threat-model.md`
 - relevant API docs
 - relevant QA/runbook docs
 
@@ -136,6 +140,69 @@ If none, say:
 
 ---
 
+# Release / Change Management
+
+## Release lane
+
+Check exactly one lane from `docs/ops/release-engineering.md`.
+
+- [ ] Lane A — standard code/doc change
+- [ ] Lane B — topology / auth / security-sensitive change
+- [ ] Lane C — migration-bearing change
+- [ ] Lane D — hotfix
+
+## Migration safety
+
+If this PR includes a migration or schema/data-shape change, fill all applicable items.
+If not applicable, say:
+
+`Not applicable.`
+
+Required when applicable:
+
+- migration class: Class 1 / Class 2 / Class 3
+- can old code still run safely after this migration?
+- can new code still run safely before this migration?
+- rollback path
+- post-migration verification steps
+
+## Rollback expectation
+
+State the rollback expectation for this change.
+
+Examples:
+
+- `None — docs/test-only change.`
+- `Redeploy previous app code only; migration is backward-compatible.`
+- `Follow-up revert migration required.`
+- `Manual DB recovery step required; see notes.`
+
+## Post-change verification
+
+List the exact checks that must be performed after the change is applied in the target environment.
+
+If none, say:
+
+`None.`
+
+## Deployment / release notes
+
+State whether this PR has any deployment, migration, rollback, or release coordination needs.
+
+If none, say:
+
+`None.`
+
+## Changelog impact
+
+State whether this PR should produce a changelog or release-note entry.
+
+If none, say:
+
+`None.`
+
+---
+
 # Reviewer Focus
 
 ## What reviewers should focus on most
@@ -151,11 +218,3 @@ Examples:
 - SSR/browser boundary changes
 - docs/runtime drift
 - module boundary fit
-
-## Deployment / release notes
-
-State whether this PR has any deployment, migration, rollback, or release coordination needs.
-
-If none, say:
-
-`None.`
