@@ -11,15 +11,13 @@
 
 This document is the repo's practical truth snapshot.
 
-It exists to keep five things aligned:
+It exists to keep these things aligned:
 
 - what the repository actually implements now
 - what the active documentation claims
 - what future implementation sessions assume
 - what is intentionally deferred to later hardening stages
 - what is baseline-only versus what is fully closed
-
-If another active document overclaims shipped scope compared with this file, this file wins until the lower document is repaired.
 
 This file is not a roadmap and not a wish list.
 It is the current-state truth for the repository as it exists now.
@@ -29,7 +27,7 @@ It is the current-state truth for the repository as it exists now.
 ## 1. High-level status
 
 The repository is no longer only a topology or auth-foundation sandbox.
-It now contains a real Auth + User Provisioning slice with real browser surfaces, real backend behavior, real test proof, and real hardening work.
+It now contains a real Auth + User Provisioning slice with real browser surfaces, real backend behavior, real test proof, and meaningful hardening work.
 
 At the time of this snapshot, the repo status is:
 
@@ -40,6 +38,7 @@ At the time of this snapshot, the repo status is:
 - **Stage 3 operability baseline:** completed as a baseline, not yet a fully mature ops system
 - **Stage 4 security-system baseline:** completed as a baseline, not yet a fully mature security program
 - **Cross-Cutting Track A:** present and active, but still partial in enforcement depth
+- **Stage 5 release-engineering baseline:** established in-repo, but not yet fully closed in practice until external branch-protection settings and ongoing usage match the documented contract
 
 That means the repository now has:
 
@@ -50,14 +49,15 @@ That means the repository now has:
 - runnable security scanning in CI
 - explicit abuse-regression proof for the highest-risk callback boundary
 - a real minimum-governance layer for PRs and repo law
+- a real release-engineering baseline for lanes, migration safety, rollback expectations, post-change verification, hotfix handling, and changelog discipline
 
 It does **not** mean:
 
 - Stage 1B is closed
-- release engineering is already mature
 - Track A is fully enforced end to end
 - Stage 3 has full dashboard/alert/SLO maturity
 - Stage 4 has fully closed every deeper security concern
+- Stage 5 is fully operationalized beyond repo-visible process and enforcement surfaces
 
 This distinction is intentional.
 The repo is strong because the current state is real, and because the remaining gaps are named instead of hidden.
@@ -77,7 +77,7 @@ The following are real and load-bearing:
 - Postgres and Redis infrastructure
 - Mailpit local email capture for non-production email proof
 - same-origin browser API model under `/api/*`
-- SSR direct-backend model with forwarded headers
+- SSR direct-to-backend model with forwarded headers
 - CI workflows covering repo guard, backend tests, frontend tests, proxy conformance, and security scans
 
 ### 2.2 Locked topology and request model
@@ -132,7 +132,7 @@ The repository supports a repeatable local proof contract:
 - local browser proof can validate signup, verification, reset-password, MFA, invite lifecycle behavior, and proxy/topology behavior
 
 This is stronger than a code-only module.
-It is still local-first proof, not full release-engineering maturity.
+It is still local-first proof, not full delivery-platform maturity.
 
 ---
 
@@ -393,11 +393,54 @@ That is stronger than “just an idea,” but weaker than “fully locked enforc
 
 ---
 
-## 12. Practical evidence map
+## 12. What Stage 5 established
+
+Stage 5 is no longer only a future item in this repository.
+A real release-engineering baseline now exists in-repo.
+
+### 12.1 What is real now
+
+The repo now contains:
+
+- a release-engineering baseline document
+- explicit release lanes
+- explicit migration classes and migration-safety expectations
+- explicit rollback-expectation and post-change verification expectations in the PR contract
+- changelog discipline
+- expanded ownership metadata intent across major repo areas
+- repo-guard enforcement for the release/change-management PR structure
+
+### 12.2 What this means
+
+Release discipline is no longer only implied through review culture.
+The repository now has written and partially enforced expectations for:
+
+- how changes are classified
+- what must be written for migration-bearing work
+- how rollback should be described honestly
+- what post-change verification should exist
+- how hotfixes should stay disciplined
+
+### 12.3 Important Stage 5 limit
+
+This file does **not** claim that Stage 5 is fully closed in practice yet.
+Practical closure still depends on:
+
+- correct GitHub branch-protection / required-check settings outside the repo
+- consistent use of the stronger PR contract by contributors
+- ownership metadata remaining correct and actually used in review flow
+
+Correct reading:
+**Stage 5 baseline is established in-repo.**
+It is stronger than “not started,” but still not the same as a fully institutionalized delivery organization.
+
+---
+
+## 13. Practical evidence map
 
 This snapshot is supported by three classes of proof.
 
-### 12.1 Code and runtime proof
+### 13.1 Code and runtime proof
 
 - topology and proxy config
 - SSR API client and forwarding contract
@@ -407,7 +450,7 @@ This snapshot is supported by three classes of proof.
 - cookie/state handling
 - logging and metrics surfaces
 
-### 12.2 Test proof
+### 13.2 Test proof
 
 - backend unit, integration, and E2E auth coverage
 - frontend unit and E2E auth coverage
@@ -417,7 +460,7 @@ This snapshot is supported by three classes of proof.
 - SSO state validation and abuse regressions
 - outbox encryption rotation tests
 
-### 12.3 Documentation and process proof
+### 13.3 Documentation and process proof
 
 - architecture docs
 - security model
@@ -426,10 +469,12 @@ This snapshot is supported by three classes of proof.
 - runbooks
 - quality-bar and governance docs
 - observability docs
+- release-engineering docs
+- PR/repo-guard governance surfaces
 
 ---
 
-## 13. Known truth limits and documentation discipline
+## 14. Known truth limits and documentation discipline
 
 This file intentionally distinguishes between:
 
@@ -445,13 +490,14 @@ This file should be read together with a simple rule:
 
 - do not describe baseline-complete work as fully mature if the repo does not prove that maturity yet
 - do not downgrade real completed work just because later hardening stages still exist
+- do not describe Stage 5 as absent now that the baseline has been established in-repo
 
 Practical implication:
-If another document says or implies that Stage 3, Stage 4, or Track A are stronger than stated here, that lower document must be corrected.
+If another document says or implies that Stage 3, Stage 4, Track A, or Stage 5 are stronger than stated here, that lower document must be corrected.
 
 ---
 
-## 14. What this repo is ready for next
+## 15. What this repo is ready for next
 
 Given the current status, the repo is ready to continue with later roadmap work **without pretending earlier foundations are still missing**.
 
@@ -459,8 +505,8 @@ Practical meaning:
 
 - new major modules must still obey Cross-Cutting Track A
 - Stage 1B can continue in parallel where deeper enforcement is still needed
-- Stage 5 release engineering can now be added on top of a real foundation
-- later stages may build on an explicit security-system baseline instead of inheriting undocumented assumptions
+- Stage 5 baseline should continue to harden through real usage and external required-check alignment
+- later stages may build on an explicit security-system baseline and release baseline instead of inheriting undocumented assumptions
 
 What should **not** happen next:
 
@@ -469,11 +515,12 @@ What should **not** happen next:
 - weakening tenant isolation for convenience
 - pretending secret-bearing tenant integrations are ready before the secrets foundation runtime exists
 - treating Stage 3 and Stage 4 baseline docs/tests as optional polish
+- pretending Stage 5 is already fully institutionalized beyond the repo-visible baseline
 - overclaiming operational or security maturity that the repo does not yet prove
 
 ---
 
-## 15. Change triggers for this file
+## 16. Change triggers for this file
 
 This file must be updated whenever any of the following materially changes:
 
@@ -489,7 +536,7 @@ This file must be updated whenever any of the following materially changes:
 
 ---
 
-## 16. Bottom-line truth
+## 17. Bottom-line truth
 
 The current repository is stronger than a typical “auth feature implementation” repo.
 It has:
@@ -501,6 +548,7 @@ It has:
 - security scanning
 - concrete abuse regressions
 - operator-facing runbooks and process material
+- a real release-engineering baseline
 
 That is a serious foundation.
 
@@ -510,7 +558,7 @@ It is also honest about what is **not** done yet:
 - Stage 3 is baseline-complete, not full ops maturity
 - Stage 4 is baseline-complete, not full security-program maturity
 - Track A is active, but still partial in enforcement depth
-- Stage 5 release engineering is still the next major missing layer
+- Stage 5 baseline exists, but full practical closure still depends on external required-check settings and continued disciplined use
 
 That honesty is part of the quality bar.
 It is one of the reasons this foundation is trustworthy.

@@ -4,9 +4,9 @@
 
 # Purpose:
 
-# - keep the Stage 1A governance protections
+# - keep the existing governance protections intact
 
-# - expand ownership metadata to the major repo areas required by Stage 5
+# - expand ownership metadata to the major repo areas
 
 # - bind the Lead Architect / Designated Quality Owner role to a real owner
 
@@ -34,8 +34,9 @@
 /code_review.md @mgabroski
 /docs/quality-bar.md @mgabroski
 /docs/current-foundation-status.md @mgabroski
-/docs/ai/repo-ai-adoption-roadmap.md @mgabroski
 /docs/ops/release-engineering.md @mgabroski
+/docs/ai/repo-ai-adoption-roadmap.md @mgabroski
+/CHANGELOG.md @mgabroski
 
 # Area instruction law
 
