@@ -36,6 +36,7 @@ import { execFileSync } from 'node:child_process';
 const ROOT = process.cwd();
 const QUALITY_EXCEPTIONS_FILE = 'docs/quality-exceptions.md';
 const AUTH_MESSAGE_AUDIT_FILE = 'docs/qa/auth-message-audit.md';
+const CHANGELOG_FILE = 'CHANGELOG.md';
 
 const PROTECTED_LAW_FILES = [
   'docs/quality-bar.md',
@@ -151,6 +152,8 @@ const RELEASE_LANE_LABELS = [
   'Lane D — hotfix',
 ];
 
+const CHANGELOG_IMPACT_LABELS = ['CHANGELOG.md updated in this PR', 'No changelog entry required'];
+
 const MIGRATION_PATH_PATTERNS = [/^backend\/src\/shared\/db\/migrations\//];
 
 main();
@@ -241,6 +244,7 @@ function buildContext(changedEntries, changedFiles, event, prBody) {
     likelyMajorModule: isLikelyMajorModuleWork(changedEntries),
     migrationChanged: hasMigrationChange(changedEntries),
     qualityExceptionsTouched: changedFiles.has(QUALITY_EXCEPTIONS_FILE),
+    changelogTouched: changedFiles.has(CHANGELOG_FILE),
   };
 }
 
@@ -654,7 +658,7 @@ function checkModuleQualityGate(context) {
 function checkReleaseManagement(context) {
   const failures = [];
   const warnings = [];
-  const { prBody, event, migrationChanged } = context;
+  const { prBody, event, migrationChanged, changelogTouched } = context;
 
   if (!isPullRequestEvent(event)) {
     warnings.push('Release / Change Management validation skipped: Not a PR event.');
@@ -675,16 +679,25 @@ function checkReleaseManagement(context) {
   }
 
   const releaseLaneSection = extractMarkdownSection(prBody, 'Release lane');
+  let checkedLaneCount = 0;
+
   if (!releaseLaneSection) {
     failures.push('PR body is missing the “Release lane” section.');
   } else {
-    const checkedLaneCount = countCheckedLabels(releaseLaneSection, RELEASE_LANE_LABELS);
+    checkedLaneCount = countCheckedLabels(releaseLaneSection, RELEASE_LANE_LABELS);
     if (checkedLaneCount === 0) {
       failures.push('Release lane section exists, but no lane is checked.');
     } else if (checkedLaneCount > 1) {
       failures.push('Release lane section must have exactly one checked lane.');
     }
   }
+
+  const laneBChecked = isCheckedLabel(
+    releaseLaneSection,
+    'Lane B — topology / auth / security-sensitive change',
+  );
+  const laneCChecked = isCheckedLabel(releaseLaneSection, 'Lane C — migration-bearing change');
+  const laneDChecked = isCheckedLabel(releaseLaneSection, 'Lane D — hotfix');
 
   const rollbackSection = extractMarkdownSection(prBody, 'Rollback expectation');
   if (!rollbackSection || isBlank(rollbackSection)) {
@@ -704,10 +717,44 @@ function checkReleaseManagement(context) {
   const changelogSection = extractMarkdownSection(prBody, 'Changelog impact');
   if (!changelogSection || isBlank(changelogSection)) {
     failures.push('PR body is missing a filled “Changelog impact” section.');
+  } else {
+    const checkedChangelogCount = countCheckedLabels(changelogSection, CHANGELOG_IMPACT_LABELS);
+
+    if (checkedChangelogCount === 0) {
+      failures.push('Changelog impact section exists, but no changelog disposition is checked.');
+    } else if (checkedChangelogCount > 1) {
+      failures.push('Changelog impact section must have exactly one checked disposition.');
+    }
+
+    const changelogUpdatedChecked = isCheckedLabel(
+      changelogSection,
+      'CHANGELOG.md updated in this PR',
+    );
+    const noChangelogChecked = isCheckedLabel(changelogSection, 'No changelog entry required');
+
+    if (changelogUpdatedChecked && !changelogTouched) {
+      failures.push(
+        `Changelog impact claims "${CHANGELOG_FILE} updated in this PR", but ${CHANGELOG_FILE} was not changed in this PR.`,
+      );
+    }
+
+    if (noChangelogChecked) {
+      const narrative = extractNarrativeText(changelogSection);
+      if (!narrative) {
+        failures.push(
+          'Changelog impact is marked “No changelog entry required”, but no explanation was provided.',
+        );
+      }
+
+      if ((laneBChecked || laneCChecked || laneDChecked) && !narrative) {
+        failures.push(
+          'Lane B, Lane C, and Lane D changes require an explicit reviewer-visible reason when no changelog entry is required.',
+        );
+      }
+    }
   }
 
   const migrationSection = extractMarkdownSection(prBody, 'Migration safety');
-  const laneCChecked = isCheckedLabel(releaseLaneSection, 'Lane C — migration-bearing change');
 
   if (migrationChanged && !laneCChecked) {
     failures.push(
@@ -725,6 +772,23 @@ function checkReleaseManagement(context) {
     failures.push(
       'Release lane is marked as Lane C, but the “Migration safety” section is blank or marked not applicable.',
     );
+  }
+
+  const hotfixDetailsSection = extractMarkdownSection(prBody, 'Hotfix details');
+  if (laneDChecked) {
+    if (!hotfixDetailsSection || isBlankOrNotApplicable(hotfixDetailsSection)) {
+      failures.push(
+        'Release lane is marked as Lane D — hotfix, but the “Hotfix details” section is blank or marked not applicable.',
+      );
+    }
+  }
+
+  if (checkedLaneCount === 1 && !laneDChecked) {
+    if (hotfixDetailsSection && !isBlankOrNotApplicable(hotfixDetailsSection)) {
+      warnings.push(
+        'Hotfix details were provided even though the release lane is not marked as Lane D — hotfix.',
+      );
+    }
   }
 
   return { failures, warnings };
@@ -828,6 +892,7 @@ function writeSummary(context, failures, warnings) {
     `- Likely major-module / major-surface work: ${context.likelyMajorModule ? 'yes' : 'no'}`,
     `- Migration-bearing change detected: ${context.migrationChanged ? 'yes' : 'no'}`,
     `- Quality exception register changed: ${context.qualityExceptionsTouched ? 'yes' : 'no'}`,
+    `- Changelog changed: ${context.changelogTouched ? 'yes' : 'no'}`,
     `- Auth/invite message-audit trigger files changed: ${formatList(context.authMessageAuditTriggers)}`,
     '',
     `- Failures: ${failures.length}`,

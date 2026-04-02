@@ -3,12 +3,18 @@ name: Frontend
 on:
   push:
     paths:
+      - 'package.json'
+      - 'yarn.lock'
+      - '.yarnrc.yml'
       - 'frontend/**'
       - 'backend/**'
       - 'infra/**'
       - '.github/workflows/frontend.yml'
   pull_request:
     paths:
+      - 'package.json'
+      - 'yarn.lock'
+      - '.yarnrc.yml'
       - 'frontend/**'
       - 'backend/**'
       - 'infra/**'

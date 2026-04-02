@@ -4,21 +4,25 @@ on:
   pull_request:
     paths:
       - 'AGENTS.md'
+      - 'CHANGELOG.md'
       - 'code_review.md'
       - 'docs/**'
       - 'backend/**'
       - 'frontend/**'
       - 'scripts/**'
+      - '.github/CODEOWNERS'
       - '.github/pull_request_template.md'
       - '.github/workflows/repo-guard.yml'
   push:
     paths:
       - 'AGENTS.md'
+      - 'CHANGELOG.md'
       - 'code_review.md'
       - 'docs/**'
       - 'backend/**'
       - 'frontend/**'
       - 'scripts/**'
+      - '.github/CODEOWNERS'
       - '.github/pull_request_template.md'
       - '.github/workflows/repo-guard.yml'
   workflow_dispatch:
@@ -54,3 +58,5 @@ jobs:
           echo "- import-boundary violation"
           echo "- protected law/governance file changed without linked update context"
           echo "- missing or incorrectly completed Module Quality Gate section in the PR body"
+          echo "- changelog disposition does not match CHANGELOG.md changes"
+          echo "- hotfix or migration release-management fields are incomplete"

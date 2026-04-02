@@ -35,7 +35,7 @@ Examples:
 - `docs/security-model.md`
 - `docs/security/threat-model.md`
 - relevant API docs
-- relevant QA/runbook docs
+- relevant QA or runbook docs
 
 ## Required doc updates included in this PR
 
@@ -53,7 +53,7 @@ If this PR changes any protected law or governance file, explain:
 2. what downstream docs or guardrails were reviewed or updated
 3. whether the change affects repo law, review behavior, prompt law, or quality-gate behavior
 
-If this PR does not change protected law/governance files, say:
+If this PR does not change protected law or governance files, say:
 
 `Not applicable.`
 
@@ -145,7 +145,7 @@ Fill this section when the PR changes or materially pressures any of the followi
 - tenant-isolation rules
 - auth/session trust boundaries
 - security-foundation rules
-- repo law / engineering law
+- repo law or engineering law
 - other lasting architectural decisions already governed by ADRs or the decision log
 
 Choose exactly one:
@@ -241,7 +241,7 @@ Check exactly one lane from `docs/ops/release-engineering.md`.
 
 ## Migration safety
 
-If this PR includes a migration or schema/data-shape change, fill all applicable items.
+If this PR includes a migration or schema or data-shape change, fill all applicable items.
 If not applicable, say:
 
 `Not applicable.`
@@ -275,7 +275,7 @@ If none, say:
 
 ## Deployment / release notes
 
-State whether this PR has any deployment, migration, rollback, or release coordination needs.
+State whether this PR has any deployment, migration, rollback, release coordination, or operator-action needs.
 
 If none, say:
 
@@ -283,11 +283,32 @@ If none, say:
 
 ## Changelog impact
 
-State whether this PR should produce a changelog or release-note entry.
+Choose exactly one disposition and then add the explanation underneath it.
 
-If none, say:
+- [ ] `CHANGELOG.md updated in this PR`
+- [ ] `No changelog entry required`
 
-`None.`
+Required guidance:
+
+- If `CHANGELOG.md updated in this PR` is checked, summarize what the entry covers.
+- If `No changelog entry required` is checked, explain why.
+- If this PR is Lane B, Lane C, or Lane D and no changelog entry is required, the reason must be explicit and reviewer-visible.
+
+## Hotfix details
+
+Fill this section only if `Lane D — hotfix` is checked.
+
+If not applicable, say:
+
+`Not applicable.`
+
+Required when applicable:
+
+- one-line incident summary
+- blast-radius statement
+- exact fix scope
+- immediate post-deploy verification owner or owner-ready handoff
+- reason this could not wait for the normal change lane
 
 ---
 
@@ -299,10 +320,10 @@ Call out the two or three highest-value review areas for this PR.
 
 Examples:
 
-- auth/session behavior
+- auth or session behavior
 - tenant isolation
 - API contract changes
 - migration safety
-- SSR/browser boundary changes
-- docs/runtime drift
+- SSR or browser boundary changes
+- docs or runtime drift
 - module boundary fit

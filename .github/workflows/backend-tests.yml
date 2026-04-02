@@ -3,12 +3,18 @@ name: Backend Tests
 on:
   push:
     paths:
-      - 'backend/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.yarnrc.yml'
       - '.github/workflows/backend-tests.yml'
+      - 'backend/**'
   pull_request:
     paths:
-      - 'backend/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.yarnrc.yml'
       - '.github/workflows/backend-tests.yml'
+      - 'backend/**'
   workflow_dispatch:
 
 jobs:
