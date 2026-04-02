@@ -14,6 +14,21 @@ It is intentionally broader in long-term vision than what is implemented today, 
 
 ---
 
+## Start here
+
+If you are new to this repo, do not guess your reading order.
+
+Read these first:
+
+1. `docs/onboarding.md`
+2. `docs/current-foundation-status.md`
+3. `ARCHITECTURE.md`
+
+`docs/onboarding.md` is the canonical contributor entrypoint.
+It tells you what this repo really is, which docs are authoritative, what order to read them in, and how to start contributing without breaking repo law.
+
+---
+
 ## How to read this repo correctly
 
 There are two truths that must stay separate.
@@ -391,12 +406,30 @@ Use all three layers appropriately:
 
 ## Where to look next
 
+### Canonical orientation path
+
+- `docs/onboarding.md` — canonical contributor entrypoint
 - `docs/current-foundation-status.md` — current repo truth
+- `ARCHITECTURE.md` — longer-term architectural direction and boundary law
+- `docs/decision-log.md` — locked architectural and security decisions
+- `docs/security-model.md` — trust-boundary and security-model law
+
+### Area-specific law
+
+- `backend/docs/README.md` — backend doc hub
+- `backend/docs/engineering-rules.md` — backend engineering law
+- `backend/docs/module-skeleton.md` — backend implementation skeleton
+- `frontend/README.md` — frontend package overview
+- `frontend/src/shared/engineering-rules.md` — frontend engineering law
+- `frontend/docs/module-skeleton.md` — frontend implementation skeleton
+
+### Local execution and support docs
+
+- `docs/developer-guide.md` — local setup, reset, commands, and workflows
 - `infra/README.md` — local topology modes and infra details
-- `ARCHITECTURE.md` — longer-term architectural direction
-- `docs/decision-log.md` — locked architectural/security decisions
-- `docs/quality-bar.md` — quality and completion rules
 - `docs/ops/runbooks.md` — operator/runbook guidance
+- `AGENTS.md` — AI/review routing and repo working rules
+- `CONTRIBUTING.md` — contribution expectations and repo-coupling rules
 
 ---
 
@@ -404,6 +437,7 @@ Use all three layers appropriately:
 
 - Do not describe Stage 3 as a fully mature ops system. The repo currently has an operability baseline.
 - Do not describe Stage 4 as a fully mature security program. The repo currently has a security-system baseline.
+- Do not describe Stage 5 as a fully automated release platform. The repo currently has practical release-engineering closure, not full delivery-platform maturity.
 - Do not assume `yarn verify` performs build proof. It currently does not.
 - Do not assume `yarn dev` auto-seeds data. It currently does not.
 - Do not test tenant-aware browser behavior on plain `localhost:3000`.

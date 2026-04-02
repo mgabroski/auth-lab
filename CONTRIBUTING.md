@@ -1,319 +1,382 @@
-# CONTRIBUTING.md
+# Contributing to Hubins Auth-Lab
 
-This repository is strict on structure, scope clarity, and documentation truthfulness.
+This file explains how to contribute safely to this repository.
 
-Do not treat this as a generic "open a PR and figure it out later" codebase.
-The foundation is intentional, and future modules depend on that foundation staying clean.
+It is intentionally **not** the main onboarding document.
+If you are new to the repo, read `docs/onboarding.md` first.
+
+Use this file after onboarding when you are actively preparing, implementing, validating, and submitting changes.
 
 ---
 
-## 1. Read these documents before changing code
+## Before you start
 
-Read them in this order:
+Do not begin from assumptions.
 
-1. `README.md`
+Read in this order:
+
+1. `docs/onboarding.md`
 2. `docs/current-foundation-status.md`
 3. `ARCHITECTURE.md`
-4. `docs/decision-log.md`
-5. `docs/security-model.md`
-6. `backend/docs/README.md`
-7. `backend/docs/engineering-rules.md`
-8. `backend/docs/module-skeleton.md`
+4. the area-specific law docs for the code you are changing
 
-If you are working on frontend code, also read:
+Examples:
 
-9. `frontend/src/shared/engineering-rules.md`
-10. `frontend/docs/module-skeleton.md`
-11. `frontend/README.md`
+- backend work → `backend/docs/README.md`, `backend/docs/engineering-rules.md`, `backend/docs/module-skeleton.md`
+- frontend work → `frontend/README.md`, `frontend/src/shared/engineering-rules.md`, `frontend/docs/module-skeleton.md`
+- topology/auth/session/trust-boundary work → also read `docs/security-model.md`, `docs/decision-log.md`, and relevant ops docs
 
-If you are using an LLM to help implement a module, also read:
-
-For **backend-only** modules:
-
-12. `backend/docs/prompts/module-generation.md`
-13. `backend/docs/prompts/implement.md`
-14. `backend/docs/prompts/review.md`
-
-For **full-stack** modules (backend + frontend + docs):
-
-12. `docs/prompts/module-generation-fullstack.md`
-13. `backend/docs/prompts/implement.md`
-14. `backend/docs/prompts/review.md`
-
-When **refactoring** existing backend code:
-
-- `backend/docs/prompts/refactor.md`
-
-Do not skip `docs/current-foundation-status.md`.
-That file exists specifically to prevent contributors from confusing broader platform direction with shipped implementation.
+This repository expects contributors to work from the governing docs first, not from memory and not from partial local context.
 
 ---
 
-## 2. The rules that are never optional
+## What this repo expects from every change
 
-### 2.1 Do not overclaim readiness
+Every meaningful change must satisfy five things:
 
-If something is:
-
-- planned
-- partially wired
-- documented as next work
-- or represented only by a brief/spec
-
-do not document or describe it as fully implemented.
-
-### 2.2 Preserve the topology law
-
-This repo is built around a load-bearing topology:
-
-- browser → same-origin public host
-- proxy → frontend/backend
-- SSR → direct backend via `INTERNAL_API_URL`
-- tenant identity → host/subdomain
-- sessions → server-side cookies + Redis
-
-Do not introduce changes that bypass that model casually.
-
-### 2.3 Tenant identity never comes from payload
-
-Tenant must not come from:
-
-- request body
-- query parameter
-- frontend local storage
-- ad hoc client headers
-
-Tenant identity is routing-derived.
-
-### 2.4 Keep layer responsibilities clean
-
-At a minimum, preserve this shape:
-
-- route registration → wiring only
-- controller → HTTP parsing / response mapping
-- service → narrow module facade
-- flow / use case → business orchestration / transactions
-- DAL / queries → persistence logic
-
-Do not hide business orchestration inside route files or controllers.
-
-### 2.5 Keep docs aligned with code
-
-If you change:
-
-- architecture shape
-- topology assumptions
-- public contracts
-- module boundaries
-- engineering rules
-
-you must update the relevant docs in the same change.
-
-### 2.6 Small, explicit, reversible changes
-
-Prefer changes that are:
-
-- narrow in scope
-- easy to review
-- easy to revert
-- easy to verify against docs and tests
-
----
-
-## 3. What this repo is today
-
-Before contributing, understand the current phase:
-
-- this repo already implements the topology and FE/BE communication foundation
-- this repo already implements the backend Auth + User Provisioning surface
-- this repo already implements the frontend Auth + User Provisioning route/UI surface for the current module scope
-- the broader Hubins product is still future work beyond the current auth/provisioning slice
+1. it respects repo law
+2. it updates truth-coupled docs in the same change
+3. it includes proof appropriate to its risk
+4. it does not silently expand scope
+5. it is honest about what was actually verified
 
 That means:
 
-- topology, session, tenant, and request-context assumptions are already real
-- the auth/provisioning UI is real and must be treated as shipped scope
-- broader product expansion and later confidence hardening are still next-step work
-
-Contribute accordingly.
+- no undocumented architecture drift
+- no API behavior change without contract updates
+- no auth/session/topology changes without higher scrutiny
+- no claiming runtime proof when only static review was done
+- no duplicate documentation when an existing authoritative doc already owns the truth
 
 ---
 
-## 4. Before opening a PR
+## Core contribution rules
 
-Run the checks that actually exist today.
+### 1. Do not fight the architecture
 
-### Root
+This repo has locked architectural laws.
+Do not work around them locally.
+
+Examples of non-negotiable direction:
+
+- browser traffic stays same-origin through `/api/*`
+- SSR and browser fetch paths are different and must stay different
+- tenant identity is host-derived
+- backend session and membership truth are authoritative
+- tenant/session mismatch must fail closed
+- topology, auth bootstrap, and trust-boundary behavior are not casual refactor surfaces
+
+If your change appears to require breaking one of these, stop and route the work through the decision path instead of forcing the code.
+
+### 2. Do not create silent documentation drift
+
+If you change behavior that is already documented in an authoritative file, update that file in the same PR.
+
+Common coupling examples:
+
+- new or changed endpoint → relevant `backend/docs/api/*.md`
+- auth/bootstrap/trust-boundary/security behavior change → `docs/security-model.md`, `docs/decision-log.md`, and possibly backend ADRs
+- new or changed shipped capability → `docs/current-foundation-status.md`
+- release/migration/incident expectations change → `docs/ops/release-engineering.md` or other relevant ops docs
+- onboarding or reading-order change → `docs/onboarding.md`, `README.md`, or this file if applicable
+
+### 3. Do not add duplicate docs
+
+Before creating a document, ask:
+
+- does an existing authoritative doc already own this truth?
+- can the current doc be tightened instead of adding a new file?
+- is this stable repo law, growing contract/runbook content, or optional local explanation?
+
+Prefer strengthening the canonical doc over adding a parallel one.
+
+### 4. Do not expand scope invisibly
+
+A small fix must stay a small fix.
+A focused PR should not quietly reorganize unrelated systems, docs, or architecture.
+
+If a larger change is genuinely needed, state that explicitly and prove why.
+
+### 5. Do not fake proof
+
+Say what you ran.
+Say what you did not run.
+Do not collapse “reviewed,” “unit-tested,” and “real-stack verified” into one claim.
+
+---
+
+## Risk-based contribution expectations
+
+Not every change needs the same level of proof.
+But every change needs an honest level of proof.
+
+### Low-risk changes
+
+Examples:
+
+- wording-only docs fixes
+- narrow UI text corrections
+- internal cleanup with no behavior change
+
+Expected:
+
+- relevant lint/format/type checks as needed
+- doc truth maintained
+- no false claims about runtime proof
+
+### Medium-risk changes
+
+Examples:
+
+- normal backend or frontend behavior changes
+- non-sensitive API additions or updates
+- module logic changes within already-established boundaries
+
+Expected:
+
+- targeted tests for changed behavior
+- contract/doc updates where applicable
+- honest summary of what paths were verified
+
+### High-risk changes
+
+Examples:
+
+- auth, session, cookies, SSO, MFA
+- request context or tenant resolution
+- proxy/topology behavior
+- SSR bootstrap behavior
+- trust boundaries, secrets, security-sensitive flows
+- migrations or rollback-sensitive data-shape changes
+
+Expected:
+
+- stronger proof than unit tests alone
+- relevant integration/E2E/topology proof where appropriate
+- explicit doc coupling updates
+- decision-log / ADR review when the change is architectural or cross-cutting
+
+---
+
+## Required doc/code coupling
+
+Use this as the default rule.
+
+| If you change...                               | update in the same PR...                                |
+| ---------------------------------------------- | ------------------------------------------------------- |
+| backend HTTP contract                          | relevant `backend/docs/api/*.md`                        |
+| architecture or cross-cutting design direction | `docs/decision-log.md` and/or backend ADRs              |
+| security or trust-boundary behavior            | `docs/security-model.md` and related ADRs/docs          |
+| shipped capability or foundation status        | `docs/current-foundation-status.md`                     |
+| onboarding path or contributor reading order   | `docs/onboarding.md`, `README.md`, or `CONTRIBUTING.md` |
+| runbook-worthy operational behavior            | relevant file under `docs/ops/`                         |
+| major module delivery expectations             | PR Module Quality Gate and any linked repo-law docs     |
+
+If you are unsure whether a doc update is needed, assume coupling exists until proven otherwise.
+
+---
+
+## How to approach a change safely
+
+### 1. Classify the work
+
+Decide whether the work is:
+
+- backend
+- frontend
+- topology / infra
+- security / trust-boundary
+- release / ops
+- documentation / governance
+
+Then load only the governing docs for that area.
+
+### 2. Identify impacted truth before editing code
+
+Before implementation, identify:
+
+- which contracts may change
+- which docs may need updates
+- which tests or proof paths are required
+- whether the change is architectural or routine
+
+### 3. Make the smallest truthful change
+
+Keep the change narrow.
+Prefer explicitness over cleverness.
+Preserve existing laws unless the change is intentionally routed as an architectural decision.
+
+### 4. Validate at the right level
+
+Use the lightest proof that is still honest for the risk involved.
+Do not stop at unit tests for topology- or auth-sensitive work.
+
+### 5. Write the PR so reviewers can reason about it quickly
+
+A good PR makes it obvious:
+
+- what changed
+- why it changed
+- which docs moved with it
+- what proof was run
+- what remains intentionally unverified
+
+---
+
+## Local validation workflow
+
+Use the repo commands intentionally.
+
+### Normal iteration
 
 ```bash
-yarn lint
-yarn fmt:check
-yarn typecheck
-yarn test
+yarn dev
 ```
 
-### Backend
+### Standard verification
 
 ```bash
-cd backend
-yarn typecheck
-yarn test
+yarn verify
 ```
 
-### Frontend
-
-```bash
-cd frontend
-yarn lint
-yarn typecheck
-yarn test:unit
-```
-
-Important:
-
-- root `yarn typecheck` covers backend + frontend
-- root `yarn test` runs both backend and frontend unit/E2E test suites
-- frontend E2E (`yarn test:e2e`) runs Playwright against a local Next.js dev server — it requires the dev server to start, so allow extra time
-- do not pretend broader gates exist if they do not
-
-If your change touches topology, also validate the full stack:
+### Topology-sensitive verification
 
 ```bash
 yarn stack
 yarn stack:test
 ```
 
----
+### Useful supporting commands
 
-## 5. When full-stack topology validation is required
+```bash
+yarn test
+yarn build:frontend
+yarn status
+yarn reset-db
+yarn stop
+```
 
-Run the full stack and proxy conformance tests before merge if you changed:
+Important:
 
-- `infra/`
-- proxy config
-- request context logic
-- session middleware
-- cookie behavior
-- SSO callback assumptions
-- anything relying on forwarded headers or host preservation
+- `yarn verify` does **not** currently prove a frontend production build
+- `yarn dev` does **not** automatically seed all test data paths
+- topology-sensitive work should not rely only on host-run assumptions
 
-Host-run mode is not enough for those changes.
-
----
-
-## 6. Adding or changing backend behavior
-
-Use the existing repo shape as defined in `backend/docs/module-skeleton.md`.
-
-Typical path:
-
-1. route registration
-2. controller handler
-3. service facade
-4. flow / use case
-5. repo / query / policy additions
-6. tests
-7. doc updates if the behavior changes a contract or rule
-
-Do not collapse those concerns into one file just because the change looks "small."
+Use `docs/developer-guide.md` for setup, reset, and command details.
 
 ---
 
-## 7. Adding or changing frontend behavior
+## Pull request expectations
 
-Frontend changes must follow `frontend/docs/module-skeleton.md` and preserve these rules:
+Every PR should make review easier, not harder.
 
-- browser calls backend through relative same-origin `/api/*`
-- SSR/server components call backend directly through `INTERNAL_API_URL` with forwarded headers
-- no direct browser hardcoding of backend origin
-- no client-side tenant selection logic
-- access gating happens in server pages via `loadAuthBootstrap()`, not in client components
-- auth bootstrap is built around backend truth (`/auth/me`, `/auth/config`), not UI guesses
+### Your PR description should clearly state:
 
-Both `frontend/src/shared/engineering-rules.md` and `frontend/docs/module-skeleton.md` are required reading for frontend work.
+- the exact problem being addressed
+- the intended scope boundary
+- the affected architectural area
+- which authoritative docs were updated
+- what proof was run
+- any follow-up explicitly left out of this change
 
----
+### For major modules or substantial expansion
 
-## 8. When docs must be updated
+Use the Module Quality Gate in the PR template.
+That checklist is not optional ceremony.
+It is the executable surface of the repo quality bar.
 
-Update docs when you change:
+### For architectural or cross-cutting changes
 
-| What changed                                                    | Update these docs                          |
-| --------------------------------------------------------------- | ------------------------------------------ |
-| Current delivered scope                                         | `docs/current-foundation-status.md`        |
-| Broader architecture direction or locked topology law           | `ARCHITECTURE.md`                          |
-| Non-obvious technical decisions                                 | `docs/decision-log.md`                     |
-| Security model, crypto primitives, rate limits, isolation rules | `docs/security-model.md`                   |
-| Backend implementation rules                                    | `backend/docs/engineering-rules.md`        |
-| Canonical backend module structure                              | `backend/docs/module-skeleton.md`          |
-| Frontend implementation rules                                   | `frontend/src/shared/engineering-rules.md` |
-| Canonical frontend module structure                             | `frontend/docs/module-skeleton.md`         |
-| Repo entrypoint / commands / current state framing              | `README.md`                                |
-| New or changed backend API endpoint                             | `backend/docs/api/<domain>.md`             |
-| New operational failure mode                                    | `docs/ops/runbooks.md`                     |
-
-If the code changed and the docs stayed silent, assume the change is incomplete until proven otherwise.
+Expect stronger review.
+If the change alters long-lived behavior or repo law, route it through the decision path instead of hiding it in implementation detail.
 
 ---
 
-## 9. Using LLMs on this repo
+## Decision path
 
-LLM-assisted implementation is allowed and expected, but only under repo law.
+Use `docs/decision-log.md` when the decision is:
+
+- architectural
+- cross-cutting
+- non-obvious
+- likely to matter again later
+
+Use backend ADRs when the decision is backend-architectural and does not belong in the repo-wide decision log.
+
+Do **not** add decision-log entries for:
+
+- routine bug fixes
+- small refactors
+- local naming changes
+- behavior already fully governed by existing law
+
+If the architecture changes, the code, docs, and decision trail must move together.
+
+---
+
+## Documentation discipline
+
+This repo already has a substantial documentation system.
+That is a strength only if it stays disciplined.
+
+When writing or updating docs:
+
+- prefer one canonical explanation over repeated summaries
+- keep support docs below source-of-truth docs
+- do not turn prompts or chat-oriented material into primary architecture law
+- do not create “overview” documents that compete with existing onboarding or architecture docs
+- remove or simplify overlap when possible instead of layering on more prose
+
+If a support document conflicts with a higher-authority doc, the support document must be corrected.
+
+---
+
+## AI-assisted contribution rule
+
+AI assistance is allowed in this repo, but it must follow repo law.
 
 That means:
 
-- do not let the model invent architecture that contradicts the repo
-- do not let the model add files that break the documented structure casually
-- do not let the model overclaim what is implemented
-- always anchor the session in the current repo + relevant docs
-- review generated code against architecture and rule docs, not only against "it compiles"
+- prompts do not outrank architecture docs
+- generated code must still satisfy module skeleton and engineering rules
+- generated reviews must still be evidence-based
+- LLM output does not count as proof by itself
+- contributors remain responsible for correctness, scope control, and doc/code coupling
 
-### Which prompt to load
+Start AI-assisted work from:
 
-| Work type                              | Primary prompt                                |
-| -------------------------------------- | --------------------------------------------- |
-| Backend-only new module                | `backend/docs/prompts/module-generation.md`   |
-| Full-stack new module (BE + FE + docs) | `docs/prompts/module-generation-fullstack.md` |
-| Backend implementation session         | `backend/docs/prompts/implement.md`           |
-| Backend refactor session               | `backend/docs/prompts/refactor.md`            |
-| Backend review session                 | `backend/docs/prompts/review.md`              |
+- `AGENTS.md`
+- `docs/prompts/usage-guide.md`
+- `docs/prompts/catalog.md`
 
-Always also load `docs/security-model.md` for any module touching access control, tenant isolation, or sensitive data.
+But only after reading the actual repo law docs.
 
 ---
 
-## 10. What a good PR looks like
+## What reviewers should be able to trust
 
-A good PR in this repo is:
+A good contribution leaves reviewers able to trust that:
 
-- **truthful** — no fake readiness claims
-- **scoped** — does one logical thing
-- **aligned** — respects topology and layer rules
-- **tested** — against the real checks that exist
-- **documented** — if it changes behavior, contract, or architecture
-- **reviewable** — another engineer can understand the change without reverse-engineering intent
+- the change stayed within scope
+- the docs reflect the code truth
+- the proof level matches the risk
+- no hidden architecture drift was introduced
+- the PR description is honest
 
-A passing test suite does not automatically mean the change is architecturally correct.
-
----
-
-## 11. Do not use this repo as precedent for shortcuts
-
-If you find:
-
-- a temporary smoke-test page
-- a phase-specific simplification
-- an intentionally incomplete frontend surface
-
-do not use it as justification to introduce additional shortcuts.
-
-This repo is in a controlled foundation phase.
-Temporary structure must not become permanent entropy.
+That is the standard.
 
 ---
 
-## 12. Default contribution mindset
+## When this file must be updated
 
-Contribute as if the next module depends on this foundation remaining stable.
+Update `CONTRIBUTING.md` when contribution behavior changes materially, including:
 
-Because it does.
+- PR expectations
+- required proof expectations
+- doc/code coupling rules
+- decision-routing expectations
+- repo-level contribution workflow
+
+Do **not** update this file for ordinary feature growth unless contribution expectations themselves changed.
+
+If contributor behavior changes and this file is left stale, that is a real repo-governance defect.
