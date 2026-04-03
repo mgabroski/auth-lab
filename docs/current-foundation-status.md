@@ -1,620 +1,278 @@
-# Hubins Auth-Lab — Current Foundation Status
-
-**Status:** Active repo truth snapshot  
-**Scope:** Current implemented foundation only  
-**Audience:** Engineers, reviewers, future implementation sessions  
-**Last Updated:** 2026-04-02
-
----
+# Current Foundation Status
 
 ## Purpose
 
-This document is the repo's practical truth snapshot.
+This file is the current shipped-truth snapshot for the repository.
 
-It exists to keep these things aligned:
+Use it to answer:
 
-- what the repository actually implements now
-- what the active documentation claims
-- what future implementation sessions assume
-- what is intentionally deferred to later hardening stages
-- what is baseline-only versus what is fully closed
-- what is enforceable in-repo versus what still depends on external GitHub settings or human review behavior
+- what is actually implemented now
+- what is validated enough to rely on
+- what exists only as broader architecture direction
+- what is intentionally deferred
+- which off-repo specs are currently active for future module work
 
-This file is not a roadmap and not a wish list.  
-It is the current-state truth for the repository as it exists now.
+This file is not a roadmap.
+It is not a changelog.
+It is not a replacement for `ARCHITECTURE.md`, `docs/security-model.md`, backend/frontend engineering law, API docs, or module master specs.
 
----
-
-## 1. High-level status
-
-The repository is no longer only a topology or auth-foundation sandbox.  
-It now contains a real Auth + User Provisioning slice with real browser surfaces, real backend behavior, real test proof, and meaningful hardening work.
-
-At the time of this snapshot, the repo status is:
-
-- **Before Stage 1 quality-bar work:** completed
-- **Stage 1A minimum enforcement:** completed
-- **Stage 1B deeper enforcement:** completed in-repo
-- **Stage 2 architecture-invariant proof:** completed and strong
-- **Stage 3 operability baseline:** completed as a baseline, not yet a fully mature ops system
-- **Stage 4 security-system baseline:** completed as a baseline, not yet a fully mature security program
-- **Cross-Cutting Track A:** completed to the strongest honest repo-native enforcement depth
-- **Stage 5 release-engineering practical closure:** completed to the strongest honest repo-visible depth, with explicit remaining dependence on external GitHub branch-protection and review settings
-
-That means the repository now has:
-
-- real topology invariants and topology proof
-- real auth/provisioning flows
-- real observability/operability baseline
-- explicit threat-model and security ADR foundation
-- runnable security scanning in CI
-- explicit abuse-regression proof for the highest-risk callback boundary
-- a real governance layer for PRs and repo law
-- a stronger Stage 1B enforcement layer for drift, exceptions, ADR linkage, and high-risk review surfaces
-- a real Track A enforcement surface for major-module quality expectations, signoff evidence, and visible deferred-quality handling
-- a real release-engineering contract for lanes, migration safety, rollback expectations, post-change verification, hotfix handling, changelog disposition, and ownership/review-flow truth
-- widened repo-visible enforcement so standalone `CHANGELOG.md` and `.github/CODEOWNERS` changes do not bypass repo guard
-- widened backend/frontend CI trigger coverage for root dependency-surface changes such as root `package.json`, `yarn.lock`, and repo Yarn config
-
-It does **not** mean:
-
-- Stage 3 has full dashboard, alert, or SLO maturity
-- Stage 4 has fully closed every deeper security concern
-- Stage 5 can fully enforce GitHub branch protection or required-review behavior from repository files alone
-- GitHub required-review merge blocking can be fully enforced from repository files alone
-
-This distinction is intentional.  
-The repo is strong because the current state is real, and because the remaining limits are named instead of hidden.
+If a broader architecture doc describes something beyond the current shipped slice, this file wins for present-state questions.
 
 ---
 
-## 2. What is implemented now
+## Current Repo Position
 
-### 2.1 Repository and infrastructure foundation
+The repository currently proves and protects a foundation-first Hubins slice:
 
-The following are real and load-bearing:
+1. multi-tenant reverse-proxy topology
+2. browser and SSR request contracts
+3. host-derived tenant identity
+4. session and cookie behavior
+5. Auth + User Provisioning as the first real module
 
-- monorepo/workspace structure
-- backend application
-- frontend application
-- proxy/container topology for full-stack local testing
-- Postgres and Redis infrastructure
-- Mailpit local email capture for non-production email proof
-- same-origin browser API model under `/api/*`
-- SSR direct-to-backend model with forwarded headers
-- CI workflows covering repo guard, backend tests, frontend tests, proxy conformance, and security scans
+This repo is not yet the full Hubins platform.
+It contains broader design direction for future modules, but only a smaller subset is implemented and operationally meaningful today.
 
-### 2.2 Locked topology and request model
+---
 
-The topology decisions remain unchanged and are now continuously provable:
+## Shipped And Load-Bearing Now
 
-- one public origin from the browser's perspective
-- browser calls use same-origin `/api/*`
-- SSR/server-side frontend calls use internal backend URL plus explicit forwarded headers
-- tenant identity is derived from request host
-- backend owns session/auth truth
-- session cookies remain backend-owned and host-scoped
-- SSO state handling remains separate from session-cookie handling
+### 1. Topology and request model
 
-### 2.3 Backend auth/provisioning implementation
+The following are part of current repo truth:
 
-The backend currently implements:
+- single public browser origin through the reverse proxy
+- browser requests use relative `/api/*` paths
+- SSR requests use the internal backend path with forwarded host, cookie, and forwarded-header context
+- host-derived tenant resolution is load-bearing
+- same-origin cookie behavior is load-bearing
+- proxy conformance is part of the foundation, not a nice-to-have
 
+For details, see:
+
+- `ARCHITECTURE.md`
+- `docs/security-model.md`
+- relevant ops docs when topology proof or recovery is the task
+
+### 2. Security and trust boundaries
+
+The following are part of current repo truth:
+
+- tenant isolation is fail-closed
+- session and cookie behavior are backend-owned and security-sensitive
+- browser and SSR auth flows are intentionally different where topology requires it
+- SSO start and callback behavior are trust-boundary-sensitive
+- auth/session/tenant logic is not a frontend-owned concern
+
+### 3. Auth + User Provisioning
+
+The first shipped module is Auth + User Provisioning.
+
+This includes current repo-level support for:
+
+- register
 - login
 - logout
-- current-user/session bootstrap
-- invite creation and acceptance
-- verify-email / resend verification
-- forgot-password / reset-password
-- MFA setup / verify / recovery
-- Google SSO start/callback surfaces
-- Microsoft SSO start/callback surfaces
-- outbox-backed email sending for auth flows
-- startup guards for dangerous production-like misconfiguration
-- local dev seed and operator bootstrap support for auth onboarding proof
+- `/auth/me`
+- `/auth/config`
+- forgot password
+- reset password
+- public signup
+- email verification
+- resend verification
+- MFA setup
+- MFA verify
+- MFA recovery codes
+- Google SSO
+- Microsoft SSO
+- invite issuance
+- invite acceptance
+- invite resend / invalidation behavior
+- admin invite management
+- audit viewing
+- outbox-backed email delivery support
 
-### 2.4 Frontend auth/provisioning implementation
+The backend API contract for this shipped slice is documented under:
 
-The frontend currently contains the real user-facing surface for the implemented module scope, including:
+- `backend/docs/api/auth.md`
+- `backend/docs/api/invites.md`
+- `backend/docs/api/admin.md`
 
-- public auth routes
-- invite acceptance and invite-driven registration
-- verify-email flow
-- reset-password flow
-- MFA setup / verify / recovery surfaces
-- role-aware authenticated landing behavior
-- admin invite-management surface
-- workspace setup banner and `/admin/settings` acknowledgement surface
+### 4. Frontend shipped surface
 
-### 2.5 Current local proof contract
+The frontend currently contains shipped support for:
 
-The repository supports a repeatable local proof contract:
+- public auth pages
+- signup and verification flows
+- forgot/reset-password flows
+- MFA setup and verify flows
+- SSO completion flow
+- member landing
+- admin landing
+- invite acceptance and registration continuation
+- admin invite management
+- browser API client behavior through `/api/*`
+- SSR API client behavior for server-side bootstrap
 
-- Mailpit receives auth emails locally
-- canonical local hosts represent different tenant policies
-- canonical seed/bootstrap flows support invite onboarding proof
-- local browser proof can validate signup, verification, reset-password, MFA, invite lifecycle behavior, and proxy/topology behavior
+### 5. Foundation discipline that is already real
 
-This is stronger than a code-only module.  
-It is still local-first proof, not full delivery-platform maturity.
+The repo already treats these as active engineering truth:
 
----
+- backend and frontend engineering law
+- review discipline
+- quality-bar and readiness discipline
+- security and threat-boundary documentation
+- runbook and release-engineering documentation
+- proxy/topology-sensitive proof expectations
 
-## 3. What is already locked and operating as law
-
-The following remain repo law for the current foundation:
-
-- host-derived tenant identity
-- same-origin browser contract
-- backend-authoritative session truth
-- SSR forwarded-header contract
-- separate session cookie vs SSO-state cookie contract
-- token hashing at rest for invite/verification/reset tokens
-- encrypted TOTP secrets at rest
-- hashed MFA recovery codes
-- encrypted outbox payload fields for auth-delivered email material
-- startup guards that fail closed for unsafe production-like config
-- repo-visible quality-bar authority
-- repo-visible quality-exception authority
-- explicit ADR / architecture-law linkage expectations for sensitive boundary changes
-
-These are not optional implementation preferences.  
-They are architecture, governance, and security invariants.
+These are part of current working discipline, not future intent only.
 
 ---
 
-## 4. What Before Stage 1 established
+## Partially Implemented Or Transitional Now
 
-Before Stage 1 work is real in this repository.  
-The repo has a visible quality bar and an explicit owner role for the governance surface.
+These exist in the repo or current workflow, but should be described carefully.
+They are not absent, but they are not yet the same thing as a fully closed next module.
 
-That foundation includes:
+### 1. Workspace setup banner and `/admin/settings`
 
-- a repo-visible quality bar
-- stage and module completion definitions
-- mandatory gates versus deferrable quality targets
-- deprecation and removal expectations
-- pressure-policy expectations
-- named ownership for protected governance surfaces
-- a single authoritative repo-visible location for deferred quality targets, refused signoff records, and explicit time-bounded quality exceptions
+Current truth:
 
-Operational meaning:  
-The repo no longer depends only on memory or verbal standards to define what “done” means.
+- the auth/provisioning slice depends on a workspace setup concept
+- `/admin` and `/admin/settings` behavior matters for admin continuation and setup guidance
+- the final Settings state model is not yet the active shipped module state model
+- current scaffolding or placeholder behavior must not be mistaken for the final Settings implementation
 
-Limit:  
-This does **not** mean every downstream enforcement mechanism can be expressed purely through prose.  
-That is why Stage 1A and Stage 1B exist.
+Use the auth docs and current repo code for what exists now.
+Do not describe the Settings module as implemented.
 
----
+### 2. QA and readiness closure depth
 
-## 5. What Stage 1A established
+The repo has strong QA, audit, ops, and readiness material.
+But some readiness/proof surfaces still represent closure work for the Auth + User Provisioning module rather than completed future-module expansion.
 
-Stage 1A created the minimum executable governance baseline.
+### 3. Prompt and documentation cleanup state
 
-That includes:
+The repo contains documentation and prompt infrastructure that is already useful, but the documentation system is still being tightened to reduce duplication, drift risk, and continuation-chat waste.
 
-- repo guard workflow
-- PR template with Module Quality Gate structure
-- prompt-catalog coupling checks
-- route-to-API-doc coupling checks for protected surfaces
-- import-boundary checks
-- protected-law file checks
-- same-origin discipline checks for the frontend proxy surface
+That means:
 
-Operational meaning:  
-Common drift paths are now blocked automatically instead of being left to reviewer memory.
-
-Limit:  
-Stage 1A is the minimum viable enforcement layer.  
-It is real and load-bearing, but it is not the same thing as Stage 1B depth.
+- active docs exist now
+- some router and support docs may still be in cleanup motion
+- do not assume every secondary doc is canonical just because it exists
 
 ---
 
-## 6. What Stage 1B now establishes
+## Explicitly Deferred Or Not Yet Shipped
 
-Stage 1B is now treated as completed **in-repo**.
+Do not describe the following as current shipped product surfaces unless a higher-truth module spec explicitly says otherwise.
 
-The repository now has a deeper enforcement layer for:
+### Deferred from Auth + User Provisioning closure
 
-- stronger doc/code truth-coupling on critical route and contract surfaces
-- stronger ADR / architecture-law linkage expectations for sensitive changes
-- stronger review-surface protection for high-risk files and directories
-- selective error-message audit coupling for user-visible auth/invite message surfaces
-- CI-visible drift, exception, and waiver reporting
-- stronger major-module applicability enforcement through repo guard
-- stronger PR evidence expectations for signoff, documentation, release notes, and exception handling
+These are not part of the current shipped auth closure target:
 
-Operational meaning:  
-Repo law is now broadly executable.  
-Important drift is harder to hide, exceptions are harder to keep informal, and sensitive changes require more explicit reviewer-visible context.
+- admin-facing outbox UI
+- SCIM
+- SAML
+- HRIS import as a fully implemented user-facing module surface
+- groups / teams
+- device/session management UX
+- advanced MFA methods beyond TOTP + recovery codes
+- self-serve tenant/account creation
 
-Important limit:  
-This file does **not** claim that Stage 1B can force every external hosting-platform behavior from inside the repo.
+### Broader Hubins modules not yet implemented as shipped modules here
 
-In particular, the repository can define:
+These may exist as architecture direction, planning, or future module truth, but are not current shipped repo modules:
 
-- ownership metadata
-- PR structure
-- repo guard failure conditions
-- required update surfaces
-- exception visibility
-- stronger evidence rules
+- Account Settings as a completed implemented module
+- Documents
+  n- Benefits
+- Payments
+- Marketplace
+- Policies as a built tenant surface
+- full Shared Templates & Communications surface
+- broader workflow/runtime/product surfaces beyond the current foundation slice
 
-But it cannot, by repository files alone, guarantee:
-
-- GitHub branch-protection configuration
-- GitHub required-review merge blocking
-- actual reviewer diligence
-
-Correct reading:  
-**Stage 1B is completed in-repo.**  
-External review-enforcement depth still depends on platform settings and review practice outside the repository itself.
+If a future-module spec exists, treat it as future module truth, not as evidence that the module is already implemented.
 
 ---
 
-## 7. What Stage 2 established
+## Active Off-Repo Module Truth
 
-Stage 2 made the architecture invariants continuously provable.
+One important exception exists for future module work:
 
-That includes proof for:
+### Settings module
 
-- same-origin browser contract
-- SSR header forwarding
-- host-derived tenant resolution
-- tenant/session mismatch fail-closed behavior
-- cookie/session contract behavior
-- no browser path to a private backend origin
-- route-state and redirect truth behavior
-- proxy/topology conformance
+`Account-Settings-Master-Context-v6_8.docx` is currently the highest source of truth for the Settings module specifically.
 
-Operational meaning:  
-The repo now has executable proof for the assumptions that matter most for tenant isolation and auth correctness.
+Use it only when the task is about Settings.
+Do not let it override unrelated repo truth.
 
-Current strength:  
-Stage 2 is one of the strongest parts of the repository.  
-This is not baseline-only wording.  
-This stage is currently treated as completed and strong.
+Important:
 
----
+- it is module-specific, not repo-global
+- it contains locked decisions and active future-module design truth
+- it explicitly bans certain historical raw docs from continuation use
 
-## 8. What Stage 3 established
+That document means:
 
-Stage 3 added the current operability baseline.
-
-That includes:
-
-- structured logging
-- request correlation
-- metrics export
-- operability smoke checks
-- observability documentation
-- runbook and incident-triage material
-
-Operational meaning:  
-The repo can now answer the first serious operational questions under pressure instead of relying on developer intuition alone.
-
-Important limit:  
-This file does **not** claim that the repo already has a fully mature operations system.  
-The repository currently has an **operability baseline**, not full operational maturity.
-
-That means the repo does **not** yet claim, from this file alone:
-
-- fully wired dashboard infrastructure
-- fully wired alert routing or paging
-- a mature SLO operating loop inside the repo itself
-
-Correct reading:  
-**Stage 3 is completed as a baseline.**  
-It should not be described as a fully matured ops program.
+- Settings design truth is real
+- Settings implementation is not yet complete
+- Settings should not be described as a shipped implemented module today
 
 ---
 
-## 9. What Stage 4 established
+## Canonical Present-State Reading Rules
 
-Stage 4 did **not** redesign auth flows.  
-It established the security-system baseline around the current implementation.
+Use this order for current repo truth questions:
 
-### 9.1 Stage 4 baseline additions
+1. this file
+2. `ARCHITECTURE.md`
+3. `docs/security-model.md`
+4. area-specific engineering law and API docs
+5. code and tests
+6. task-gated support docs only when needed
 
-The repository now has real baseline work for:
-
-- an explicit platform threat model
-- security ADR coverage for the highest-risk SSO callback trust boundary
-- an explicit secrets-foundation ADR for future tenant-configured integrations
-- abuse-regression tests for SSO state tampering and related callback-boundary risks
-- stronger outbox key-rotation test proof
-- CI security scanning for:
-  - secret leakage
-  - dependency vulnerabilities
-  - container-image vulnerabilities
-
-- runbook/process coverage for:
-  - key rotation realities
-  - startup-guard failures
-  - adversarial pre-release security review expectations
-
-### 9.2 What Stage 4 means here
-
-Security in this repo is no longer only “careful code plus good intentions.”  
-The main trust boundaries are now named, documented, and attached to proof and process.
-
-### 9.3 Important Stage 4 limit
-
-This file does **not** claim that the repo already operates as a fully mature security program.  
-Stage 4 is currently closed as a **security-system baseline**, not as a complete security maturity endpoint.
-
-That means the repository does **not** yet claim, from this file alone:
-
-- full tenant secret-runtime implementation for secret-bearing integrations
-- non-disruptive multi-version rotation maturity for every auth crypto material
-- fully release-blocking vulnerability enforcement across all scan surfaces
-- complete security-program closure for all later product areas
-
-Correct reading:  
-**Stage 4 is completed as a baseline.**  
-It should not be described as the finished state of security engineering for the platform.
+If a question is specifically about a future complex module with its own higher-truth master spec, use that module spec only for that module.
 
 ---
 
-## 10. What remains intentionally deferred or limited after the Stage 4 baseline
+## What This File Intentionally Does Not Do
 
-The Stage 4 baseline does **not** mean every deeper security capability is already built.  
-The following remain intentionally deferred or limited:
+This file does not:
 
-### 10.1 Tenant integration secrets runtime implementation
+- retell the full architecture
+- restate security law in detail
+- duplicate backend or frontend engineering rules
+- duplicate API docs
+- act as a decision log
+- list every historical hardening step
+- act as a future roadmap for all modules
 
-The foundation decision is explicit, but the repo does **not** yet ship a full runtime secret-store implementation for tenant-configured secret-bearing integrations.
-
-Consequence:  
-Secret-bearing tenant integrations remain blocked or deferred until that implementation exists.
-
-### 10.2 Server-side used-state ledger for SSO callbacks
-
-The current accepted SSO baseline uses:
-
-- encrypted short-lived state
-- exact cookie/query equality
-- host/provider coherence checks
-- return-path validation
-- immediate cookie clearing
-
-The repo does **not** currently add a server-side consumed-state ledger for SSO callback state.  
-That is a conscious baseline boundary decision, not an accidental omission.
-
-### 10.3 Non-disruptive multi-version rotation for all auth crypto materials
-
-Outbox encryption currently has the clearest multi-version rotation support.  
-Other auth crypto materials are still more operationally disruptive to rotate.
-
-Consequence:
-
-- rotating the SSO state key is operationally acceptable but invalidates in-flight starts
-- rotating MFA encryption or HMAC material requires more deliberate maintenance handling and may require re-enrollment or reset strategies
-
-### 10.4 Security scan enforcement depth
-
-Security scanning is real and valuable.  
-However, this file does **not** overclaim every scan surface as fully release-blocking policy.  
-Any stronger blocking posture must be stated explicitly in release/process docs when adopted.
+If those details are needed, route to the correct authority doc.
 
 ---
 
-## 11. What Track A means in the repo right now
+## Final Snapshot
 
-Cross-Cutting Track A is now treated as completed to the **strongest honest repo-native enforcement depth**.
+### True now
 
-### 11.1 What is real now
+- topology-first multi-tenant foundation is real
+- browser and SSR request models are real
+- host-derived tenant behavior is real
+- session/cookie/auth trust boundaries are real
+- Auth + User Provisioning is the first real shipped module
+- repo quality/review/security/release discipline is real
 
-The repo currently has:
+### Not true now
 
-- Track A defined in the quality bar
-- a Module Quality Gate section in the PR template
-- stronger repo-guard checks that require:
-  - applicability classification
-  - stronger evidence sections
-  - signoff-evidence visibility
-  - deferred-quality visibility
-  - refusal/escalation visibility
-  - stronger release/change-management structure
-- stronger major-module / major-surface detection heuristics
-- a named owner role for the protected governance surface
-- a repo-visible quality-exception register for:
-  - deferred quality targets
-  - refused Track A signoff records
-  - explicit time-bounded process exceptions
-  - closures
+- the full future Hubins product is implemented here
+- Settings is fully implemented
+- every documented future module is already shipped
+- every support doc is equally canonical
 
-### 11.2 What this means
+### Working rule
 
-New major-module work is no longer merely asked to “follow the standard.”  
-It is now required to present reviewer-visible evidence for the standard inside the normal repo workflow.
+When in doubt, describe the repo as:
 
-That means the repo now has meaningful enforcement for:
-
-- architecture fit
-- contract/doc updates
-- minimum test expectation visibility
-- security/failure-mode review visibility
-- observability/runbook review visibility
-- migration-safety visibility
-- owner signoff evidence
-- explicit deferred-quality tracking
-- explicit refusal/escalation recording
-
-### 11.3 Important Track A limit
-
-This file does **not** claim that the repository can fully replace external review controls.
-
-The repo can strongly enforce:
-
-- PR structure
-- exception visibility
-- evidence expectations
-- ownership metadata
-- stronger major-module applicability pressure
-
-The repo cannot, by itself, fully guarantee:
-
-- actual human signoff quality
-- GitHub required-review blocking behavior
-- branch-protection correctness outside repo files
-
-Correct reading:  
-**Track A is completed to the strongest honest repo-native depth.**  
-Final merge authority still depends in part on review behavior and GitHub settings outside the repository.
-
----
-
-## 12. What Stage 5 now establishes
-
-Stage 5 is no longer only a future item in this repository.  
-A real release-engineering contract and practical repo-visible closure now exist in-repo.
-
-### 12.1 What is real now
-
-The repo now contains:
-
-- a release-engineering contract document
-- explicit release lanes
-- explicit migration classes and migration-safety expectations
-- explicit rollback-expectation and post-change verification expectations in the PR contract
-- explicit hotfix details in the PR contract
-- explicit changelog disposition in the PR contract
-- changelog discipline tied to reviewer-visible PR declarations
-- expanded ownership metadata intent across major repo areas
-- repo-guard enforcement for the release/change-management PR structure
-- repo-guard enforcement for hotfix-specific PR content
-- repo-guard enforcement for changelog truth versus actual `CHANGELOG.md` file changes
-- widened repo-guard workflow trigger coverage so standalone changes to `CHANGELOG.md` and `.github/CODEOWNERS` do not bypass the guard
-- widened backend/frontend workflow trigger coverage so root dependency-surface changes trigger the relevant CI checks
-
-### 12.2 What this means
-
-Release discipline is no longer only implied through review culture.  
-The repository now has written and partially enforced expectations for:
-
-- how changes are classified
-- what must be written for migration-bearing work
-- how rollback should be described honestly
-- what post-change verification should exist
-- how hotfixes should stay disciplined
-- how changelog disposition must match the actual PR contents
-- how dependency-surface changes must still pass meaningful CI
-
-### 12.3 Important Stage 5 limit
-
-This file still does **not** claim that Stage 5 can fully enforce external GitHub or hosting-platform behavior from inside the repo.
-
-Practical closure still depends on these external controls being configured correctly:
-
-- GitHub branch protection
-- required status checks in GitHub
-- required review / CODEOWNERS review settings where the team expects them
-- stale-approval handling in GitHub
-- any manual staging or production promotion process outside the repo
-
-Correct reading:  
-**Stage 5 is practically closed to the strongest honest repo-visible depth.**  
-The remaining dependencies are explicit external controls, not hidden missing repo work.
-
----
-
-## 13. Practical evidence map
-
-This snapshot is supported by four classes of proof.
-
-### 13.1 Code and runtime proof
-
-- topology and proxy config
-- SSR API client and forwarding contract
-- session middleware tenant binding
-- auth module flows
-- startup guards
-- cookie/state handling
-- logging and metrics surfaces
-
-### 13.2 Test proof
-
-- backend unit, integration, and E2E auth coverage
-- frontend unit and E2E auth coverage
-- proxy conformance checks
-- tenant-isolation regressions
-- token lifecycle and replay/reuse regressions
-- SSO state validation and abuse regressions
-- outbox encryption rotation tests
-
-### 13.3 Documentation and process proof
-
-- architecture docs
-- security model
-- threat model
-- ADRs and decision log
-- runbooks
-- quality-bar and governance docs
-- quality-exception register
-- observability docs
-- release-engineering docs
-- PR/repo-guard governance surfaces
-
-### 13.4 Review and drift-control proof
-
-- CODEOWNERS coverage for high-risk surfaces
-- protected-law file review context requirements
-- route-to-doc coupling checks
-- architecture-law linkage expectations
-- selective auth/invite message-audit coupling
-- CI-visible summary output for drift, exceptions, and enforcement warnings
-- release-management PR enforcement for migration, rollback, hotfix, and changelog sections
-- repo-guard workflow coverage for standalone `CHANGELOG.md` and `.github/CODEOWNERS` changes
-
----
-
-## 14. Known truth limits and documentation discipline
-
-This file intentionally distinguishes between:
-
-- fully completed stages
-- stages completed as baselines
-- in-repo-closed governance layers
-- repo-native enforcement depth versus externally enforced review controls
-- work that remains deferred
-
-That distinction matters.  
-The repository is stronger when status language is exact.
-
-This file should be read together with a simple rule:
-
-- do not describe baseline-complete work as fully mature if the repo does not prove that maturity yet
-- do not downgrade real completed work just because later hardening stages still exist
-- do not describe Stage 1B or Track A as “still open” once the in-repo enforcement layer is actually in place
-- do not describe Stage 5 as merely “baseline established but still open” once the practical repo-visible closure work has landed
-- do not describe CODEOWNERS as equivalent to external branch protection when that platform enforcement is outside the repository
-
-Practical implication:  
-If another document says or implies that Stage 3, Stage 4, Track A, Stage 1B, or Stage 5 are stronger than stated here, that lower document must be corrected.  
-If another document says Stage 1B, Track A, or Stage 5 are still merely partial after the stronger in-repo enforcement layer lands, that lower document must also be corrected.
-
----
-
-## 15. What this repo is ready for next
-
-Given the current status, the repo is ready to continue with later roadmap work **without pretending earlier foundations are still missing**.
-
-Practical meaning:
-
-- new major modules must obey Cross-Cutting Track A
-- Stage 1B should now be maintained, not reopened casually
-- Stage 5 should now be maintained and externally aligned, not treated as unresolved repo work
-- later stages may build on an explicit security-system baseline and release-engineering closure instead of inheriting undocumented assumptions
-- future governance changes should extend the current system, not create a parallel one
-
-What should **not** happen next:
-
-- re-litigating topology
-- re-litigating backend-authoritative auth/session truth
-- weakening tenant isolation for convenience
-- pretending secret-bearing tenant integrations are ready before the secrets foundation runtime exists
-- treating Stage 3 and Stage 4 baseline docs/tests as optional polish
-- pretending CODEOWNERS alone equals GitHub-required review enforcement
-- pretending Stage 5 can enforce external branch-protection settings from repo code alone
-- overclaiming operational or security maturity that the repo does not yet prove
+**a foundation-first multi-tenant Hubins repository with Auth + User Provisioning implemented and broader module architecture partially designed but not yet broadly shipped.**

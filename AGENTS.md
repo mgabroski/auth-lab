@@ -8,31 +8,39 @@ Applies at the repository root.
 
 This is the single AI entrypoint for the repo.
 
-Use it to route work correctly, load the right authority first, and avoid generic or conflicting answers.
+Use it to load the right authority first, keep answers tied to repo truth, and avoid duplicate or lower-value context.
 
 This file is a router.
-It is not a second architecture doc, not a product brief, and not a replacement for area-specific law.
+It is not a second architecture doc, not a product brief, and not a substitute for area-specific law.
 
 ---
 
-## Read First
+## Default Read Order
 
-Before any non-trivial implementation, review, or audit work, load these in this order:
+Before non-trivial implementation, debugging, review, or audit work, load these first:
 
 1. `docs/current-foundation-status.md`
 2. `ARCHITECTURE.md`
-3. `docs/quality-bar.md`
-4. `docs/decision-log.md`
-5. `docs/security-model.md`
+3. `docs/security-model.md`
 
-Then route by area:
+Then route by task:
 
-- backend work → `backend/AGENTS.md`
-- frontend work → `frontend/AGENTS.md`
-- review / audit work → `code_review.md`
-- prompt selection only → `docs/prompts/catalog.md`
+* backend work -> `backend/AGENTS.md`
+* frontend work -> `frontend/AGENTS.md`
+* review / audit work -> `code_review.md`
+* prompt selection only -> `docs/prompts/catalog.md`
 
-Do not start with QA docs, prompt docs, or support docs when a higher-truth file already answers the question.
+### Task-gated docs
+
+Load these only when the task actually needs them:
+
+* `docs/quality-bar.md` -> review, signoff, readiness, or release-quality questions
+* `docs/decision-log.md` -> architectural decisions, open conflicts, or decision-history questions
+* `docs/developer-guide.md` -> local setup, commands, environment, or workflow execution
+* `docs/ops/*` -> operability, release, incident, topology-proof, or recovery work
+* `docs/qa/*` -> QA execution, user-visible flow proof, or message-audit work
+
+Do not start with QA docs, prompt docs, runbooks, or support docs when a higher-truth file already answers the question.
 
 ---
 
@@ -40,21 +48,102 @@ Do not start with QA docs, prompt docs, or support docs when a higher-truth file
 
 When sources disagree, use this order:
 
-1. active locked product or module source-of-truth docs
+1. module-specific highest-truth docs explicitly declared as authoritative for the target module
 2. current shipped-truth docs
-3. architecture and decision records
-4. security and trust-boundary docs
-5. area engineering law and contract docs
-6. implementation code
-7. tests and CI workflows
-8. runbooks, QA docs, and developer guides
-9. prompts, temporary notes, and chat summaries
+3. architecture and security law
+4. area engineering law and API contract docs
+5. implementation code
+6. tests and CI workflows
+7. developer, ops, and QA support docs
+8. prompts, temporary notes, and chat summaries
 
 ### Required behavior
 
-- Call out real conflicts explicitly.
-- Do not smooth over contradictions.
-- Do not let polished wording outrank repo evidence.
+* Call out real conflicts explicitly.
+* Do not smooth over contradictions.
+* Do not let polished wording outrank repo evidence.
+* Do not let support docs overrule architecture, security, contracts, or shipped-truth docs.
+
+### Off-repo truth rule
+
+An off-repo document may outrank repo docs only when all of the following are true:
+
+* it is module-specific
+* it explicitly declares source-of-truth priority
+* it is still active, not historical
+* the current task is about that module
+
+Example: a locked master spec for Settings may outrank repo docs for Settings work only.
+It does not become the default truth source for unrelated backend, frontend, auth, or topology work.
+
+---
+
+## Continuation Chat Attachment Rules
+
+### Default attachment bundle
+
+Use this by default:
+
+1. the latest repo/codebase snapshot
+2. `AGENTS.md`
+3. `docs/current-foundation-status.md`
+4. `ARCHITECTURE.md`
+5. `docs/security-model.md`
+
+### Add one area bundle only when needed
+
+#### Backend task
+
+Attach or load:
+
+* `backend/AGENTS.md`
+* `backend/docs/engineering-rules.md`
+* `backend/docs/module-skeleton.md`
+* relevant `backend/docs/api/*.md`
+* relevant module-local docs only if they exist and matter
+
+#### Frontend task
+
+Attach or load:
+
+* `frontend/AGENTS.md`
+* `frontend/src/shared/engineering-rules.md`
+* `frontend/docs/module-skeleton.md`
+* relevant backend API docs
+
+#### Review or release task
+
+Attach or load:
+
+* `code_review.md`
+* `docs/quality-bar.md`
+* relevant `docs/ops/*` only if release, rollback, readiness, or recovery is in scope
+
+#### QA task
+
+Attach or load:
+
+* relevant files under `docs/qa/`
+* `docs/developer-guide.md` only if setup or environment execution is part of the task
+
+### Do not attach by default
+
+Do not attach these unless the task explicitly needs them:
+
+* `docs/decision-log.md`
+* `docs/developer-guide.md`
+* `docs/ops/*`
+* `docs/qa/*`
+* `CONTRIBUTING.md`
+* `CHANGELOG.md`
+* prompt docs other than `docs/prompts/catalog.md`
+* ADR indexes or folder-map docs
+* historical inventories, brainstorm notes, or raw cleanup inputs
+
+### Historical-doc rule
+
+If a master module spec explicitly bans certain historical docs from continuation chats, do not attach them.
+They are treated as regression sources, not helpful context.
 
 ---
 
@@ -116,10 +205,9 @@ Load:
 
 Also load, when relevant:
 
-- `docs/ops/runbooks.md`
-- `docs/ops/observability.md`
-- `docs/ops/release-engineering.md`
-- relevant ADRs under `backend/docs/adr/`
+* `docs/decision-log.md`
+* relevant `docs/ops/*`
+* relevant ADRs
 
 ### Review or audit work
 
@@ -127,7 +215,8 @@ Load:
 
 1. `code_review.md`
 2. relevant authority docs for the changed area
-3. `docs/prompts/catalog.md` only if you need a reusable prompt asset
+3. `docs/quality-bar.md` when the task is about readiness or signoff
+4. `docs/prompts/catalog.md` only if you need a reusable prompt asset
 
 ---
 
@@ -135,13 +224,13 @@ Load:
 
 Review or update the matching docs when code changes affect:
 
-- architecture or cross-cutting behavior → `ARCHITECTURE.md`, `docs/decision-log.md`
-- security, sessions, cookies, tenant rules, or trust boundaries → `docs/security-model.md`
-- request/response or behavioral contracts → relevant `backend/docs/api/*.md`
-- shipped capability or repo truth snapshot → `docs/current-foundation-status.md`
-- operational recovery, release behavior, or support flow → relevant files under `docs/ops/`
-- QA-visible messages or flow behavior → relevant files under `docs/qa/`
-- contribution or review behavior → `AGENTS.md`, `CONTRIBUTING.md`, `code_review.md`, `docs/prompts/catalog.md`
+* architecture or cross-cutting behavior -> `ARCHITECTURE.md`, `docs/decision-log.md`
+* security, sessions, cookies, tenant rules, or trust boundaries -> `docs/security-model.md`
+* request/response or behavioral contracts -> relevant `backend/docs/api/*.md`
+* shipped capability or repo truth snapshot -> `docs/current-foundation-status.md`
+* operational recovery, release behavior, or support flow -> relevant files under `docs/ops/`
+* QA-visible messages or flow behavior -> relevant files under `docs/qa/`
+* routing or repo-usage behavior -> `AGENTS.md`, `README.md`, `code_review.md`, `docs/prompts/catalog.md`
 
 Do not create silent documentation drift.
 
@@ -151,23 +240,23 @@ Do not create silent documentation drift.
 
 Treat a change as topology-sensitive if it touches any of the following:
 
-- proxy behavior
-- browser `/api/*` routing
-- SSR direct-backend calls
-- `INTERNAL_API_URL`
-- forwarded headers
-- host-derived tenant behavior
-- cookie or session behavior
-- auth bootstrap behavior
-- SSO start/callback behavior
+* proxy behavior
+* browser `/api/*` routing
+* SSR direct-backend calls
+* `INTERNAL_API_URL`
+* forwarded headers
+* host-derived tenant behavior
+* cookie or session behavior
+* auth bootstrap behavior
+* SSO start/callback behavior
 
 ### Required behavior for topology-sensitive work
 
-- Do not treat browser and SSR requests as interchangeable.
-- Do not hardcode browser calls to backend origins.
-- Do not weaken host-derived tenant routing.
-- Do not weaken tenant/session isolation.
-- Do not replace navigation-based auth flows with inappropriate `fetch()` flows.
+* Do not treat browser and SSR requests as interchangeable.
+* Do not hardcode browser calls to backend origins.
+* Do not weaken host-derived tenant routing.
+* Do not weaken tenant/session isolation.
+* Do not replace navigation-based auth flows with inappropriate `fetch()` flows.
 
 ---
 
@@ -179,9 +268,9 @@ Run the smallest meaningful proof that actually matches the risk.
 
 Use the relevant subset of:
 
-- `yarn fmt:check`
-- `yarn lint`
-- `yarn typecheck`
+* `yarn fmt:check`
+* `yarn lint`
+* `yarn typecheck`
 
 ### Backend-focused changes
 
@@ -204,11 +293,12 @@ Do not imply runtime proof if you only reviewed code.
 
 ## What Not To Do
 
-- Do not start from prompt files when repo law already answers the question.
-- Do not treat support docs as stronger than architecture or shipped-truth docs.
-- Do not invent missing behavior because a lower doc sounds confident.
-- Do not claim completion without the proof level the task actually needs.
-- Do not add parallel explanation docs when an existing canonical doc can be tightened instead.
+* Do not start from prompt files when repo law already answers the question.
+* Do not treat support docs as stronger than architecture or shipped-truth docs.
+* Do not invent missing behavior because a lower doc sounds confident.
+* Do not claim completion without the proof level the task actually needs.
+* Do not attach historical or raw inventory docs when a higher-truth master spec already forbids them.
+* Do not add parallel explanation docs when an existing canonical doc can be tightened instead.
 
 ---
 

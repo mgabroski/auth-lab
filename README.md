@@ -20,19 +20,21 @@ If you are new to the repo, read these in order:
 
 1. `docs/current-foundation-status.md`
 2. `ARCHITECTURE.md`
-3. `docs/quality-bar.md`
-4. `docs/decision-log.md`
-5. `docs/security-model.md`
+3. `docs/security-model.md`
 
-Then route by area:
+Then route by need:
 
-- local setup and commands → `docs/developer-guide.md`
-- contribution rules → `CONTRIBUTING.md`
-- review expectations → `code_review.md`
-- backend implementation law → `backend/docs/engineering-rules.md`
-- frontend implementation law → `frontend/src/shared/engineering-rules.md`
+- local setup and commands -> `docs/developer-guide.md`
+- contribution rules -> `CONTRIBUTING.md`
+- review expectations -> `code_review.md`
+- backend implementation law -> `backend/docs/engineering-rules.md`
+- frontend implementation law -> `frontend/src/shared/engineering-rules.md`
+- prompt selection only -> `docs/prompts/catalog.md`
 
-For AI/review agents, the entrypoint is `AGENTS.md`, not this file.
+Read `docs/quality-bar.md` only when the task is about readiness, signoff, or release-quality judgment.
+Read `docs/decision-log.md` only when the task is about architecture decisions, recorded conflicts, or decision history.
+
+For AI and review agents, the entrypoint is `AGENTS.md`, not this file.
 
 ---
 
@@ -42,9 +44,9 @@ Today, this repository is the working foundation for:
 
 - reverse-proxy-aware multi-tenant application behavior
 - same-origin browser API usage
-- SSR direct-to-backend calls with forwarded tenant/session headers
+- SSR direct-to-backend calls with forwarded tenant and session headers
 - backend session-aware auth and tenant resolution
-- frontend auth/provisioning flows
+- frontend auth and provisioning flows
 - Auth + User Provisioning as the first real module
 
 It is not the full future Hubins product.
@@ -65,15 +67,6 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 - proxy conformance proof
 - baseline operability, security, and release discipline
 
-### Backend
-
-- Fastify backend
-- PostgreSQL + Kysely
-- Redis-backed server-side sessions
-- shared request context
-- bounded module structure
-- health checks and core observability baseline
-
 ### Auth + User Provisioning
 
 - register
@@ -83,8 +76,8 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 - `/auth/config`
 - forgot/reset password
 - public signup
-- email verification + resend verification
-- MFA setup / verify / recovery
+- email verification and resend verification
+- MFA setup, verify, and recovery
 - Google SSO
 - Microsoft SSO
 - invite-based provisioning
@@ -92,9 +85,8 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 - audit viewing
 - outbox-backed email delivery
 
-### Frontend
+### Frontend Surface
 
-- Next.js App Router frontend for the current auth/provisioning surface
 - public auth entry routes
 - invite registration and acceptance flows
 - password reset and email verification flows
@@ -105,36 +97,8 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 - admin invite management
 - SSR fetch wrapper
 - browser API wrapper
-- host-run `/api/*` proxy path
 
----
-
-## What Is Not Shipped Yet
-
-This repo does **not** yet claim broader product completion.
-
-Examples of intentionally unshipped scope:
-
-- broader tenant product modules beyond the current auth/provisioning slice
-- broader admin product areas beyond the current invite-management/admin landing surface
-- later-stage platform capabilities that are documented as future work in architecture or roadmap materials
-- full production-maturity claims beyond the current proven baseline
-
-Do not collapse architecture vision into shipped truth.
-
----
-
-## Tech Stack
-
-- Node.js + TypeScript
-- Fastify
-- PostgreSQL + Kysely
-- Redis
-- Next.js 15 App Router
-- Caddy for local proxy topology
-- Vitest + Playwright
-- Yarn 4 workspaces
-- Docker Compose for local infra
+Do not collapse broader architecture vision into shipped truth.
 
 ---
 
@@ -164,7 +128,7 @@ Primary local tenant URL:
 http://goodwill-ca.lvh.me:3000
 ```
 
-Do **not** use plain `localhost:3000` for tenant-aware browser behavior.
+Do not use plain `localhost:3000` for tenant-aware browser behavior.
 
 ### Full topology validation
 
@@ -173,127 +137,59 @@ yarn stack
 yarn stack:test
 ```
 
-Use this for proxy, cookie, host-header, SSR, SSO callback, and other topology-sensitive work.
+Use this for proxy, cookie, host-header, SSR, and full-flow topology proof.
+
+For more setup, environment, reset, QA execution, and local workflow detail, use `docs/developer-guide.md`.
 
 ---
 
-## Useful Commands
-
-### Start normal development
-
-```bash
-yarn dev
-```
-
-### Start full Docker topology
-
-```bash
-yarn stack
-```
-
-### Start full Docker topology plus local OIDC helper
-
-```bash
-yarn dev:stack
-```
-
-### Stop local stack
-
-```bash
-yarn stop
-```
-
-### Check stack status
-
-```bash
-yarn status
-```
-
-### Reset local DB/Redis volumes
-
-```bash
-yarn reset-db
-```
-
-### Run repo verification
-
-```bash
-yarn verify
-```
-
-### Run tests directly
-
-```bash
-yarn test
-```
-
-### Run frontend production build explicitly
-
-```bash
-yarn build:frontend
-```
-
-For setup details, env behavior, seeding, reset flows, and deeper local workflow guidance, use `docs/developer-guide.md`.
-
----
-
-## Canonical Repo Map
-
-### Repo truth
-
-- `docs/current-foundation-status.md`
-- `ARCHITECTURE.md`
-- `docs/quality-bar.md`
-- `docs/quality-exceptions.md`
-- `docs/decision-log.md`
-- `docs/security-model.md`
-
-### Working rules
-
-- `CONTRIBUTING.md`
-- `code_review.md`
-- `AGENTS.md`
-
-### Local execution and support
-
-- `docs/developer-guide.md`
-- `docs/ops/runbooks.md`
-- `docs/ops/observability.md`
-- `docs/ops/release-engineering.md`
+## How To Navigate The Repo
 
 ### Backend
 
-- `backend/AGENTS.md`
-- `backend/docs/engineering-rules.md`
-- `backend/docs/module-skeleton.md`
-- `backend/docs/api/*.md`
+Start with:
+
+1. `backend/AGENTS.md`
+2. `backend/docs/engineering-rules.md`
+3. relevant `backend/docs/api/*.md`
 
 ### Frontend
 
-- `frontend/AGENTS.md`
-- `frontend/src/shared/engineering-rules.md`
-- `frontend/docs/module-skeleton.md`
+Start with:
 
-### Prompt assets
+1. `frontend/AGENTS.md`
+2. `frontend/src/shared/engineering-rules.md`
+3. relevant backend API docs
 
-- `docs/prompts/catalog.md`
+### Review or audit work
+
+Start with:
+
+1. `code_review.md`
+2. relevant authority docs for the touched area
+
+### Prompt selection only
+
+Start with:
+
+1. `docs/prompts/catalog.md`
 
 ---
 
-## Repo Truth Rules
+## Documentation Position
 
+- `README.md` is the human router.
+- `AGENTS.md` is the AI router.
 - `docs/current-foundation-status.md` is the current shipped-truth snapshot.
-- `ARCHITECTURE.md` is architecture law, not a promise that every described module already exists.
-- `docs/developer-guide.md` owns detailed local setup and workflow instructions.
-- `AGENTS.md` is the AI entrypoint.
-- Do not create a second source of truth when an existing canonical doc can be updated instead.
+- `ARCHITECTURE.md` is broader system law, not the same thing as shipped scope.
+- `docs/security-model.md` is the trust-boundary and security law.
+
+Do not start from QA docs, ops docs, or prompt docs when a higher-truth file already answers the question.
 
 ---
 
 ## Final Position
 
-Start here as a human.
-
-If you need deeper execution details, go to `docs/developer-guide.md`.
-If you need repo law, go to the canonical docs listed above.
-If you are an AI agent, switch to `AGENTS.md`.
+Keep this file short.
+Use it to orient humans quickly.
+Then route to the smallest authoritative document set that actually matches the task.

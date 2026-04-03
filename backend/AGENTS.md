@@ -8,20 +8,20 @@ Applies to all work under `backend/`.
 
 ## Purpose
 
-This is the backend-specific AI/review router.
+This is the backend-specific AI and review router.
 
 It narrows root repo law into backend execution rules so backend work stays:
 
-- structurally correct
-- tenant-safe
-- contract-aware
-- transaction-aware
-- audit-aware
-- validation-coupled
+* contract-correct
+* tenant-aware
+* auth-aware
+* transaction-safe
+* audit-aware
+* topology-safe
 
 It does not replace the root `AGENTS.md`.
-It does not replace `backend/docs/engineering-rules.md`.
-It routes backend work to the right law and keeps backend changes from drifting.
+It does not replace backend engineering law.
+It routes backend work to the right authority and helps prevent contract, state, and boundary drift.
 
 ---
 
@@ -32,19 +32,21 @@ After reading `../AGENTS.md`, load backend authority in this order:
 1. `backend/docs/engineering-rules.md`
 2. `backend/docs/module-skeleton.md`
 3. relevant `backend/docs/api/*.md`
-4. relevant ADRs under `backend/docs/adr/`
-5. relevant module docs under `backend/docs/modules/`
-6. backend code and tests for the changed path
+4. relevant backend module docs or ADRs only when needed
+5. relevant backend code, tests, migrations, and workflows
 
-Also re-check these when the task touches cross-cutting behavior:
+### Task-gated re-checks
 
-- `docs/current-foundation-status.md`
-- `ARCHITECTURE.md`
-- `docs/decision-log.md`
-- `docs/security-model.md`
-- `docs/ops/runbooks.md`
+Load these only when the task actually needs them:
 
-Do not invent backend law from memory when these files already answer it.
+* `docs/current-foundation-status.md` -> shipped scope or current truth questions
+* `ARCHITECTURE.md` -> cross-cutting design or boundary questions
+* `docs/security-model.md` -> session, cookie, tenant, trust-boundary, or security-sensitive work
+* `docs/decision-log.md` -> decision-history or architecture-decision questions
+* `docs/ops/*` -> recovery, release, operability, or topology-proof work
+* `docs/qa/*` -> QA-visible backend behavior or user-visible message proof
+
+Do not invent backend truth from assumptions, screenshots, or chat memory when the repo already defines it.
 
 ---
 
@@ -52,89 +54,91 @@ Do not invent backend law from memory when these files already answer it.
 
 When backend sources disagree, use this order:
 
-1. active locked product/module source-of-truth docs
-2. repo shipped-truth and architecture law
-3. backend engineering law
-4. backend API/contract docs
-5. ADRs and module docs
-6. backend implementation code
-7. backend tests and CI workflows
-8. runbooks, QA docs, and developer guides
-9. temporary notes and chat summaries
+1. module-specific highest-truth docs explicitly declared authoritative for the target module
+2. current shipped-truth and architecture/security law
+3. backend API contract docs
+4. backend engineering law
+5. backend implementation code
+6. backend tests, migrations, and CI workflows
+7. runbooks, QA docs, and developer guides
+8. prompts, temporary notes, and chat summaries
 
 ### Required behavior
 
-- Call out real conflicts explicitly.
-- Do not let tests silently overrule architecture, security, or contract truth.
-- Do not let lower-value notes become backend law.
+* Call out real conflicts explicitly.
+* Do not let code convenience overrule API, security, or shipped truth.
+* Do not let support docs become backend law.
+
+---
+
+## Backend Attachment Rules
+
+### Default backend bundle
+
+For most backend tasks, use:
+
+1. repo snapshot
+2. `../AGENTS.md`
+3. `backend/AGENTS.md`
+4. `backend/docs/engineering-rules.md`
+5. `backend/docs/module-skeleton.md`
+6. relevant `backend/docs/api/*.md`
+
+### Add only when needed
+
+* `docs/security-model.md` -> auth, session, tenant, cookie, proxy, or trust-boundary work
+* `ARCHITECTURE.md` -> cross-cutting design or structural boundary work
+* `docs/current-foundation-status.md` -> shipped-scope or current-state questions
+* `docs/decision-log.md` -> decision-history questions
+* `docs/ops/*` -> release, support, recovery, topology-proof, or incident work
+* `docs/qa/*` -> QA-visible flows or message-audit work
+
+### Do not attach by default
+
+Do not attach by default:
+
+* prompt docs
+* QA docs
+* ops docs
+* `docs/decision-log.md`
+* folder-map docs
+* historical inventories or raw notes
+* backend prompt docs when root prompt routing already covers the need
 
 ---
 
 ## Backend Hard Rules
 
-### 1. Keep business logic inside modules
+### 1. Backend owns contract truth
 
-Business behavior belongs in `backend/src/modules/**`.
+Request validation, status codes, response shape, session truth, membership truth, and next-action truth are backend-owned.
 
-Do not move domain logic into generic helpers or cross-cutting folders just to reduce imports.
+Do not push contract meaning into frontend guesswork.
 
-### 2. Keep `shared/` truly shared
+### 2. Keep module boundaries real
 
-`shared/` is for cross-cutting infrastructure and broadly reusable technical utilities.
+Do not bypass the established backend structure without a repo-level reason.
 
-It is not a shortcut for bypassing module boundaries.
+### 3. Tenant and session behavior must fail closed
 
-### 3. Preserve the module skeleton
+If tenant resolution, membership state, auth state, cookie state, or trust-boundary behavior becomes uncertain, the safer behavior wins.
 
-Default backend flow should remain recognizable and explicit:
+### 4. Do not weaken audit and side-effect discipline
 
-- route
-- controller
-- service
-- flow / use-case
-- queries / repositories / policies / helpers
+Invites, verification, reset, MFA, SSO, outbox, and admin actions often require coupled behavior.
+Do not change one part casually and assume the rest is unaffected.
 
-Do not collapse layers casually because a task looks small.
+### 5. Treat auth and topology work as high-risk
 
-### 4. Put transactions in the correct place
+Auth, session, SSR-related backend behavior, proxy assumptions, tenant resolution, and forwarded-header behavior require stronger proof than ordinary CRUD changes.
 
-Transactions belong in the flow / use-case layer.
+### 6. Keep migrations and data-shape changes explicit
 
-Do not start transactions in controllers.
-Do not scatter write coordination across unrelated helpers.
+Do not bury schema changes inside unrelated backend work.
 
-### 5. Keep request truth server-side
+### 7. Use Yarn only
 
-Tenant identity, session state, membership state, and security-sensitive continuation truth must come from backend request context and backend-owned rules.
-
-Do not trust client-declared payload truth where the backend must decide.
-
-### 6. Preserve tenant isolation
-
-Any change touching tenant resolution, membership lookup, invite acceptance, session checks, or protected resource access is boundary-sensitive by default.
-
-Fail closed when tenant/session truth does not line up.
-
-### 7. Do not weaken audit behavior
-
-If a backend flow requires audit evidence, preserve it deliberately.
-
-Do not let refactors, transaction changes, or rollback behavior silently remove required success-path or failure-path audit coverage.
-
-### 8. Be careful with side-effect sequencing
-
-Invite, verification, password reset, SSO, MFA, and outbox-backed email flows are sequencing-sensitive.
-
-Do not move side effects earlier or later without checking commit boundaries, retries, idempotency, and documented behavior.
-
-### 9. Do not hide contract changes
-
-If request/response behavior, status codes, redirect semantics, or user-visible backend outcomes change, review and update the matching API docs.
-
-### 10. Keep backend claims honest
-
-A clean explanation is not proof.
-A passing unit test is not automatically enough for a high-risk backend change.
+Do not switch package managers.
 
 ---
 
@@ -142,45 +146,27 @@ A passing unit test is not automatically enough for a high-risk backend change.
 
 When reviewing backend work, check these explicitly when relevant:
 
-### Module ownership
+### Boundary correctness
 
-- Is the behavior in the correct module?
-- Is `shared/` being used correctly?
-- Is one module leaking business rules into another?
-
-### Layer ownership
-
-- Is the responsibility in the right layer?
-- Is the flow still easy to reason about end to end?
-- Has a refactor hidden important behavior in the wrong place?
-
-### Transaction placement
-
-- Is the transaction boundary in the flow / use-case layer?
-- Is it too broad or too narrow?
-- Could partial failure produce inconsistent state?
-
-### Request-context correctness
-
-- Is tenant identity derived correctly?
-- Is membership/access enforced in the right place?
-- Is backend truth still server-owned?
+* Is the change in the right module and layer?
+* Is shared code introduced in the right place?
+* Is backend truth still server-owned?
 
 ### Contract correctness
 
-- Does implementation still match the API doc?
-- Are response shapes, codes, and continuation semantics still correct?
+* Does implementation still match the API doc?
+* Are response shapes, codes, and continuation semantics still correct?
 
-### Audit / side-effect behavior
+### Audit and side-effect behavior
 
-- Are required audit events preserved?
-- Are emails, invites, resets, or other side effects still triggered in the right situations?
-- Could retries or sequencing changes break expected behavior?
+* Are required audit events preserved?
+* Are emails, invites, resets, or other side effects still triggered in the right situations?
+* Could retries or sequencing changes break expected behavior?
 
-### Migration / rollout risk
+### Migration and rollout risk
 
-- Does the change alter schema, data meaning, or rollout assumptions?
-- Does it require migration safety thinking, test fixture updates, or runbook changes?
+* Does the change alter schema, data meaning, or rollout assumptions?
+* Does it require migration safety thinking, test fixture updates, or runbook changes?
 
 ---
 
@@ -188,22 +174,22 @@ When reviewing backend work, check these explicitly when relevant:
 
 Treat backend work as high-risk when it touches any of the following:
 
-- authentication
-- authorization
-- session creation, validation, or invalidation
-- tenant resolution
-- request context
-- membership activation, suspension, or gating
-- invites
-- email verification
-- password reset
-- MFA
-- SSO start/callback behavior
-- audit flow behavior
-- outbox or email delivery behavior
-- migrations or data-shape changes
-- forwarded-header assumptions
-- proxy-sensitive backend behavior
+* authentication
+* authorization
+* session creation, validation, or invalidation
+* tenant resolution
+* request context
+* membership activation, suspension, or gating
+* invites
+* email verification
+* password reset
+* MFA
+* SSO start/callback behavior
+* audit flow behavior
+* outbox or email delivery behavior
+* migrations or data-shape changes
+* forwarded-header assumptions
+* proxy-sensitive backend behavior
 
 For these changes, be stricter than normal about docs, review, and validation.
 
@@ -213,12 +199,13 @@ For these changes, be stricter than normal about docs, review, and validation.
 
 Review or update the relevant docs when backend code changes affect:
 
-- request/response contract → relevant `backend/docs/api/*.md`
-- backend engineering law or structure expectations → `backend/docs/engineering-rules.md`, `backend/docs/module-skeleton.md`
-- architecture or cross-cutting design → `ARCHITECTURE.md`, `docs/decision-log.md`, relevant ADRs
-- session, security, tenant, or trust boundaries → `docs/security-model.md`, relevant ADRs
-- operational recovery or supportability → `docs/ops/runbooks.md`, `docs/ops/observability.md`, `docs/ops/release-engineering.md`
-- QA-visible backend behavior → relevant docs under `docs/qa/`
+* request/response contract -> relevant `backend/docs/api/*.md`
+* backend engineering law or structure expectations -> `backend/docs/engineering-rules.md`, `backend/docs/module-skeleton.md`
+* architecture or cross-cutting design -> `ARCHITECTURE.md`, `docs/decision-log.md`, relevant ADRs
+* session, security, tenant, or trust boundaries -> `docs/security-model.md`, relevant ADRs
+* operational recovery or supportability -> `docs/ops/runbooks.md`, `docs/ops/observability.md`, `docs/ops/release-engineering.md`
+* QA-visible backend behavior -> relevant docs under `docs/qa/`
+* shipped capability or repo truth snapshot -> `docs/current-foundation-status.md`
 
 Do not create silent backend documentation drift.
 
@@ -232,76 +219,44 @@ Run the smallest meaningful proof that actually matches the changed backend risk
 
 Use the relevant subset of:
 
-- backend typecheck
-- backend unit tests
-- backend DAL/integration tests
-- backend E2E tests
+* backend typecheck
+* backend unit tests
+* backend DAL or integration tests
+* backend E2E tests
 
 ### For schema or migration changes
 
-Also run:
+Also use the smallest meaningful migration or fixture proof.
 
-- migration-related checks
-- affected fixtures/seeds/tests
-- rollback-sensitive or data-shape-sensitive validation where available
+### For auth, session, tenant, proxy, or trust-boundary changes
 
-### For auth/session/tenant/topology-sensitive changes
+Use stronger proof than unit tests alone when the behavior becomes real only through:
 
-Use stronger proof than unit tests alone when the behavior only becomes real through the full stack or proxy path.
+* cookies or sessions
+* forwarded headers
+* real redirects or callbacks
+* proxy routing
+* full stack behavior
 
 ### Required behavior
 
-When reporting validation:
-
-- state what was actually run
-- state what was not run
-- do not imply runtime proof if you only reviewed code
-
----
-
-## How To Work On Backend Tasks
-
-### For implementation
-
-- start from the owning module
-- read the backend law before changing structure
-- prefer narrow, explicit changes
-- keep important behavior visible
-
-### For review
-
-- read the real code path end to end
-- check tenant, contract, transaction, and audit implications
-- separate blocker-level issues from cleanup advice
-
-### For refactor
-
-- preserve behavior first
-- preserve boundaries second
-- improve readability without erasing sequencing, validation, or audit truth
+When reporting validation, state what was actually run.
+Do not imply stack-proof if you only reviewed code.
 
 ---
 
 ## What Not To Do
 
-- Do not use this file as a second root router.
-- Do not duplicate all repo-wide rules here.
-- Do not move business logic into `shared/` for convenience.
-- Do not trust client input where backend request context should decide.
-- Do not treat API docs as optional when behavior changes.
-- Do not declare a backend flow safe because one shallow test passed.
-- Do not let refactor language hide contract, tenant, or audit risk.
+* Do not treat controller changes as isolated if they alter service, audit, or side-effect meaning.
+* Do not weaken fail-closed auth or tenant behavior to make local flows feel easier.
+* Do not let stale notes, prompt docs, or support docs overrule backend law.
+* Do not add parallel backend explainer docs when the right fix is to update the canonical contract or law doc.
 
 ---
 
 ## Final Position
 
-Use this file after the root `AGENTS.md`.
+Use this file to route backend work after reading the root `AGENTS.md`.
 
-Its job is to keep backend work:
-
-- aligned with backend law
-- structurally clean
-- safe around tenant/session boundaries
-- coupled to the right docs
-- validated at the right proof level
+If the task is backend-specific, load only the backend authority you actually need.
+Less context is better than duplicated context when the truth path is already clear.

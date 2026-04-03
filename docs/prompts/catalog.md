@@ -1,204 +1,194 @@
 # Prompt Catalog
 
-**Status:** Active  
-**Scope:** Repo-level approved prompt index
+## Purpose
 
-This is the only prompt index/routing file for the repo.
+This file is the single index for the active prompt system in the repository.
 
-Its job is simple:
+Use it to choose the right prompt asset for a task.
+Do not treat it as architecture law, implementation law, API truth, or QA truth.
 
-- list the approved reusable prompt assets in `docs/prompts/`
-- state what each one is for
-- keep the approved prompt pack visible and small
-- make prompt drift obvious
-
-It is not:
-
-- a usage essay
-- a review contract
-- a roadmap
-- a backlog for future prompts
+Prompts are execution infrastructure.
+They must follow repo law.
+They must not compete with canonical docs.
 
 ---
 
-## Read First
+## Active Prompt System
 
-Before using any prompt in this folder, read:
+The active prompt pack for this repository lives under:
+
+- `docs/prompts/`
+
+This is the only active prompt pack that should be treated as canonical prompt infrastructure.
+
+If another prompt file exists elsewhere in the repo, it is secondary, transitional, or deprecated unless repo law explicitly says otherwise.
+
+---
+
+## Read Before Using Any Prompt
+
+Before using a prompt for real work, load the relevant authority docs first.
+
+### Minimum baseline
 
 1. `AGENTS.md`
-2. `docs/quality-bar.md`
-3. `code_review.md`
+2. `docs/current-foundation-status.md`
+3. `ARCHITECTURE.md`
+4. `docs/security-model.md`
 
-Use this catalog after that, only to choose the right reusable prompt asset.
+Then add the area-specific law needed for the task.
 
-If you need detailed usage notes, use `docs/prompts/usage-guide.md` as secondary reference only.
-
----
-
-## Catalog Rule
-
-If a reusable repo prompt in `docs/prompts/` is meant to be approved and durable, it must appear in this file.
-
-If it is not listed here, it is not part of the approved prompt pack.
-
-No other file should act as a competing prompt index.
+Prompts do not replace the repo’s truth order.
+They operate inside it.
 
 ---
 
-## Approved Prompt Pack
+## Prompt Selection Rules
 
-### Design and architecture prompts
+Choose prompts by work type, not by habit.
 
-#### `docs/prompts/design-challenge.md`
+### Implementation work
 
-Use before implementation to pressure-test a proposed design.
+Use the implementation-oriented prompt only after loading:
 
-#### `docs/prompts/better-architecture.md`
+- the correct routers
+- the relevant engineering rules
+- the relevant backend API docs
+- any module-specific highest-truth spec if the task is for that module
 
-Use before implementation when you want to compare the current approach with cleaner or more durable alternatives.
+### Review or audit work
 
----
+Use the review-oriented prompt only after loading:
 
-### Review prompts
+- the relevant authority docs for the changed area
+- `code_review.md`
+- `docs/quality-bar.md` when readiness or signoff is the question
 
-#### `docs/prompts/pre-push-self-review.md`
+### Refactor work
 
-Use before push to catch obvious drift, missing docs, missing proof, and coupling mistakes.
+Use the refactor-oriented prompt only when the task is explicitly about safe restructuring rather than new feature behavior.
 
-#### `docs/prompts/pr-review.md`
+### Module-generation work
 
-Use when a diff or PR is ready for real review.
+Use the module-generation prompt only when the repo law and module shape are already clear enough to generate within the established architecture.
 
-#### `docs/prompts/module-audit.md`
-
-Use to inspect a module or feature boundary during implementation, refactor, or targeted review.
-
----
-
-### Risk-focused prompts
-
-#### `docs/prompts/migration-change-risk.md`
-
-Use when a change affects schema, data shape, rollout, rollback, migration safety, or partial deploy risk.
-
-#### `docs/prompts/security-tenant-review.md`
-
-Use when a change affects auth, session, permissions, trust boundaries, topology, or tenant isolation.
+If the task reveals a missing repo-level architectural decision, stop and update repo law first.
+Do not use prompts to paper over missing architecture.
 
 ---
 
-### Structured generation prompt
+## Canonical Prompt Assets
 
-#### `docs/prompts/module-generation-fullstack.md`
+The exact active files under `docs/prompts/` may evolve, but this folder is where the canonical prompt system lives.
 
-Use for structured full-stack generation work when the repo already has enough law and constraints to generate safely.
+Typical prompt roles include:
 
-This is an approved prompt asset, but it is not a substitute for design review or PR review.
+- implementation
+- review
+- refactor
+- module generation
+- task-specific review aids where they still obey repo law
 
----
+Every prompt in this folder must remain aligned with:
 
-## What To Use When
-
-### Before coding
-
-Prefer one of:
-
-- `design-challenge.md`
-- `better-architecture.md`
-
-### During implementation or refactor
-
-Prefer:
-
-- `module-audit.md`
-
-### Before push
-
-Prefer:
-
-- `pre-push-self-review.md`
-
-### During PR review
-
-Prefer:
-
-- `pr-review.md`
-
-### For high-risk changes
-
-Add one specialized prompt when needed:
-
-- `migration-change-risk.md`
-- `security-tenant-review.md`
-
-### For structured generation work
-
-Prefer:
-
-- `module-generation-fullstack.md`
-
-Do not stack many prompts for normal work.
-
-Pick one primary prompt tied to the highest-risk concern.
-Add one specialized prompt only when the change genuinely needs it.
+- `AGENTS.md`
+- `ARCHITECTURE.md`
+- `docs/security-model.md`
+- backend and frontend engineering rules
+- the current documentation-coupling rules of the repo
 
 ---
 
-## Prompt Pack Boundaries
+## Deprecation Rule For Other Prompt Docs
 
-This catalog governs the approved reusable prompt pack under `docs/prompts/`.
+Prompt docs outside `docs/prompts/` must not remain parallel active prompt systems.
 
-It does **not** automatically treat other prompt-like files elsewhere in the repo as part of the approved repo-level pack.
+### Backend prompt docs
 
-That means this file is stronger than:
+If prompt files still exist under locations such as:
 
-- ad hoc prompt text in chats
-- one-off prompt notes
-- prompt-like docs outside `docs/prompts/` that are not listed here
+- `backend/docs/prompts/`
 
-If another prompt asset should become part of the approved repo-level pack, add it here explicitly.
+then treat them as deprecated unless and until any unique permanent rules have been migrated into canonical law docs such as:
 
----
+- `backend/AGENTS.md`
+- `backend/docs/engineering-rules.md`
+- root-level canonical prompt files under `docs/prompts/`
 
-## Maintenance Rules
+After migration, those backend-local prompt docs should be removed or archived from the active documentation surface.
 
-Update this file when:
+### Important rule
 
-- an approved prompt file is added
-- an approved prompt file is removed
-- an approved prompt file is renamed
-- an approved prompt changes role materially
-
-Do not update this file for:
-
-- one-off chat prompts
-- ordinary implementation work
-- non-approved draft prompts
-- product changes that do not affect the approved prompt pack
+Do not let multiple prompt packs drift independently.
+One canonical prompt system is the goal.
 
 ---
 
-## What This File Should Be
+## Prompt Maintenance Rules
 
-Keep this file:
+### 1. Prompts must follow repo law
 
-- small
-- explicit
-- authoritative
-- limited to indexing approved prompt assets
+If repo law changes, the relevant prompts must be updated in the same change.
+A prompt that encodes stale repo behavior is a bug.
 
-Do not let it become:
+### 2. Prompts are not truth sources
 
-- a second usage guide
-- a second review guide
-- a prompt design manifesto
-- a dumping ground for future prompt ideas
+Prompts help execute work.
+They do not outrank architecture docs, security docs, API contracts, or shipped-truth docs.
+
+### 3. Prompts should stay small and operational
+
+A prompt should tell the model how to work, not re-explain the whole product.
+If a prompt starts duplicating architecture or module truth, move that material back to canonical docs.
+
+### 4. Do not create per-module prompt packs casually
+
+Complex modules may need stronger specs, build packets, or bug-triage maps.
+They do not automatically need their own prompt ecosystems.
+
+### 5. Prompt updates are reviewed like code
+
+A prompt change that weakens repo discipline, truth order, review rigor, or architecture alignment is a real defect.
+
+---
+
+## When Not To Use Prompt Docs
+
+Do not reach for prompts first when the real problem is one of these:
+
+- missing architecture decision
+- missing API contract
+- missing module spec
+- missing QA execution truth
+- missing runbook or recovery guidance
+- missing router or truth-order clarity
+
+Fix the repo truth first.
+Then use prompts to execute inside that truth.
+
+---
+
+## Documentation Coupling Rule
+
+Update this catalog when:
+
+- a prompt is added to or removed from the canonical prompt pack
+- a prompt role changes materially
+- a non-canonical prompt surface is deprecated or retired
+- prompt routing rules change
+
+If a prompt change also changes how implementation or review should behave, update the relevant router or engineering law docs in the same PR.
 
 ---
 
 ## Final Position
 
-This file is the repo’s only prompt index/routing file.
+Use this file as the single prompt index.
 
-Use it to choose from the approved prompt pack in `docs/prompts/`.
-Use `docs/prompts/usage-guide.md` only as secondary reference when needed.
+- root docs define truth
+- engineering rules define execution law
+- API docs define contract
+- QA and ops docs define proof and support surfaces
+- prompts help apply those rules consistently
+
+There should be one active prompt system, not several competing ones.

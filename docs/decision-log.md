@@ -1,761 +1,454 @@
 # Decision Log
 
-This file records non-obvious architectural decisions that should not silently drift.
+## Purpose
 
-Each entry explains:
+This file records locked architectural and cross-cutting decisions for the repository.
+
+Use it when you need to know:
 
 - what was decided
 - why it was decided
-- what alternatives were rejected
-- what consequences follow from that decision
+- what it now constrains
+- which older alternatives are no longer valid
 
-Format:
-`## ADR-NNN — Title`
+This file is for real decisions only.
+It is not a changelog.
+It is not a backlog.
+It is not a place to record ordinary implementation choices that already follow repo law.
 
----
-
-## ADR-001 — Next.js App Router over Vite SPA
-
-**Date:** 2026-03
-**Status:** Accepted
-
-### Context
-
-We needed to choose a frontend framework for the auth UI foundation. The two candidates were:
-
-- Next.js App Router
-- Vite React SPA
-
-### Decision
-
-Use **Next.js App Router**.
-
-### Why
-
-- Sessions use `HttpOnly` cookies. There is no browser-managed auth token in `localStorage`.
-- The first render often needs server-side knowledge of session state.
-- Tenant identity is derived from host/subdomain, which SSR can read reliably before hydration.
-- SSR can call `GET /auth/me` and `GET /auth/config` using the server-side request context.
-- This supports a cleaner auth/bootstrap flow than forcing the browser to discover everything after hydration.
-
-### Rejected alternative
-
-**Vite SPA**
-
-A SPA can work, but for this topology it would push too much session/bootstrap logic into client-side loading states and route flicker. That is the wrong tradeoff for an auth-heavy, tenant-aware frontend foundation.
+If a change does not alter architecture, trust boundaries, cross-cutting behavior, documentation law, or module-spanning operating rules, it probably does not belong here.
 
 ---
 
-## ADR-002 — Two dev modes: host-run for daily work, full stack for topology validation
+## How To Read This File
 
-**Date:** 2026-03
-**Status:** Accepted
+### Fast path
 
-### Context
+1. check the ADR index below
+2. open only the entries relevant to the task
+3. do not load the full file unless the task truly needs decision history
 
-We needed to decide whether local development should standardize on:
+### When to update this file
 
-- host-run development
-- or full Docker stack only
+Add or update an entry only when a decision changes:
 
-### Decision
+- repo architecture
+- security or trust-boundary behavior
+- topology or request model behavior
+- module-spanning operating rules
+- documentation system law
+- cross-cutting product rules that affect implementation across more than one file or area
 
-Use **both**, intentionally.
+Do not write ADRs for:
 
-### Why
-
-#### Host-run mode
-
-Best for daily engineering work:
-
-- faster feedback loop
-- backend hot reload
-- frontend hot reload
-- easier debugging
-
-#### Full stack mode
-
-Required for validating topology behavior that host-run mode does not prove:
-
-- reverse proxy behavior
-- forwarded header behavior
-- cookie handling through proxy
-- same-origin routing
-- subdomain tenant resolution through the public entrypoint
-
-### Consequence
-
-A change can be "good enough for host-run" and still be unsafe for topology.
-That is why topology-affecting changes must be validated in the full stack too.
+- ordinary endpoint additions
+- normal CRUD implementation choices
+- local refactors that preserve existing repo law
+- decisions already fully covered by code comments and skeleton rules
 
 ---
 
-## ADR-003 — SSO redirect URI embedded in encrypted state
+## ADR Index
 
-**Date:** 2026-03
-**Status:** Accepted
-
-### Context
-
-A single global redirect base URL is too weak for tenant-aware SSO in a subdomain-driven system.
-
-### Decision
-
-Construct the tenant-aware redirect URI at SSO start and embed it in the encrypted SSO state.
-
-### Why
-
-- callback processing uses the exact URI chosen for that flow
-- avoids brittle global re-derivation
-- supports tenant-aware redirect behavior
-- keeps the redirect target protected inside the encrypted state payload
-
-### Rejected alternative
-
-**Global `SSO_REDIRECT_BASE_URL` re-derivation at callback time**
-
-That centralizes the callback origin too aggressively and becomes fragile in a multi-tenant topology.
+| ID       | Title                                                                        | Status | Scope                         |
+| -------- | ---------------------------------------------------------------------------- | ------ | ----------------------------- |
+| ADR-0001 | Single Public Origin Through Reverse Proxy                                   | LOCKED | topology                      |
+| ADR-0002 | Host-Derived Tenant Resolution                                               | LOCKED | topology / auth               |
+| ADR-0003 | SSR Uses Internal Backend URL With Explicit Header Forwarding                | LOCKED | frontend / backend / topology |
+| ADR-0004 | Browser Uses Same-Origin `/api/*`; SSO Starts With Navigation, Not `fetch()` | LOCKED | frontend / auth / topology    |
+| ADR-0005 | Session Cookie And SSO State Cookie Are Separate Contracts                   | LOCKED | auth / security               |
+| ADR-0006 | Proxy Conformance Tests Are The Safety Net For Dev/Prod Proxy Drift          | LOCKED | infra / topology              |
+| ADR-0007 | Next.js App Router Is The Frontend Framework                                 | LOCKED | frontend                      |
+| ADR-0008 | Workspace Setup Guidance Is Tenant-Scoped; No `FIRST_TIME_SETUP` NextAction  | LOCKED | auth / settings boundary      |
+| ADR-0009 | MFA TOTP Label Uses Verified Email, Not `userId`                             | LOCKED | auth / MFA                    |
+| ADR-0010 | Seed Bootstrap Delivery Differs By Environment                               | LOCKED | auth / ops                    |
+| ADR-0011 | Expired Invite Cannot Be Bypassed By SSO                                     | LOCKED | auth / invites / SSO          |
+| ADR-0012 | SSO Does Not Bypass App-Level MFA                                            | LOCKED | auth / SSO / MFA              |
+| ADR-0013 | Documentation System Uses Tiered Truth And One Active Prompt Pack            | LOCKED | documentation system          |
 
 ---
 
-## ADR-004 — SSO state cookie CSRF binding
+## ADR-0001 — Single Public Origin Through Reverse Proxy
 
-**Date:** 2026-03
-**Status:** Accepted
+### Status
 
-### Context
-
-OAuth `state` protects against CSRF, but state alone is stronger when also bound to the browser with a short-lived cookie.
+LOCKED
 
 ### Decision
 
-Set a short-lived `sso-state` cookie and require it to match the callback `state` query parameter.
+The system is exposed to the browser through one public origin fronted by the reverse proxy.
+The browser does not talk directly to backend service origins.
 
 ### Why
 
-- adds browser-bound CSRF protection
-- keeps the SSO flow harder to replay incorrectly
-- cookie is short-lived and contains only encrypted state
-- aligns with a defense-in-depth approach for SSO entrypoints
-
-### Cookie posture
-
-- `HttpOnly`
-- `SameSite=Lax`
-- short TTL
-- cleared on callback completion
-
-### Why not `SameSite=Strict`
-
-The OAuth provider redirects back to our callback URL as a top-level cross-site navigation. `Strict` would block the cookie in that flow and make validation fail.
-
----
-
-## ADR-005 — Caddy manages `X-Forwarded-For` chain by default
-
-**Date:** 2026-03
-**Status:** Accepted
-
-### Context
-
-A manual `header_up X-Forwarded-For {remote_host}` override looked harmless, but it actually collapses the forwarded chain.
-
-### Decision
-
-Do not manually override `X-Forwarded-For` in Caddy. Rely on Caddy's normal reverse proxy behavior.
-
-### Why
-
-- preserves the client IP chain correctly
-- avoids flattening all requests into a single proxy-shaped identity
-- keeps rate limiting and audit behavior meaningful behind the proxy
-
-### Rejected alternative
-
-**Manual header override**
-
-It is too easy to accidentally destroy the chain that the backend expects when `trustProxy` is enabled.
-
----
-
-## ADR-006 — Topology-first foundation before broader module expansion
-
-**Date:** 2026-03
-**Status:** Accepted
-
-### Context
-
-Hubins is a broader platform, but this repository phase needed a strong foundation before expanding into more modules or richer UI flows.
-
-There was a risk of treating broader product docs as if they implied current implementation completeness.
-
-### Decision
-
-Treat this repo phase explicitly as:
-
-**Topology + FE/BE wiring + Auth/User Provisioning foundation first**
-
-### Why
-
-Because the following are load-bearing and must be correct before broader expansion:
-
-- same-origin FE/BE contract
-- SSR backend access contract
-- tenant routing and isolation
-- session/cookie behavior
-- proxy trust assumptions
-- backend module/bootstrap discipline
-- truthful repo/documentation authority
-
-### Consequence
-
-The repo is allowed to describe the broader Hubins platform direction, but it must always keep current shipped scope explicit through:
-
-- `README.md`
-- `docs/current-foundation-status.md`
-- this decision log
-
-### Rejected alternative
-
-**Pretend the wider platform architecture equals current repo completeness**
-
-That creates false confidence and causes drift in both implementation and planning.
-
----
-
-## ADR-007 — Browser uses same-origin `/api/*`, SSR uses direct backend access
-
-**Date:** 2026-03
-**Status:** Accepted
-
-### Context
-
-We needed one clear FE/BE communication rule that works with:
-
-- tenant subdomains
-- proxy routing
-- session cookies
-- SSR bootstrap flows
-
-### Decision
-
-Split communication paths by execution environment:
-
-#### Browser
-
-Use relative same-origin `/api/*` through the proxy.
-
-#### SSR / server-side frontend code
-
-Call backend directly through `INTERNAL_API_URL` and explicitly forward:
-
-- `Host`
-- `Cookie`
-- `X-Forwarded-For`
-- `X-Forwarded-Proto`
-- `X-Forwarded-Host`
-
-### Why
-
-This keeps browser behavior aligned with the public topology while allowing SSR to bootstrap session-aware state directly and efficiently.
-
-### Rejected alternatives
-
-#### Browser directly calling backend origin
-
-Rejected because it weakens topology discipline and complicates cookie / origin handling.
-
-#### SSR also calling through public `/api/*`
-
-Rejected because SSR already has direct backend reachability and should preserve the original request context explicitly.
-
----
-
-## ADR-008 — Tenant identity is derived from routing, not client-selected state
-
-**Date:** 2026-03
-**Status:** Accepted
-
-### Context
-
-Multi-tenant systems often drift into client-selected tenant IDs passed in payloads or app state. That weakens isolation and complicates trust assumptions.
-
-### Decision
-
-Derive tenant identity from the request host/subdomain.
-
-### Why
-
-- aligns tenant identity with routing
-- avoids client-controlled tenant switching in payloads
-- simplifies reasoning about request ownership
-- pairs naturally with same-origin browser behavior and SSR host forwarding
-
-### Consequence
-
-Frontend code must not invent its own tenant source of truth.
-Tenant-aware behavior must follow the current host.
-
-### Rejected alternatives
-
-- tenant ID in request body
-- tenant selection in query string
-- tenant stored as client-auth state independent of host
-
-## ADR-009 — Documentation home is scope-split, not single-folder-only
-
-**Date:** 2026-03
-**Status:** Accepted
-
-### Context
-
-The repository now has three kinds of active documentation:
-
-- repo-wide truth and architecture documents
-- backend law / contract documents
-- frontend scope documents that intentionally live close to the frontend surface
-
-Without an explicit rule, future work can create drift by duplicating truth across new folders or by moving backend/frontend docs away from the code they describe.
-
-### Decision
-
-Use a **scope-split documentation home**:
-
-- repo-wide truth lives at repo root and under `/docs`
-- backend law/contracts live under `backend/docs/`
-- frontend implementation guidance stays close to the frontend surface (`frontend/README.md` and `frontend/src/shared/engineering-rules.md`)
-
-### Why
-
-- keeps repo-wide truth easy to find
-- keeps backend contracts and law close to backend code
-- keeps frontend guidance close to the frontend implementation surface
-- avoids inventing a second parallel home for the same truth
+This keeps browser behavior same-origin, simplifies cookie handling, and keeps local behavior aligned with the intended production model.
 
 ### Consequences
 
-When updating docs:
+- browser requests use proxy-routed paths
+- proxy behavior becomes load-bearing
+- cookie, session, and tenant behavior depend on correct proxy routing
 
-- change repo-wide status/architecture/decision documents in root `/docs`
-- change backend-specific law/contracts in `backend/docs/`
-- change frontend-specific guidance where the frontend already keeps it
+### Supersedes
 
-A new document should not be added until its scope is clear.
-If the same fact would need to live in two homes, one of those homes is wrong.
+Any design that assumes the browser should call backend container or service origins directly.
 
 ---
 
-## ADR-010 — MFA secrets are global per user, not per tenant
+## ADR-0002 — Host-Derived Tenant Resolution
 
-**Date:** 2026-03
-**Status:** Accepted
+### Status
 
-### Context
-
-The auth system is multi-tenant. Users can belong to multiple tenants simultaneously. MFA (TOTP) setup requires generating and storing an encrypted TOTP secret and a set of hashed recovery codes.
-
-We needed to decide whether MFA secrets should be scoped per-user globally or per-membership (per user + per tenant).
+LOCKED
 
 ### Decision
 
-MFA secrets are **global per user** (`UNIQUE(user_id)` on `mfa_secrets`).
-
-A user has one TOTP secret across the entire platform. If they set up MFA while logged into `acme.hubins.com`, that same verified secret is used when they log into `techstart.hubins.com`.
+Tenant identity is derived from the host and treated as load-bearing request truth.
 
 ### Why
 
-#### Identity model is global
-
-A user is a global entity identified by email. Auth identities (password, Google, Microsoft) are already global — a user has one password, not one per tenant. TOTP identity follows the same model.
-
-#### UX coherence
-
-Requiring users to set up a new authenticator app entry for each tenant they join would be confusing and impractical for users who belong to multiple tenants.
-
-#### Simplicity and correctness
-
-Per-tenant MFA would require each tenant's login flow to check for a tenant-scoped secret, and recovery flows would need tenant-scoped recovery code sets. This adds complexity with no security benefit — the TOTP secret authenticates the user's identity, not their membership in a specific tenant.
-
-### Multi-tenant consequences
-
-#### MFA requirement is per-tenant, secret is global
-
-`isMfaRequiredForLogin` checks `membership.role` and `tenant.memberMfaRequired` — both are per-tenant. The enforcement decision (must verify MFA?) is tenant-scoped. The credential (the TOTP secret) is global.
-
-This means:
-
-- A user who is ADMIN in tenant A and MEMBER in tenant B uses the same TOTP secret in both tenants.
-- When logging into tenant A (admin, MFA required), they verify their TOTP code.
-- When logging into tenant B (member, MFA not required), the same secret exists but is not required.
-- The session `mfaVerified` flag is set per-login based on whether the specific login flow required and completed MFA verification.
-
-#### Setup requirement is triggered per-login, not globally
-
-If a user has not yet set up MFA (`hasVerifiedMfaSecret = false`) and logs into a tenant where MFA is required for their role, `nextAction` will be `MFA_SETUP_REQUIRED` for that login session. This works correctly regardless of whether they have completed MFA setup for other tenants, because the global secret is either present and verified or it is not.
-
-### Rejected alternatives
-
-#### Per-membership MFA secrets
-
-Rejected because it requires duplicate authenticator entries, complicates the recovery flow, and provides no meaningful security improvement over global secrets. The TOTP secret authenticates the user's identity, not their role in a specific workspace.
-
-#### Per-tenant MFA secret with tenant-selection at setup time
-
-Also rejected. The UX overhead of choosing "which tenant is this authenticator entry for" is unjustifiable given that the user's physical identity (and therefore their authenticator app) is the same across tenants.
-
-### Named re-evaluation trigger
-
-Re-evaluate this decision when any of the following becomes true:
-
-**`MFA_PER_TENANT_TRIGGER`**
-
-- a regulatory or compliance requirement mandates tenant-isolated MFA credentials
-- a tenant requires the ability to independently revoke a user's MFA secret without affecting their access to other tenants
-- user research shows the global MFA model creates a meaningful UX problem for multi-tenant users
-
----
-
-## ADR-011 — Workspace setup banner, not auth continuation redirect
-
-**Date:** 2026-03
-**Status:** Accepted (Phase 9 implementation — official replacement for the original LOCK-1 redirect expectation)
-
-### Context
-
-LOCK-1 (see Locked Decisions Register at the end of this file) originally described a one-time
-`FIRST_TIME_SETUP` nextAction that would redirect the first fully onboarded admin in a tenant
-to `/admin/settings`. Phase 9 evaluated this approach before implementation began and changed
-the design. This ADR records what was built in Phase 9 and why the redirect approach was
-superseded.
-
-### Decision
-
-Workspace setup guidance is delivered via a **non-blocking banner on `/admin`**, not an auth
-continuation redirect.
-
-- All admins always land on `/admin` after full authentication (`NONE + ADMIN`).
-- No `FIRST_TIME_SETUP` nextAction is emitted. The `AuthNextAction` contract is unchanged.
-- `GET /auth/config` returns `setupCompleted: boolean` derived from `tenants.setup_completed_at IS NOT NULL`.
-- The `/admin` page renders a `WorkspaceSetupBanner` when `config.tenant.setupCompleted === false`.
-- Any admin visiting `/admin/settings` triggers `POST /auth/workspace-setup-ack` on SSR load,
-  which sets `tenants.setup_completed_at = now()`.
-- On the next `GET /auth/config` call, `setupCompleted` is `true` and the banner disappears
-  for **all admins** in the workspace.
-
-### Why the redirect approach was superseded
-
-#### Race condition
-
-If multiple admin invites are sent simultaneously and all complete onboarding at the same time,
-redirect-based first-admin detection creates a race: exactly one admin gets the special redirect
-and the rest are silently skipped. The banner approach is consistent — every admin sees it
-until any admin dismisses it.
-
-#### Auth continuation is the wrong mechanism for setup guidance
-
-Auth continuation redirects enforce required steps such as email verification and MFA.
-Workspace setup is onboarding assistance, not a security gate. Using the auth continuation
-contract for a non-mandatory UI hint conflates two distinct concerns and adds unnecessary
-complexity to the continuation contract.
-
-#### Tenant-level state, not user-level state
-
-Setup completion belongs to the tenant as a whole, not to the specific user who first
-completes the setup flow. The banner correctly models this as a tenant-level flag.
+The platform is multi-tenant by host.
+Tenant routing and access isolation must align with the incoming host context rather than a frontend-owned tenant switch.
 
 ### Consequences
 
-- `FIRST_TIME_SETUP` nextAction does **not** exist and must never be added.
-- `frontend/src/shared/auth/redirects.ts` has no `FIRST_TIME_SETUP` case — this is intentional.
-- The `AuthNextAction` union type has no `FIRST_TIME_SETUP` member — this is intentional.
-- Future product phases that need onboarding flows must model them as page-level state,
-  not as auth continuation nextActions.
+- proxy must preserve host correctly
+- backend request context must treat host-derived tenant resolution as authoritative
+- tenant/session mismatches must fail closed
 
-### Named re-evaluation trigger
+### Supersedes
 
-**`FIRST_ADMIN_REDIRECT_TRIGGER`**: Re-evaluate if future product requirements need a
-hard-gated admin workspace-onboarding sequence that cannot be skipped or deferred by
-navigating to other admin pages before setup is complete.
+Any design that makes tenant identity primarily frontend-selected or weakly inferred.
 
 ---
 
-## ADR-012 — MFA QR code label uses verified email, not `userId`
+## ADR-0003 — SSR Uses Internal Backend URL With Explicit Header Forwarding
 
-**Date:** 2026-03
-**Status:** Accepted
+### Status
 
-### Context
-
-The TOTP QR label is part of the real authenticator-app enrollment surface. The previous behavior used `userId` as the label, which makes the authenticator entry opaque to the user and does not match the intended product behavior.
+LOCKED
 
 ### Decision
 
-Use:
-
-- issuer: `Hubins`
-- label: the user's **verified email address**
-
-The previous `userId` label is treated as an oversight, not as intentional privacy behavior.
+SSR and server-side frontend calls use the internal backend URL and explicitly forward the host, cookie, and forwarded-header context needed by backend auth and tenant resolution.
 
 ### Why
 
-- users recognize their own verified email immediately in authenticator apps
-- the label now matches the product-facing identity model
-- this is the correct basis for real MFA proof testing
+SSR is not the browser.
+Routing SSR through the public proxy as if it were a browser request adds avoidable indirection and weakens clarity.
 
 ### Consequences
 
-- real MFA proof testing must use the verified-email label behavior
-- previously generated dev MFA seeds may still display the old label and should not be treated as proof of the corrected behavior
-- environments with stale pre-correction MFA seeds may need reset / reseed before real authenticator-app validation
+- browser and SSR calls remain distinct by design
+- SSR helpers must forward the correct headers explicitly
+- SSR auth/bootstrap behavior must not be treated as generic browser fetch behavior
 
-### Rejected alternative
+### Supersedes
 
-#### Continue using `userId`
-
-Rejected because it weakens usability and does not reflect the intended user-facing identity for authenticator enrollment.
+Any design that treats SSR calls as interchangeable with browser `/api/*` calls.
 
 ---
 
-## ADR-013 — Seed/bootstrap invite delivery is environment-specific
+## ADR-0004 — Browser Uses Same-Origin `/api/*`; SSO Starts With Navigation, Not `fetch()`
 
-**Date:** 2026-03
-**Status:** Accepted
+### Status
 
-### Context
-
-The current stage still relies on operator/bootstrap tenant creation rather than a public self-serve production onboarding flow. The roadmap needed an explicit environment-specific contract for how invite/bootstrap delivery works so that local convenience does not silently become the staging or production rule.
+LOCKED
 
 ### Decision
 
-Use an environment-specific bootstrap delivery contract.
-
-### Local dev
-
-- raw invite token may be logged to stdout for developer convenience
-- local email capture may also be used when SMTP is enabled
-- raw token logging is acceptable **only** in local development
-
-### Shared staging / QA
-
-- seed/bootstrap must queue an outbox message
-- invite delivery must go through the real outbox + SMTP path
-- raw token logging is **not** the operational contract in shared staging / QA
-
-### Production
-
-- seed-style bootstrap is accepted as the operator mechanism for tenant creation at this stage
-- this is not a public self-serve onboarding flow
-- raw token logging must never occur in production
-- the production bootstrap runbook must describe the exact operator sequence
-
-### Consequences
-
-- staging / QA proof phases must validate real outbox-backed invite delivery
-- production bootstrap remains an operator flow until a later public onboarding model is introduced
-- local developer convenience does not change the staging or production contract
-
----
-
-## ADR-014 — Expired invites are invalid for SSO activation
-
-**Date:** 2026-03
-**Status:** Accepted
-
-### Context
-
-The roadmap identified an open human-decision flag around whether Google or Microsoft SSO could activate a membership whose only tenant-entry basis was an expired invite.
-
-Leaving that ambiguous would create a bypass around invite expiration and produce inconsistent membership activation behavior across login methods.
-
-### Decision
-
-Expired invites are **invalid** for SSO activation.
-
-If a user's only tenant-entry basis is an expired invite, neither Google SSO nor Microsoft SSO may activate that membership.
-
-### Recovery path
-
-Admin must resend or recreate the invite.
-
-### What this does not change
-
-This rule does **not** affect users who already have an `ACTIVE` membership. It only prevents SSO from reviving an expired invite-based entry path.
+Browser-side requests use same-origin `/api/*` routes.
+SSO initiation uses browser navigation, not `fetch()`.
 
 ### Why
 
-- invite expiration must mean the same thing across password and SSO entry paths
-- SSO must not become a bypass around invite lifecycle policy
-- membership activation remains consistent regardless of authentication method
+Same-origin browser API usage preserves the proxy model and cookie behavior.
+SSO is a navigation flow, not a resource-fetch flow.
 
 ### Consequences
 
-- tenant-entry policy must reject expired-invite-only SSO activation
-- tests and code comments must reflect this as a closed decision, not an unresolved question
+- browser API clients must remain relative-path clients
+- frontend code must not hardcode backend origins for browser requests
+- SSO start behavior must remain navigation-based
 
-### Rejected alternative
+### Supersedes
 
-#### Allow SSO to activate expired invites
-
-Rejected because it would silently weaken the invite lifecycle contract and create a loophole around admin-controlled onboarding.
+Any design that starts SSO with `fetch()` or pushes browser traffic directly to backend origins.
 
 ---
 
-## ADR-015 — SSO does not bypass app-level MFA
+## ADR-0005 — Session Cookie And SSO State Cookie Are Separate Contracts
 
-**Date:** 2026-03
-**Status:** Accepted
+### Status
 
-### Context
-
-SSO proves identity with the upstream provider, but the application still owns its own session state, membership rules, and MFA enforcement decisions.
-
-Without an explicit rule, future flows could incorrectly treat SSO as a reason to skip app-level MFA continuation.
+LOCKED
 
 ### Decision
 
-SSO authentication does **not** bypass app-level MFA.
-
-If the authenticated user is subject to MFA:
-
-- and MFA is not configured yet, SSO login must continue into MFA setup
-- and MFA is already configured, SSO login must continue into MFA verification when required
-
-Recovery-code behavior remains valid after SSO login exactly as it does after password login.
+The session cookie and the SSO state cookie are separate cookies with separate purposes, lifecycle rules, and SameSite behavior.
+They are host-only and must not use a parent-domain cookie model.
 
 ### Why
 
-- the app, not the upstream identity provider, owns app-level continuation requirements
-- MFA policy must stay consistent across password and SSO entry paths
-- recovery behavior should not differ by login mechanism
+The session contract and the SSO callback protection contract solve different problems and require different browser behavior.
 
 ### Consequences
 
-- Google and Microsoft callback flows must preserve the same MFA continuation semantics as password login
-- future proof testing for SSO must validate MFA continuation explicitly
-- recovery-code support remains part of the same app-level MFA contract after SSO
+- session cookie and SSO state cookie must not be merged conceptually or technically
+- host-only cookie behavior is mandatory for the intended isolation model
+- cookie changes are security-sensitive and topology-sensitive
 
-### Rejected alternative
+### Supersedes
 
-#### Treat SSO as sufficient to skip app-level MFA
-
-Rejected because it would create inconsistent enforcement and weaken the application's own continuation / step-up policy.
+Any design that mixes session and SSO callback state into one cookie model or weakens host-only behavior.
 
 ---
 
-## ADR-016 — Open redirect guard hardened to block backslash-normalised paths
+## ADR-0006 — Proxy Conformance Tests Are The Safety Net For Dev/Prod Proxy Drift
 
-**Date:** 2026-03
-**Status:** Accepted
+### Status
 
-### Context
-
-`isSafeReturnToPath` in `frontend/src/shared/auth/url-tokens.ts` guarded against
-`//evil.com` style protocol-relative redirects by checking `!startsWith('//')`.
-Some older browser parsers normalise `/\evil.com` to `//evil.com`, creating a
-second bypass path for the same class of attack.
-
-The unit test file (`url-tokens.spec.ts`) already covered this vector explicitly
-as part of Phase 10 security coverage, but the implementation guard was missing.
+LOCKED
 
 ### Decision
 
-Add `!value.startsWith('/\\')` as a third guard in `isSafeReturnToPath`.
+Dev and prod may use different proxy families for now, but proxy conformance tests are required as the safety net for behavioral drift.
 
 ### Why
 
-Defence in depth. The practical risk is low for modern browsers, but the guard
-is a one-line addition with zero false-positive surface: no legitimate return-to
-path in this system begins with `/\`.
+The request model is too important to leave to human memory or config review alone.
 
 ### Consequences
 
-- `isSafeReturnToPath('/\\evil.com')` returns `false`.
-- All existing return-to paths (starting with a single `/` followed by a letter) are unaffected.
-- Unit test already covered the case; the implementation now matches the stated contract.
+- proxy routing and forwarding behavior require executable proof
+- proxy-sensitive changes require stronger validation than normal app changes
+- a future single-proxy-family decision may still be made later if operational cost justifies it
 
-### Rejected alternative
+### Supersedes
 
-**Do nothing** — rejected because the cost of adding the guard is zero and the
-defence-in-depth principle (from `docs/security-model.md`) favours adding it.
-
----
-
-## Locked Decisions Register (LOCK-1 through LOCK-5)
-
-This section is the canonical cross-reference for the five decisions locked by the Auth +
-User Provisioning module roadmap. These decisions are referenced by their LOCK-N labels
-throughout `docs/ops/runbooks.md`, `docs/qa/qa-execution-pack.md`, and CI test comments.
-
-Each entry states the decision in summary form and references the ADR above that contains
-the full rationale, rejected alternatives, and named re-evaluation triggers.
+Any design that relies only on manual review to keep proxy behavior aligned across environments.
 
 ---
 
-### LOCK-1 — Workspace setup banner and admin-settings acknowledgement
+## ADR-0007 — Next.js App Router Is The Frontend Framework
 
-**ADR:** ADR-011
-**Status:** Locked — Phase 9 implementation complete
+### Status
 
-Workspace setup is delivered as a **tenant-scoped non-blocking banner on `/admin`**,
-not an auth continuation redirect. All admins always land on `/admin` after full authentication
-(`NONE + ADMIN`). No `FIRST_TIME_SETUP` nextAction exists or will be added to the
-`AuthNextAction` union. The banner disappears for all admins in the workspace once any admin
-visits `/admin/settings` and the acknowledgement is recorded on the tenant row.
+LOCKED
 
-**Named re-evaluation trigger:** `FIRST_ADMIN_REDIRECT_TRIGGER` (see ADR-011).
+### Decision
 
----
+The frontend framework choice is Next.js App Router.
 
-### LOCK-2 — MFA QR code TOTP label
+### Why
 
-**ADR:** ADR-012
-**Status:** Locked — correction applied before Phase 5 proof
+The repo’s frontend architecture, SSR model, and routing assumptions are built around this choice.
 
-TOTP QR code issuer is `Hubins`. Label is the user's verified email address.
-Using `userId` as the label was an oversight and was corrected. Any environment with
-pre-correction MFA seeds must be reset before real authenticator-app proof is accepted
-as evidence.
+### Consequences
+
+- route, SSR, and bootstrap patterns must remain compatible with App Router
+- frontend guidance and tests assume this framework model
+
+### Supersedes
+
+Any unresolved framework-choice state for the current frontend.
 
 ---
 
-### LOCK-3 — Seed bootstrap delivery mechanism
+## ADR-0008 — Workspace Setup Guidance Is Tenant-Scoped; No `FIRST_TIME_SETUP` NextAction
 
-**ADR:** ADR-013
-**Status:** Locked
+### Status
 
-Invite delivery is environment-specific:
+LOCKED
 
-- **Local dev:** raw token logging acceptable as developer convenience only.
-- **Staging / QA:** must use the real outbox + SMTP path. Raw token logging is not the delivery contract.
-- **Production:** operator bootstrap only. Raw token logging must never occur in production.
+### Decision
+
+Workspace setup state belongs to the tenant, not to an individual admin membership.
+Admins land on `/admin` after full authentication, and workspace setup guidance is expressed through a non-blocking banner and `/admin/settings`, not through a `FIRST_TIME_SETUP` auth nextAction.
+
+### Why
+
+Workspace setup is shared tenant configuration, not a personal auth continuation state.
+
+### Consequences
+
+- `/admin` is the post-auth admin landing
+- `/admin/settings` is the setup guidance/configuration surface
+- auth nextAction contract must not grow a `FIRST_TIME_SETUP` branch
+- workspace setup behavior must not become a per-admin dismissal state
+
+### Supersedes
+
+Any design that models workspace setup as a membership-scoped or auth-nextAction-only state.
 
 ---
 
-### LOCK-4 — Expired invite is invalid for SSO activation
+## ADR-0009 — MFA TOTP Label Uses Verified Email, Not `userId`
 
-**ADR:** ADR-014
-**Status:** Locked
+### Status
 
-An expired invite cannot be activated by Google or Microsoft SSO. If a user's only
-tenant-entry basis is an expired invite, the SSO callback must reject activation and
-create no orphan user or revived membership. Recovery path: admin resends or recreates
-the invite.
+LOCKED
 
-**Referenced in:** `docs/ops/runbooks.md` Phase 6-C (Google), Phase 7-E (Microsoft);
-`docs/qa/qa-execution-pack.md` TC-09, TC-10.
+### Decision
+
+The MFA TOTP label uses the verified user email with issuer `Hubins`, not `userId`.
+
+### Why
+
+The authenticator-app presentation should reflect user-recognizable identity rather than an internal opaque identifier.
+
+### Consequences
+
+- MFA QR and label behavior must reflect verified email presentation
+- tests and proof expectations should validate the visible label accordingly
+
+### Supersedes
+
+Any earlier behavior or assumption using `userId` as the intended MFA TOTP label.
 
 ---
 
-### LOCK-5 — SSO does not bypass app-level MFA
+## ADR-0010 — Seed Bootstrap Delivery Differs By Environment
 
-**ADR:** ADR-015
-**Status:** Locked
+### Status
 
-SSO authentication does not remove app-level MFA requirements. If MFA is required and not
-yet configured, SSO login continues into `MFA_SETUP_REQUIRED`. If MFA is configured and
-required for that login, SSO login continues into `MFA_REQUIRED`. Recovery codes remain
-valid after SSO login on the same terms as after password login.
+LOCKED
 
-**Referenced in:** `docs/ops/runbooks.md` Phase 6-D (Google), Phase 7-F (Microsoft);
-`docs/qa/qa-execution-pack.md` TC-09, TC-10.
+### Decision
+
+Seed/bootstrap delivery behavior is environment-specific:
+
+- local dev may allow developer-friendly raw-token convenience
+- shared staging/QA must use the real outbox + SMTP path
+- production must not use raw-token convenience
+
+### Why
+
+Local convenience and operational realism are different concerns and should not be conflated.
+
+### Consequences
+
+- local behavior must not be described as the staging or production contract
+- staging/QA bootstrap proof must validate real delivery behavior
+- production bootstrap must follow an operator-safe runbook path
+
+### Supersedes
+
+Any design that treats local raw-token convenience as the general operational contract.
+
+---
+
+## ADR-0011 — Expired Invite Cannot Be Bypassed By SSO
+
+### Status
+
+LOCKED
+
+### Decision
+
+If a user’s only tenant-entry basis is an expired invite, Google SSO and Microsoft SSO must not activate that membership.
+
+### Why
+
+SSO must not become a bypass around invite expiration rules.
+
+### Consequences
+
+- invite expiry rules remain authoritative even in SSO continuation flows
+- recovery path is admin resend or recreate invite
+
+### Supersedes
+
+Any design that allows SSO to reactivate or bypass an expired invite path.
+
+---
+
+## ADR-0012 — SSO Does Not Bypass App-Level MFA
+
+### Status
+
+LOCKED
+
+### Decision
+
+SSO authentication does not remove the application’s own MFA requirements.
+
+### Why
+
+Provider authentication and application-level MFA policy are not the same trust decision.
+
+### Consequences
+
+- users subject to app MFA must continue into MFA setup or verification as appropriate after SSO
+- recovery code behavior remains valid after SSO exactly as after password login
+
+### Supersedes
+
+Any design that treats successful SSO as a blanket replacement for app-level MFA.
+
+---
+
+## ADR-0013 — Documentation System Uses Tiered Truth And One Active Prompt Pack
+
+### Status
+
+LOCKED
+
+### Decision
+
+The documentation system uses tiered truth:
+
+- stable global law
+- growing global contracts and operational docs
+- opt-in module-local docs only for genuinely complex modules
+
+The active prompt system is centralized under `docs/prompts/` rather than split across competing prompt packs.
+
+### Why
+
+This keeps the repo navigable for engineers and AI, reduces duplicate truth, and limits drift.
+
+### Consequences
+
+- module docs are opt-in, not mandatory
+- API docs are domain-owned, not aggregated into one giant contract file
+- prompts are execution infrastructure, not a second truth system
+- support docs must not compete with higher-truth docs
+
+### Supersedes
+
+Any documentation model that duplicates truth widely, creates parallel prompt systems, or generates per-module docs by default.
+
+---
+
+## Maintenance Rules
+
+### 1. New entries must be real decisions
+
+If the choice only affects a local implementation detail and does not alter repo law, cross-cutting behavior, or module-spanning rules, do not add an ADR.
+
+### 2. Update in the same PR
+
+If a real architectural or cross-cutting decision is made, the ADR belongs in that same PR.
+Do not leave decision capture for later.
+
+### 3. Keep entries short and sharp
+
+Each entry should make scanning cheaper, not heavier.
+If an ADR becomes long because it is re-explaining architecture or a module spec, move that material back to the correct canonical doc.
+
+### 4. Do not duplicate module-local truth here
+
+Module-specific implementation detail belongs in the module’s own highest-truth spec when one exists.
+This file only records the cross-cutting or architectural decision itself.
+
+---
+
+## Final Position
+
+Use this file to record what the repo has actually decided.
+
+If you need current shipped truth, start with `docs/current-foundation-status.md`.
+If you need architecture law, use `ARCHITECTURE.md`.
+If you need security law, use `docs/security-model.md`.
+If you need a real decision that constrains multiple areas, use this file.
