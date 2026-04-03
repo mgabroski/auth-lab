@@ -1,488 +1,453 @@
-# Auth / User Provisioning — Backend Module Guide
+# Auth / User Provisioning — Module Complexity Guide
 
-This document explains the **current backend behavior** of the Auth + User Provisioning foundation in this repository.
+## Purpose
 
-It is written for:
+This is a **Tier 3 module-local reference** for Auth / User Provisioning.
 
-- backend engineers
-- frontend engineers integrating with auth/bootstrap behavior
-- QA engineers verifying tenant-aware auth behavior
-- PM/technical stakeholders who need a truthful view of what the backend currently supports
+Its job is narrow:
 
-This is **not** a generic platform vision document.
-It is a backend module guide for the module surface that exists now.
+- explain the **non-obvious complexity** of the auth/provisioning module
+- summarize the **flow shapes and state transitions** that are easy to misunderstand from API docs alone
+- record **module-local design judgments** that should not be rediscovered during reviews or refactors
+- point engineers toward the **most relevant proof surfaces**
 
-Read this after:
+This file is **not** the source of current shipped scope.
+This file is **not** the API contract.
+This file is **not** the repo router.
 
-1. `README.md`
-2. `docs/current-foundation-status.md`
-3. `ARCHITECTURE.md`
-4. `docs/decision-log.md`
-5. `backend/docs/api/auth.md`
+For canonical truth order, use:
 
----
+1. `docs/current-foundation-status.md`
+2. `ARCHITECTURE.md`
+3. `docs/security-model.md`
+4. `backend/docs/api/*.md`
+5. this document
 
-## 1. What this module is responsible for
-
-At the current repo phase, the Auth + User Provisioning backend foundation is responsible for:
-
-- authenticating users by password
-- establishing and destroying tenant-bound sessions
-- exposing auth bootstrap endpoints (`/auth/me`, `/auth/config`)
-- handling public signup where tenant policy allows it
-- handling invite-based registration / provisioning
-- handling email verification and resend flows
-- handling password reset initiation and completion
-- handling MFA setup / verify / recovery
-- handling Google and Microsoft SSO start/callback flows
-- coordinating tenant membership creation/activation during provisioning flows
-- supporting admin invite lifecycle behavior
-
-This module is foundational because it sits on top of:
-
-- tenant resolution
-- request context
-- session infrastructure
-- tenant membership behavior
-- email/outbox delivery
-- audit behavior
+If this file conflicts with shipped-truth docs, security law, or API contracts, this file loses.
 
 ---
 
-## 2. What this module does not claim to do yet
+## When To Use This File
 
-This guide must remain truthful about current scope.
+Read this file when you need to understand **why Auth behaves the way it does**, especially around:
 
-It does **not** claim that the repo already has:
+- continuation state after login
+- tenant-aware session rules
+- invite vs signup vs existing-user branching
+- MFA setup / verify / recovery transitions
+- SSO start/callback behavior and state binding
+- why some auth/privacy behaviors intentionally look stricter or more indirect than a typical CRUD module
 
-- the full broader Hubins product UI beyond the current auth/provisioning slice
-- every future tenant-admin management surface that later modules may add
-- every future Hubins identity/provisioning feature that broader platform docs may discuss
-- later confidence/test hardening work that belongs to later phases
+Do **not** read this file first if you only need:
 
-The frontend auth/provisioning surface **is** real now for the current slice.
-What remains unshipped is the broader product beyond that slice.
+- current shipped capability status
+- endpoint request/response shapes
+- local setup commands
+- QA execution steps
 
-If a behavior is planned but not yet implemented, it must not be described here as current capability.
-
----
-
-## 3. Core backend model
-
-## 3.1 Tenant identity
-
-Tenant identity is derived from the request host/subdomain.
-
-The backend does **not** trust the client to choose tenant identity through:
-
-- request body
-- query params
-- local storage
-- arbitrary headers
-
-This means every auth/provisioning behavior is tenant-aware by construction.
+Those are owned elsewhere.
 
 ---
 
-## 3.2 Sessions
+## Why This Module Qualifies For Tier 3
 
-Sessions are server-side and Redis-backed.
+Auth / User Provisioning is not just a list of endpoints.
+It qualifies for module-local documentation because it contains multiple interacting flows and state transitions that are easy to misuse during implementation or review:
 
-Important consequences:
+- tenant resolution from host context
+- tenant-bound session behavior
+- partially authenticated continuation state
+- email verification gating
+- MFA setup vs MFA verify vs MFA recovery
+- invite acceptance branching for new vs existing users
+- SSO start and callback coordination through browser navigation plus short-lived state binding
 
-- browser code does not manage auth tokens in local storage
-- the backend can revoke or rotate session state centrally
-- session state can represent intermediate continuation state such as MFA verification status
-- session identity is tenant-bound
-
-A session from tenant A must not authenticate on tenant B.
-That is a foundational security rule of this module.
+A contributor can read the architecture and API docs and still miss how these pieces interact across a real login or provisioning journey. This guide exists to close that gap.
 
 ---
 
-## 3.3 Continuation state
+## Flow Overview
 
-Authentication is not modeled as a single binary “logged in / not logged in” result.
+## 1. Password Login Flow
 
-The backend can require continued action after session establishment, such as:
+High-level shape:
+
+1. request arrives under tenant host context
+2. backend resolves tenant from host
+3. backend validates credentials against the correct tenant membership context
+4. backend establishes or updates session state
+5. backend returns authenticated truth plus any required continuation state
+6. frontend follows backend truth instead of inventing its own continuation logic
+
+Important consequence:
+
+A successful credential check does **not** always mean immediate app access.
+The user may still need to complete a continuation step such as:
 
 - email verification
 - MFA setup
 - MFA verification
 
-This is surfaced through backend truth, especially:
-
-- `AuthResult.nextAction`
-- `GET /auth/me`
-
-The frontend is expected to follow backend continuation truth rather than re-derive it independently.
+That is a deliberate model choice.
 
 ---
 
-## 4. Current backend capability areas
+## 2. Invite Provisioning Flow
 
-## 4.1 Password login
+Invite flows branch earlier than most people expect.
+The important distinction is not just “invite valid or not.”
+The flow also branches on whether the invited email already belongs to an existing user.
 
-The module supports tenant-aware email/password login.
+Typical shape:
 
-Behavior summary:
+1. invite token is validated
+2. tenant and invite state are checked
+3. backend determines whether the invited identity is already a known user
+4. flow continues as either:
+   - **new user invite acceptance** -> registration/setup path
+   - **existing user invite acceptance** -> sign-in/continuation path
 
-- validates credentials against the current tenant context
-- creates a session on success
-- returns continuation-aware auth result
-- may still require next-step action (`nextAction`) rather than immediate app access
+5. membership is activated only through the valid invite path
+6. auth continuation rules still apply after acceptance
 
----
+Important consequence:
 
-## 4.2 Invite-based registration / provisioning
-
-The module supports invite-based registration.
-
-Behavior summary:
-
-- registration is tied to an invite token
-- provisioning happens in the context of the current tenant
-- the resulting user is associated to the tenant membership created or activated by the flow
-- successful completion establishes a session and returns auth result data
-
-This is distinct from public self-signup.
+Invite acceptance is not a separate universe from auth.
+It is a provisioning entry into the same continuation model used elsewhere.
 
 ---
 
-## 4.3 Public signup
+## 3. Public Signup Flow
 
-The module supports self-service signup **only** when the tenant policy allows it.
+Public signup is tenant-scoped and policy-controlled.
+It is not a global platform capability.
 
-Behavior summary:
+Typical shape:
 
-- signup is tenant-scoped by host/subdomain
-- backend checks tenant availability / signup policy
-- successful signup may still require email verification before the session is considered fully continued
+1. tenant is resolved from host
+2. public-safe tenant auth config is read
+3. signup availability is enforced for that tenant
+4. user and membership are created in the tenant context
+5. post-signup continuation truth is established
+6. frontend continues based on backend truth
 
-This is why the frontend must use backend bootstrap/config endpoints instead of assuming signup is globally allowed.
+Important consequence:
 
----
-
-## 4.4 Email verification
-
-The module supports:
-
-- verify email via token
-- resend verification email
-
-Behavior summary:
-
-- verification is associated with the authenticated user/session flow
-- verifying email upgrades server-side truth so the session reflects verified state
-- resend flow intentionally uses a generic success message rather than leaking detailed state
-
-This is part of the continuation flow, not a separate unrelated feature.
+Frontend must not assume signup is globally available.
+It must read tenant-safe bootstrap truth instead.
 
 ---
 
-## 4.5 Password reset
+## 4. Email Verification Flow
 
-The module supports:
+Email verification is part of auth continuation, not a disconnected profile action.
 
-- forgot password initiation
-- reset password completion
+Typical shape:
 
-Behavior summary:
+1. user reaches a continuation point where verified email matters
+2. backend issues or resends verification token through the mail flow
+3. token consumption upgrades backend-authenticated truth
+4. session-visible state changes after successful verification
+5. user can continue through the next required step or into normal access
 
-- forgot-password always returns generic success
-- this is deliberate anti-enumeration behavior
-- reset-password consumes a reset token and updates the password
-- reset-password does not automatically log the user in
+Important consequence:
 
----
-
-## 4.6 MFA
-
-The module supports:
-
-- MFA setup
-- MFA setup verification
-- MFA verification for partially authenticated sessions
-- MFA recovery via recovery code
-
-Behavior summary:
-
-- MFA endpoints require an authenticated, email-verified session
-- setup returns secret / QR URI / recovery codes
-- verify-setup and verify elevate the session into MFA-verified state
-- session rotation occurs on privilege elevation
-- recovery also results in MFA-verified session elevation
-
-This is a security-critical part of the module, not optional decoration.
+This flow is intentionally privacy-preserving.
+Resend behavior should not become an account-state leak.
 
 ---
 
-## 4.7 SSO
+## 5. Password Reset Flow
 
-The module supports SSO start/callback for:
+Password reset intentionally avoids becoming an enumeration surface.
 
-- Google
-- Microsoft
+Typical shape:
 
-Behavior summary:
+1. forgot-password accepts the identifier without revealing existence
+2. backend decides internally whether a reset message should be sent
+3. reset token is consumed by a dedicated reset flow
+4. password is changed
+5. user signs in again through the normal auth path
 
-- start endpoint validates provider and optional safe `returnTo`
-- encrypted state carries redirect context
-- short-lived `sso-state` cookie binds browser callback state for CSRF protection
-- callback validates query `state` against the cookie
-- successful callback provisions or signs in the user in the current tenant context
-- successful callback establishes session and redirects back into the app
+Important consequence:
 
-This is intentionally tenant-aware and topology-aware.
-It is not a generic global callback hack.
+Reset is not the same thing as login.
+Completing password reset should not silently bypass the normal auth continuation model.
 
 ---
 
-## 4.8 Logout
+## 6. MFA Flow Family
 
-The module supports authenticated logout.
+MFA is not one screen; it is a small state family.
 
-Behavior summary:
+### MFA setup
 
-- destroys session state
-- clears session cookie
-- works even if the current user has not yet completed email verification
+Used when the user is authenticated enough to begin enrollment but is not yet MFA-configured.
 
-That last point is deliberate: unverified users must still be able to log out.
+### MFA verify
 
----
+Used when the user is partially authenticated and must prove possession of the enrolled factor before becoming fully continued.
 
-## 4.9 Auth bootstrap surface
+### MFA recovery
 
-This is one of the most important responsibilities of the current backend foundation.
+Used when the authenticator path is unavailable but recovery material exists.
 
-The backend exposes:
+Important consequence:
 
-- `GET /auth/config`
-- `GET /auth/me`
-
-These are the main frontend bootstrap endpoints.
-
-### `GET /auth/config`
-
-Purpose:
-
-- tell the unauthenticated/bootstrap UI what public-safe tenant auth configuration is visible
-
-Current truth exposed:
-
-- tenant display name
-- tenant active/inactive availability
-- whether public signup is enabled
-- which SSO providers are allowed
-
-Deliberately not exposed:
-
-- internal tenant security settings not required by bootstrap UI
-- sensitive tenant policy data that would overexpose internal configuration
-
-### `GET /auth/me`
-
-Purpose:
-
-- tell the frontend who the current authenticated user is
-- tell the frontend what tenant and membership are active
-- tell the frontend whether email/MFA continuation is required
-
-These two endpoints are central to the current frontend-readiness plan.
+These are related flows, but they are not interchangeable.
+A refactor that tries to collapse them into one generic “MFA endpoint” usually causes subtle behavior bugs.
 
 ---
 
-## 5. Tenant configuration behavior that currently matters
+## 7. SSO Flow Family
 
-This section describes tenant-scoped backend behavior that is meaningful today.
-It does **not** claim to document every possible future tenant setting.
+SSO has two critical stages:
 
-## 5.1 Tenant active/inactive availability
+### SSO start
 
-Current effect:
+- validates provider choice
+- prepares redirect context
+- creates short-lived state binding
+- initiates browser navigation to provider
 
-- inactive or unavailable tenant state affects public-facing auth bootstrap behavior
-- `GET /auth/config` deliberately returns the same unavailable shape for unknown and inactive tenants
+### SSO callback
 
-Why:
+- validates returned state against browser-bound state
+- resolves/provisions user in tenant context
+- establishes session and continuation truth
+- redirects back into app flow
 
-- avoids unnecessary tenant state enumeration
-- keeps public bootstrap behavior privacy-preserving
+Important consequence:
 
----
-
-## 5.2 Public signup enabled/disabled
-
-Current effect:
-
-- controls whether self-service signup is available for the current tenant
-- exposed as public-safe bootstrap information via `/auth/config`
-
-This matters to both backend enforcement and frontend visibility.
+This is a **browser navigation flow**, not a normal API fetch flow.
+Treating SSO start like a standard XHR-style request is a design error.
 
 ---
 
-## 5.3 Allowed SSO providers
+## Non-Obvious Design Decisions
 
-Current effect:
+## 1. Tenant identity is host-derived
 
-- controls which SSO providers are allowed for the current tenant
-- exposed through `/auth/config` as public-safe bootstrap truth
-- current supported providers are Google and Microsoft
+The module does not trust arbitrary client-supplied tenant identity.
+This is why host handling, proxy behavior, SSR header forwarding, and tenant-bound session checks matter so much.
 
-The frontend should show SSO entrypoints based on backend truth, not static UI assumptions.
-
----
-
-## 6. Privacy and anti-enumeration posture
-
-The current backend module intentionally avoids exposing too much account or tenant state through public responses.
-
-Important behaviors:
-
-### Unknown vs inactive tenant
-
-`GET /auth/config` returns the same unavailable shape for both.
-
-### Forgot password
-
-`POST /auth/forgot-password` always returns generic success.
-
-### Resend verification
-
-`POST /auth/resend-verification` always returns generic success.
-
-These are contract decisions, not implementation accidents.
-They should not be “simplified” casually because they are part of the module’s privacy posture.
+This is not implementation detail.
+It is a security boundary.
 
 ---
 
-## 7. Current interaction with neighboring backend modules
+## 2. Backend owns continuation truth
 
-The Auth + User Provisioning module does not exist in isolation.
+The frontend does not decide whether the user is “done.”
+The backend owns the truth about whether the user must still:
 
-It currently relies on neighboring bounded contexts such as:
+- verify email
+- set up MFA
+- verify MFA
 
-- tenants
-- users
-- memberships
-- invites
-- audit
-
-Typical responsibilities across boundaries:
-
-### Tenants
-
-- resolve tenant by key/host context
-- provide tenant availability/config inputs
-
-### Users
-
-- user lookup and user creation/update behaviors needed by auth flows
-
-### Memberships
-
-- membership lookup, creation, activation, role information
-
-### Invites
-
-- invite lookup, validation, acceptance/provisioning coordination
-
-### Audit
-
-- structured audit recording for auth/admin-sensitive actions
-
-This document describes the module behavior, not every internal boundary detail.
-Those boundaries are governed by the repo’s backend engineering rules and actual code structure.
+That is why `nextAction`-style continuation behavior exists and why frontend routing must follow backend-authenticated state.
 
 ---
 
-## 8. Current frontend integration truth
+## 3. Session success and full access are not the same thing
 
-The frontend integration model expected by this backend foundation is:
+This module intentionally allows intermediate authenticated states.
+A session may exist while access is still restricted by continuation requirements.
 
-### Before authentication
-
-Use `GET /auth/config` to decide:
-
-- whether the tenant is effectively available
-- whether signup should be shown
-- which SSO options should be shown
-
-### After a session exists
-
-Use `GET /auth/me` to decide:
-
-- current user identity
-- current membership role
-- current tenant identity
-- current continuation requirement through `nextAction`
-
-### Do not re-derive continuation logic in frontend
-
-The backend owns continuation truth.
-The frontend should follow it.
-
-### Do not hardcode browser-to-backend origins
-
-Browser calls stay same-origin through `/api/*`.
-SSR may call backend directly through `INTERNAL_API_URL` while forwarding request identity headers.
+This is one of the biggest differences between this module and a simple login/logout module.
 
 ---
 
-## 9. What is strong and stable enough to build on now
+## 4. Privacy-preserving generic success is intentional
 
-The following parts of this module should be treated as stable foundation behavior unless intentionally changed:
+Some public-facing flows deliberately avoid revealing whether the requested identity exists or what exact state it is in.
+That includes flows like forgot-password and resend-style behavior.
 
-- tenant-scoped auth behavior
-- session-tenant binding
-- `/auth/config` as public-safe bootstrap endpoint
-- `/auth/me` as authenticated bootstrap endpoint
-- continuation semantics through `nextAction`
-- generic success responses for selected privacy-sensitive endpoints
-- tenant-aware SSO start/callback model
-- MFA session elevation + rotation behavior
-
-These are not temporary conveniences.
-They are foundational behaviors for the next frontend and module work.
+Do not “improve UX” by casually making these responses more specific.
+That would weaken the privacy posture.
 
 ---
 
-## 10. What is still intentionally next-step work
+## 5. SSO state is browser-bound on purpose
 
-This backend module guide must remain explicit that some work is still ahead.
+The short-lived SSO state cookie is not decorative.
+It exists to bind callback validation to the same browser journey that initiated the provider redirect.
 
-Not yet represented here as completed product surface:
-
-- rich frontend auth screens and shells
-- full frontend continuation routing behavior
-- broader identity/admin settings UX beyond the current backend foundation
-- future Hubins modules beyond this foundation slice
-
-That future work should build on the behaviors described here, not replace them casually.
+If that state binding is weakened, callback integrity weakens with it.
 
 ---
 
-## 11. When to update this file
+## 6. SSO does not replace app-level continuation rules
 
-Update this file whenever:
-
-- auth/provisioning backend behavior changes materially
-- tenant-facing auth configuration behavior changes
-- privacy/anti-enumeration behaviors change
-- bootstrap endpoint responsibilities change
-- new provisioning paths are added
-- current documented capability becomes obsolete or removed
-
-If the backend module changed and this file still describes the old behavior, this file is stale.
+A successful external provider identity check does not automatically mean the user bypasses app-level continuation requirements.
+The app still owns its own tenant, membership, verification, and MFA rules.
 
 ---
 
-## 12. Final truth rule
+## 7. MFA privilege elevation should be treated as security-sensitive state transition
 
-This file should help future contributors answer one question clearly:
+Crossing from partially authenticated to MFA-verified state is not a cosmetic transition.
+It changes trust level and must be treated carefully in both code and review.
 
-**What does the Auth + User Provisioning backend foundation actually do today?**
+---
 
-If the document becomes broader, vaguer, or more aspirational than the code, it has failed its job.
+## 8. Auth bootstrap is intentionally split between public-safe and authenticated truth
+
+This module uses a two-surface model for bootstrap:
+
+- one surface safe for pre-auth tenant-aware UI decisions
+- one surface for authenticated user/membership/continuation truth
+
+That split keeps bootstrap useful without overexposing internal state.
+
+---
+
+## Known Failure Modes And Review Traps
+
+## 1. Wrong-host or rewritten-host behavior
+
+If tenant identity is derived from the wrong host, the module can appear to “work” while actually resolving the wrong tenant context.
+
+Typical symptom:
+
+- user appears valid but membership/auth behavior is inconsistent across hosts
+
+Review rule:
+
+- always treat host and forwarded-host handling as load-bearing
+
+---
+
+## 2. Session cookie present but tenant context mismatched
+
+A session that exists for one tenant must not silently authenticate against another tenant.
+
+Typical symptom:
+
+- cross-tenant `/auth/me` behavior looks unexpectedly authenticated
+
+Review rule:
+
+- tenant/session binding failures are security bugs, not convenience bugs
+
+---
+
+## 3. Frontend tries to re-derive continuation logic
+
+When the frontend starts inventing its own “if admin then go here, if verified then skip there” behavior without using backend continuation truth, drift follows quickly.
+
+Typical symptom:
+
+- login succeeds but routing differs from `/auth/me` or server truth
+
+Review rule:
+
+- continuation logic belongs to backend-authenticated truth first
+
+---
+
+## 4. SSO start treated like normal fetch
+
+SSO start must remain a navigation-first flow.
+Using the wrong request primitive can break redirects, state, and browser behavior in ways that are easy to misdiagnose.
+
+---
+
+## 5. SSR requests lose request identity
+
+When SSR/backend calls stop forwarding required request identity, auth bootstrap can fail in ways that look like random unauthenticated behavior.
+
+Typical symptom:
+
+- SSR pages render as if tenant or session is missing while browser requests look fine
+
+Review rule:
+
+- browser and SSR paths are related but not interchangeable
+
+---
+
+## 6. Invite acceptance simplified too aggressively
+
+Invite acceptance has distinct branches for token validity, tenant validity, new-user vs existing-user path, and post-accept continuation.
+Reducing it to “accept token then log in” usually breaks real behavior.
+
+---
+
+## 7. MFA flows collapsed together
+
+Setup, verify, and recovery flows may share concepts but should not be casually merged into one generic path.
+That often causes incorrect gating or incorrect privilege transition behavior.
+
+---
+
+## 8. Public-safe config becomes overexposed
+
+Bootstrap-safe auth config should not become a dumping ground for internal tenant configuration.
+If more fields are added there, they should be reviewed as exposure decisions, not convenience additions.
+
+---
+
+## What This File Must Not Re-Own
+
+This file must stay narrow.
+Do **not** expand it into any of the following:
+
+- a current-shipped-capability tracker
+- an API endpoint inventory
+- a frontend integration contract
+- a developer setup guide
+- a QA execution manual
+- a roadmap or closeout tracker
+- a second architecture or security model document
+
+If it drifts into those roles, it should be tightened again.
+
+---
+
+## Most Relevant Proof Surfaces
+
+When validating changes to this module, the most useful proof surfaces are usually:
+
+### API contracts
+
+- `backend/docs/api/auth.md`
+- `backend/docs/api/invites.md`
+- `backend/docs/api/admin.md`
+
+### Auth / policy / topology tests
+
+Check current backend and frontend auth-related unit, integration, and E2E suites, especially around:
+
+- login and continuation behavior
+- MFA policy and next-action handling
+- SSO callback behavior
+- tenant/session isolation
+- proxy and SSR conformance
+
+### Current shipped-truth snapshot
+
+- `docs/current-foundation-status.md`
+
+### Security and topology law
+
+- `docs/security-model.md`
+- `ARCHITECTURE.md`
+
+---
+
+## Update Rule
+
+Update this file only when the **non-obvious module-local auth complexity** changes materially.
+
+Do **not** update it for every endpoint tweak, copy change, or ordinary behavior clarification that belongs in API docs, shipped-truth docs, QA docs, or code comments.
+
+---
+
+## Final Rule
+
+This file should answer one narrow question well:
+
+**What makes the Auth / User Provisioning module easy to misunderstand, even after reading the contracts?**
+
+If it starts answering broader questions than that, it is too big.

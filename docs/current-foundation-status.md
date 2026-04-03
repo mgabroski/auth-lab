@@ -1,278 +1,216 @@
 # Current Foundation Status
 
-## Purpose
+## Status
 
-This file is the current shipped-truth snapshot for the repository.
+This document is the current shipped-truth snapshot for the repo.
 
-Use it to answer:
+It records what is implemented, what is locked, what remains open, and which active documents own which kinds of truth.
 
-- what is actually implemented now
-- what is validated enough to rely on
-- what exists only as broader architecture direction
-- what is intentionally deferred
-- which off-repo specs are currently active for future module work
+Documentation-system cleanup for the current repo state is closed.
+Use the routing and tier rules in `AGENTS.md` as the canonical guide for documentation priority, AI read order, attachment rules, and tier assignment.
 
-This file is not a roadmap.
-It is not a changelog.
-It is not a replacement for `ARCHITECTURE.md`, `docs/security-model.md`, backend/frontend engineering law, API docs, or module master specs.
-
-If a broader architecture doc describes something beyond the current shipped slice, this file wins for present-state questions.
+If this file conflicts with support docs, folder maps, prompt docs, or temporary planning notes, this file wins unless a module-specific higher-truth document explicitly outranks it for that module.
 
 ---
 
-## Current Repo Position
+## Current Repo Phase
 
-The repository currently proves and protects a foundation-first Hubins slice:
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked.
 
-1. multi-tenant reverse-proxy topology
-2. browser and SSR request contracts
-3. host-derived tenant identity
-4. session and cookie behavior
-5. Auth + User Provisioning as the first real module
+This repo already has:
 
-This repo is not yet the full Hubins platform.
-It contains broader design direction for future modules, but only a smaller subset is implemented and operationally meaningful today.
+- single public-origin local topology through the proxy
+- host-derived tenant routing
+- backend-owned auth/session/membership truth
+- current auth and invite API surfaces
+- current QA and developer execution documents
+- a locked documentation routing model with explicit tiering
 
----
-
-## Shipped And Load-Bearing Now
-
-### 1. Topology and request model
-
-The following are part of current repo truth:
-
-- single public browser origin through the reverse proxy
-- browser requests use relative `/api/*` paths
-- SSR requests use the internal backend path with forwarded host, cookie, and forwarded-header context
-- host-derived tenant resolution is load-bearing
-- same-origin cookie behavior is load-bearing
-- proxy conformance is part of the foundation, not a nice-to-have
-
-For details, see:
-
-- `ARCHITECTURE.md`
-- `docs/security-model.md`
-- relevant ops docs when topology proof or recovery is the task
-
-### 2. Security and trust boundaries
-
-The following are part of current repo truth:
-
-- tenant isolation is fail-closed
-- session and cookie behavior are backend-owned and security-sensitive
-- browser and SSR auth flows are intentionally different where topology requires it
-- SSO start and callback behavior are trust-boundary-sensitive
-- auth/session/tenant logic is not a frontend-owned concern
-
-### 3. Auth + User Provisioning
-
-The first shipped module is Auth + User Provisioning.
-
-This includes current repo-level support for:
-
-- register
-- login
-- logout
-- `/auth/me`
-- `/auth/config`
-- forgot password
-- reset password
-- public signup
-- email verification
-- resend verification
-- MFA setup
-- MFA verify
-- MFA recovery codes
-- Google SSO
-- Microsoft SSO
-- invite issuance
-- invite acceptance
-- invite resend / invalidation behavior
-- admin invite management
-- audit viewing
-- outbox-backed email delivery support
-
-The backend API contract for this shipped slice is documented under:
-
-- `backend/docs/api/auth.md`
-- `backend/docs/api/invites.md`
-- `backend/docs/api/admin.md`
-
-### 4. Frontend shipped surface
-
-The frontend currently contains shipped support for:
-
-- public auth pages
-- signup and verification flows
-- forgot/reset-password flows
-- MFA setup and verify flows
-- SSO completion flow
-- member landing
-- admin landing
-- invite acceptance and registration continuation
-- admin invite management
-- browser API client behavior through `/api/*`
-- SSR API client behavior for server-side bootstrap
-
-### 5. Foundation discipline that is already real
-
-The repo already treats these as active engineering truth:
-
-- backend and frontend engineering law
-- review discipline
-- quality-bar and readiness discipline
-- security and threat-boundary documentation
-- runbook and release-engineering documentation
-- proxy/topology-sensitive proof expectations
-
-These are part of current working discipline, not future intent only.
+This repo does not yet claim that the full Auth / Provisioning closure roadmap is complete.
+Roadmap closure still depends on the remaining real-environment, proof, QA, and production-readiness work tracked elsewhere.
 
 ---
 
-## Partially Implemented Or Transitional Now
+## Canonical Current-Truth Documents
 
-These exist in the repo or current workflow, but should be described carefully.
-They are not absent, but they are not yet the same thing as a fully closed next module.
+These are the active current-truth docs for the repo as it exists today.
+Use them before support docs.
 
-### 1. Workspace setup banner and `/admin/settings`
+1. `AGENTS.md` — canonical AI router, truth order, read order, attachment rules, and actual repo tier map
+2. `ARCHITECTURE.md` — repo architecture law
+3. `docs/security-model.md` — security, tenant, trust-boundary, and auth model law
+4. `docs/decision-log.md` — locked architectural and cross-cutting decisions
+5. `backend/docs/api/auth.md` — auth contract surface
+6. `backend/docs/api/invites.md` — invite contract surface
+7. `backend/docs/api/admin.md` — admin auth/provisioning contract surface
 
-Current truth:
+### Supporting but non-canonical-by-default docs
 
-- the auth/provisioning slice depends on a workspace setup concept
-- `/admin` and `/admin/settings` behavior matters for admin continuation and setup guidance
-- the final Settings state model is not yet the active shipped module state model
-- current scaffolding or placeholder behavior must not be mistaken for the final Settings implementation
+These are active support docs, but they do not outrank the current-truth set above:
 
-Use the auth docs and current repo code for what exists now.
-Do not describe the Settings module as implemented.
+- `docs/developer-guide.md`
+- `docs/qa/qa-execution-pack.md`
+- `docs/ops/*`
+- `docs/prompts/catalog.md`
+- other docs under `docs/prompts/`
+- folder-map docs such as `backend/docs/README.md`, `frontend/README.md`, and `infra/README.md`
 
-### 2. QA and readiness closure depth
+### Historical and raw-input rule
 
-The repo has strong QA, audit, ops, and readiness material.
-But some readiness/proof surfaces still represent closure work for the Auth + User Provisioning module rather than completed future-module expansion.
+Historical notes, raw inventories, cleanup inputs, and one-off planning materials are not active current-truth docs.
+They must not be attached to continuation chats unless the task is explicitly historical analysis.
 
-### 3. Prompt and documentation cleanup state
-
-The repo contains documentation and prompt infrastructure that is already useful, but the documentation system is still being tightened to reduce duplication, drift risk, and continuation-chat waste.
-
-That means:
-
-- active docs exist now
-- some router and support docs may still be in cleanup motion
-- do not assume every secondary doc is canonical just because it exists
-
----
-
-## Explicitly Deferred Or Not Yet Shipped
-
-Do not describe the following as current shipped product surfaces unless a higher-truth module spec explicitly says otherwise.
-
-### Deferred from Auth + User Provisioning closure
-
-These are not part of the current shipped auth closure target:
-
-- admin-facing outbox UI
-- SCIM
-- SAML
-- HRIS import as a fully implemented user-facing module surface
-- groups / teams
-- device/session management UX
-- advanced MFA methods beyond TOTP + recovery codes
-- self-serve tenant/account creation
-
-### Broader Hubins modules not yet implemented as shipped modules here
-
-These may exist as architecture direction, planning, or future module truth, but are not current shipped repo modules:
-
-- Account Settings as a completed implemented module
-- Documents
-  n- Benefits
-- Payments
-- Marketplace
-- Policies as a built tenant surface
-- full Shared Templates & Communications surface
-- broader workflow/runtime/product surfaces beyond the current foundation slice
-
-If a future-module spec exists, treat it as future module truth, not as evidence that the module is already implemented.
+If a module-specific master context explicitly bans certain historical inputs, that ban must be respected.
 
 ---
 
-## Active Off-Repo Module Truth
+## What Is Actually Shipped Now
 
-One important exception exists for future module work:
+The following foundations are treated as real in the repo now.
 
-### Settings module
+### Topology and routing
 
-`Account-Settings-Master-Context-v6_8.docx` is currently the highest source of truth for the Settings module specifically.
+- browser traffic goes through one public origin
+- proxy routes browser `/api/*` traffic to backend services
+- frontend and backend are separated behind the proxy
+- host-derived tenant identity is part of the runtime contract
+- SSR uses the backend-aware path defined by repo architecture and topology law
 
-Use it only when the task is about Settings.
-Do not let it override unrelated repo truth.
+### Auth and provisioning foundation
 
-Important:
+- password login exists
+- invite-driven onboarding exists
+- public signup exists where tenant policy allows it
+- email verification and password reset flows exist in the product surface
+- MFA setup and verification flows exist in the product surface
+- admin vs member post-auth routing exists
+- `/admin/settings` exists as a real admin route in current scope
+- workspace-setup guidance exists as a real current surface, though broader Settings work remains open
 
-- it is module-specific, not repo-global
-- it contains locked decisions and active future-module design truth
-- it explicitly bans certain historical raw docs from continuation use
+### Documentation and execution surfaces
 
-That document means:
-
-- Settings design truth is real
-- Settings implementation is not yet complete
-- Settings should not be described as a shipped implemented module today
-
----
-
-## Canonical Present-State Reading Rules
-
-Use this order for current repo truth questions:
-
-1. this file
-2. `ARCHITECTURE.md`
-3. `docs/security-model.md`
-4. area-specific engineering law and API docs
-5. code and tests
-6. task-gated support docs only when needed
-
-If a question is specifically about a future complex module with its own higher-truth master spec, use that module spec only for that module.
+- root routing docs are tightened and active
+- backend and frontend area routers are tightened and active
+- one canonical developer execution surface exists: `docs/developer-guide.md`
+- one canonical Auth / Provisioning QA execution surface exists: `docs/qa/qa-execution-pack.md`
+- current prompt routing is centralized through `docs/prompts/catalog.md`
 
 ---
 
-## What This File Intentionally Does Not Do
+## What Is Locked
 
-This file does not:
+The following should be treated as locked unless reopened by an explicit architectural or product decision.
 
-- retell the full architecture
-- restate security law in detail
-- duplicate backend or frontend engineering rules
-- duplicate API docs
-- act as a decision log
-- list every historical hardening step
-- act as a future roadmap for all modules
+### Documentation-system rules
 
-If those details are needed, route to the correct authority doc.
+- one canonical truth order for the repo
+- one canonical AI read order for the repo
+- explicit Tier 1 / Tier 2 / Tier 3 mapping in `AGENTS.md`
+- historical docs are demoted from active continuation context by default
+- support docs do not outrank current-truth or law docs
+- no two active docs should compete for the same job
+
+### Architecture and trust-boundary rules
+
+- frontend does not own auth truth
+- backend owns session, membership, and next-action truth
+- tenant identity is host-derived
+- browser/backend topology is same-origin through the proxy
+- SSR and browser request paths must not be treated as interchangeable
+- auth, cookie, SSO, and forwarded-header behavior are boundary-sensitive and must be changed carefully
+
+### QA/developer split
+
+- developer execution and environment guidance lives in `docs/developer-guide.md`
+- QA execution lives in `docs/qa/qa-execution-pack.md`
+- neither doc should silently re-own the other's job
 
 ---
 
-## Final Snapshot
+## What Is Still Open
 
-### True now
+The following remain open or incomplete at the repo level.
 
-- topology-first multi-tenant foundation is real
-- browser and SSR request models are real
-- host-derived tenant behavior is real
-- session/cookie/auth trust boundaries are real
-- Auth + User Provisioning is the first real shipped module
-- repo quality/review/security/release discipline is real
+### Auth / Provisioning closure work
 
-### Not true now
+The full auth closure roadmap is still open in the areas already tracked by the roadmap, including:
 
-- the full future Hubins product is implemented here
-- Settings is fully implemented
-- every documented future module is already shipped
-- every support doc is equally canonical
+- broader real-environment proof work
+- final staging/provider proof for SSO and email delivery
+- complete production-readiness closure
+- final signoff that the full auth roadmap is closed
 
-### Working rule
+### Settings expansion
 
-When in doubt, describe the repo as:
+The repo contains real `/admin/settings` groundwork and locked Settings design inputs, but the broader Settings implementation remains open.
+Current shipped auth/settings surfaces must not be mistaken for full Settings completion.
 
-**a foundation-first multi-tenant Hubins repository with Auth + User Provisioning implemented and broader module architecture partially designed but not yet broadly shipped.**
+### Future modules and later-scope surfaces
+
+The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork.
+
+---
+
+## Canonical QA and Developer Surfaces
+
+### Developer execution surface
+
+`docs/developer-guide.md`
+
+Use this for:
+
+- local setup
+- commands
+- environment execution
+- reset/reseed workflow
+- test-running instructions
+- operational developer workflow
+
+### QA execution surface
+
+`docs/qa/qa-execution-pack.md`
+
+Use this for:
+
+- user-visible flow validation
+- manual execution steps
+- expected messages and outcomes
+- evidence collection expectations
+- scenario-by-scenario QA execution
+
+Do not use `docs/developer-guide.md` as a second QA script.
+Do not use the QA pack as a general developer setup guide.
+
+---
+
+## Actual Repo Tier Summary
+
+This summary is informational only.
+The canonical tier map lives in `AGENTS.md`.
+
+### Tier 1
+
+Canonical routing, current shipped truth, architecture law, security law, and area law.
+
+### Tier 2
+
+Canonical growing decision and API contract surfaces.
+
+### Tier 3
+
+Support docs, execution packs, prompt docs, folder maps, and tightly scoped module-local reference docs that do not compete with higher-tier truth.
+
+---
+
+## How To Use This File
+
+Use this file when you need to answer any of the following:
+
+- what is really shipped now
+- what is locked vs still open
+- which docs are canonical vs secondary
+- whether a support doc is allowed to overrule a higher-truth source
+- whether a task is trying to claim completion that the repo does not yet have
+
+If the task is module-specific and a module-specific higher-truth document explicitly outranks this file for that module, follow that module-specific truth order.
+Otherwise, treat this file as the current shipped-truth snapshot for the repo.

@@ -15,36 +15,7 @@ It is not a second architecture doc, not a product brief, and not a substitute f
 
 ---
 
-## Default Read Order
-
-Before non-trivial implementation, debugging, review, or audit work, load these first:
-
-1. `docs/current-foundation-status.md`
-2. `ARCHITECTURE.md`
-3. `docs/security-model.md`
-
-Then route by task:
-
-* backend work -> `backend/AGENTS.md`
-* frontend work -> `frontend/AGENTS.md`
-* review / audit work -> `code_review.md`
-* prompt selection only -> `docs/prompts/catalog.md`
-
-### Task-gated docs
-
-Load these only when the task actually needs them:
-
-* `docs/quality-bar.md` -> review, signoff, readiness, or release-quality questions
-* `docs/decision-log.md` -> architectural decisions, open conflicts, or decision-history questions
-* `docs/developer-guide.md` -> local setup, commands, environment, or workflow execution
-* `docs/ops/*` -> operability, release, incident, topology-proof, or recovery work
-* `docs/qa/*` -> QA execution, user-visible flow proof, or message-audit work
-
-Do not start with QA docs, prompt docs, runbooks, or support docs when a higher-truth file already answers the question.
-
----
-
-## Truth Order
+## Canonical Truth Order
 
 When sources disagree, use this order:
 
@@ -78,6 +49,92 @@ It does not become the default truth source for unrelated backend, frontend, aut
 
 ---
 
+## Canonical AI Read Order
+
+Before non-trivial implementation, debugging, review, or audit work, load these first:
+
+1. `docs/current-foundation-status.md`
+2. `ARCHITECTURE.md`
+3. `docs/security-model.md`
+
+Then route by task:
+
+* backend work -> `backend/AGENTS.md`
+* frontend work -> `frontend/AGENTS.md`
+* review / audit work -> `code_review.md`
+* prompt selection only -> `docs/prompts/catalog.md`
+
+### Task-gated docs
+
+Load these only when the task actually needs them:
+
+* `docs/quality-bar.md` -> review, signoff, readiness, or release-quality questions
+* `docs/decision-log.md` -> architectural decisions, open conflicts, or decision-history questions
+* `docs/developer-guide.md` -> local setup, commands, environment, or workflow execution
+* `docs/ops/*` -> operability, release, incident, topology-proof, or recovery work
+* `docs/qa/*` -> QA execution, user-visible flow proof, or message-audit work
+
+Do not start with QA docs, prompt docs, runbooks, or support docs when a higher-truth file already answers the question.
+
+---
+
+## Actual Repo Tier Map
+
+This repo uses three documentation tiers.
+The tier decides how a document is used, how often it should change, and whether it is allowed to compete for truth.
+
+### Tier 1 — Canonical active routing and law
+
+These are the highest-value active docs for repo navigation, shipped truth, and engineering law.
+Load these first when relevant.
+
+* `AGENTS.md`
+* `README.md`
+* `docs/current-foundation-status.md`
+* `ARCHITECTURE.md`
+* `docs/security-model.md`
+* `backend/AGENTS.md`
+* `frontend/AGENTS.md`
+* `backend/docs/engineering-rules.md`
+* `frontend/src/shared/engineering-rules.md`
+* `backend/docs/module-skeleton.md`
+* `frontend/docs/module-skeleton.md`
+
+### Tier 2 — Canonical growing domain and decision surfaces
+
+These are active and important, but they are not the first router layer.
+They grow as the repo evolves.
+
+* `docs/decision-log.md`
+* `backend/docs/api/auth.md`
+* `backend/docs/api/invites.md`
+* `backend/docs/api/admin.md`
+* `code_review.md`
+
+### Tier 3 — Support, execution, and secondary reference
+
+These are useful, but they must never compete with Tier 1 or Tier 2 for repo truth.
+They are loaded only when the task needs them.
+
+* `docs/developer-guide.md`
+* `docs/qa/*`
+* `docs/ops/*`
+* `docs/prompts/catalog.md`
+* other prompt docs under `docs/prompts/`
+* folder-map docs such as `backend/docs/README.md`, `frontend/README.md`, and `infra/README.md`
+* `CONTRIBUTING.md`
+* `CHANGELOG.md`
+* module-local docs that are explicitly secondary and scoped to genuine local complexity only
+
+### Tier rules
+
+* No Tier 3 doc may restate or re-own shipped truth already owned by Tier 1.
+* No Tier 3 doc may restate API or behavioral contract truth already owned by Tier 2.
+* If two active docs compete for the same job, tighten, demote, or remove one.
+* Historical docs are not active tiers. They are reference-only or should be removed from active use.
+
+---
+
 ## Continuation Chat Attachment Rules
 
 ### Default attachment bundle
@@ -100,7 +157,7 @@ Attach or load:
 * `backend/docs/engineering-rules.md`
 * `backend/docs/module-skeleton.md`
 * relevant `backend/docs/api/*.md`
-* relevant module-local docs only if they exist and matter
+* relevant module-local docs only if they exist, are still active, and add genuine non-obvious value
 
 #### Frontend task
 
@@ -257,56 +314,3 @@ Treat a change as topology-sensitive if it touches any of the following:
 * Do not weaken host-derived tenant routing.
 * Do not weaken tenant/session isolation.
 * Do not replace navigation-based auth flows with inappropriate `fetch()` flows.
-
----
-
-## Validation Routing
-
-Run the smallest meaningful proof that actually matches the risk.
-
-### Baseline
-
-Use the relevant subset of:
-
-* `yarn fmt:check`
-* `yarn lint`
-* `yarn typecheck`
-
-### Backend-focused changes
-
-Run backend tests or stronger proof for the affected area.
-
-### Frontend-focused changes
-
-Run frontend unit tests, E2E, or stronger proof for the affected area.
-
-### Auth, session, topology, or proxy-sensitive changes
-
-Use stack-level or end-to-end proof when the behavior only becomes real through the full flow.
-
-### Required behavior
-
-When reporting validation, state what was actually run.
-Do not imply runtime proof if you only reviewed code.
-
----
-
-## What Not To Do
-
-* Do not start from prompt files when repo law already answers the question.
-* Do not treat support docs as stronger than architecture or shipped-truth docs.
-* Do not invent missing behavior because a lower doc sounds confident.
-* Do not claim completion without the proof level the task actually needs.
-* Do not attach historical or raw inventory docs when a higher-truth master spec already forbids them.
-* Do not add parallel explanation docs when an existing canonical doc can be tightened instead.
-
----
-
-## Final Position
-
-Use this file as the root AI router.
-
-For humans, `README.md` is the entrypoint.
-For AI, this file is the entrypoint.
-
-Everything else should stay below those two surfaces instead of competing with them.
