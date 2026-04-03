@@ -1,74 +1,58 @@
-# Stage 1B + Track A ownership surface
-
+# Repo ownership surface
 #
-
 # Purpose:
-
-# - keep the existing governance protections intact
-
-# - expand ownership metadata to explicit high-risk repo surfaces
-
-# - bind the Lead Architect / Designated Quality Owner role to a real owner
-
+# - keep ownership explicit for canonical repo law, high-risk trust boundaries,
+#   review/CI guardrails, and core application surfaces
+# - remove ownership references to deleted docs
+# - keep the file small and deliberate
 #
-
 # Current owner:
-
 # - @mgabroski
-
 #
+# Note:
+# - CODEOWNERS uses last-match precedence
+# - branch protection / required review enforcement still depends on GitHub settings
 
-# Notes:
-
-# - This remains intentionally simple for the current team size.
-
-# - Branch protection / required-review merge blocking still depends on GitHub settings.
-
-# - Explicit high-risk paths remain listed even when broader globs map to the same owner.
-
-# - CODEOWNERS uses last-match precedence, so keep high-risk entries visible and deliberate.
-
-# Core repo law / governance
-
+# Canonical repo law / truth
 /AGENTS.md @mgabroski
+/README.md @mgabroski
+/CONTRIBUTING.md @mgabroski
 /code_review.md @mgabroski
 /ARCHITECTURE.md @mgabroski
+/docs/current-foundation-status.md @mgabroski
 /docs/quality-bar.md @mgabroski
 /docs/quality-exceptions.md @mgabroski
-/docs/current-foundation-status.md @mgabroski
 /docs/decision-log.md @mgabroski
+/docs/security-model.md @mgabroski
+/docs/developer-guide.md @mgabroski
 /docs/ops/release-engineering.md @mgabroski
-/docs/ai/repo-ai-adoption-roadmap.md @mgabroski
+/docs/ops/runbooks.md @mgabroski
+/docs/ops/observability.md @mgabroski
+/docs/prompts/catalog.md @mgabroski
 /CHANGELOG.md @mgabroski
 
 # Area instruction law
-
 /backend/AGENTS.md @mgabroski
 /frontend/AGENTS.md @mgabroski
+/backend/docs/engineering-rules.md @mgabroski
+/backend/docs/module-skeleton.md @mgabroski
+/frontend/src/shared/engineering-rules.md @mgabroski
+/frontend/docs/module-skeleton.md @mgabroski
 
-# Prompt-law surface
-
-/docs/prompts/catalog.md @mgabroski
-/docs/prompts/usage-guide.md @mgabroski
-/docs/prompts/\*.md @mgabroski
-
-# PR / review / CI / guard surfaces
-
+# Review / CI / guard surfaces
 /.github/CODEOWNERS @mgabroski
 /.github/pull_request_template.md @mgabroski
-/.github/workflows/\*\* @mgabroski
+/.github/workflows/** @mgabroski
 /scripts/repo-guard.mjs @mgabroski
 
 # Architecture / ADR / contract surfaces
-
 /backend/docs/adr/** @mgabroski
 /backend/docs/api/** @mgabroski
 /docs/security/** @mgabroski
-/docs/ops/** @mgabroski
-/infra/\*\* @mgabroski
+/docs/qa/** @mgabroski
+/infra/** @mgabroski
 
 # High-risk backend trust-boundary surfaces
-
 /backend/src/modules/auth/** @mgabroski
 /backend/src/modules/invites/** @mgabroski
 /backend/src/modules/tenants/** @mgabroski
@@ -79,13 +63,11 @@
 /backend/src/shared/db/migrations/** @mgabroski
 
 # High-risk frontend topology / auth surfaces
-
 /frontend/src/app/api/** @mgabroski
 /frontend/src/shared/api-client.ts @mgabroski
 /frontend/src/shared/ssr-api-client.ts @mgabroski
 /frontend/src/shared/auth/** @mgabroski
 
 # Broad application ownership surface
-
 /backend/** @mgabroski
 /frontend/** @mgabroski

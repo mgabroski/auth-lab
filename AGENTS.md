@@ -2,102 +2,132 @@
 
 ## Scope
 
-Applies to the repository root.
+Applies at the repository root.
 
 ## Purpose
 
-This file is the **root repo instruction layer** for AI-assisted work and repo-aware engineering support.
+This is the single AI entrypoint for the repo.
 
-Its job is to keep work in this repository:
+Use it to route work correctly, load the right authority first, and avoid generic or conflicting answers.
 
-* grounded in repo truth
-* aligned with documentation
-* aware of tenant, session, and topology boundaries
-* coupled to the right validation
-* resistant to generic or persuasive-but-ungrounded output
-
-This file is the **root router**, not the full backend guide, frontend guide, or review contract.
+This file is a router.
+It is not a second architecture doc, not a product brief, and not a replacement for area-specific law.
 
 ---
 
-## Read This First
+## Read First
 
-Before doing any non-trivial task, review these in this order when present:
+Before any non-trivial implementation, review, or audit work, load these in this order:
 
-1. `docs/quality-bar.md`
-2. `docs/ai/repo-ai-adoption-roadmap.md`
-3. `docs/current-foundation-status.md`
-4. `ARCHITECTURE.md`
-5. `docs/decision-log.md`
-6. `docs/security-model.md`
-7. `docs/prompts/usage-guide.md`
+1. `docs/current-foundation-status.md`
+2. `ARCHITECTURE.md`
+3. `docs/quality-bar.md`
+4. `docs/decision-log.md`
+5. `docs/security-model.md`
 
 Then route by area:
 
-* backend work → `backend/AGENTS.md`
-* frontend work → `frontend/AGENTS.md`
-* review / audit / risk work → `code_review.md`
-* prompt selection questions → `docs/prompts/catalog.md` and `docs/prompts/usage-guide.md`
+- backend work → `backend/AGENTS.md`
+- frontend work → `frontend/AGENTS.md`
+- review / audit work → `code_review.md`
+- prompt selection only → `docs/prompts/catalog.md`
 
-If one of these files does not exist yet, do not invent it. Continue with the files that do exist.
+Do not start with QA docs, prompt docs, or support docs when a higher-truth file already answers the question.
 
 ---
 
-## Truth Ladder
+## Truth Order
 
 When sources disagree, use this order:
 
-1. active locked product/module source-of-truth documents
-2. repo quality bar and current foundation / shipped-scope truth docs
+1. active locked product or module source-of-truth docs
+2. current shipped-truth docs
 3. architecture and decision records
-4. security model and topology law
-5. contract and API docs
+4. security and trust-boundary docs
+5. area engineering law and contract docs
 6. implementation code
 7. tests and CI workflows
 8. runbooks, QA docs, and developer guides
-9. temporary notes, chat summaries, and scratch prompts
+9. prompts, temporary notes, and chat summaries
 
 ### Required behavior
 
-* If a lower-truth source conflicts with a higher-truth source, call it out explicitly.
-* Do not silently smooth over contradictions.
-* Do not let polished wording override repo evidence.
+- Call out real conflicts explicitly.
+- Do not smooth over contradictions.
+- Do not let polished wording outrank repo evidence.
 
 ---
 
 ## Repo-Wide Hard Rules
 
-### 1. Do not improvise system truth
+### 1. Do not improvise repo truth
 
 If the repo already defines architecture, topology, security, product behavior, or quality gates, use that definition.
 
-### 2. Keep diffs minimal
+### 2. Keep scope tight
 
-Do not rename, reorganize, or “clean up” unrelated files unless explicitly asked.
+Do not turn a focused task into a cleanup campaign unless the task explicitly asks for cleanup.
 
-### 3. Use Yarn only
+### 3. Keep code and docs coupled
+
+If a change affects architecture, contracts, trust boundaries, review behavior, runbooks, or user-visible workflow truth, update the matching docs in the same change.
+
+### 4. AI output is not proof
+
+Reasoning is not the same as tests, CI, topology checks, QA, or runtime evidence.
+
+### 5. Respect boundary-sensitive work
+
+Auth, session, tenant, SSR, proxy, SSO, and cookie behavior require stricter reasoning and stronger validation than normal changes.
+
+### 6. Use Yarn only
 
 Do not switch package managers.
 
-### 4. Do not modify environment files casually
+### 7. Do not casually edit env or secret-bearing config
 
-Do not edit `.env` files, secrets, or secret-bearing config unless the task explicitly requires it.
+Only change environment or secret-related files when the task explicitly requires it.
 
-### 5. Keep code and docs coupled
+---
 
-If a change affects architecture, contracts, runbooks, review behavior, quality gates, or user-visible workflows, update or review the matching docs in the same change.
+## Routing By Work Type
 
-### 6. AI output is not proof
+### Backend work
 
-Reasoning, summaries, and reviews do not replace tests, CI, topology checks, QA, or runtime evidence.
+Load:
 
-### 7. Keep AI repo-aware
+1. `backend/AGENTS.md`
+2. `backend/docs/engineering-rules.md`
+3. `backend/docs/module-skeleton.md`
+4. relevant `backend/docs/api/*.md`
+5. relevant backend module docs or ADRs when needed
 
-Prefer repo-specific review and guidance over generic best-practice commentary when the repo can answer the question more precisely.
+### Frontend work
 
-### 8. Respect the repo quality bar
+Load:
 
-Do not treat major-module work as complete unless it satisfies the current repo quality bar and the required signoff path defined there.
+1. `frontend/AGENTS.md`
+2. `frontend/src/shared/engineering-rules.md`
+3. `frontend/docs/module-skeleton.md`
+4. relevant backend API docs
+5. relevant frontend route or shared files
+
+### Topology, auth, trust-boundary, or security work
+
+Also load, when relevant:
+
+- `docs/ops/runbooks.md`
+- `docs/ops/observability.md`
+- `docs/ops/release-engineering.md`
+- relevant ADRs under `backend/docs/adr/`
+
+### Review or audit work
+
+Load:
+
+1. `code_review.md`
+2. relevant authority docs for the changed area
+3. `docs/prompts/catalog.md` only if you need a reusable prompt asset
 
 ---
 
@@ -105,13 +135,13 @@ Do not treat major-module work as complete unless it satisfies the current repo 
 
 Review or update the matching docs when code changes affect:
 
-* architecture or cross-cutting behavior → `ARCHITECTURE.md`, `docs/decision-log.md`
-* security, sessions, tenant rules, trust boundaries → `docs/security-model.md`
-* request/response or behavioral contracts → relevant API/contract docs
-* operational recovery, setup, deployment, or support behavior → `docs/ops/runbooks.md`
-* QA-visible flows, redirects, user messages, or test behavior → relevant QA docs
-* quality gates, module completion rules, or signoff expectations → `docs/quality-bar.md`
-* AI/review operating behavior → `AGENTS.md`, `code_review.md`, `docs/ai/repo-ai-adoption-roadmap.md`, `docs/prompts/usage-guide.md`, `docs/prompts/catalog.md`
+- architecture or cross-cutting behavior → `ARCHITECTURE.md`, `docs/decision-log.md`
+- security, sessions, cookies, tenant rules, or trust boundaries → `docs/security-model.md`
+- request/response or behavioral contracts → relevant `backend/docs/api/*.md`
+- shipped capability or repo truth snapshot → `docs/current-foundation-status.md`
+- operational recovery, release behavior, or support flow → relevant files under `docs/ops/`
+- QA-visible messages or flow behavior → relevant files under `docs/qa/`
+- contribution or review behavior → `AGENTS.md`, `CONTRIBUTING.md`, `code_review.md`, `docs/prompts/catalog.md`
 
 Do not create silent documentation drift.
 
@@ -121,136 +151,72 @@ Do not create silent documentation drift.
 
 Treat a change as topology-sensitive if it touches any of the following:
 
-* reverse proxy behavior
-* host-derived tenant behavior
-* browser `/api/*` routing
-* SSR/backend calling path
-* `INTERNAL_API_URL`
-* forwarded header behavior
-* cookie/session behavior
-* auth bootstrap behavior
-* SSO start/callback behavior
+- proxy behavior
+- browser `/api/*` routing
+- SSR direct-backend calls
+- `INTERNAL_API_URL`
+- forwarded headers
+- host-derived tenant behavior
+- cookie or session behavior
+- auth bootstrap behavior
+- SSO start/callback behavior
 
-### Required behavior for topology-sensitive changes
+### Required behavior for topology-sensitive work
 
-* Do not treat browser and SSR requests as interchangeable.
-* Do not hardcode direct browser calls to backend origins.
-* Do not weaken host-derived tenant routing.
-* Do not weaken tenant/session isolation assumptions.
-* Do not replace navigation-based auth flows with inappropriate `fetch()` flows.
-
-If a task touches one of these areas, use stricter review and stronger validation than usual.
-
----
-
-## Frontend / SSR Boundary Rules
-
-These rules are repo-wide because they affect correctness across the stack:
-
-* browser API calls must stay same-origin through `/api/*`
-* SSR/server-side code may use direct backend access only through the approved internal path and with the correct forwarded headers
-* tenant identity must remain host-derived, not client-selected
-* auth/bootstrap truth must remain backend-authoritative
-* session and setup state must not become frontend-only truth
-
-If a task changes frontend auth/bootstrap, SSR fetch wrappers, SSO flows, or protected routing, assume it is boundary-sensitive.
+- Do not treat browser and SSR requests as interchangeable.
+- Do not hardcode browser calls to backend origins.
+- Do not weaken host-derived tenant routing.
+- Do not weaken tenant/session isolation.
+- Do not replace navigation-based auth flows with inappropriate `fetch()` flows.
 
 ---
 
 ## Validation Routing
 
-Run the smallest meaningful checks that actually prove the area you changed.
+Run the smallest meaningful proof that actually matches the risk.
 
-### Repo-wide baseline
+### Baseline
 
-* `yarn fmt:check`
-* `yarn lint`
-* `yarn typecheck`
+Use the relevant subset of:
+
+- `yarn fmt:check`
+- `yarn lint`
+- `yarn typecheck`
 
 ### Backend-focused changes
 
-Run the backend-focused checks relevant to the affected area.
+Run backend tests or stronger proof for the affected area.
 
 ### Frontend-focused changes
 
-Run the frontend-focused checks relevant to the affected area.
+Run frontend unit tests, E2E, or stronger proof for the affected area.
 
-### Topology/auth/session/proxy-sensitive changes
+### Auth, session, topology, or proxy-sensitive changes
 
-Run the higher-confidence stack or end-to-end proof relevant to the change.
+Use stack-level or end-to-end proof when the behavior only becomes real through the full flow.
 
 ### Required behavior
 
-When reporting results, say what was actually run. Do not imply runtime proof if you only reasoned about the change.
-
----
-
-## How To Work In This Repo
-
-### For implementation work
-
-* start from repo truth
-* keep scope narrow
-* avoid hidden side effects
-* preserve architecture and documentation boundaries
-
-### For review work
-
-* ground the review in actual files and docs
-* distinguish facts from assumptions
-* separate blocker-level issues from advisory commentary
-
-### For planning work
-
-* do not mix product truth, implementation planning, and AI/review governance into one blob
-* keep each file and discussion at the correct layer
-
----
-
-## When To Consult Other Repo AI Files
-
-### Consult `backend/AGENTS.md` when:
-
-* backend modules, transactions, migrations, queries, audit, or outbox behavior are involved
-
-### Consult `frontend/AGENTS.md` when:
-
-* SSR, browser routing, auth flows, protected routes, UI shell boundaries, or frontend topology-sensitive work are involved
-
-### Consult `code_review.md` when:
-
-* the task is review, audit, risk assessment, or merge/release evaluation
-
-### Consult `docs/prompts/catalog.md` and `docs/prompts/usage-guide.md` when:
-
-* you need to choose the right prompt or review mode for the stage of work
-
-### Consult `docs/quality-bar.md` when:
-
-* the task introduces or substantially expands a major module
-* you are deciding whether work is actually complete
-* you are reviewing signoff readiness, debt acceptance, or mandatory gates
+When reporting validation, state what was actually run.
+Do not imply runtime proof if you only reviewed code.
 
 ---
 
 ## What Not To Do
 
-* Do not use this file as a product roadmap.
-* Do not use this file as a replacement for backend or frontend instructions.
-* Do not use this file as a dumping ground for temporary chat guidance.
-* Do not overfit the repo to AI tooling at the expense of clarity.
-* Do not treat missing docs as permission to invent system truth.
+- Do not start from prompt files when repo law already answers the question.
+- Do not treat support docs as stronger than architecture or shipped-truth docs.
+- Do not invent missing behavior because a lower doc sounds confident.
+- Do not claim completion without the proof level the task actually needs.
+- Do not add parallel explanation docs when an existing canonical doc can be tightened instead.
 
 ---
 
 ## Final Position
 
-This file is the root repo law for AI routing and repo-aware engineering assistance.
+Use this file as the root AI router.
 
-Its job is to keep work:
+For humans, `README.md` is the entrypoint.
+For AI, this file is the entrypoint.
 
-* grounded in repo truth
-* aligned with documentation
-* aware of topology and tenant boundaries
-* coupled to validation
-* resistant to generic drift
+Everything else should stay below those two surfaces instead of competing with them.

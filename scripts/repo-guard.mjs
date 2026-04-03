@@ -47,7 +47,6 @@ const PROTECTED_LAW_FILES = [
   'backend/AGENTS.md',
   'frontend/AGENTS.md',
   'code_review.md',
-  'docs/ai/repo-ai-adoption-roadmap.md',
   'docs/prompts/catalog.md',
   'docs/prompts/usage-guide.md',
   '.github/CODEOWNERS',
@@ -462,7 +461,6 @@ function checkArchitectureLawLinkage(context) {
     failures.push(
       `Architecture-law-sensitive files changed (${architectureLawChanges.join(', ')}), but the PR body does not contain a filled “ADR / architecture-law linkage” section.`,
     );
-    return { failures, warnings };
   }
 
   const checkedCount = countCheckedLabels(linkageSection, ADR_LINKAGE_LABELS);

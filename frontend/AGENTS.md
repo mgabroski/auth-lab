@@ -8,139 +8,195 @@ Applies to all work under `frontend/`.
 
 ## Purpose
 
-This file defines the **frontend-specific AI/review rules** for this repository.
+This is the frontend-specific AI/review router.
 
-It exists to keep frontend work:
+It narrows root repo law into frontend execution rules so frontend work stays:
 
-* aligned with repo truth
-* correct across browser and SSR boundaries
-* safe for tenant/session behavior
-* coupled to the right contracts and validation
-* resistant to topology and auth drift
+- route-correct
+- contract-correct
+- SSR-aware
+- tenant-aware
+- auth-aware
+- UX-truthful
 
-This file does **not** replace the root `AGENTS.md`. It narrows and extends it for frontend work.
+It does not replace the root `AGENTS.md`.
+It does not replace frontend engineering law.
+It routes frontend work to the right authority and helps prevent contract and state drift.
 
 ---
 
-## Read These After Root Instructions
+## Read After Root Instructions
 
-After reading `../AGENTS.md`, review the frontend-governing docs that exist for the area you are changing.
-
-Prioritize these when present:
+After reading `../AGENTS.md`, load frontend authority in this order:
 
 1. `frontend/src/shared/engineering-rules.md`
-2. relevant frontend auth/bootstrap/shared files
-3. relevant `backend/docs/api/*.md`
-4. `docs/decision-log.md`
-5. `docs/security-model.md`
-6. frontend code and tests for the affected route or component
+2. `frontend/docs/module-skeleton.md`
+3. relevant backend contract docs under `backend/docs/api/*.md`
+4. relevant ADRs or backend docs when the frontend behavior depends on them
+5. relevant frontend code, route files, shared utilities, and tests
 
-If one of these files does not exist yet, do not invent it. Continue with the files that do exist.
+Also re-check these when the task touches cross-cutting behavior:
+
+- `docs/current-foundation-status.md`
+- `ARCHITECTURE.md`
+- `docs/decision-log.md`
+- `docs/security-model.md`
+- `docs/ops/runbooks.md`
+
+Do not invent frontend truth from screenshots, assumptions, or chat memory when the repo already defines it.
 
 ---
 
-## Frontend Source-of-Truth Order
+## Frontend Truth Order
 
-Use this frontend-oriented truth order when sources disagree:
+When frontend sources disagree, use this order:
 
-1. active locked product/module source-of-truth documents
-2. repo-wide current foundation / shipped-scope truth docs
-3. architecture and decision records
-4. security model and topology law
-5. backend API/contract docs and frontend shared contracts
-6. frontend implementation code
-7. frontend tests and CI workflows
-8. runbooks, QA docs, and developer guides
-9. temporary notes or chat summaries
+1. active locked product/module source-of-truth docs
+2. repo shipped-truth and architecture law
+3. backend API/behavior contract docs
+4. frontend engineering law
+5. frontend implementation code
+6. frontend tests and E2E flows
+7. runbooks, QA docs, and developer guides
+8. temporary notes and chat summaries
 
-### Required Behavior
+### Required behavior
 
-* If a lower-truth source conflicts with a higher-truth source, call it out explicitly.
-* Do not silently resolve frontend behavior based on assumption.
-* Do not let temporary UI behavior overrule auth, topology, or contract truth.
+- Call out real conflicts explicitly.
+- Do not let UI convenience overrule backend truth.
+- Do not let screenshots or temporary behavior become frontend law.
 
 ---
 
 ## Frontend Hard Rules
 
-### 1. Keep browser and SSR behavior distinct
+### 1. Browser requests stay same-origin
 
-Browser code and SSR/server-side code do not have the same routing, cookie, or header behavior. Do not treat them as interchangeable.
+Browser-side requests must use relative `/api/*` paths.
 
-### 2. Browser calls must stay same-origin
+Do not hardcode browser calls to backend origins.
+Do not bypass the host-run proxy path in browser code.
 
-Browser-side API calls must stay on the same origin through `/api/*`.
+### 2. SSR and browser flows are different
 
-Do not hardcode direct browser calls to backend origins.
+Server-rendered calls and browser calls are not interchangeable.
 
-### 3. SSR backend access must stay explicit
+Use the correct SSR/server path for server-side data loading.
+Use the correct browser path for client-side requests.
+Do not flatten both models into one generic approach if that weakens topology truth.
 
-SSR/server-side code may call the backend directly only through the approved internal backend path and only with the correct forwarded headers.
+### 3. Backend owns auth and session truth
 
-### 4. Tenant identity stays host-derived
+The frontend does not decide final auth state, membership state, tenant truth, or next-action truth.
 
-Do not introduce frontend behavior that lets the client choose tenant identity independently of the host-derived model.
+The frontend renders and routes from backend-owned outcomes.
+It does not invent parallel state machines for those decisions.
 
-### 5. Auth/bootstrap truth stays backend-authoritative
+### 4. Keep tenant awareness intact
 
-The frontend may display, route, and react, but it must not become the source of truth for auth state, setup state, or security-sensitive workflow state.
+The current tenant comes from host-derived behavior and backend truth.
 
-### 6. Do not break protected-route assumptions
+Do not introduce frontend shortcuts that weaken tenant isolation, tenant-sensitive routing, or tenant/session fail-closed behavior.
 
-Changes to routing, layout loading, auth bootstrap, or redirects must preserve the protected-route model.
+### 5. Preserve route-state clarity
 
-### 7. Do not weaken SSO flow correctness
+Public auth pages, admin pages, member pages, setup pages, and transition pages should remain easy to reason about.
 
-Do not replace browser-native navigation flows with inappropriate fetch-based flows when the feature depends on real navigation behavior.
+Do not hide important route behavior inside scattered helpers or UI-only abstractions.
 
-### 8. Do not let placeholder UI become system truth
+### 6. Do not blur UI state with contract state
 
-Interim or placeholder screens must not redefine product or security behavior.
+Loading, success, error, and redirect behavior must reflect actual backend contract behavior.
 
-### 9. Keep contract changes visible
+Do not make the UI “feel nicer” by masking real contract states or inventing optimistic states the backend did not authorize.
 
-If frontend behavior depends on changed response shapes, new bootstrap fields, or changed auth/setup semantics, review or update the matching contract/docs.
+### 7. Keep user-visible text deliberate
 
-### 10. AI is not proof
+Auth, invite, MFA, reset, verification, and setup flows are sensitive.
 
-A clean explanation of a frontend/auth flow is not proof that routing, cookies, SSR behavior, or topology actually work.
+Do not casually rewrite user-visible messages if those messages are contract-meaningful, QA-audited, or security-sensitive.
+
+### 8. Do not casually redesign auth flow behavior
+
+Login, logout, signup, invite acceptance, MFA, reset-password, verification, SSO initiation, SSO completion, and admin/member landing behavior are not generic UX playgrounds.
+
+Treat them as behaviorally coupled to backend truth and documented flow rules.
+
+### 9. Respect shared frontend patterns
+
+Use established frontend route, shell, shared-client, and state patterns unless the task explicitly requires a change.
+
+Do not introduce one-off architectural patterns without a clear repo-level reason.
+
+### 10. Keep frontend claims honest
+
+A visually correct page is not automatically contract-correct.
+A passing component test is not enough for high-risk route behavior.
 
 ---
 
-## Frontend Review Focus Areas
+## Frontend Review Focus
 
-When reviewing or changing frontend code, check these areas explicitly when relevant:
+When reviewing frontend work, check these explicitly when relevant:
 
-### Browser vs SSR boundary correctness
+### Route correctness
 
-* Is this code running in the browser, on the server, or both?
-* Is the chosen request path correct for that execution context?
-* Are forwarded headers handled where SSR requires them?
-
-### Auth/bootstrap correctness
-
-* Is frontend routing still aligned with backend-authored auth truth?
-* Are setup or redirect decisions still coming from the right source?
-* Has any frontend-only interpretation started to drift from backend truth?
+- Is the page using the correct route model?
+- Is auth gating or redirect behavior still correct?
+- Are admin and member landing paths still aligned with backend truth?
 
 ### Contract correctness
 
-* Does the frontend still match backend request/response expectations?
-* Are user-visible states and error messages still aligned with contract and QA truth?
+- Does the UI match backend response and error behavior?
+- Are redirects, next actions, and status handling still correct?
+- Is any frontend logic silently overriding backend semantics?
 
-### Tenant/topology correctness
+### SSR vs browser correctness
 
-* Does the change preserve host-derived tenant behavior?
-* Could this route/component accidentally weaken tenant isolation or mix workspace contexts?
+- Is server-side data loading using the correct SSR path?
+- Are browser requests still same-origin through `/api/*`?
+- Has any change weakened forwarded-header or session behavior indirectly?
 
-### UI shell and route ownership
+### State clarity
 
-* Is this behavior in the right route, layout, or shared layer?
-* Is a temporary convenience layer being mistaken for architecture?
+- Are loading/error/empty/success states deterministic?
+- Is any critical behavior hidden in a way that makes debugging harder?
+- Does the component tree make the route behavior easier or harder to reason about?
 
-### QA-visible behavior
+### UX truthfulness
 
-* Does the change alter screens, redirects, messages, or flows that QA docs rely on?
+- Are messages, actions, and CTAs aligned with real system behavior?
+- Is a setup banner, warning, or auth continuation shown only when backend truth warrants it?
+- Has a cosmetic cleanup changed product meaning?
+
+### Drift risk
+
+- Does the frontend now assume behavior that only existed in mocks?
+- Has a shared utility become a second source of truth?
+- Does the current UI still match shipped repo law?
+
+---
+
+## High-Risk Frontend Change Triggers
+
+Treat frontend work as high-risk when it touches any of the following:
+
+- auth pages and auth routing
+- admin/member landing behavior
+- protected route gating
+- SSR bootstrap or SSR API client behavior
+- browser API client behavior
+- invite flows
+- email verification flows
+- password reset flows
+- MFA setup / verify / recovery flows
+- SSO initiation or completion flows
+- workspace setup banner behavior
+- settings bootstrap behavior
+- tenant-derived behavior from host or forwarded headers
+- logout and session invalidation behavior
+
+For these changes, be stricter than normal about contracts, proof, and doc coupling.
 
 ---
 
@@ -148,85 +204,47 @@ When reviewing or changing frontend code, check these areas explicitly when rele
 
 Review or update the relevant docs when frontend code changes affect:
 
-* user-visible flow or screen behavior → relevant QA docs
-* request/response contract assumptions → relevant `backend/docs/api/*.md`
-* auth/bootstrap/setup semantics → `docs/decision-log.md`, `docs/security-model.md`, current foundation docs
-* AI/review operating guidance → `docs/prompts/usage-guide.md`, `AGENTS.md`, `code_review.md`
-* operational/recovery expectations for the UI flow → relevant runbooks or support docs
+- user-visible flow behavior or page semantics → relevant API docs, QA docs, and shipped-truth docs
+- route or cross-cutting behavior → `ARCHITECTURE.md`, `docs/decision-log.md`, relevant ADRs
+- session, security, tenant, or trust-boundary behavior → `docs/security-model.md`
+- frontend structure expectations → `frontend/src/shared/engineering-rules.md`, `frontend/docs/module-skeleton.md`
+- operational or support expectations → relevant docs under `docs/ops/`
+- current shipped capability or behavior snapshot → `docs/current-foundation-status.md`
 
-Do not let frontend behavior drift away from the docs that describe the flow.
-
----
-
-## High-Risk Frontend Change Triggers
-
-Treat frontend changes as high-risk when they touch any of the following:
-
-* login/logout flows
-* signup/invite acceptance flows
-* email verification
-* forgot/reset password
-* MFA setup/verify/recovery
-* SSO start/callback/done flows
-* session/bootstrap logic
-* protected routes
-* admin vs member landing logic
-* settings/setup banners or setup-completion behavior
-* SSR fetch wrappers
-* `/api/*` route handling
-* topology-sensitive or proxy-sensitive behavior
-
-For these changes, be stricter than usual about review, docs, and validation.
-
----
-
-## Topology-Sensitive Frontend Rules
-
-This repo has load-bearing frontend topology rules.
-
-Treat a frontend change as topology-sensitive if it affects:
-
-* same-origin `/api/*` behavior
-* SSR direct backend calls
-* `INTERNAL_API_URL`
-* forwarded `Host`, `Cookie`, or `X-Forwarded-*` behavior
-* browser vs SSR cookie/session handling
-* host-derived tenant assumptions
-* auth callback or redirect flows
-
-### Required Behavior For Topology-Sensitive Frontend Changes
-
-* Do not treat browser requests and SSR requests as equivalent.
-* Do not break forwarded-header expectations for SSR.
-* Do not hardcode backend origins into browser code.
-* Do not weaken host-derived tenant routing.
-* Do not turn navigation-based auth flows into fetch-based approximations.
-
-If you are touching one of these areas, use stricter review and stronger validation than usual.
+Do not let frontend behavior drift away from the docs that users, QA, and reviewers depend on.
 
 ---
 
 ## Validation Routing For Frontend Work
 
-Run the smallest meaningful checks that prove the frontend area you changed.
+Run the smallest meaningful proof that actually matches the changed frontend risk.
 
-### Typical frontend checks
+### Typical frontend proof
 
-* frontend typecheck
-* frontend unit tests
-* affected route/component checks
+Use the relevant subset of:
 
-### For auth/session/topology-sensitive frontend changes
+- frontend lint/typecheck
+- frontend unit tests
+- route-level tests
+- Playwright E2E
 
-Also run the higher-confidence proof relevant to the flow, including stack or end-to-end validation when needed.
+### For route/auth/topology-sensitive changes
 
-### For SSR-boundary changes
+Use stronger proof than unit tests alone when the behavior only becomes real through:
 
-Be especially careful to validate the path that actually runs on the server, not only client-side behavior.
+- real redirects
+- SSR + browser interaction
+- session cookies
+- protected route behavior
+- full stack or proxy topology
 
-### Required Behavior
+### Required behavior
 
-When reporting results, say what was actually run. Do not imply full-stack proof if you only reasoned about the UI.
+When reporting validation:
+
+- state what was actually run
+- state what was not run
+- do not imply real-stack proof if you only ran unit tests
 
 ---
 
@@ -234,61 +252,45 @@ When reporting results, say what was actually run. Do not imply full-stack proof
 
 ### For implementation
 
-* start from the real route, layout, or shared boundary that owns the behavior
-* preserve browser vs SSR correctness
-* keep changes narrow and understandable
-* avoid spreading auth/topology logic across many unrelated components
+- start from the route or shared utility that actually owns the behavior
+- read the backend contract before changing sensitive UI flows
+- keep route behavior explicit
+- preserve SSR/browser distinctions
 
 ### For review
 
-* inspect the real flow, not only the visible screen
-* check routing, bootstrap, contract, and tenant implications
-* distinguish blocker-level risk from cleanup advice
+- check the real user path, not just the component in isolation
+- compare frontend behavior to backend contract and shipped docs
+- separate cosmetic suggestions from behavioral issues
 
 ### For refactor
 
-* preserve behavior first
-* do not let convenience abstractions hide important route or topology assumptions
-* be careful when moving logic between client and server contexts
-
----
-
-## When To Escalate Review
-
-Use stricter review when the frontend change affects:
-
-* auth flows
-* SSR/bootstrap behavior
-* tenant or workspace context
-* topology or proxy assumptions
-* protected routes or session behavior
-* settings/setup-state presentation that influences user routing or expectations
-* operationally sensitive user journeys
-
-If the change is high-risk, a generic UI skim is not enough.
+- preserve route and contract truth first
+- improve clarity without inventing new state models
+- avoid “cleanup” that weakens tenant, session, or redirect behavior
 
 ---
 
 ## What Not To Do
 
-* Do not treat this file as a general architecture doc.
-* Do not duplicate the entire root `AGENTS.md` here.
-* Do not hardcode backend origins in browser code.
-* Do not let client-side state replace backend truth for auth or setup decisions.
-* Do not treat placeholder UI as permanent system behavior.
-* Do not claim frontend flow safety just because the screen renders.
+- Do not use this file as a second root router.
+- Do not hardcode browser calls to backend origins.
+- Do not treat SSR and browser fetch paths as the same thing.
+- Do not let frontend state override backend auth/session truth.
+- Do not casually rewrite audited or security-sensitive user messages.
+- Do not declare frontend flow correctness from visuals alone.
+- Do not let mock behavior silently define production expectations.
 
 ---
 
 ## Final Position
 
-This file is the frontend-specific instruction layer for repo-aware AI assistance and review.
+Use this file after the root `AGENTS.md`.
 
 Its job is to keep frontend work:
 
-* correct across browser and SSR contexts
-* aligned with backend truth
-* topology-aware
-* tenant-safe
-* contract-aware
-* validation-coupled
+- aligned with frontend law
+- tied to backend contracts
+- safe around auth, tenant, and session behavior
+- clear across SSR and browser boundaries
+- validated at the correct proof level

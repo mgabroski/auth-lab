@@ -1,305 +1,227 @@
-# infra/
+# Infra Surface Reference
 
-Infrastructure configuration for Hubins Auth-Lab.
+This folder contains local infrastructure and topology support for the Hubins repo.
 
-This folder defines the local and reference deployment topology for the current foundation phase.
+It is an infra surface reference.
+It is not the repo entrypoint.
 
-Read this together with:
+Start at the repo root first:
 
-- `README.md`
-- `docs/current-foundation-status.md`
-- `ARCHITECTURE.md`
-- `docs/decision-log.md`
+1. `../README.md`
+2. `../docs/current-foundation-status.md`
+3. `../ARCHITECTURE.md`
+4. `../docs/quality-bar.md`
+5. `../docs/decision-log.md`
+6. `../docs/security-model.md`
 
----
+For AI/review routing, use:
 
-## Purpose of this folder
-
-This folder exists to support two different but complementary needs:
-
-1. **daily local development** where backend/frontend run on the host and only infra is containerized
-2. **full topology validation** where the app runs behind the intended local proxy shape
-
-Neither mode replaces the other.
-They prove different things.
+- `../AGENTS.md`
 
 ---
 
-## Local modes
+## What This Folder Owns
 
-There are intentionally two local modes.
+This folder owns repo infrastructure assets that support local execution, stack topology, and environment-backed validation.
 
-## Mode 1 — host-run (daily development)
+That includes:
 
-Command from repo root:
+- Docker Compose stack definitions
+- proxy configuration
+- local service topology
+- local support services such as database, cache, mail capture, and identity-provider helpers when present
+- stack lifecycle helpers referenced by repo scripts
+- topology-sensitive test support
 
-```bash
-yarn dev
-```
-
-### What actually runs
-
-- Postgres in Docker
-- Redis in Docker
-- Mailpit in Docker
-- local OIDC helper in Docker
-- backend on the host (`localhost:3001`)
-- frontend on the host
-
-### Canonical browser URL
-
-Use:
-
-```text
-http://goodwill-ca.lvh.me:3000
-```
-
-Do **not** use plain `localhost:3000` when testing tenant-aware behavior.
-
-### What host-run mode proves
-
-- backend ↔ Postgres / Redis local wiring
-- Mailpit local email capture
-- SSR direct-backend communication through `INTERNAL_API_URL`
-- browser same-origin `/api/*` usage through the local Next Route Handler proxy
-- tenant-aware browser behavior when using the correct tenant host
-- local OIDC availability for auth-related local proof
-
-### What host-run mode does not prove
-
-- real Caddy proxy behavior
-- real `/api` prefix stripping through the public proxy layer
-- real `X-Forwarded-*` handling through Caddy
-- full cookie/proxy behavior for the public stack shape
-- final topology conformance
-
-Host-run mode is the daily work mode, not the final topology-proof mode.
+Use `../docs/current-foundation-status.md` before describing any infra behavior as fully shipped or production-complete.
 
 ---
 
-## Mode 2 — full Docker topology
+## What This Folder Does Not Own
 
-You have two entry paths depending on what you need.
+This folder does **not** own:
 
-### A. Standard full topology
+- repo-wide architecture law
+- backend business logic
+- frontend route behavior
+- API contract truth
+- product scope truth
+- security policy truth by itself
 
-```bash
-yarn stack
-```
-
-This uses `infra/docker-compose.yml`.
-
-### B. Full topology plus local OIDC helper
-
-```bash
-yarn dev:stack
-```
-
-This uses:
-
-- `infra/docker-compose.yml`
-- `infra/docker-compose-ci-oidc.yml`
-
-Use `yarn dev:stack` when you want the full Docker topology and also need the local OIDC helper available in that stack.
-
-### Public full-stack entrypoint
-
-```text
-http://goodwill-ca.lvh.me:3000
-```
-
-### What full-stack mode proves
-
-- Caddy proxy behavior
-- `/api/*` routing through the proxy
-- `/api` prefix stripping
-- public-origin browser behavior through the proxy layer
-- host-derived tenant routing through the public stack shape
-- forwarded-header behavior through the proxy path
-- proxy conformance checks against the real local topology
-
-### What full-stack mode still does not prove
-
-The local full stack is still HTTP-only.
-It does **not** fully prove:
-
-- production HTTPS behavior
-- real `__Host-` cookie prefix enforcement by browsers
-- final production TLS termination behavior
-
-That is expected.
-The local stack is for topology proof, not for pretending local HTTP equals production HTTPS.
+Those are defined in higher-truth repo and backend/frontend authority docs.
 
 ---
 
-## Recommended validation flow
+## Read For Infra Work
 
-### Daily feature loop
+### Core repo truth
 
-```bash
-yarn dev
-```
+- `../ARCHITECTURE.md`
+- `../docs/decision-log.md`
+- `../docs/security-model.md`
+- `../docs/current-foundation-status.md`
 
-### Repo-level checks before push / merge
+### Operational and execution docs
 
-```bash
-yarn verify
-```
+- `../docs/developer-guide.md`
+- `../docs/ops/runbooks.md`
+- `../docs/ops/observability.md`
+- `../docs/ops/release-engineering.md`
 
-### Topology-sensitive changes
+### Review expectations
 
-```bash
-yarn stack
-yarn stack:test
-```
+- `../code_review.md`
 
-Or, if your test path depends on the local OIDC helper inside the full stack:
+### Area-specific code and config
 
-```bash
-yarn dev:stack
-yarn stack:test
-```
+Read the actual files under this folder that the task changes, such as:
 
-Use all three levels appropriately:
-
-- `yarn dev` for normal iteration
-- `yarn verify` for format/lint/typecheck/test proof
-- `yarn stack:test` for topology-sensitive proof
-
-Important truth note:
-
-`yarn verify` currently runs:
-
-- format check
-- lint
-- typecheck
-- tests
-
-It does **not** run a frontend production build.
-If you want build proof, run it separately.
-
----
-
-## Topology-sensitive changes that require full-stack proof
-
-Run full-stack proof before merging changes that affect:
-
-- `infra/`
+- Docker Compose files
 - proxy config
-- request context / tenant resolution
-- session/cookie behavior
-- SSR forwarded-header behavior
-- SSO callback/start assumptions
-- browser vs SSR communication assumptions
-- public-origin path handling under `/api/*`
-
-If the change touches one of those areas, host-run mode alone is not enough.
+- local env templates
+- support-service config
+- stack scripts referenced by repo commands
 
 ---
 
-## Commands in practice
+## Infra Operating Rules
 
-### Start host-run mode
+### 1. Preserve the topology contract
+
+Infra changes must not casually break:
+
+- single public-origin local behavior
+- browser same-origin `/api/*` assumptions
+- SSR/backend internal call assumptions
+- host-derived tenant behavior
+- forwarded-header expectations
+- session/cookie behavior through the proxy path
+
+### 2. Dev infra must support truthful validation
+
+Local infra exists to make important behavior real enough to test.
+
+Do not simplify local stack behavior in ways that make auth, session, proxy, cookie, SSR, or tenant behavior misleading.
+
+### 3. Do not confuse local support with production truth
+
+Some local services exist only to support development and validation.
+
+Do not describe local convenience behavior as production behavior unless a higher-truth doc says so.
+
+### 4. Keep infra changes coupled to support docs
+
+If infra changes alter startup, reset, stack behavior, proxy behavior, support-service usage, or operator expectations, update the matching docs in the same change.
+
+### 5. Keep secrets and env handling disciplined
+
+Do not casually add, rename, or repurpose environment variables without checking:
+
+- repo docs
+- env templates
+- developer guidance
+- affected scripts
+- CI or stack expectations
+
+### 6. Keep topology-sensitive proof honest
+
+A config that boots is not automatically a correct config.
+Infra work must be judged by whether the intended behavior still holds.
+
+---
+
+## Folder Map
+
+### Stack definitions
+
+Use the Compose and related stack files here for:
+
+- service wiring
+- networks
+- ports
+- dependencies
+- local support services
+
+### Proxy configuration
+
+Use proxy config here for:
+
+- public-origin routing
+- `/api/*` forwarding
+- asset routing
+- header forwarding
+- host preservation
+- local topology behavior
+
+### Env templates and support config
+
+Use env examples and support-service config here only as infra support assets.
+
+They are not the only source of truth for behavior.
+
+### Infra-adjacent scripts or helpers
+
+If this folder contains helper files for stack lifecycle or local support services, keep them aligned with repo scripts and support docs.
+
+---
+
+## Local Development Role
+
+Normal repo development usually starts from the repo root:
 
 ```bash
 yarn dev
 ```
 
-### Start full Docker topology
+Topology-sensitive validation may use:
 
 ```bash
 yarn stack
-```
-
-### Start full Docker topology plus local OIDC helper
-
-```bash
-yarn dev:stack
-```
-
-### Run proxy conformance tests
-
-```bash
 yarn stack:test
 ```
 
-### Stop Docker-backed local modes
+Stopping or resetting the stack may use repo-root commands such as:
 
 ```bash
 yarn stop
-```
-
-### Check local topology status
-
-```bash
 yarn status
-```
-
-### Reset local Docker volumes
-
-```bash
 yarn reset-db
 ```
 
----
-
-## Files in this folder
-
-| File                         | Purpose                                                    |
-| ---------------------------- | ---------------------------------------------------------- |
-| `docker-compose.yml`         | full Docker stack: proxy + frontend + backend + core infra |
-| `docker-compose-infra.yml`   | infra-only stack for host-run mode                         |
-| `docker-compose-ci-oidc.yml` | local OIDC helper overlay used by `yarn dev:stack`         |
-| `caddy/Caddyfile`            | local reverse-proxy topology                               |
-| `nginx/nginx.conf`           | production/reference reverse-proxy config                  |
+Use `../docs/developer-guide.md` for the authoritative developer workflow rather than expanding this file into a setup manual.
 
 ---
 
-## Canonical local URLs
+## Infra Truth Order
 
-### Host-run mode
+When infra-local materials seem to disagree, use this order:
 
-| Surface         | URL                                           |
-| --------------- | --------------------------------------------- |
-| Public app      | `http://goodwill-ca.lvh.me:3000`              |
-| Backend health  | `http://localhost:3001/health`                |
-| Mailpit UI      | `http://localhost:8025`                       |
-| Local OIDC JWKS | `http://localhost:9998/.well-known/jwks.json` |
+1. active locked product/module source-of-truth docs
+2. repo-level shipped-truth and architecture docs
+3. security and trust-boundary docs
+4. ops and developer docs
+5. actual infra config and stack files
+6. local reference docs like this one
 
-### Full-stack mode
-
-| Surface                  | URL                                         |
-| ------------------------ | ------------------------------------------- |
-| Public app               | `http://goodwill-ca.lvh.me:3000`            |
-| Backend health via proxy | `http://goodwill-ca.lvh.me:3000/api/health` |
-
-`lvh.me` resolves to `127.0.0.1`, so no `/etc/hosts` edits are needed.
+If a lower source conflicts with a higher one, the lower source must be corrected or ignored.
 
 ---
 
-## Local development credentials
+## What This File Should Be
 
-### Postgres (dev only)
+This file should stay small.
 
-| Key      | Value      |
-| -------- | ---------- |
-| Database | `auth_lab` |
-| User     | `auth_lab` |
-| Password | `auth_lab` |
+Its job is to:
 
-These are local-development credentials only.
-Never reuse them in production.
+- explain what the infra folder owns
+- point readers to the right higher-truth docs
+- prevent this folder from becoming a second repo entrypoint
+- keep infra readers oriented without adding duplicate process text
 
----
+It should not become:
 
-## Practical truth rules
-
-- Host-run mode is the fastest daily loop, but it is not final topology proof.
-- Full-stack mode is required for proxy-sensitive changes.
-- `yarn verify` is a repo verification gate, not a deployment simulation.
-- `yarn verify` does not currently perform a frontend production build.
-- `lvh.me` is the canonical tenant-aware browser host in both local modes.
-- If you test tenant behavior on plain `localhost`, you are testing the wrong host contract.
-
-These distinctions are intentional.
-They keep local development fast while still preserving a real topology-proof path.
+- a duplicate of root `README.md`
+- a long setup guide
+- a second architecture document
+- a substitute for `docs/developer-guide.md`
+- a substitute for `docs/ops/*.md`

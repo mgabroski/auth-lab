@@ -2,45 +2,29 @@
 
 **Status:** Active local-development truth
 **Scope:** Current repo only
-**Audience:** Engineers working in the repo today
-**Last Updated:** 2026-04-01
 
----
+This guide is the practical local execution document for the repo.
 
-## Purpose
+Use it for:
 
-This guide is the repo's practical setup and repeatability document for the current foundation.
+- local setup
+- local stack modes
+- canonical local URLs
+- health checks
+- stop/reset flows
+- seed/bootstrap commands
+- test and verification commands
+- local-vs-staging proof boundaries
 
-Use it to answer:
+It is not the repo entrypoint.
 
-- how to start the current local stack
-- which URLs are canonical today
-- how to confirm health/status
-- how to stop or reset local state safely
-- how to run checks and tests
-- how to seed or bootstrap known local data intentionally
-- which env files are used in each local mode
-- what staging-only proof still depends on external credentials or infrastructure
+Start with:
 
-This guide is intentionally scoped to:
+1. `README.md`
+2. `docs/current-foundation-status.md`
+3. `ARCHITECTURE.md`
 
-- local development
-- local topology validation
-- current test-running truth
-- current seed/bootstrap truth
-- current repo env/config truth
-
-It does **not** replace:
-
-- release engineering rules
-- deployment / rollback process
-- incident response policy
-- full operator runbooks
-
-Those belong in:
-
-- `docs/ops/release-engineering.md`
-- `docs/ops/runbooks.md`
+Use this file after that, when you need concrete local execution truth.
 
 ---
 
@@ -95,32 +79,11 @@ or your platform equivalent.
 
 ---
 
-## Repo layout at a glance
-
-Main working areas:
-
-- `backend/` — Fastify backend, DB migrations, seed/bootstraps, auth logic
-- `frontend/` — Next.js App Router frontend, browser proxy handlers, auth UI, Playwright tests
-- `infra/` — Docker Compose files, Caddy config, reference nginx config
-- `docs/` — active repo truth, quality docs, ops/security docs
-- `scripts/` — startup, verify, stack, reset, and repo utility scripts
-
-Important docs:
-
-- `docs/current-foundation-status.md`
-- `README.md`
-- `infra/README.md`
-- `docs/ops/runbooks.md`
-- `docs/ops/release-engineering.md`
-- `docs/security/threat-model.md`
-
----
-
 ## Local development modes
 
-The repo intentionally supports two different local modes.
+The repo intentionally supports two local modes.
 
-## Mode 1 — host-run (daily development)
+### Mode 1 — host-run daily development
 
 Use this for the normal inner loop.
 
@@ -128,7 +91,7 @@ Use this for the normal inner loop.
 yarn dev
 ```
 
-### What `yarn dev` actually does
+#### What `yarn dev` does
 
 It:
 
@@ -143,7 +106,7 @@ It:
 - starts backend on the host
 - starts frontend on the host
 
-### What runs in host-run mode
+#### What runs in host-run mode
 
 - Postgres in Docker
 - Redis in Docker
@@ -152,17 +115,17 @@ It:
 - backend on the host
 - frontend on the host
 
-### Canonical URLs in host-run mode
+#### Canonical URLs in host-run mode
 
 Use these exact URLs:
 
-- Public app: `http://goodwill-ca.lvh.me:3000`
-- Proxy-style health check: `http://goodwill-ca.lvh.me:3000/api/health`
-- Backend health directly: `http://localhost:3001/health`
+- public app: `http://goodwill-ca.lvh.me:3000`
+- proxy-style health check: `http://goodwill-ca.lvh.me:3000/api/health`
+- direct backend health: `http://localhost:3001/health`
 - Mailpit UI: `http://localhost:8025`
-- Local OIDC JWKS: `http://localhost:9998/.well-known/jwks.json`
+- local OIDC JWKS: `http://localhost:9998/.well-known/jwks.json`
 
-### Important truth for host-run mode
+#### Important truth for host-run mode
 
 In host-run mode:
 
@@ -172,9 +135,8 @@ In host-run mode:
 - tenant-aware browser behavior still requires the tenant host, not plain `localhost:3000`
 
 Do **not** test tenant-aware browser behavior on plain `localhost:3000`.
-Use `goodwill-ca.lvh.me:3000` or another intended tenant host.
 
-### What host-run mode proves well
+#### What host-run mode proves well
 
 - normal daily frontend/backend iteration
 - local auth/provisioning feature work
@@ -182,7 +144,7 @@ Use `goodwill-ca.lvh.me:3000` or another intended tenant host.
 - SSR direct-backend behavior
 - browser same-origin behavior through the Route Handler proxy
 
-### What host-run mode does not prove fully
+#### What host-run mode does not prove fully
 
 - real Caddy proxy behavior
 - real `/api` prefix stripping through the public proxy layer
@@ -191,13 +153,13 @@ Use `goodwill-ca.lvh.me:3000` or another intended tenant host.
 
 ---
 
-## Mode 2 — full Docker topology
+### Mode 2 — full Docker topology
 
 Use this when the actual proxy/topology path matters.
 
 You have two entry paths.
 
-### A. Standard full topology
+#### A. Standard full topology
 
 ```bash
 yarn stack
@@ -205,7 +167,7 @@ yarn stack
 
 This uses `infra/docker-compose.yml`.
 
-### B. Full topology plus local OIDC helper
+#### B. Full topology plus local OIDC helper
 
 ```bash
 yarn dev:stack
@@ -218,12 +180,12 @@ This uses:
 
 Use `yarn dev:stack` when you need the full Docker topology and also want the local OIDC helper available in that stack.
 
-### Canonical URL in full-stack mode
+#### Canonical URL in full-stack mode
 
-- Public app: `http://goodwill-ca.lvh.me:3000`
-- Health via proxy: `http://goodwill-ca.lvh.me:3000/api/health`
+- public app: `http://goodwill-ca.lvh.me:3000`
+- health via proxy: `http://goodwill-ca.lvh.me:3000/api/health`
 
-### What full-stack mode proves
+#### What full-stack mode proves
 
 - Caddy proxy routing
 - `/api/*` public-origin routing
@@ -232,7 +194,7 @@ Use `yarn dev:stack` when you need the full Docker topology and also want the lo
 - forwarded-header behavior through the proxy path
 - real proxy conformance checks
 
-### What full-stack mode still does not prove
+#### What full-stack mode still does not prove
 
 The local full stack is HTTP-only.
 It does **not** fully prove:
@@ -249,7 +211,7 @@ That is expected.
 
 The repo uses committed example env files as the safe source of truth.
 
-## Backend env
+### Backend env
 
 Primary example file:
 
@@ -261,14 +223,14 @@ Local working file:
 
 In normal local work, `yarn dev` auto-creates `backend/.env` from the example if it is missing.
 
-### Important backend env notes
+#### Important backend env notes
 
 - host-run backend uses `localhost` endpoints for Postgres and Redis
 - Mailpit SMTP is local
 - backend env contains sensitive values in real usage
 - never share real env files in screenshots, zips, or chat threads
 
-## Frontend env
+### Frontend env
 
 Primary example file:
 
@@ -280,7 +242,7 @@ Local working file:
 
 In normal local work, `yarn dev` auto-creates `frontend/.env.local` from the example if it is missing.
 
-### Important frontend env notes
+#### Important frontend env notes
 
 Frontend env should not contain OAuth secrets.
 Its main job is SSR/backend wiring, for example:
@@ -288,7 +250,7 @@ Its main job is SSR/backend wiring, for example:
 - `INTERNAL_API_URL`
 - `NEXT_PUBLIC_ENV`
 
-## Infra stack env
+### Infra stack env
 
 Primary example file:
 
@@ -330,7 +292,7 @@ Safe sharing rule:
 
 ## Health and status checks
 
-## Quick status command
+### Quick status command
 
 ```bash
 yarn status
@@ -344,27 +306,27 @@ This shows:
 - direct backend health
 - Mailpit UI reachability
 
-## Manual health checks
+### Manual health checks
 
-### Canonical public health check
+#### Canonical public health check
 
 ```bash
 curl -fsS http://goodwill-ca.lvh.me:3000/api/health
 ```
 
-### Direct backend health check
+#### Direct backend health check
 
 ```bash
 curl -fsS http://localhost:3001/health
 ```
 
-### Mailpit UI
+#### Mailpit UI
 
 Open:
 
 - `http://localhost:8025`
 
-### Local OIDC JWKS
+#### Local OIDC JWKS
 
 ```bash
 curl -fsS http://localhost:9998/.well-known/jwks.json
@@ -374,7 +336,7 @@ curl -fsS http://localhost:9998/.well-known/jwks.json
 
 ## Stop and reset commands
 
-## Stop Docker-backed local modes
+### Stop Docker-backed local modes
 
 ```bash
 yarn stop
@@ -387,13 +349,14 @@ This stops:
 
 If backend/frontend were started manually in separate host terminals, stop those terminals yourself.
 
-## Reset local DB/Redis volumes
+### Reset local DB/Redis volumes
 
 ```bash
 yarn reset-db
 ```
 
 This wipes local Docker volumes for the supported local modes.
+
 Use it when you need a clean local state.
 
 Warning:
@@ -405,30 +368,31 @@ Warning:
 
 ## Seed and bootstrap truth
 
-This is important because old assumptions easily drift here.
+This area drifts easily, so keep these distinctions explicit.
 
-## What `yarn dev` does **not** do
+### What `yarn dev` does **not** do
 
 `yarn dev` does **not** automatically run repo seed commands.
+
 It prepares env files, infra, migrations, DB types, and host-run app processes.
 
 Do **not** assume `yarn dev` gives you seeded personas automatically.
 
-## Available seed/bootstrap commands
+### Available seed/bootstrap commands
 
-### Dev seed
+#### Dev seed
 
 ```bash
 yarn seed:dev
 ```
 
-### E2E fixtures seed
+#### E2E fixtures seed
 
 ```bash
 yarn seed:e2e
 ```
 
-### Tenant bootstrap helper
+#### Tenant bootstrap helper
 
 ```bash
 yarn bootstrap:tenant
@@ -440,7 +404,7 @@ Use these intentionally when you need:
 - E2E fixture accounts/data
 - operator-style tenant bootstrap flow
 
-## Recommended seed usage
+### Recommended seed usage
 
 - use `yarn seed:dev` when you want known local development fixtures
 - use `yarn seed:e2e` when preparing Playwright-compatible local fixtures
@@ -451,13 +415,12 @@ Use these intentionally when you need:
 ## Local email proof
 
 Mailpit is part of the real local proof contract.
-The repo does not treat auth email as purely mocked behavior in local work.
 
-## Mailpit URL
+### Mailpit URL
 
 - `http://localhost:8025`
 
-## Typical local email proof flows
+### Typical local email proof flows
 
 - invite email
 - verify-email
@@ -474,7 +437,7 @@ Local proof is considered real only if:
 
 ## Running checks and tests
 
-## Repo-wide verification
+### Repo-wide verification
 
 ```bash
 yarn verify
@@ -490,13 +453,14 @@ What `yarn verify` actually runs:
 Important truth:
 
 `yarn verify` does **not** run a frontend production build.
+
 If you need explicit frontend build proof, run:
 
 ```bash
 yarn build:frontend
 ```
 
-## Main test command
+### Main test command
 
 ```bash
 yarn test
@@ -512,7 +476,7 @@ What `yarn test` actually does:
 
 If the stack is not reachable at `http://goodwill-ca.lvh.me:3000/api/health`, E2E is skipped.
 
-## Backend-only tests
+### Backend-only tests
 
 ```bash
 yarn test:backend
@@ -524,7 +488,7 @@ or directly:
 yarn workspace @auth-lab/backend test
 ```
 
-## Frontend unit tests
+### Frontend unit tests
 
 ```bash
 yarn test:frontend:unit
@@ -536,7 +500,7 @@ or directly:
 yarn workspace frontend test:unit
 ```
 
-## Playwright E2E
+### Playwright E2E
 
 ```bash
 yarn test:e2e
@@ -551,21 +515,21 @@ Important truth for Playwright in this repo today:
 
 That means current E2E is **not** a mock-backed no-Docker path.
 
-## Recommended local test flow
+### Recommended local test flow
 
-### Daily feature work
+#### Daily feature work
 
 ```bash
 yarn dev
 ```
 
-### Before push / PR
+#### Before push / PR
 
 ```bash
 yarn verify
 ```
 
-### Before merging topology-sensitive changes
+#### Before merging topology-sensitive changes
 
 ```bash
 yarn stack
@@ -606,7 +570,6 @@ yarn stack:test
 ## Staging-only proof boundaries
 
 Some proof cannot be honestly completed only on a local machine.
-These remain staging / externally-managed environment concerns.
 
 Examples:
 
@@ -726,36 +689,6 @@ curl -fsS https://login.microsoftonline.com/common/discovery/v2.0/keys > /dev/nu
 
 ---
 
-## Recommended daily workflow
-
-1. start normal local mode:
-
-```bash
-yarn dev
-```
-
-2. open the canonical tenant host:
-
-```text
-http://goodwill-ca.lvh.me:3000
-```
-
-3. run intentional seed/bootstrap commands only when needed
-4. run `yarn verify` before push / PR
-5. run `yarn stack:test` when the change touches topology-sensitive behavior
-
----
-
-## Where to look next
-
-- `docs/current-foundation-status.md` — current repo truth
-- `README.md` — top-level entry and command summary
-- `infra/README.md` — local topology modes and infra truth
-- `docs/ops/release-engineering.md` — release gates, migration safety, rollback, hotfix rules
-- `docs/ops/runbooks.md` — operator and incident-facing procedures
-
----
-
 ## Practical truth rules
 
 - do not describe `yarn verify` as if it includes build proof; it does not
@@ -764,5 +697,3 @@ http://goodwill-ca.lvh.me:3000
 - do not test tenant-aware browser behavior on plain `localhost`
 - do not call local HTTP proof equivalent to production HTTPS proof
 - do not claim local-only proof is enough for live-provider SSO or real external SMTP proof
-
-Those distinctions are part of repo truth, not optional wording.
