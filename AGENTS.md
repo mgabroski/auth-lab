@@ -6,9 +6,9 @@ Applies at the repository root.
 
 ## Purpose
 
-This is the single AI entrypoint for the repo.
+This is the single AI router for the repo.
 
-Use it to load the right authority first, keep answers tied to repo truth, and avoid duplicate or lower-value context.
+Use it to load the right authority first, keep answers tied to repo truth, and prevent drift caused by duplicate or lower-priority context.
 
 This file is a router.
 It is not a second architecture doc, not a product brief, and not a substitute for area-specific law.
@@ -19,21 +19,22 @@ It is not a second architecture doc, not a product brief, and not a substitute f
 
 When sources disagree, use this order:
 
-1. module-specific highest-truth docs explicitly declared as authoritative for the target module
+1. module-specific highest-truth docs explicitly declared as authoritative for the current module
 2. current shipped-truth docs
 3. architecture and security law
-4. area engineering law and API contract docs
-5. implementation code
-6. tests and CI workflows
-7. developer, ops, and QA support docs
-8. prompts, temporary notes, and chat summaries
+4. reusable module-introduction and module-design law
+5. area engineering law and API contract docs
+6. implementation code
+7. tests and CI workflows
+8. developer, ops, and QA support docs
+9. prompts, temporary notes, and chat summaries
 
 ### Required behavior
 
-* Call out real conflicts explicitly.
+* Call out conflicts explicitly.
 * Do not smooth over contradictions.
 * Do not let polished wording outrank repo evidence.
-* Do not let support docs overrule architecture, security, contracts, or shipped-truth docs.
+* Do not let support docs overrule shipped truth, architecture, security, reusable module-design law, engineering law, or API contracts.
 
 ### Off-repo truth rule
 
@@ -42,10 +43,10 @@ An off-repo document may outrank repo docs only when all of the following are tr
 * it is module-specific
 * it explicitly declares source-of-truth priority
 * it is still active, not historical
-* the current task is about that module
+* the current task is truly scoped to that module
 
-Example: a locked master spec for Settings may outrank repo docs for Settings work only.
-It does not become the default truth source for unrelated backend, frontend, auth, or topology work.
+Example: a locked Settings master document may outrank repo docs for Settings work only.
+It does not become default truth for unrelated backend, frontend, topology, auth, or future-module work.
 
 ---
 
@@ -61,20 +62,25 @@ Then route by task:
 
 * backend work -> `backend/AGENTS.md`
 * frontend work -> `frontend/AGENTS.md`
-* review / audit work -> `code_review.md`
+* review or audit work -> `code_review.md`
 * prompt selection only -> `docs/prompts/catalog.md`
+* new module introduction, analysis, or full design -> `docs/module-design-framework.md`
 
 ### Task-gated docs
 
 Load these only when the task actually needs them:
 
+* `docs/module-design-framework.md` -> introducing, analyzing, or fully designing a new module
+* `backend/docs/module-skeleton.md` -> backend planning after module design is complete
+* `frontend/docs/module-skeleton.md` -> frontend planning after module design is complete
+* `docs/prompts/module-generation-fullstack.md` -> full-stack module planning prompt after module design is complete or when the session must explicitly test that completeness
 * `docs/quality-bar.md` -> review, signoff, readiness, or release-quality questions
-* `docs/decision-log.md` -> architectural decisions, open conflicts, or decision-history questions
+* `docs/decision-log.md` -> architecture decisions, recorded conflicts, or decision-history questions
 * `docs/developer-guide.md` -> local setup, commands, environment, or workflow execution
 * `docs/ops/*` -> operability, release, incident, topology-proof, or recovery work
 * `docs/qa/*` -> QA execution, user-visible flow proof, or message-audit work
 
-Do not start with QA docs, prompt docs, runbooks, or support docs when a higher-truth file already answers the question.
+Do not start with QA docs, runbooks, or support docs when a higher-truth file already answers the question.
 
 ---
 
@@ -85,14 +91,14 @@ The tier decides how a document is used, how often it should change, and whether
 
 ### Tier 1 — Canonical active routing and law
 
-These are the highest-value active docs for repo navigation, shipped truth, and engineering law.
-Load these first when relevant.
+These are the highest-value active docs for repo navigation, shipped truth, architecture law, security law, and reusable module method.
 
 * `AGENTS.md`
 * `README.md`
 * `docs/current-foundation-status.md`
 * `ARCHITECTURE.md`
 * `docs/security-model.md`
+* `docs/module-design-framework.md`
 * `backend/AGENTS.md`
 * `frontend/AGENTS.md`
 * `backend/docs/engineering-rules.md`
@@ -120,7 +126,7 @@ They are loaded only when the task needs them.
 * `docs/qa/*`
 * `docs/ops/*`
 * `docs/prompts/catalog.md`
-* other prompt docs under `docs/prompts/`
+* prompt docs under `docs/prompts/`
 * folder-map docs such as `backend/docs/README.md`, `frontend/README.md`, and `infra/README.md`
 * `CONTRIBUTING.md`
 * `CHANGELOG.md`
@@ -155,9 +161,8 @@ Attach or load:
 
 * `backend/AGENTS.md`
 * `backend/docs/engineering-rules.md`
-* `backend/docs/module-skeleton.md`
 * relevant `backend/docs/api/*.md`
-* relevant module-local docs only if they exist, are still active, and add genuine non-obvious value
+* relevant backend module docs only if they exist, are still active, and add genuine non-obvious value
 
 #### Frontend task
 
@@ -165,8 +170,18 @@ Attach or load:
 
 * `frontend/AGENTS.md`
 * `frontend/src/shared/engineering-rules.md`
-* `frontend/docs/module-skeleton.md`
 * relevant backend API docs
+
+#### New module introduction or full module design task
+
+Attach or load:
+
+* `docs/module-design-framework.md`
+* `backend/docs/module-skeleton.md` when backend work is in scope
+* `frontend/docs/module-skeleton.md` when frontend work is in scope
+* `docs/prompts/module-generation-fullstack.md` only when a full-stack module planning prompt is actually needed
+* relevant existing API docs if the new module touches existing surfaces
+* relevant master module specs only when the task is truly scoped to that module
 
 #### Review or release task
 
@@ -193,8 +208,8 @@ Do not attach these unless the task explicitly needs them:
 * `docs/qa/*`
 * `CONTRIBUTING.md`
 * `CHANGELOG.md`
-* prompt docs other than `docs/prompts/catalog.md`
-* ADR indexes or folder-map docs
+* prompt docs other than the one specifically needed
+* folder-map docs
 * historical inventories, brainstorm notes, or raw cleanup inputs
 
 ### Historical-doc rule
@@ -208,7 +223,7 @@ They are treated as regression sources, not helpful context.
 
 ### 1. Do not improvise repo truth
 
-If the repo already defines architecture, topology, security, product behavior, or quality gates, use that definition.
+If the repo already defines architecture, topology, security, product behavior, reusable module-design method, or quality gates, use that definition.
 
 ### 2. Keep scope tight
 
@@ -216,7 +231,7 @@ Do not turn a focused task into a cleanup campaign unless the task explicitly as
 
 ### 3. Keep code and docs coupled
 
-If a change affects architecture, contracts, trust boundaries, review behavior, runbooks, or user-visible workflow truth, update the matching docs in the same change.
+If a change affects architecture, trust boundaries, module-introduction method, contracts, runbooks, or user-visible workflow truth, update the matching docs in the same change.
 
 ### 4. AI output is not proof
 
@@ -224,7 +239,7 @@ Reasoning is not the same as tests, CI, topology checks, QA, or runtime evidence
 
 ### 5. Respect boundary-sensitive work
 
-Auth, session, tenant, SSR, proxy, SSO, and cookie behavior require stricter reasoning and stronger validation than normal changes.
+Auth, session, tenant, SSR, proxy, SSO, cookie behavior, fail-closed access behavior, and new-module design boundaries require stricter reasoning and stronger validation than normal changes.
 
 ### 6. Use Yarn only
 
@@ -244,9 +259,8 @@ Load:
 
 1. `backend/AGENTS.md`
 2. `backend/docs/engineering-rules.md`
-3. `backend/docs/module-skeleton.md`
-4. relevant `backend/docs/api/*.md`
-5. relevant backend module docs or ADRs when needed
+3. relevant `backend/docs/api/*.md`
+4. `backend/docs/module-skeleton.md` when creating or expanding a backend module
 
 ### Frontend work
 
@@ -254,9 +268,19 @@ Load:
 
 1. `frontend/AGENTS.md`
 2. `frontend/src/shared/engineering-rules.md`
-3. `frontend/docs/module-skeleton.md`
-4. relevant backend API docs
-5. relevant frontend route or shared files
+3. relevant backend API docs
+4. `frontend/docs/module-skeleton.md` when creating or expanding a frontend module surface
+
+### New module introduction or module design work
+
+Load:
+
+1. `docs/module-design-framework.md`
+2. relevant architecture and security law already listed above
+3. relevant API docs or master specs only when they truly apply
+4. `backend/docs/module-skeleton.md` when backend work is in scope and the module design is already complete enough to plan backend structure
+5. `frontend/docs/module-skeleton.md` when frontend work is in scope and the module design is already complete enough to plan frontend structure
+6. `docs/prompts/module-generation-fullstack.md` only when the session must produce a single full-stack planning artifact
 
 ### Topology, auth, trust-boundary, or security work
 
@@ -273,16 +297,17 @@ Load:
 1. `code_review.md`
 2. relevant authority docs for the changed area
 3. `docs/quality-bar.md` when the task is about readiness or signoff
-4. `docs/prompts/catalog.md` only if you need a reusable prompt asset
+4. `docs/prompts/catalog.md` only if prompt selection is part of the task
 
 ---
 
 ## Documentation Coupling Rules
 
-Review or update the matching docs when code changes affect:
+Review or update the matching docs when code or durable behavior changes affect:
 
 * architecture or cross-cutting behavior -> `ARCHITECTURE.md`, `docs/decision-log.md`
 * security, sessions, cookies, tenant rules, or trust boundaries -> `docs/security-model.md`
+* reusable module-introduction or module-design method -> `docs/module-design-framework.md`, `docs/prompts/module-generation-fullstack.md`, and any area skeleton docs whose prerequisites changed
 * request/response or behavioral contracts -> relevant `backend/docs/api/*.md`
 * shipped capability or repo truth snapshot -> `docs/current-foundation-status.md`
 * operational recovery, release behavior, or support flow -> relevant files under `docs/ops/`
@@ -314,3 +339,13 @@ Treat a change as topology-sensitive if it touches any of the following:
 * Do not weaken host-derived tenant routing.
 * Do not weaken tenant/session isolation.
 * Do not replace navigation-based auth flows with inappropriate `fetch()` flows.
+
+---
+
+## Final Position
+
+The repo now has a strict reusable module-introduction layer.
+Use it.
+
+`docs/module-design-framework.md` is the first required file for future-module thinking.
+Area skeletons and full-stack prompts come after that, not before.

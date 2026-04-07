@@ -1,258 +1,251 @@
 # Backend Module Skeleton
 
+This document defines the required backend planning shape for a new or expanded backend module in Hubins.
+
+It is a backend implementation skeleton.
+It is not a product-design document.
+It is not a substitute for architecture law.
+It is not a substitute for the reusable module-design framework.
+
+---
+
+## Mandatory Prerequisite
+
+Before using this file, the module must already be analyzed through:
+
+- `docs/module-design-framework.md`
+
+That framework decides whether module thinking is actually complete enough to move into implementation planning.
+
+This backend skeleton starts only after the following are already clear:
+
+- what the module is
+- what it owns
+- what actions and lifecycle it contains
+- what settings implications it has
+- what permission and policy implications it has
+- what fail-closed and removal behavior it requires
+- what adjacent module boundaries exist
+
+If those questions are still open, stop and return to `docs/module-design-framework.md`.
+
+---
+
+## Required Source Bundle
+
+Before backend planning begins, load:
+
+1. `docs/current-foundation-status.md`
+2. `ARCHITECTURE.md`
+3. `docs/security-model.md`
+4. `backend/docs/engineering-rules.md`
+5. relevant `backend/docs/api/*.md`
+6. relevant adjacent backend modules
+7. this file
+
+If the task touches auth, tenant, proxy, cookies, session, SSO, or SSR-trust behavior, also load the relevant decision and ops docs.
+
+---
+
 ## Purpose
 
-This file defines the standard backend module shape for work in this repo.
+Use this file to turn an already-designed module into a clean backend work package.
 
-Use it when creating or reviewing backend functionality so the result stays:
-
-- boundary-correct
-- contract-correct
-- tenant-aware
-- auth-aware
-- transaction-safe
-- audit-aware
-- easy for engineers and AI to navigate
-
-This file does not replace:
-
-- `AGENTS.md`
-- `backend/AGENTS.md`
-- `backend/docs/engineering-rules.md`
-- relevant backend API docs
-
-Read those first.
+The goal is not to guess files.
+The goal is to define the correct backend surfaces, ownership, contracts, data changes, and proof requirements before coding begins.
 
 ---
 
-## Core Rule
+## Backend Planning Order
 
-A normal backend module should follow the established backend pattern.
+Follow this order.
+Do not skip steps.
 
-Do not invent a new backend architecture per module.
-Do not create new layers, folders, or wiring conventions unless the repo-level architecture truly changed.
+### Step 1 — Restate backend ownership
 
-If a module needs a new cross-cutting pattern, that is an architecture decision, not a normal module-generation choice.
+Answer:
 
----
+- what backend bounded area owns this module
+- what it is allowed to own
+- what it must not own
+- what existing modules it touches
+- what trust boundaries it crosses
 
-## Default Backend Shape
+### Step 2 — Define backend behavior
 
-A normal backend module should use the existing backend structure and separate concerns cleanly.
+Answer:
 
-Typical pieces may include:
+- read-only behavior
+- mutating behavior
+- transaction boundaries
+- policy checks
+- async/outbox behavior
+- audit behavior
+- fail-closed behavior
 
-- route registration
-- controller or handler entry
-- service-layer behavior
-- repository / DAL behavior
-- validators, schemas, or DTO shaping as needed
-- tests at the correct level
+### Step 3 — Define the contract surface
 
-Use the repo’s existing names and placement rules.
-Do not add extra ceremony where the existing pattern already works.
+Answer before planning files:
 
----
+- new endpoints
+- changed endpoints
+- request shape
+- response shape
+- role/auth requirements
+- status/error behavior
+- anti-enumeration behavior
+- admin/member differences where applicable
 
-## Ownership Rules
+### Step 4 — Define persistence and state changes
 
-### Backend owns truth for:
+Answer:
 
-- request validation
-- response shape and status codes
-- auth and session truth
-- tenant and membership truth
-- next-action truth
-- audit side effects
-- durable state transitions
+- entities or tables touched
+- migrations needed or not
+- indexes needed or not
+- state transitions
+- uniqueness constraints
+- orphan-retention behavior where applicable
 
-### Frontend does not own these meanings
+### Step 5 — Generate file plan
 
-Frontend may render and route from backend outcomes, but it must not become the hidden owner of backend contract meaning.
-
----
-
-## Contract Rules
-
-If a backend module exposes HTTP behavior, it must be represented in the active domain contract system:
-
-- `backend/docs/api/<domain>.md`
-
-Do not create or reference a generic `docs/api/<module>.md` pattern.
-The active contract pattern is domain-owned backend API docs under `backend/docs/api/`.
-
-If the module changes an endpoint, request shape, response shape, behavior note, or status-code meaning, update the relevant backend API doc in the same PR.
+Only now generate the backend file plan.
 
 ---
 
-## Backend Module Checklist
+## Backend File Plan Output Shape
 
-Before creating or changing a backend module, answer these:
-
-1. Which bounded area or module should own this behavior?
-2. Which existing module/layer should it live in?
-3. Is the change synchronous, asynchronous, or both?
-4. Does it affect auth, session, tenant, invite, MFA, SSO, or audit behavior?
-5. What is the correct request/response contract?
-6. What state change actually occurs?
-7. What tests prove the behavior at the right level?
-8. Which docs must be updated in the same PR?
-
-If these answers are unclear, stop and reload the relevant repo law before coding.
-
----
-
-## Recommended Backend Shape
-
-Exact file names may vary by domain, but a normal backend feature should usually map to a shape like this:
+For every planned file, use this structure:
 
 ```text
-module/
-  route registration
-  handler/controller entry
-  service logic
-  repository / DAL logic
-  schemas / validation if needed
-  tests near the changed behavior or in the established backend test structure
+Path:
+Action: create | modify
+Layer:
+Role:
+Why needed:
+Depends on:
 ```
 
-Keep each file honest about what it owns.
-Do not collapse all behavior into one oversized service file just because it feels faster.
+### Expected backend layers
+
+Use only when actually needed:
+
+- route
+- controller
+- service
+- flow / use-case
+- policy / authorization helper
+- query
+- repository / DAL
+- model / schema / types
+- migration
+- tests
+- docs
+
+Do not create layers that the module does not need.
+Do not collapse multiple responsibilities into the wrong layer.
 
 ---
 
-## Shared Code Rules
+## Backend Work Package Checklist
 
-Promote logic into shared backend code only when it is:
+Every backend module plan must explicitly answer these.
 
-- genuinely cross-cutting
-- stable enough to deserve shared ownership
-- not carrying hidden assumptions from one feature
+### 1. Contract package
 
-Good candidates:
+- Which API docs must be created or updated?
+- Does the module introduce a new domain contract file or extend an existing one?
+- What response shapes become stable contract?
 
-- shared request context patterns
-- shared auth/session helpers already part of repo law
-- shared audit helpers
-- stable validation or domain utilities
+### 2. Data package
 
-Bad candidates:
+- What persistence changes are required?
+- Are migrations required?
+- Are indexes required?
+- Are there uniqueness, retention, or lifecycle rules?
 
-- feature-specific branching hidden as "helper" code
-- DAL shortcuts that bypass module ownership
-- shared abstractions built only to avoid writing one more explicit file
+### 3. Logic package
 
----
+- Which service owns orchestration?
+- Are flows or use-cases needed?
+- Are policy checks simple or layered?
+- Is fail-closed behavior explicit?
 
-## Audit And Side-Effect Rules
+### 4. Async/audit package
 
-Treat these with extra care:
+- Does the module emit audit actions?
+- Does it require outbox events or background work?
+- What happens if a downstream dependency is unavailable?
 
-- invite lifecycle
-- email verification
-- password reset
-- MFA
-- SSO
-- admin actions
-- outbox/email behavior
-- membership activation/suspension
+### 5. Proof package
 
-If a backend change affects any of these, check explicitly:
-
-- contract meaning
-- audit behavior
-- side-effect timing
-- retry or sequencing implications
-- test coverage depth
-- doc coupling
-
-Do not assume a “small refactor” is small if it changes one of these flows.
+- What backend tests are required?
+- What contract tests are required?
+- What integration or E2E proof is required?
 
 ---
 
-## Data And Migration Rules
+## Anti-Drift Rules
 
-If a backend change affects persistence:
+### 1. Do not use this file to finish product design
 
-- keep schema meaning explicit
-- keep migration behavior explicit
-- update fixtures/tests that rely on old meaning
-- do not bury data-shape change inside unrelated feature work
+If the module is still vague at product or settings-adapter level, go back to `docs/module-design-framework.md`.
 
-If a change affects current seeded assumptions, also update:
+### 2. Do not generate files before defining the contract
 
-- `docs/developer-guide.md`
-- `docs/qa/qa-execution-pack.md`
+Undefined contract first, file planning second, coding third.
+Not the other way around.
 
-when those docs depend on the changed state.
+### 3. Do not skip fail-closed behavior
 
----
+If the module can lose targets, mappings, dependencies, or permissions, backend behavior must say what fails closed, what is retained, and what requires review.
 
-## Testing Rules
+### 4. Do not hide data-model impact
 
-Choose the smallest meaningful proof that matches the risk.
+If a module changes storage, state transitions, or constraints, call it out explicitly.
+Do not bury this in a service description.
 
-### Usually enough
+### 5. Do not claim readiness from structure alone
 
-- backend unit tests
-- repository / integration tests
-- API or E2E tests for changed endpoint behavior
-
-### Stronger proof required
-
-Use stronger proof when the change affects:
-
-- auth/session behavior
-- tenant resolution
-- invites
-- MFA
-- SSO
-- audit flow behavior
-- outbox/email behavior
-- proxy/header-sensitive behavior
-- migrations or state transitions
-
-Do not claim high confidence from isolated unit tests when the real behavior depends on the full flow.
+A set of backend files is not proof.
+Tests, contracts, and runtime behavior still decide readiness.
 
 ---
 
-## Documentation Coupling
+## Fast Routing
 
-A backend PR must update the right docs in the same change when it affects:
+### I am still defining what the module is
 
-- endpoint contract -> relevant `backend/docs/api/*.md`
-- backend law or generation pattern -> `backend/docs/engineering-rules.md` or this file
-- shipped current-state truth -> `docs/current-foundation-status.md`
-- operational recovery/support behavior -> relevant `docs/ops/*`
-- QA-visible backend behavior -> relevant `docs/qa/*`
-- architecture or cross-cutting design -> root law docs and decision log as needed
+Go to:
 
-Do not create silent drift between backend code and backend truth.
+- `docs/module-design-framework.md`
 
----
+### I need backend implementation law
 
-## What Not To Create By Default
+Read:
 
-Do not create these unless the module genuinely needs them:
+- `backend/docs/engineering-rules.md`
 
-- per-feature README files
-- feature-local architecture docs
-- alternate API contract docs
-- extra layers that repeat existing ones
-- “shared” abstractions that only one feature uses
-- background docs that duplicate file WHY headers or canonical law
+### I need backend file planning
 
-If the module is normal, the code plus canonical docs are enough.
+Use:
+
+- this file
+
+### I need full-stack planning in one session
+
+Use:
+
+- `docs/prompts/module-generation-fullstack.md`
+
+But only after the module-design framework has been applied.
 
 ---
 
 ## Final Position
 
-A backend module in this repo should be boring to place, explicit in ownership, and easy to review.
+This file is the backend execution bridge.
+It exists to make backend module work structured, explicit, and provable.
 
-When in doubt:
-
-- keep the structure aligned with repo law
-- keep backend truth server-owned
-- use domain API docs under `backend/docs/api/`
-- update canonical docs instead of inventing side docs
+It starts after module design is complete.
+It does not replace that design step.

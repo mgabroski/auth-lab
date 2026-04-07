@@ -29,6 +29,10 @@ Then route by need:
 - review expectations -> `code_review.md`
 - backend implementation law -> `backend/docs/engineering-rules.md`
 - frontend implementation law -> `frontend/src/shared/engineering-rules.md`
+- designing a new module -> `docs/module-design-framework.md`
+- backend module planning after the design is locked -> `backend/docs/module-skeleton.md`
+- frontend module planning after the design is locked -> `frontend/docs/module-skeleton.md`
+- AI-assisted full-stack module planning -> `docs/prompts/module-generation-fullstack.md`
 - prompt selection only -> `docs/prompts/catalog.md`
 
 Read `docs/quality-bar.md` only when the task is about readiness, signoff, or release-quality judgment.
@@ -102,6 +106,52 @@ Do not collapse broader architecture vision into shipped truth.
 
 ---
 
+## Designing a New Module
+
+Use this sequence whenever a new Hubins module is being introduced.
+
+### Step 1 — Design the module correctly
+
+Start with:
+
+- `docs/module-design-framework.md`
+
+This is the reusable project-level source for future-module thinking.
+It forces the team to answer the full design cycle before implementation planning begins, including:
+
+- module truth
+- module settings implications
+- permission and policy implications
+- workspace experience implications
+- communications implications
+- fail-closed, removal, and orphan behavior
+
+Do not skip this step.
+A module is not ready for implementation planning until this file says the design is complete enough.
+
+### Step 2 — Move into surface planning
+
+Only after Step 1 is complete, move to the surface-specific skeletons:
+
+- backend planning -> `backend/docs/module-skeleton.md`
+- frontend planning -> `frontend/docs/module-skeleton.md`
+
+These files are implementation skeletons.
+They are not module-design documents.
+
+### Step 3 — Use the full-stack planning prompt only when needed
+
+If you need one integrated AI-driven planning session across backend, frontend, docs, and proof:
+
+- `docs/prompts/module-generation-fullstack.md`
+
+That prompt now assumes the module-design framework is part of the required source bundle.
+
+Do not jump straight from a business idea into route, DTO, page, and file generation.
+That is exactly the failure mode the new framework is meant to prevent.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -122,74 +172,140 @@ corepack enable
 yarn dev
 ```
 
-Primary local tenant URL:
+Primary local tenant URLs:
 
-```text
-http://goodwill-ca.lvh.me:3000
-```
+- `http://goodwill-ca.lvh.me:3000`
+- `http://goodwill-open.lvh.me:3000`
 
-Do not use plain `localhost:3000` for tenant-aware browser behavior.
+Mailpit:
 
-### Full topology validation
+- `http://localhost:8025`
+
+### Common commands
 
 ```bash
-yarn stack
-yarn stack:test
+yarn dev
+yarn stop
+yarn status
+yarn reset-db
+yarn test
+yarn verify
 ```
 
-Use this for proxy, cookie, host-header, SSR, and full-flow topology proof.
-
-For more setup, environment, reset, QA execution, and local workflow detail, use `docs/developer-guide.md`.
+Use `docs/developer-guide.md` for setup detail, environment expectations, and routine workflows.
 
 ---
 
-## How To Navigate The Repo
+## Repo Structure
 
-### Backend
+Top-level shape:
 
-Start with:
+```text
+backend/    Fastify backend, DB, auth flows, API contracts, backend docs
+frontend/   Next.js frontend, SSR/browser boundary, frontend docs
+infra/      Docker, proxy, local stack, infra docs
+docs/       shared truth, quality, QA, ops, prompts, reusable design docs
+scripts/    local stack and verification helpers
+```
 
-1. `backend/AGENTS.md`
-2. `backend/docs/engineering-rules.md`
-3. relevant `backend/docs/api/*.md`
-
-### Frontend
-
-Start with:
-
-1. `frontend/AGENTS.md`
-2. `frontend/src/shared/engineering-rules.md`
-3. relevant backend API docs
-
-### Review or audit work
-
-Start with:
-
-1. `code_review.md`
-2. relevant authority docs for the touched area
-
-### Prompt selection only
-
-Start with:
-
-1. `docs/prompts/catalog.md`
+Use the closest authority doc before editing a surface.
+Do not infer repo law from folder names alone.
 
 ---
 
-## Documentation Position
+## Human Routing Guide
 
-- `README.md` is the human router.
-- `AGENTS.md` is the AI router.
-- `docs/current-foundation-status.md` is the current shipped-truth snapshot.
-- `ARCHITECTURE.md` is broader system law, not the same thing as shipped scope.
-- `docs/security-model.md` is the trust-boundary and security law.
+### I need local setup help
 
-Do not start from QA docs, ops docs, or prompt docs when a higher-truth file already answers the question.
+Read:
+
+- `docs/developer-guide.md`
+- `infra/README.md`
+
+### I need to understand what is truly shipped
+
+Read:
+
+- `docs/current-foundation-status.md`
+
+### I need to understand architecture or security law
+
+Read:
+
+- `ARCHITECTURE.md`
+- `docs/security-model.md`
+
+### I need backend implementation rules
+
+Read:
+
+- `backend/docs/engineering-rules.md`
+- `backend/docs/module-skeleton.md`
+
+### I need frontend implementation rules
+
+Read:
+
+- `frontend/src/shared/engineering-rules.md`
+- `frontend/docs/module-skeleton.md`
+
+### I need to introduce or design a brand-new module
+
+Read in this order:
+
+1. `docs/module-design-framework.md`
+2. `backend/docs/module-skeleton.md` when backend work is in scope
+3. `frontend/docs/module-skeleton.md` when frontend work is in scope
+4. `docs/prompts/module-generation-fullstack.md` when using an LLM to prepare a single full-stack module plan
+
+### I need operational or QA guidance
+
+Read:
+
+- `docs/ops/*`
+- `docs/qa/*`
+
+### I need prompt selection only
+
+Read:
+
+- `docs/prompts/catalog.md`
+
+---
+
+## Working Rules
+
+- Do not treat support docs as higher truth than shipped-truth, architecture, security, or API contracts.
+- Do not describe future work as shipped.
+- Do not create duplicate docs for things already owned elsewhere.
+- Do not skip documentation updates when code or durable behavior changes.
+- Do not invent new module structure without first checking the reusable module-design framework.
+- Do not use backend or frontend skeleton docs as a substitute for unfinished module thinking.
+
+---
+
+## Contribution and Review
+
+For contribution expectations, read:
+
+- `CONTRIBUTING.md`
+
+For review expectations, read:
+
+- `code_review.md`
+- `docs/quality-bar.md` when readiness or signoff is in scope
+
+For AI/review-agent routing, use:
+
+- `AGENTS.md`
 
 ---
 
 ## Final Position
 
-Keep this file short.
-Use it to orient humans quickly.
-Then route to the smallest authoritative document set that actually matches the task.
+This repo is intentionally strict.
+
+It is designed so that humans and AI can find the real truth quickly, keep module work aligned with the current foundation, and avoid fake progress caused by duplicate docs, guessed architecture, or skipped proof.
+
+The new durable addition to that system is `docs/module-design-framework.md`.
+Use it first for every future module.

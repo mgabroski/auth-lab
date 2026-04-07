@@ -1,214 +1,248 @@
 # Frontend Module Skeleton
 
+This document defines the required frontend planning shape for a new or expanded frontend module surface in Hubins.
+
+It is a frontend implementation skeleton.
+It is not a product-design document.
+It is not a substitute for architecture law.
+It is not a substitute for the reusable module-design framework.
+
+---
+
+## Mandatory Prerequisite
+
+Before using this file, the module must already be analyzed through:
+
+- `docs/module-design-framework.md`
+
+That framework decides whether module thinking is actually complete enough to move into implementation planning.
+
+This frontend skeleton starts only after the following are already clear:
+
+- what the module is
+- what objects and actions it exposes to users
+- what workspace experience implications it has
+- what settings implications it has
+- what permission and policy implications it has
+- what communications touchpoints it creates or depends on
+- what fail-closed and removal behavior must be visible or enforced in the UI
+
+If those questions are still open, stop and return to `docs/module-design-framework.md`.
+
+---
+
+## Required Source Bundle
+
+Before frontend planning begins, load:
+
+1. `docs/current-foundation-status.md`
+2. `ARCHITECTURE.md`
+3. `docs/security-model.md`
+4. `frontend/src/shared/engineering-rules.md`
+5. relevant backend API docs
+6. relevant adjacent frontend routes or features
+7. this file
+
+If the task touches auth, session, SSR bootstrap, `/api/*` behavior, tenant routing, or protected-route behavior, also load the relevant decision and ops docs.
+
+---
+
 ## Purpose
 
-This file defines the standard frontend module shape for work in this repo.
+Use this file to turn an already-designed module into a clean frontend work package.
 
-Use it when creating or reviewing new frontend functionality so the result stays:
+The goal is not to guess components.
+The goal is to define the correct routes, data-flow boundaries, SSR/client responsibilities, user-visible behavior, and proof expectations before coding begins.
 
-- route-correct
-- contract-correct
-- SSR-aware
-- same-origin browser-safe
-- easy for engineers and AI to navigate
+---
 
-This file does not replace:
+## Frontend Planning Order
 
-- `AGENTS.md`
-- `frontend/AGENTS.md`
+Follow this order.
+Do not skip steps.
+
+### Step 1 — Restate frontend ownership
+
+Answer:
+
+- what routes or surfaces this module owns
+- what shell or layout it lives inside
+- what existing frontend areas it touches
+- what it must not own
+- what role, tenant, or setup state affects visibility
+
+### Step 2 — Define frontend behavior
+
+Answer:
+
+- SSR behavior
+- client-only behavior
+- navigation behavior
+- setup or management mode differences where applicable
+- permission-sensitive behavior
+- fail-closed UI behavior
+- loading, empty, error, and blocked states
+
+### Step 3 — Define the data and contract usage
+
+Answer before planning files:
+
+- what API calls are needed
+- browser vs SSR call path
+- bootstrap dependencies
+- request sequencing
+- response-driven rendering states
+- error and redirect behavior
+
+### Step 4 — Define component and route structure
+
+Answer:
+
+- new pages or routes
+- shared components required
+- local components required
+- whether new hooks or helpers are needed
+- what should stay route-level vs reusable component-level
+
+### Step 5 — Generate file plan
+
+Only now generate the frontend file plan.
+
+---
+
+## Frontend File Plan Output Shape
+
+For every planned file, use this structure:
+
+```text
+Path:
+Action: create | modify
+Layer:
+Role:
+Why needed:
+Depends on:
+```
+
+### Expected frontend layers
+
+Use only when actually needed:
+
+- route / page
+- layout
+- view / screen component
+- feature component
+- shared component
+- hook
+- API client wrapper use
+- types / mapping helper
+- tests
+- docs
+
+Do not invent components that duplicate route responsibility.
+Do not hide route logic in the wrong shared layer.
+
+---
+
+## Frontend Work Package Checklist
+
+Every frontend module plan must explicitly answer these.
+
+### 1. Route package
+
+- What routes are new?
+- Which are SSR-gated?
+- Which are role-gated or setup-gated?
+- Which routes are placeholders vs real surfaces?
+
+### 2. Rendering package
+
+- What is rendered on the server?
+- What is rendered on the client?
+- What loading, empty, blocked, and review-needed states exist?
+- What fail-closed states must be visible?
+
+### 3. Data package
+
+- What data comes from bootstrap?
+- What data comes from direct page fetches?
+- What browser `/api/*` calls are needed?
+- What SSR direct-backend fetches are needed?
+
+### 4. UX contract package
+
+- What headings, cards, actions, and status states exist?
+- What is hidden vs visible vs read-only?
+- What is role-specific?
+- What is tenant-configuration-specific?
+
+### 5. Proof package
+
+- What frontend tests are required?
+- What browser E2E flows are required?
+- What message or copy expectations are important enough for QA?
+
+---
+
+## Anti-Drift Rules
+
+### 1. Do not use this file to finish product design
+
+If the module is still vague at product or settings-adapter level, go back to `docs/module-design-framework.md`.
+
+### 2. Do not plan routes before defining rendering and data boundaries
+
+A route tree without SSR/client/data rules will drift fast.
+
+### 3. Do not blur browser and SSR behavior
+
+If the module needs both, say exactly what happens in each path.
+Do not plan frontend work as if all fetches are interchangeable.
+
+### 4. Do not skip fail-closed UI behavior
+
+If access, targets, configuration, or dependencies disappear, the frontend plan must say what becomes hidden, blocked, or review-needed.
+
+### 5. Do not claim readiness from screens alone
+
+Pages and components are not proof.
+Tests, browser flows, and correct state handling still decide readiness.
+
+---
+
+## Fast Routing
+
+### I am still defining what the module is
+
+Go to:
+
+- `docs/module-design-framework.md`
+
+### I need frontend implementation law
+
+Read:
+
 - `frontend/src/shared/engineering-rules.md`
-- backend API contract docs
 
-Read those first.
-
----
-
-## Core Rule
-
-Frontend modules do not invent their own architecture.
-They fit into the existing repo structure and derive behavior from backend contracts and shared frontend law.
-
-If a new frontend area requires a new architectural pattern, that is not a normal module-generation decision.
-That is a repo-level design decision and must be documented in the right law docs.
-
----
-
-## Default Frontend Shape
-
-A normal frontend feature should be built from these kinds of pieces only when needed:
-
-- route/page entrypoint
-- feature-specific UI components
-- feature-specific hooks or helpers
-- contract-facing API client usage
-- tests close to the behavior being proved
-
-Prefer small, obvious files over large feature blobs.
-Do not create extra folders just to look "enterprise."
-
----
-
-## Routing Rules
-
-### Browser-side calls
-
-Browser requests must use relative `/api/*` paths.
-Do not hardcode browser calls to backend origins.
-
-### SSR / server-side calls
-
-SSR and server-side fetches must use the established server-side path and forwarding model already defined by repo law.
-Do not flatten SSR and browser behavior into one generic helper if that weakens topology truth.
-
-### Auth and protected routes
-
-Frontend route behavior must reflect backend-owned auth truth.
-Do not create frontend-only auth state machines for:
-
-- session truth
-- tenant truth
-- membership truth
-- next-action truth
-- admin/member landing truth
-
----
-
-## Contract Rules
-
-Every frontend module that talks to backend behavior must align with the relevant backend contract docs.
+### I need frontend file planning
 
 Use:
 
-- `backend/docs/api/auth.md`
-- `backend/docs/api/invites.md`
-- `backend/docs/api/admin.md`
-- future domain docs under `backend/docs/api/<domain>.md`
+- this file
 
-Do not create or reference `docs/api/<module>.md`.
-The active contract pattern in this repo is backend-owned domain docs under:
+### I need full-stack planning in one session
 
-- `backend/docs/api/<domain>.md`
+Use:
 
-If a module exposes or depends on HTTP behavior, the matching backend API doc must be created or updated in the same PR.
+- `docs/prompts/module-generation-fullstack.md`
 
----
-
-## Frontend Module Checklist
-
-Before creating a new frontend feature, answer these:
-
-1. Which existing route owns this behavior?
-2. Is this browser behavior, SSR behavior, or both?
-3. Which backend contract doc defines the API behavior?
-4. Which shared frontend rules already cover the pattern?
-5. What is the smallest file set needed?
-6. Which tests prove the behavior at the right level?
-7. Which docs must be updated in the same PR?
-
-If you cannot answer these quickly, stop and load the canonical docs again.
-
----
-
-## Recommended File Pattern
-
-Exact paths can vary by feature, but normal frontend work should usually map to a shape like this:
-
-```text
-feature/
-  page or route entry
-  feature component(s)
-  feature hook/helper(s) if needed
-  tests near the changed behavior
-```
-
-Use shared code only when behavior is truly shared.
-Do not prematurely extract abstractions just because two files look similar.
-
----
-
-## What Belongs In Shared Frontend Code
-
-Promote logic into shared frontend code only when it is:
-
-- reused across multiple features
-- stable enough to deserve shared ownership
-- not carrying one feature's hidden assumptions
-
-Good candidates:
-
-- route-safe UI primitives
-- API-client wrappers already established by repo law
-- shared auth bootstrap helpers already proven by the repo
-
-Bad candidates:
-
-- feature-specific redirect hacks
-- feature-specific response shaping
-- one-off loading logic
-- UI state that only makes sense for one page
-
----
-
-## Testing Rules
-
-Choose the smallest meaningful proof that matches the risk.
-
-### Usually enough
-
-- unit or route-level tests for isolated UI logic
-- contract-aware component tests for visible state handling
-
-### Stronger proof required
-
-Use broader proof when the change affects:
-
-- auth routing
-- redirects
-- SSR/browser interaction
-- cookies/session behavior
-- protected routes
-- invite / reset / verification / MFA / SSO flows
-
-Do not claim full-flow confidence from shallow component tests.
-
----
-
-## Documentation Coupling
-
-A frontend PR must update the right docs in the same change when it affects:
-
-- route behavior -> relevant API docs, shipped-truth docs, or review docs
-- auth/setup/provisioning user-visible flow -> relevant QA docs
-- shared frontend pattern -> `frontend/src/shared/engineering-rules.md`
-- frontend generation pattern -> this file
-- broader architecture or boundary behavior -> root law docs and decision log as needed
-
-Do not create silent drift between UI behavior and repo docs.
-
----
-
-## What Not To Create By Default
-
-Do not create these unless the feature genuinely needs them:
-
-- feature README files
-- feature-local architecture docs
-- alternate API contract docs
-- one-off design-system layers
-- large service folders for trivial UI behavior
-- duplicate route helpers that compete with shared patterns
-
-If a feature is normal, the code plus canonical repo docs are enough.
+But only after the module-design framework has been applied.
 
 ---
 
 ## Final Position
 
-A frontend module in this repo should be boring to place, easy to read, and hard to misunderstand.
+This file is the frontend execution bridge.
+It exists to make frontend module work structured, explicit, and provable.
 
-When in doubt:
-
-- keep the file set small
-- use backend-owned contract truth
-- preserve browser vs SSR correctness
-- update the canonical docs instead of inventing side docs
+It starts after module design is complete.
+It does not replace that design step.

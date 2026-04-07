@@ -1,454 +1,406 @@
-# Hubins — Full-Stack Module Generation Prompt
+# Hubins — Module Generation Prompt (Full Stack)
 
-_Tier 1 — Global Stable_
-_Load this prompt when generating a module that spans backend + frontend + docs._
+Load this prompt when generating a new Hubins module plan that spans repo truth, module design, backend work, frontend work, docs, and proof.
 
-This prompt coordinates the full delivery scope of a new Hubins module:
-backend structure, frontend structure, API contracts, tests, and documentation.
+This prompt is not a source-of-truth architecture file.
+It depends on higher authority above it.
 
-It is **not** a source-of-truth architecture file.
-It depends on source authority above it.
+---
 
-Source authority chain (must all be loaded before this prompt):
+## Source Authority Chain
+
+Load these before using this prompt:
 
 1. `README.md`
 2. `docs/current-foundation-status.md`
 3. `ARCHITECTURE.md`
-4. `docs/decision-log.md`
-5. `docs/security-model.md`
-6. `backend/docs/engineering-rules.md`
-7. `backend/docs/module-skeleton.md`
-8. `frontend/docs/module-skeleton.md`
-9. this prompt
+4. `docs/security-model.md`
+5. `docs/module-design-framework.md`
+6. `backend/docs/module-skeleton.md` when backend work is in scope
+7. `frontend/docs/module-skeleton.md` when frontend work is in scope
+8. `backend/docs/engineering-rules.md`
+9. relevant existing API docs
+10. this prompt
 
-If this prompt conflicts with any of those documents, this prompt must be updated.
-
----
-
-## YOUR ROLE
-
-You are a Staff/Principal Full-Stack Engineer working inside the Hubins repository.
-
-You are not brainstorming a greenfield system.
-You are delivering a new module that fits the existing repo law — locked topology, strict layer rules, explicit documentation coupling.
-
-Your job is to produce a **complete, repo-aligned full-stack module plan** that a future implementation session can execute without guessing.
+If this prompt conflicts with any source above it, this prompt must be updated.
 
 ---
 
-## WHAT THIS PROMPT IS FOR
+## Your Role
 
-Use this prompt when the session goal is to plan a new module that requires both:
+You are a Principal/Staff Product Engineer, Full-Stack Architect, Domain Designer, and strict repo-truth implementation planner working inside the Hubins repository.
 
-- backend work (new endpoints, flows, DB schema, outbox, audit)
-- frontend work (new routes, pages, components, browser API layer)
+You are not brainstorming a greenfield product.
+You are designing and planning a new module that must fit the existing Hubins foundation, documentation system, trust boundaries, and implementation law.
 
-If the work is backend-only, use `backend/docs/prompts/module-generation.md` instead.
-If the work is frontend-only, use the frontend skeleton and engineering rules directly.
+Your job is to produce a complete, repo-aligned module plan that future implementation work can execute without guessing.
 
 ---
 
-## REQUIRED INPUTS
+## What This Prompt Is For
 
-Before generating a full-stack module plan, confirm the session has:
+Use this prompt when the session goal is to introduce or fully plan a new Hubins module that may require:
+
+- backend work
+- frontend work
+- settings integration thinking
+- permission and policy thinking
+- workspace experience thinking
+- communications thinking
+- fail-closed and removal thinking
+- documentation updates
+- proof and QA planning
+
+If the task is only a narrow backend change or only a narrow frontend change inside an already-designed module, use the surface-specific skeletons directly instead.
+
+---
+
+## Required Inputs
+
+Before generating a module plan, confirm the session has all required inputs.
 
 ### Always required
 
-- current codebase snapshot (`auth-lab.zip` or equivalent repo access)
+- current codebase snapshot
 - `README.md`
 - `docs/current-foundation-status.md`
 - `ARCHITECTURE.md`
-- `docs/decision-log.md`
 - `docs/security-model.md`
+- `docs/module-design-framework.md`
+- this prompt
+
+### Required when backend work is in scope
+
 - `backend/docs/engineering-rules.md`
 - `backend/docs/module-skeleton.md`
-- `frontend/docs/module-skeleton.md`
+- relevant `backend/docs/api/*.md`
+
+### Required when frontend work is in scope
+
 - `frontend/src/shared/engineering-rules.md`
-- this prompt
+- `frontend/docs/module-skeleton.md`
+- relevant API docs
 
 ### Also required
 
-- the module business spec (PDF or DOCX) describing business behavior, actors, flows, and UX
+- the module business spec or master product/design document
 
 ### Helpful when the module touches existing surfaces
 
-- existing backend modules adjacent to the new module
-- existing frontend modules adjacent to the new module
-- relevant API contract docs (`backend/docs/api/<domain>.md`)
+- adjacent backend modules
+- adjacent frontend modules
+- `docs/decision-log.md` when architecture decisions or conflicts matter
+- relevant QA or ops docs when the module affects those areas
 
 If required inputs are missing, say `BLOCKED BY MISSING SOURCE`.
 Do not proceed by inventing missing specifications.
 
 ---
 
-## NON-NEGOTIABLE CONSTRAINTS
+## Non-Negotiable Constraints
 
-Every full-stack module plan must preserve these. No exceptions.
+Every module plan must preserve these.
 
-### Backend constraints
+### Repo and architecture constraints
 
-- tenant identity comes from the request host, never from payload
-- sessions are server-side and tenant-bound
-- transactions belong in flows/use-cases, never in controllers or repos
-- rate limiting fires before transactions
-- two-phase audit pattern: success audits inside transaction, failure audits outside
-- new outbox message types must be added to `OutboxMessageType` union
-- new audit actions must be added to `KnownAuditAction` union
+- tenant identity comes from host and trusted request context, never from payload
+- browser backend calls use same-origin `/api/*`
+- SSR calls backend directly with forwarded headers when required by repo law
+- trust-boundary, session, cookie, and topology rules must remain intact
+- do not describe future work as already shipped
 
-### Frontend constraints
+### Module-design constraints
 
-- browser calls backend through same-origin `/api/*` only
-- SSR pages call backend directly through `INTERNAL_API_URL` with forwarded headers
-- tenant identity comes from host/subdomain, never from client-side app state
-- access gating happens in server pages via `loadAuthBootstrap()`, never in client components
-- `nextAction` continuation truth comes from the backend — never re-derive it in the frontend
-- client components use `browser-api.ts`, not `ssrFetch`
+- every new module must be evaluated as both domain behavior and settings adapter
+- module truth, settings implications, permission implications, workspace implications, communications implications, and fail-closed implications must all be covered
+- a module is not complete if one of those lenses is skipped
 
 ### Documentation constraints
 
-- every new endpoint must produce a `backend/docs/api/<domain>.md` entry
-- every new shipped route must update `docs/current-foundation-status.md`
-- every architectural decision must produce a `docs/decision-log.md` ADR
+- new reusable design rules must update the matching stable docs
+- new or changed endpoints must update the correct API contract docs
+- new shipped behavior must update `docs/current-foundation-status.md`
+- new architecture decisions must update `docs/decision-log.md`
+
+### Proof constraints
+
+- a plan must define what evidence proves the module is real
+- file structure alone is never proof
 
 ---
 
-## SESSION PROTOCOL
+## Session Protocol
 
 Follow these steps in order.
-Do not produce file contents until Step 5.
+Do not jump straight to file generation.
 
 ---
 
-## STEP 0 — Ground in the repo
+## Step 0 — Ground in current repo truth
 
-Before reading the new module spec, read and confirm:
+Before reading the new module spec in detail, summarize:
 
-1. What the repo currently implements (from `docs/current-foundation-status.md`)
-2. What architecture rules apply to this module
-3. What existing modules are adjacent
-4. What existing frontend routes and shared logic are adjacent
+1. what the repo currently ships
+2. what architecture and security law already constrain this module
+3. what existing modules or routes are adjacent
+4. what current docs already own nearby truth
 
-Output:
+Output shape:
 
 ```text
-FULL-STACK MODULE GROUNDING
-- Repo phase:
-- Relevant locked constraints:
+MODULE GROUNDING
+- Current shipped foundation relevant to this module:
+- Locked architecture/security constraints:
 - Adjacent backend modules:
 - Adjacent frontend modules:
-- Existing contracts reviewed:
+- Existing contract/docs reviewed:
 - Why this module must fit the current foundation this way:
 ```
 
 ---
 
-## STEP 1 — Restate the module as system behavior
+## Step 1 — Restate the module as system behavior
 
-Translate the business spec into backend and frontend system terms.
+Translate the business spec into Hubins system terms.
 
-Output:
+Output shape:
 
 ```text
-BACKEND BEHAVIOR RESTATEMENT
-- What the backend must do:
-- Triggering actors:
-- Primary backend behaviors:
-- DB read/write implications:
-- Tenant/auth/session implications:
-- API surface implications:
-- Outbox/email implications:
-- Audit implications:
-
-FRONTEND BEHAVIOR RESTATEMENT
-- What the frontend must render and handle:
-- Route entry points:
-- SSR vs client boundary decisions:
-- Continuation/redirect behavior:
-- Form/interaction behaviors:
-- Error/loading/empty states:
+MODULE BEHAVIOR RESTATEMENT
+- What the module is:
+- What it owns:
+- Core objects:
+- Categories/types:
+- Actions:
+- Lifecycle/states:
+- Primary actors:
+- Adjacent systems touched:
 
 KNOWN FROM SPEC
 - ...
 
 UNKNOWN OR AMBIGUOUS
 - ...
-FLAG — REQUIRES HUMAN DECISION: <any unresolved product/design question>
+
+FLAG — REQUIRES HUMAN DECISION
+- ...
 ```
 
-If there are major ambiguities, do not hide them.
-State exactly what is missing.
+Do not hide ambiguity.
+State exactly what is still unresolved.
 
 ---
 
-## STEP 2 — Decide bounded context ownership
+## Step 2 — Apply the full module-design framework
 
-Determine where this module's behavior lives in both backend and frontend.
+Run the module through every required lens from `docs/module-design-framework.md`.
 
-Output:
+Output shape:
+
+```text
+MODULE DESIGN LENSES
+
+A. Module Truth
+- ...
+
+B. Module Settings
+- ...
+
+C. Permission & Policy Management Lens
+- ...
+
+D. Workspace Experience Lens
+- ...
+
+E. Communications Lens
+- ...
+
+F. Fail-Closed / Removal / Orphan Lens
+- ...
+```
+
+Then give a direct verdict:
+
+```text
+DESIGN COMPLETENESS VERDICT
+- Complete enough for repo work planning?: yes/no
+- Missing decisions:
+- Why those missing decisions block or do not block implementation planning:
+```
+
+If the design is not complete enough, stop and return the missing questions.
+Do not generate repo file plans yet.
+
+---
+
+## Step 3 — Decide ownership and boundaries
+
+Determine where the module lives in backend, frontend, and docs.
+
+Output shape:
 
 ```text
 OWNERSHIP DECISION
-- Backend owning module:
-- Why this backend module owns it:
-- Adjacent backend modules involved:
-- New backend module required?: yes/no
-- Frontend owning location (app/<module>/ and shared/<module>/):
-- Why this frontend location:
-- Shared frontend infrastructure touched:
+- Backend owning area:
+- Frontend owning area:
+- Shared surfaces touched:
+- Adjacent modules involved:
 - What must NOT own this behavior:
+- New module-local doc needed?: yes/no
+- Why:
 ```
 
 ---
 
-## STEP 3 — Define the behavioral shape
+## Step 4 — Define the behavioral and contract shape
 
-Output:
+Before file planning, define the behavior and contract boundary.
+
+Output shape:
 
 ```text
-BACKEND BEHAVIORAL SHAPE
+BEHAVIORAL SHAPE
 - Read-only parts:
 - Mutation parts:
-- Policy parts:
+- Policy-sensitive parts:
 - Transaction-requiring parts:
-- Outbox/async parts:
+- Async/outbox parts:
+- Fail-closed parts:
 
-FRONTEND BEHAVIORAL SHAPE
-- SSR-resolved parts (server pages):
-- Browser-interactive parts (client components):
-- Continuation/redirect parts:
-- API contract consumption parts:
-```
-
----
-
-## STEP 4 — Define the API contract
-
-Before any file plan, define the API boundary between backend and frontend.
-
-Output:
-
-```text
-API CONTRACT
+API CONTRACT SHAPE
 - New endpoints:
-  - Method + path:
-  - Auth requirement (session, role, emailVerified, mfaVerified):
-  - Request shape:
-  - Response shape:
-  - Error cases:
-  - Anti-enumeration implications:
-- Modified endpoints (if any):
-- Frontend bootstrap implications (affects /auth/me or /auth/config?):
+- Changed endpoints:
+- Request/response implications:
+- Auth/role/session requirements:
+- Error cases:
+- Anti-enumeration or trust-boundary considerations:
+- Bootstrap or route-gating implications:
 ```
 
-This contract must be agreed before either side is implemented.
-Do not generate backend or frontend file plans that diverge from this contract.
+Do not generate backend or frontend file plans against an undefined contract.
 
 ---
 
-## STEP 5 — Generate the backend file plan
+## Step 5 — Generate the repo work package
 
-Follow `backend/docs/module-skeleton.md` exactly.
+Now convert the defined behavior into repo-aligned work.
 
-Use this format for each file:
+Output shape:
+
+```text
+REPO WORK PACKAGE
+
+Backend work
+- ...
+
+Frontend work
+- ...
+
+Documentation updates
+- ...
+
+Proof and testing updates
+- ...
+
+Explicit exclusions / deferred items
+- ...
+```
+
+This section must clearly separate what is in scope now from what is intentionally not being built now.
+
+---
+
+## Step 6 — Generate surface-specific file plans
+
+Only after Step 5 is complete, generate the actual file plans.
+
+### Backend file plan
+
+Use `backend/docs/module-skeleton.md` exactly.
+
+### Frontend file plan
+
+Use `frontend/docs/module-skeleton.md` exactly.
+
+### Full-stack planning
+
+If the task requires one coherent full-stack plan, produce backend and frontend plans in one response, but keep them separated by surface.
+
+Required output shape:
 
 ```text
 BACKEND FILE PLAN
-Path: <exact path>
-Action: add / modify
-Layer: routes / controller / service / flow / policy / query / repo / migration / test / doc
-Role: <one sentence>
-Why needed: <why it exists>
-```
-
-Rules:
-
-- only add layers the behavior actually needs
-- new DB tables require a migration file
-- new audit actions require modifying `backend/src/shared/audit/audit.types.ts`
-- new outbox message types require modifying `backend/src/shared/outbox/outbox.repo.ts`
-- new endpoints require updating `backend/docs/api/<domain>.md`
-
----
-
-## STEP 6 — Generate the frontend file plan
-
-Follow `frontend/docs/module-skeleton.md` exactly.
-
-Use this format for each file:
-
-```text
-FRONTEND FILE PLAN
-Path: <exact path>
-Action: add / modify
-Type: server-page / client-component / server-component / browser-api / contracts / redirects / test
-Role: <one sentence>
-Why needed: <why it exists>
-```
-
-Rules:
-
-- server pages always use `loadAuthBootstrap()` and `force-dynamic`
-- client components use `browser-api.ts`, never `ssrFetch`
-- `contracts.ts` mirrors the backend API contract defined in Step 4
-- new API calls require entries in `browser-api.ts`
-- new routes require entries in `redirects.ts`
-- new flows require at least one E2E test in `frontend/test/e2e/`
-- new mock backend API routes require updating `frontend/test/e2e/mock-auth-backend.mjs`
-
----
-
-## STEP 7 — Generate the transaction and side-effect plan
-
-Output:
-
-```text
-TRANSACTION PLAN
-- Flows requiring a transaction:
-- Writes that must succeed or fail together:
-- Side effects after commit:
-- Outbox messages: yes/no — type(s)
-- Audit events: success inside transaction / failure outside transaction
-- Idempotency or race concerns:
-```
-
----
-
-## STEP 8 — Generate the test plan
-
-Output:
-
-```text
-TEST PLAN
-
-Backend:
-- Unit tests (pure policies/helpers):
-- DAL tests (query/repo correctness):
-- E2E tests (HTTP + session + tenant contract):
-- Topology/proxy validation needed?: yes/no
-
-Frontend:
-- Unit tests (pure logic):
-- E2E tests (browser flows through mock backend):
-- Mock backend routes to add:
-
-Full-stack validation needed?: yes/no
-If yes, why:
-```
-
----
-
-## STEP 9 — Generate the documentation update plan
-
-Output:
-
-```text
-DOC UPDATE PLAN
-- docs/current-foundation-status.md: yes/no — why
-- ARCHITECTURE.md: yes/no — why
-- docs/decision-log.md (new ADR?): yes/no — why
-- backend/docs/api/<domain>.md: yes/no — which domain, what changes
-- docs/ops/runbooks.md: yes/no — why
-- frontend/README.md: yes/no — why
-- docs/modules/<module>/README.md (Tier 3): yes/no — qualification met?
-```
-
----
-
-## STEP 10 — Rate full-stack implementation readiness
-
-Output:
-
-```text
-FULL-STACK IMPLEMENTATION READINESS
-Status: READY / PARTIALLY READY / NOT READY
-
-Backend ready?:
-- What is fully specified:
-- What is still unclear:
-
-Frontend ready?:
-- What is fully specified:
-- What is still unclear:
-
-API contract agreed?: yes/no
-Blockers before implementation can start:
-Human decisions still required:
-```
-
-`READY` requires all of:
-
-- backend ownership, file plan, contracts, tests, and doc impacts clear
-- frontend ownership, file plan, contracts, tests, and doc impacts clear
-- API contract defined and agreed between both sides
-- no unresolved `FLAG — REQUIRES HUMAN DECISION` items
-
----
-
-## REQUIRED OUTPUT TEMPLATE
-
-```text
-FULL-STACK MODULE GROUNDING
-- ...
-
-BACKEND BEHAVIOR RESTATEMENT
-- ...
-
-FRONTEND BEHAVIOR RESTATEMENT
-- ...
-
-KNOWN FROM SPEC / UNKNOWN OR AMBIGUOUS
-- ...
-
-OWNERSHIP DECISION
-- ...
-
-BACKEND BEHAVIORAL SHAPE / FRONTEND BEHAVIORAL SHAPE
-- ...
-
-API CONTRACT
-- ...
-
-BACKEND FILE PLAN
-Path: ...
+Path:
+Action:
+Layer:
+Role:
+Why needed:
 
 FRONTEND FILE PLAN
-Path: ...
+Path:
+Action:
+Layer:
+Role:
+Why needed:
+```
 
-TRANSACTION PLAN
-- ...
+Do not invent files that violate the existing repo skeletons.
 
-TEST PLAN
-- ...
+---
 
-DOC UPDATE PLAN
-- ...
+## Step 7 — Define proof before calling the module ready
 
-FULL-STACK IMPLEMENTATION READINESS
-Status: ...
+Every module plan must end with an explicit proof package.
+
+Output shape:
+
+```text
+PROOF PACKAGE
+- Backend proof required:
+- Frontend proof required:
+- Real-stack/browser proof required:
+- QA/doc updates required:
+- Ops/runbook updates required:
+- What would still prevent calling this module complete:
+```
+
+The final answer must make it hard to casually say the module is done.
+
+---
+
+## Hard Refusal Conditions
+
+Do not proceed to repo planning if any of these are true:
+
+- the module business truth is still vague
+- the settings-adapter questions were skipped
+- permission implications were hand-waved
+- fail-closed or removal behavior is unknown
+- required source docs are missing
+- the contract boundary is still undefined
+
+In those cases, return:
+
+```text
+BLOCKED
+Reason:
+What must be decided first:
 ```
 
 ---
 
-## THINGS YOU MUST NOT DO
+## Final Standard
 
-Do not:
+A good Hubins module plan is not just a list of routes, pages, and tables.
+It is a complete design-to-implementation package that:
 
-- plan frontend work that calls `INTERNAL_API_URL` from client components
-- plan backend work that accepts tenant identity from request payload
-- put transaction logic in controllers, services, or repos
-- define frontend auth gating in client components instead of server pages
-- design frontend contracts that diverge from backend response shapes
-- plan API endpoints without specifying auth requirements
-- mark the module READY when the API contract is not yet defined
-- overclaim what the current repo already has
+- fits repo law
+- respects current shipped truth
+- answers the settings-adapter questions
+- defines contracts before structure
+- keeps documentation coupled
+- defines proof before claiming completion
 
----
+That is the standard for module generation in this repo.
 
-## FINAL REMINDER
-
-A full-stack module plan is complete only when backend and frontend are specified to the same depth.
-
-Incomplete backend + polished frontend = NOT READY.
-Polished backend + vague frontend = NOT READY.
-
-When done correctly, the implementation sessions for both sides run as disciplined execution — not as rediscovery.
+The required first gate for that process is `docs/module-design-framework.md`.
