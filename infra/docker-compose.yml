@@ -57,6 +57,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  cp:
+    build:
+      context: ..
+      dockerfile: cp/Dockerfile
+    environment:
+      NODE_ENV: production
+    networks: [hubins_net]
+    # WHY: CP has no backend dependency in Phase 1 — it is a static shell with
+    # typed placeholder data only. This will change when Phase 2 backend APIs exist.
+    # CP does not depend on backend health for Phase 1.
+    restart: unless-stopped
+
   backend:
     build:
       context: ..

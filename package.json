@@ -4,7 +4,8 @@
   "packageManager": "yarn@4.12.0",
   "workspaces": [
     "backend",
-    "frontend"
+    "frontend",
+    "cp"
   ],
   "scripts": {
     "dev": "./scripts/dev.sh",
@@ -13,6 +14,7 @@
     "stack:down": "./scripts/stack.sh down",
     "stack:test": "./scripts/stack.sh test",
     "stop": "./scripts/stop.sh",
+    "restart": "./scripts/restart.sh",
     "status": "./scripts/status.sh",
     "reset-db": "./scripts/reset-db.sh",
     "fmt": "prettier . --write",
@@ -21,10 +23,14 @@
     "lint:fix": "eslint . --fix",
     "lint:backend": "eslint backend",
     "lint:frontend": "eslint frontend",
-    "typecheck": "yarn typecheck:backend && yarn typecheck:frontend",
+    "lint:cp": "eslint cp",
+    "typecheck": "yarn typecheck:backend && yarn typecheck:frontend && yarn typecheck:cp",
     "typecheck:backend": "yarn workspace @auth-lab/backend typecheck",
     "typecheck:frontend": "yarn workspace frontend typecheck",
+    "typecheck:cp": "yarn workspace cp typecheck",
     "build:frontend": "yarn workspace frontend build",
+    "build:cp": "yarn workspace cp build",
+    "dev:cp": "yarn workspace cp dev",
     "test": "./scripts/test.sh",
     "test:backend": "yarn workspace @auth-lab/backend test",
     "test:frontend:unit": "yarn workspace frontend test:unit",

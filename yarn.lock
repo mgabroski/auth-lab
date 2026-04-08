@@ -2591,6 +2591,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"cp@workspace:cp":
+  version: 0.0.0-use.local
+  resolution: "cp@workspace:cp"
+  dependencies:
+    "@types/node": "npm:^20"
+    "@types/react": "npm:^18"
+    "@types/react-dom": "npm:^18"
+    next: "npm:^15.5.12"
+    react: "npm:^18"
+    react-dom: "npm:^18"
+    typescript: "npm:^5"
+  languageName: unknown
+  linkType: soft
+
 "cross-spawn@npm:^7.0.3, cross-spawn@npm:^7.0.6":
   version: 7.0.6
   resolution: "cross-spawn@npm:7.0.6"

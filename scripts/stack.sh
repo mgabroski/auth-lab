@@ -74,10 +74,11 @@ case "$CMD" in
     echo ""
     echo "✅ Stack started."
     echo ""
-    echo "  Public app: http://goodwill-ca.lvh.me:3000"
-    echo "  Health:     http://goodwill-ca.lvh.me:3000/api/health"
-    echo "  Logs:       ./scripts/stack.sh logs"
-    echo "  Test:       ./scripts/stack.sh test"
+echo "  Public app:     http://goodwill-ca.lvh.me:3000"
+    echo "  Health:         http://goodwill-ca.lvh.me:3000/api/health"
+    echo "  Control Plane:  http://cp.lvh.me:3000"
+    echo "  Logs:           ./scripts/stack.sh logs"
+    echo "  Test:           ./scripts/stack.sh test"
     ;;
 
   down)

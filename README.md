@@ -9,6 +9,7 @@ This repo exists to prove and protect a small number of critical things before b
 - host-derived tenant resolution
 - session and cookie behavior
 - the first shipped module: Auth + User Provisioning
+- the separate internal Control Plane shell foundation
 
 This file is the single human entrypoint for the repo.
 
@@ -51,6 +52,7 @@ Today, this repository is the working foundation for:
 - SSR direct-to-backend calls with forwarded tenant and session headers
 - backend session-aware auth and tenant resolution
 - frontend auth and provisioning flows
+- the separate internal Control Plane app shell for future account setup work
 - Auth + User Provisioning as the first real module
 
 It is not the full future Hubins product.
@@ -101,6 +103,26 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 - admin invite management
 - SSR fetch wrapper
 - browser API wrapper
+
+### Control Plane Surface
+
+- separate `cp/` Next.js application
+- root entry redirect into the create-account flow
+- accounts list route for QA re-entry and edit/review navigation
+- create flow route skeleton:
+  - Basic Account Info
+  - Account Setup
+  - Review & Publish
+
+- setup group detail routes for:
+  - Access, Identity & Security
+  - Account Settings
+  - Module Settings
+  - Integrations & Marketplace
+
+- edit/re-entry route skeleton
+- dev-only no-auth mode in current scope
+- typed placeholder data boundaries only, with no fake backend handlers
 
 Do not collapse broader architecture vision into shipped truth.
 
@@ -177,6 +199,10 @@ Primary local tenant URLs:
 - `http://goodwill-ca.lvh.me:3000`
 - `http://goodwill-open.lvh.me:3000`
 
+Control Plane:
+
+- `http://localhost:3002`
+
 Mailpit:
 
 - `http://localhost:8025`
@@ -186,6 +212,7 @@ Mailpit:
 ```bash
 yarn dev
 yarn stop
+yarn restart
 yarn status
 yarn reset-db
 yarn test
@@ -202,7 +229,8 @@ Top-level shape:
 
 ```text
 backend/    Fastify backend, DB, auth flows, API contracts, backend docs
-frontend/   Next.js frontend, SSR/browser boundary, frontend docs
+frontend/   tenant-facing Next.js frontend, SSR/browser boundary, frontend docs
+cp/         internal Control Plane Next.js app
 infra/      Docker, proxy, local stack, infra docs
 docs/       shared truth, quality, QA, ops, prompts, reusable design docs
 scripts/    local stack and verification helpers
@@ -281,6 +309,8 @@ Read:
 - Do not skip documentation updates when code or durable behavior changes.
 - Do not invent new module structure without first checking the reusable module-design framework.
 - Do not use backend or frontend skeleton docs as a substitute for unfinished module thinking.
+- Do not implement the Control Plane as a route subtree inside `frontend/`.
+- Do not import runtime code directly from `frontend/` into `cp/`.
 
 ---
 

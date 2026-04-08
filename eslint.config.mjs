@@ -17,13 +17,13 @@ export default [
       '**/.yarn/**',
       '**/.pnp.*',
       'frontend/next-env.d.ts',
+      'cp/next-env.d.ts',
     ],
   },
 
   js.configs.recommended,
   ...typedTsConfigs,
 
-  // Local OIDC server — Node.js script, no TypeScript, needs Node globals
   {
     files: ['infra/oidc-server/**/*.mjs'],
     languageOptions: {
@@ -60,6 +60,24 @@ export default [
     languageOptions: {
       parserOptions: {
         project: ['./frontend/tsconfig.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+
+  {
+    files: ['cp/**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: {
+        project: ['./cp/tsconfig.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },

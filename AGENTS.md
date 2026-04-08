@@ -79,6 +79,7 @@ Load these only when the task actually needs them:
 * `docs/developer-guide.md` -> local setup, commands, environment, or workflow execution
 * `docs/ops/*` -> operability, release, incident, topology-proof, or recovery work
 * `docs/qa/*` -> QA execution, user-visible flow proof, or message-audit work
+* Control Plane Prerequisite Roadmap (external) -> attach alongside the repo zip for any CP implementation or continuation session; this document is an external locked roadmap, not committed to the repo
 
 Do not start with QA docs, runbooks, or support docs when a higher-truth file already answers the question.
 
@@ -171,6 +172,15 @@ Attach or load:
 * `frontend/AGENTS.md`
 * `frontend/src/shared/engineering-rules.md`
 * relevant backend API docs
+
+#### Control Plane task
+
+Attach or load:
+
+* the external Control Plane Prerequisite Roadmap document
+* `docs/current-foundation-status.md` (CP foundation and boundary rules sections)
+* the repo zip
+* the Account Settings Master Context document only when the task touches CP-to-Settings integration or cascade wiring
 
 #### New module introduction or full module design task
 
@@ -270,6 +280,14 @@ Load:
 2. `frontend/src/shared/engineering-rules.md`
 3. relevant backend API docs
 4. `frontend/docs/module-skeleton.md` when creating or expanding a frontend module surface
+
+### Control Plane work
+
+Load:
+
+1. the external Control Plane Prerequisite Roadmap document
+2. `docs/current-foundation-status.md` — read the Control Plane foundation and boundary rules sections
+3. the Account Settings Master Context document only when the task involves CP-to-Settings cascade wiring or Phase 6 handoff work
 
 ### New module introduction or module design work
 

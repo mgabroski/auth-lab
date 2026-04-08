@@ -3,13 +3,12 @@
 #
 # WHY:
 # - Single command to stop local Docker-backed topology pieces consistently.
-# - Supports BOTH intentional local modes:
-#   - infra-only host-run mode
-#   - full stack topology mode
+# - Also stops host-run backend/frontend/cp processes tracked by repo-local PID files.
 #
 # HOW TO USE:
-#   ./scripts/stop.sh          # stop BOTH stack + infra (safe default)
+#   ./scripts/stop.sh          # stop host-run services + Docker-backed local modes
 #   ./scripts/stop.sh --all    # same as default
+#   ./scripts/stop.sh --host   # stop only host-run backend/frontend/cp
 #   ./scripts/stop.sh --infra  # stop only infra-only host-run containers
 #   ./scripts/stop.sh --stack  # stop only full topology stack containers
 
@@ -19,6 +18,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INFRA_COMPOSE="$ROOT_DIR/infra/docker-compose-infra.yml"
 STACK_COMPOSE="$ROOT_DIR/infra/docker-compose.yml"
 MODE="${1:---all}"
+
+# shellcheck source=./lib/host-services.sh
+source "$ROOT_DIR/scripts/lib/host-services.sh"
 
 stop_compose() {
   local file="$1"
@@ -30,10 +32,15 @@ stop_compose() {
 
 case "$MODE" in
   --all)
+    stop_default_host_services
     stop_compose "$STACK_COMPOSE" "full stack"
     stop_compose "$INFRA_COMPOSE" "infra-only stack"
-    echo "✅ Docker-backed local modes stopped."
-    echo "ℹ️  Host-run frontend/backend processes, if started manually, must be stopped in their own terminal."
+    echo "✅ Host-run services and Docker-backed local modes stopped."
+    ;;
+
+  --host)
+    stop_default_host_services
+    echo "✅ Host-run services stopped."
     ;;
 
   --infra)
@@ -47,7 +54,7 @@ case "$MODE" in
     ;;
 
   *)
-    echo "Usage: ./scripts/stop.sh [--all|--infra|--stack]"
+    echo "Usage: ./scripts/stop.sh [--all|--host|--infra|--stack]"
     exit 1
     ;;
- esac
+esac

@@ -16,6 +16,7 @@
  *    and quality-exception visibility.
  * 7. Architecture-law / ADR-sensitive changes must provide explicit ADR linkage handling.
  * 8. Frontend same-origin discipline remains enforced.
+ * 8a. CP package must not import from frontend/src/. CP same-origin discipline enforced.
  * 9. Release / change-management expectations remain enforced.
  * 10. Selective auth/invite message-surface changes must update the user-visible
  *     message audit in the same PR.
@@ -132,6 +133,38 @@ const FRONTEND_PRIVATE_BACKEND_PATTERNS = [
   },
 ];
 
+// WHY: CP is a separate package that must never import from the tenant frontend.
+// The boundary is enforced here so a Phase 2 engineer cannot accidentally
+// pull frontend/src/ modules into cp/src/ and blur the separation.
+const CP_FRONTEND_IMPORT_PATTERNS = [
+  {
+    label: 'import from frontend/src/',
+    regex: /from\s+['"][^'"]*frontend\/src\//,
+  },
+  {
+    label: 'require from frontend/src/',
+    regex: /require\s*\(\s*['"][^'"]*frontend\/src\//,
+  },
+];
+
+// WHY: CP must not call the backend directly with hardcoded origins in Phase 2+.
+// Same-origin discipline applies to CP just as it does to the tenant frontend.
+// CP API calls must go through the proxy or through CP-scoped /api/* routes.
+const CP_PRIVATE_BACKEND_PATTERNS = [
+  {
+    label: 'localhost:3001 backend origin',
+    regex: /https?:\/\/localhost:3001\b/,
+  },
+  {
+    label: '127.0.0.1:3001 backend origin',
+    regex: /https?:\/\/127\.0\.0\.1:3001\b/,
+  },
+  {
+    label: 'backend:3001 Docker-internal origin',
+    regex: /https?:\/\/backend:3001\b/,
+  },
+];
+
 const MODULE_APPLICABILITY_LABELS = [
   'Not applicable — this PR does not introduce or substantially expand a major module',
   'Applicable — this PR introduces or substantially expands a major module',
@@ -172,6 +205,7 @@ function main() {
   failures.push(...checkRouteDocCoupling(context));
   failures.push(...checkImportBoundaries());
   failures.push(...checkFrontendSameOriginDiscipline());
+  failures.push(...checkCpBoundaries());
 
   const linkedUpdateContextResult = checkLinkedUpdateContext(context);
   failures.push(...linkedUpdateContextResult.failures);
@@ -382,6 +416,36 @@ function checkFrontendSameOriginDiscipline() {
       failures.push(
         `Frontend topology violation: client component ${relFile} must not import ssr-api-client. Client/browser code must use api-client.ts and same-origin /api/* paths.`,
       );
+    }
+  }
+
+  return failures;
+}
+
+function checkCpBoundaries() {
+  const failures = [];
+  const cpFiles = walkCodeFiles(abs('cp/src'));
+
+  for (const file of cpFiles) {
+    const relFile = toRepoPath(file);
+    const content = fs.readFileSync(file, 'utf8');
+
+    // Block cp/src/ from importing anything inside frontend/src/.
+    for (const pattern of CP_FRONTEND_IMPORT_PATTERNS) {
+      if (pattern.regex.test(content)) {
+        failures.push(
+          `CP boundary violation: ${relFile} must not ${pattern.label}. CP and the tenant frontend are separate packages.`,
+        );
+      }
+    }
+
+    // Block cp/src/ from referencing the backend origin directly.
+    for (const pattern of CP_PRIVATE_BACKEND_PATTERNS) {
+      if (pattern.regex.test(content)) {
+        failures.push(
+          `CP same-origin violation: ${relFile} must not reference ${pattern.label}. CP API calls must go through the proxy or CP-scoped routes.`,
+        );
+      }
     }
   }
 

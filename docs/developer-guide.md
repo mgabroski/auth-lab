@@ -7,7 +7,7 @@ This file is the developer setup and daily-work guide for the repository.
 Use it for:
 
 - local environment setup
-- daily start / stop / reset commands
+- daily start / stop / restart / reset commands
 - health verification
 - test execution entrypoints
 - environment expectations
@@ -77,14 +77,22 @@ Expected result:
 - Postgres starts
 - Redis starts
 - Mailpit starts
+- local OIDC starts
 - backend starts
 - frontend starts
+- Control Plane starts
 - local seed/bootstrap runs as defined by the current repo state
 
 ### Stop the local stack
 
 ```bash
 yarn stop
+```
+
+### Restart the local stack
+
+```bash
+yarn restart
 ```
 
 ### Check status
@@ -116,11 +124,19 @@ Use reset when:
 
 ### Support URLs
 
+- Control Plane: `http://localhost:3002`
 - Mailpit: `http://localhost:8025`
-- health: `http://goodwill-ca.lvh.me:3000/api/health`
+- tenant health: `http://goodwill-ca.lvh.me:3000/api/health`
+- backend direct health: `http://localhost:3001/health`
+- local OIDC discovery: `http://localhost:9998/.well-known/openid-configuration`
+- local OIDC JWKS: `http://localhost:9998/.well-known/jwks.json`
 
 Do not use plain `localhost:3000` as the main tenant-aware browser URL.
 Tenant-aware browser behavior depends on the `*.lvh.me` host pattern.
+
+Do not treat `http://localhost:9998/` as a browser homepage.
+The local OIDC server is a test/provider surface, not a UI.
+The root path may return `{ "error": "not_found", "path": "/" }` by design.
 
 ---
 
@@ -128,7 +144,7 @@ Tenant-aware browser behavior depends on the `*.lvh.me` host pattern.
 
 Run this before serious local work or handing the stack to QA.
 
-### 1. Backend health
+### 1. Tenant health
 
 Open:
 
@@ -168,7 +184,21 @@ Expected result:
 
 - login page loads
 
-### 4. Mailpit
+### 4. Control Plane shell
+
+Open:
+
+```text
+http://localhost:3002
+```
+
+Expected result:
+
+- redirects into the create-account flow
+- Control Plane shell loads
+- no auth screen is expected in current scope
+
+### 5. Mailpit
 
 Open:
 
@@ -180,7 +210,29 @@ Expected result:
 
 - inbox loads
 
-### 5. Baseline seeded member login
+### 6. Local OIDC discovery
+
+Open:
+
+```text
+http://localhost:9998/.well-known/openid-configuration
+```
+
+Expected result:
+
+- JSON discovery document loads
+
+Optional direct key check:
+
+```text
+http://localhost:9998/.well-known/jwks.json
+```
+
+Expected result:
+
+- JWKS JSON loads
+
+### 7. Baseline seeded member login
 
 Use the seeded member account on GoodWill Open.
 Expected result:
@@ -217,10 +269,12 @@ If the actual seed changes, update this section and the QA pack in the same chan
 
 ## Local development
 
-- browser origin: local `*.lvh.me` through the dev proxy
+- tenant browser origin: local `*.lvh.me` through the dev proxy
+- Control Plane browser origin: `http://localhost:3002`
 - backend routing: same-origin browser `/api/*`
 - SSR routing: internal backend path with forwarded headers
 - email mode: Mailpit / local capture
+- local OIDC: Docker-backed local provider for dev/CI proof
 - seed/bootstrap: developer-friendly local mode
 - session cookie: local dev cookie policy
 - SSO credentials: local environment only if intentionally configured
@@ -314,6 +368,20 @@ Needed for:
 
 - live Microsoft SSO proof outside purely local non-provider work
 
+### Local OIDC
+
+Document the active variables used by the repo for:
+
+- `LOCAL_OIDC_ENABLED`
+- `LOCAL_OIDC_ISSUER`
+- `LOCAL_OIDC_CLIENT_ID`
+
+Needed for:
+
+- local SSO test proof
+- local callback validation
+- CI/local provider-backed auth testing without a real external IdP
+
 ### Important rule
 
 Do not duplicate secret values in docs.
@@ -371,6 +439,8 @@ Run the relevant backend tests for the touched area.
 ### Frontend-focused work
 
 Run the relevant frontend tests for the touched area.
+
+If the touched area is the Control Plane, apply the same rule to `cp/` and verify the route/shell surface you changed.
 
 ### Playwright / browser proof
 

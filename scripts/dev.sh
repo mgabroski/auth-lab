@@ -6,6 +6,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:-}"
 COMPOSE_ENV_FILE="$ROOT_DIR/infra/.env.stack"
 
+# shellcheck source=./lib/host-services.sh
+source "$ROOT_DIR/scripts/lib/host-services.sh"
+
+CLEANED_UP=0
+
 ensure_env_file() {
   local target_file="$1"
   local example_file="$2"
@@ -32,6 +37,23 @@ ensure_compose_env() {
   ensure_env_file "$COMPOSE_ENV_FILE" "$ROOT_DIR/infra/.env.stack.example" "Infra"
 }
 
+cleanup_host_services_once() {
+  if [ "$CLEANED_UP" -eq 1 ]; then
+    return 0
+  fi
+
+  CLEANED_UP=1
+  stop_default_host_services
+}
+
+handle_signal() {
+  cleanup_host_services_once
+  exit 130
+}
+
+trap handle_signal INT TERM
+trap cleanup_host_services_once EXIT
+
 if [ "$MODE" = "--stack" ]; then
   ensure_compose_env
 
@@ -41,15 +63,17 @@ if [ "$MODE" = "--stack" ]; then
     -f "$ROOT_DIR/infra/docker-compose.yml" \
     -f "$ROOT_DIR/infra/docker-compose-ci-oidc.yml" \
     up --build -d
+
   echo "✅ Full stack started (including local OIDC server)."
   echo "   Public app: http://goodwill-ca.lvh.me:3000"
   echo "   API health: http://goodwill-ca.lvh.me:3000/api/health"
+  echo "ℹ️  Control Plane remains a separate host-run app in current scope."
   exit 0
 fi
 
 ensure_compose_env
 
-echo "🔧 Starting infra (Postgres + Redis + Mailpit)..."
+echo "🔧 Starting infra (Postgres + Redis + Mailpit + local OIDC)..."
 docker compose \
   --env-file "$COMPOSE_ENV_FILE" \
   -f "$ROOT_DIR/infra/docker-compose-infra.yml" \
@@ -83,17 +107,27 @@ yarn workspace @auth-lab/backend db:migrate
 echo "🧬 Generating DB types..."
 yarn workspace @auth-lab/backend db:types
 
-echo "🚀 Starting backend + frontend (host-run mode)..."
-echo "   Public app:   http://goodwill-ca.lvh.me:3000"
-echo "   Backend URL:  http://localhost:3001"
-echo "   Mailpit UI:   http://localhost:8025"
-echo "   Local OIDC:   http://localhost:9998"
+echo "🧹 Ensuring host-run services are not already running..."
+stop_default_host_services
+
+echo "🚀 Starting backend + frontend + cp (host-run mode)..."
+start_host_service backend yarn workspace @auth-lab/backend dev
+start_host_service frontend yarn workspace frontend dev
+start_host_service cp yarn workspace cp dev
+
+echo "   Tenant app:    http://goodwill-ca.lvh.me:3000"
+echo "   Backend URL:   http://localhost:3001"
+echo "   Control Plane: http://localhost:3002"
+echo "   Mailpit UI:    http://localhost:8025"
+echo "   Local OIDC:    http://localhost:9998"
 echo ""
 echo "ℹ️  Use goodwill-ca.lvh.me:3000 in the browser for tenant-aware behaviour."
 echo "   Plain localhost:3000 does not include a tenant subdomain."
-echo "   In host-run mode, browser /api/* is proxied by Next Route Handlers."
+echo "   Control Plane is a separate internal app and currently runs on localhost:3002."
 echo ""
 
-yarn concurrently \
-  "yarn workspace @auth-lab/backend dev" \
-  "yarn workspace frontend dev"
+if ! wait_for_host_services; then
+  echo "❌ One of the host-run services exited."
+  cleanup_host_services_once
+  exit 1
+fi

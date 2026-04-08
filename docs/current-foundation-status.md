@@ -25,6 +25,7 @@ This repo already has:
 - current auth and invite API surfaces
 - current QA and developer execution documents
 - a locked documentation routing model with explicit tiering
+- a separate internal Control Plane frontend app with Phase 1 shell and routing only
 
 This repo does not yet claim that the full Auth / Provisioning closure roadmap is complete.
 Roadmap closure still depends on the remaining real-environment, proof, QA, and production-readiness work tracked elsewhere.
@@ -48,6 +49,7 @@ Use them before support docs.
 
 These are active support docs, but they do not outrank the current-truth set above:
 
+- `README.md`
 - `docs/developer-guide.md`
 - `docs/qa/qa-execution-pack.md`
 - `docs/ops/*`
@@ -95,6 +97,15 @@ The following foundations are treated as real in the repo now.
 - one canonical Auth / Provisioning QA execution surface exists: `docs/qa/qa-execution-pack.md`
 - current prompt routing is centralized through `docs/prompts/catalog.md`
 
+### Control Plane foundation
+
+- a separate Control Plane Next.js app exists at `cp/`
+- the Control Plane is not part of the tenant frontend package
+- root Control Plane entry redirects into the create-account flow
+- the Phase 1 Control Plane scope is shell and routing only
+- the Control Plane currently has no auth, no backend API integration, no publish flow, and no persistence
+- the locked Control Plane Prerequisite Roadmap is an external document; it must be attached to any CP continuation session and is not committed to this repo
+
 ---
 
 ## What Is Locked
@@ -119,6 +130,13 @@ The following should be treated as locked unless reopened by an explicit archite
 - SSR and browser request paths must not be treated as interchangeable
 - auth, cookie, SSO, and forwarded-header behavior are boundary-sensitive and must be changed carefully
 
+### Control Plane boundary rules
+
+- Control Plane is a separate app, not a route subtree inside `frontend/`
+- Control Plane Phase 1 is limited to shell, route composition, and typed placeholder data boundaries
+- Control Plane must not create fake backend route handlers or pretend real APIs exist
+- direct runtime imports from `frontend/` into `cp/` are not allowed
+
 ### QA/developer split
 
 - developer execution and environment guidance lives in `docs/developer-guide.md`
@@ -139,6 +157,20 @@ The full auth closure roadmap is still open in the areas already tracked by the 
 - final staging/provider proof for SSO and email delivery
 - complete production-readiness closure
 - final signoff that the full auth roadmap is closed
+
+### Control Plane expansion
+
+The Control Plane currently stops at frontend shell and route skeleton work.
+Still open:
+
+- real backend APIs
+- create/edit persistence
+- publish logic
+- revision/state storage
+- review gating logic
+- Settings integration
+- auth / RBAC / audit surfaces for the Control Plane itself
+- the execution order and phase definitions for all of the above are owned by the external Control Plane Prerequisite Roadmap document
 
 ### Settings expansion
 
