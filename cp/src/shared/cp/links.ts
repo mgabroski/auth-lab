@@ -1,4 +1,4 @@
-import type { StepDefinition } from '@/features/accounts/contracts';
+import type { SetupGroupSlug, StepDefinition } from '@/features/accounts/contracts';
 
 export const CONTROL_PLANE_TITLE = 'Control Plane';
 
@@ -13,7 +13,7 @@ export function getAccountsListPath(): string {
 }
 
 export function getCreateFlowEntryPath(): string {
-  return '/accounts/create/basic-info';
+  return getCreateBasicInfoPath();
 }
 
 export function getCreateBasicInfoPath(): string {
@@ -24,7 +24,7 @@ export function getCreateSetupPath(): string {
   return '/accounts/create/setup';
 }
 
-export function getCreateSetupGroupPath(groupSlug: string): string {
+export function getCreateSetupGroupPath(groupSlug: SetupGroupSlug): string {
   return `/accounts/create/setup/${groupSlug}`;
 }
 
@@ -32,15 +32,15 @@ export function getCreateReviewPath(): string {
   return '/accounts/create/review';
 }
 
-export function getEditBasicInfoPath(accountKey: string): string {
-  return `/accounts/${accountKey}/edit/basic-info`;
+export function getEditFlowEntryPath(accountKey: string): string {
+  return getEditSetupPath(accountKey);
 }
 
 export function getEditSetupPath(accountKey: string): string {
   return `/accounts/${accountKey}/edit/setup`;
 }
 
-export function getEditSetupGroupPath(accountKey: string, groupSlug: string): string {
+export function getEditSetupGroupPath(accountKey: string, groupSlug: SetupGroupSlug): string {
   return `/accounts/${accountKey}/edit/setup/${groupSlug}`;
 }
 

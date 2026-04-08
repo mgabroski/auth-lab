@@ -1,6 +1,5 @@
-import { notFound } from 'next/navigation';
-import { loadEditableAccount } from '@/features/accounts/mock-data';
-import { AccountBasicInfoScreen } from '@/features/accounts/screens/account-basic-info-screen';
+import { redirect } from 'next/navigation';
+import { getEditSetupPath } from '@/shared/cp/links';
 
 type EditAccountBasicInfoPageProps = {
   params: Promise<{
@@ -10,11 +9,9 @@ type EditAccountBasicInfoPageProps = {
 
 export default async function EditAccountBasicInfoPage({ params }: EditAccountBasicInfoPageProps) {
   const { accountKey } = await params;
-  const account = await loadEditableAccount(accountKey);
 
-  if (!account) {
-    notFound();
-  }
-
-  return <AccountBasicInfoScreen mode="edit" account={account} />;
+  // WHY: the locked CP edit flow must re-enter at Step 2 (Account Setup), not Step 1.
+  // Existing accounts are editable through setup/review only.
+  // Basic Account Info is not a valid edit surface in this phase.
+  redirect(getEditSetupPath(accountKey));
 }
