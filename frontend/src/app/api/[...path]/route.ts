@@ -10,8 +10,9 @@
  * IMPORTANT:
  * - Stack/prod-like topology still routes `/api/*` directly to the backend via Caddy/nginx.
  * - This file is a host-run compatibility shim, not a replacement for the real proxy.
- * - Request bodies are forwarded as the original ReadableStream.
- *   Do not re-buffer into ArrayBuffer/Blob here unless the route must inspect or transform bytes.
+ * - Request bodies are forwarded as Blob instances created from request.arrayBuffer().
+ *   This avoids unstable direct stream forwarding and keeps RequestInit.body compatible
+ *   with the TypeScript/body contract in this repo.
  */
 
 import type { NextRequest } from 'next/server';
@@ -52,10 +53,6 @@ type RouteContext = {
   }>;
 };
 
-type UpstreamRequestInit = RequestInit & {
-  duplex?: 'half';
-};
-
 function backendBaseUrl(): string {
   return (process.env.INTERNAL_API_URL ?? 'http://localhost:3001').replace(/\/+$/g, '');
 }
@@ -74,7 +71,7 @@ function requestProtocol(request: NextRequest): string {
   return nextProtocol || 'http';
 }
 
-function clientIp(request: NextRequest): string | null {
+function clientIp(request: NextRequest): string {
   return request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? '127.0.0.1';
 }
 
@@ -100,11 +97,7 @@ function buildUpstreamHeaders(request: NextRequest): Headers {
   }
 
   headers.set('x-forwarded-proto', requestProtocol(request));
-
-  const forwardedFor = clientIp(request);
-  if (forwardedFor) {
-    headers.set('x-forwarded-for', forwardedFor);
-  }
+  headers.set('x-forwarded-for', clientIp(request));
 
   return headers;
 }
@@ -140,30 +133,34 @@ function mustNotHaveBody(status: number): boolean {
   return status === 204 || status === 205 || status === 304;
 }
 
-function buildUpstreamRequestInit(request: NextRequest, headers: Headers): UpstreamRequestInit {
-  const init: UpstreamRequestInit = {
-    method: request.method,
-    headers,
-    cache: 'no-store',
-    redirect: 'manual',
-  };
-
-  if (hasRequestBody(request.method) && request.body) {
-    init.body = request.body;
-    init.duplex = 'half';
+async function buildUpstreamBody(request: NextRequest): Promise<Blob | undefined> {
+  if (!hasRequestBody(request.method)) {
+    return undefined;
   }
 
-  return init;
+  const buffer = await request.arrayBuffer();
+  if (buffer.byteLength === 0) {
+    return undefined;
+  }
+
+  return new Blob([buffer]);
 }
 
 async function proxy(request: NextRequest, context: RouteContext): Promise<Response> {
   const { path } = await context.params;
   const url = buildUpstreamUrl(request, path);
   const headers = buildUpstreamHeaders(request);
+  const body = await buildUpstreamBody(request);
 
-  const upstream = await fetch(url, buildUpstreamRequestInit(request, headers));
+  const upstream = await fetch(url, {
+    method: request.method,
+    headers,
+    body,
+    cache: 'no-store',
+    redirect: 'manual',
+  });
+
   const responseHeaders = buildDownstreamHeaders(upstream);
-
   const responseBody =
     request.method === 'HEAD' || mustNotHaveBody(upstream.status) ? null : upstream.body;
 
