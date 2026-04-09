@@ -13,6 +13,8 @@ on:
       - '.github/CODEOWNERS'
       - '.github/pull_request_template.md'
       - '.github/workflows/repo-guard.yml'
+      - '.nvmrc'
+      - 'package.json'
   push:
     paths:
       - 'AGENTS.md'
@@ -25,6 +27,8 @@ on:
       - '.github/CODEOWNERS'
       - '.github/pull_request_template.md'
       - '.github/workflows/repo-guard.yml'
+      - '.nvmrc'
+      - 'package.json'
   workflow_dispatch:
 
 jobs:
@@ -39,10 +43,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node 22
+      - name: Setup Node.js from .nvmrc
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version-file: '.nvmrc'
 
       - name: Run repo guard
         run: node scripts/repo-guard.mjs

@@ -16,7 +16,7 @@
 # - INTERNAL_API_URL is injected at container runtime (docker-compose.yml).
 #   It is NOT baked in at build time — Next.js SSR reads it at request time.
 
-FROM node:20-alpine AS base
+FROM node:24.14.1-alpine AS base
 RUN corepack enable
 
 # ── Stage 1: install workspace deps from the repo root lockfile ──────────────
@@ -27,6 +27,7 @@ COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY frontend/package.json frontend/package.json
 COPY backend/package.json backend/package.json
+COPY cp/package.json cp/package.json
 RUN yarn install --immutable
 
 # ── Stage 2: build the Next.js app ───────────────────────────────────────────

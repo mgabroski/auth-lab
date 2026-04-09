@@ -15,7 +15,7 @@
 # - CP has no INTERNAL_API_URL dependency in Phase 1 (no backend calls yet).
 #   This will change when Phase 2 backend APIs are wired.
 
-FROM node:20-alpine AS base
+FROM node:24.14.1-alpine AS base
 RUN corepack enable
 
 # ── Stage 1: install workspace deps from the repo root lockfile ──────────────

@@ -2,11 +2,11 @@
 #
 # WHY:
 # - The local OIDC server is a pure Node.js script with zero npm dependencies.
-# - node:20-alpine is the smallest official image that ships Node 20.
+# - node:24.14.1-alpine is a small official image that matches the repo runtime standard.
 # - No build step, no package install — just copy the single script and run it.
 # - Only used in CI Docker stack (docker-compose-ci.yml). Never deployed to production.
 
-FROM node:20-alpine
+FROM node:24.14.1-alpine
 
 WORKDIR /app
 

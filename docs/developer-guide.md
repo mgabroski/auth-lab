@@ -36,12 +36,14 @@ Then use this guide for workflow execution.
 Install these first:
 
 - Docker Desktop
-- Node.js 20+
+- Node.js 24.14.1 LTS
 - Corepack
 
-Enable Corepack once:
+Use the repo-pinned runtime:
 
 ```bash
+nvm install
+nvm use
 corepack enable
 ```
 
@@ -380,7 +382,7 @@ Needed for:
 
 - local SSO test proof
 - local callback validation
-- CI/local provider-backed auth testing without a real external IdP
+- local provider-backed auth testing without a real external IdP
 
 ### Important rule
 

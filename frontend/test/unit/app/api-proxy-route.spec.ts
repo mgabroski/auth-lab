@@ -20,16 +20,33 @@ function makeArrayBuffer(value?: string): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
+function makeBodyStream(value: string): ReadableStream<Uint8Array> {
+  const bytes = new TextEncoder().encode(value);
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
+
 function makeRequest(opts: {
   method: string;
   url: string;
   headers?: Record<string, string>;
   body?: string;
 }): NextRequest {
+  const streamBody =
+    opts.method === 'GET' || opts.method === 'HEAD' || opts.body === undefined
+      ? null
+      : makeBodyStream(opts.body);
+
   return {
     method: opts.method,
     nextUrl: new URL(opts.url),
     headers: new Headers(opts.headers),
+    body: streamBody,
     arrayBuffer: () => Promise.resolve(makeArrayBuffer(opts.body)),
   } as unknown as NextRequest;
 }
@@ -99,7 +116,7 @@ describe('frontend api proxy route', () => {
     expect(await response.json()).toEqual({ ok: true });
   });
 
-  it('proxies POST requests, strips hop-by-hop request headers, forwards request body, and falls back to nextUrl.protocol when x-forwarded-proto is missing', async () => {
+  it('proxies POST requests, strips hop-by-hop request headers, forwards request body as a stream, and falls back to nextUrl.protocol when x-forwarded-proto is missing', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(null, {
         status: 204,
@@ -133,7 +150,10 @@ describe('frontend api proxy route', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [
+      string,
+      RequestInit & { duplex?: 'half' },
+    ];
     const calledHeaders = new Headers(calledInit.headers);
 
     expect(calledUrl).toBe('http://localhost:3001/auth/login?mode=password');
@@ -150,8 +170,8 @@ describe('frontend api proxy route', () => {
     expect(calledHeaders.get('content-length')).toBeNull();
     expect(calledHeaders.get('connection')).toBeNull();
 
-    const forwardedBody = calledInit.body as ArrayBuffer;
-    expect(new TextDecoder().decode(forwardedBody)).toBe(body);
+    expect(calledInit.body).toBe(request.body);
+    expect(calledInit.duplex).toBe('half');
 
     expect(response.status).toBe(204);
     expect(response.headers.get('x-upstream')).toBe('write-ok');

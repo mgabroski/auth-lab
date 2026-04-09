@@ -6,6 +6,7 @@ on:
       - 'package.json'
       - 'yarn.lock'
       - '.yarnrc.yml'
+      - '.nvmrc'
       - 'eslint.config.mjs'
       - 'cp/**'
       - '.github/workflows/cp.yml'
@@ -14,6 +15,7 @@ on:
       - 'package.json'
       - 'yarn.lock'
       - '.yarnrc.yml'
+      - '.nvmrc'
       - 'eslint.config.mjs'
       - 'cp/**'
       - '.github/workflows/cp.yml'
@@ -32,10 +34,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Node 24
+      - name: Setup Node.js from .nvmrc
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version-file: '.nvmrc'
 
       - name: Enable Corepack and activate repo Yarn
         run: |

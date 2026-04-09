@@ -10,12 +10,16 @@
  * IMPORTANT:
  * - Stack/prod-like topology still routes `/api/*` directly to the backend via Caddy/nginx.
  * - This file is a host-run compatibility shim, not a replacement for the real proxy.
+ * - Request bodies are forwarded as the original ReadableStream.
+ *   Do not re-buffer into ArrayBuffer/Blob here unless the route must inspect or transform bytes.
  */
 
 import type { NextRequest } from 'next/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const METHODS_WITHOUT_BODY = new Set(['GET', 'HEAD']);
 
 const REQUEST_HEADERS_TO_DROP = new Set([
   'connection',
@@ -48,6 +52,10 @@ type RouteContext = {
   }>;
 };
 
+type UpstreamRequestInit = RequestInit & {
+  duplex?: 'half';
+};
+
 function backendBaseUrl(): string {
   return (process.env.INTERNAL_API_URL ?? 'http://localhost:3001').replace(/\/+$/g, '');
 }
@@ -68,6 +76,10 @@ function requestProtocol(request: NextRequest): string {
 
 function clientIp(request: NextRequest): string | null {
   return request.headers.get('x-forwarded-for') ?? request.headers.get('x-real-ip') ?? '127.0.0.1';
+}
+
+function hasRequestBody(method: string): boolean {
+  return !METHODS_WITHOUT_BODY.has(method.toUpperCase());
 }
 
 function buildUpstreamHeaders(request: NextRequest): Headers {
@@ -128,28 +140,32 @@ function mustNotHaveBody(status: number): boolean {
   return status === 204 || status === 205 || status === 304;
 }
 
+function buildUpstreamRequestInit(request: NextRequest, headers: Headers): UpstreamRequestInit {
+  const init: UpstreamRequestInit = {
+    method: request.method,
+    headers,
+    cache: 'no-store',
+    redirect: 'manual',
+  };
+
+  if (hasRequestBody(request.method) && request.body) {
+    init.body = request.body;
+    init.duplex = 'half';
+  }
+
+  return init;
+}
+
 async function proxy(request: NextRequest, context: RouteContext): Promise<Response> {
   const { path } = await context.params;
   const url = buildUpstreamUrl(request, path);
   const headers = buildUpstreamHeaders(request);
 
-  const body =
-    request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.arrayBuffer();
-
-  const upstream = await fetch(url, {
-    method: request.method,
-    headers,
-    body,
-    cache: 'no-store',
-    redirect: 'manual',
-  });
-
+  const upstream = await fetch(url, buildUpstreamRequestInit(request, headers));
   const responseHeaders = buildDownstreamHeaders(upstream);
 
   const responseBody =
-    request.method === 'HEAD' || mustNotHaveBody(upstream.status)
-      ? null
-      : await upstream.arrayBuffer();
+    request.method === 'HEAD' || mustNotHaveBody(upstream.status) ? null : upstream.body;
 
   return new Response(responseBody, {
     status: upstream.status,

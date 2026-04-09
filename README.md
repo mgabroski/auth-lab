@@ -107,8 +107,11 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 ### Control Plane Surface
 
 - separate `cp/` Next.js application
+
 - root entry redirect into the create-account flow
+
 - accounts list route for QA re-entry and edit/review navigation
+
 - create flow route skeleton:
   - Basic Account Info
   - Account Setup
@@ -121,7 +124,9 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
   - Integrations & Marketplace
 
 - edit/re-entry route skeleton
+
 - dev-only no-auth mode in current scope
+
 - typed placeholder data boundaries only, with no fake backend handlers
 
 Do not collapse broader architecture vision into shipped truth.
@@ -179,12 +184,14 @@ That is exactly the failure mode the new framework is meant to prevent.
 ### Prerequisites
 
 - Docker
-- Node.js 20+
+- Node.js 24.14.1 LTS
 - Corepack
 
-Enable Corepack once:
+Use the repo-pinned runtime:
 
 ```bash
+nvm install
+nvm use
 corepack enable
 ```
 

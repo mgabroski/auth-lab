@@ -6,6 +6,7 @@ on:
       - 'package.json'
       - 'yarn.lock'
       - '.yarnrc.yml'
+      - '.nvmrc'
       - '.github/workflows/backend-tests.yml'
       - 'backend/**'
   pull_request:
@@ -13,6 +14,7 @@ on:
       - 'package.json'
       - 'yarn.lock'
       - '.yarnrc.yml'
+      - '.nvmrc'
       - '.github/workflows/backend-tests.yml'
       - 'backend/**'
   workflow_dispatch:
@@ -80,10 +82,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
+      - name: Setup Node.js from .nvmrc
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           package-manager-cache: false
 
       - name: Enable Corepack and activate repo Yarn

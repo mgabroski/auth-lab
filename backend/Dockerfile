@@ -11,7 +11,7 @@
 # - All secret env vars are injected by docker-compose — never hardcoded here.
 # - The container does NOT expose ports to the host — only the proxy does.
 
-FROM node:20-alpine
+FROM node:24.14.1-alpine
 
 RUN apk add --no-cache wget && corepack enable
 
@@ -23,6 +23,7 @@ COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
+COPY cp/package.json cp/package.json
 RUN yarn install --immutable
 
 # Copy only the backend source needed at runtime.

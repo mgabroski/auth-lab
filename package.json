@@ -2,6 +2,10 @@
   "name": "auth-lab",
   "private": true,
   "packageManager": "yarn@4.12.0",
+  "engines": {
+    "node": ">=24.14.1 <25",
+    "yarn": "4.12.0"
+  },
   "workspaces": [
     "backend",
     "frontend",
