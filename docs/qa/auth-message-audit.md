@@ -16,14 +16,14 @@ and free of information leaks.
 
 ## 1. Success Messages (2xx responses with a `message` field)
 
-| Endpoint                         | HTTP status | Message text                                                                 | Intentional? | Notes                                                                                                           |
-| -------------------------------- | ----------- | ---------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------- |
-| `POST /auth/logout`              | 200         | `Logged out.`                                                                | ✅ Yes       | Clean, minimal, correct                                                                                         |
-| `POST /auth/forgot-password`     | 200         | `If an account with that email exists, a password reset link has been sent.` | ✅ Yes       | **Deliberately vague.** Must never confirm or deny email existence. This phrasing is correct.                   |
-| `POST /auth/reset-password`      | 200         | `Password updated successfully. Please sign in with your new password.`      | ✅ Yes       | Directs user to login after reset. Actionable.                                                                  |
-| `POST /auth/resend-verification` | 200         | `If your email is unverified, a new verification link has been sent.`        | ✅ Yes       | **Deliberately vague.** Matches forgot-password pattern — no account-existence leak.                            |
-| `POST /auth/workspace-setup-ack` | 200         | `{ status: 'ACKNOWLEDGED' }`                                                 | ✅ Yes       | Not user-facing copy — internal status field consumed by the frontend SSR call only.                            |
-| `POST /auth/reset-password/validate` | 200     | `{ valid: true }`                                                            | ✅ Yes       | Not end-user copy. Internal validation result used by the reset-password page to decide whether to show the form. |
+| Endpoint                             | HTTP status | Message text                                                                 | Intentional? | Notes                                                                                                             |
+| ------------------------------------ | ----------- | ---------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `POST /auth/logout`                  | 200         | `Logged out.`                                                                | ✅ Yes       | Clean, minimal, correct                                                                                           |
+| `POST /auth/forgot-password`         | 200         | `If an account with that email exists, a password reset link has been sent.` | ✅ Yes       | **Deliberately vague.** Must never confirm or deny email existence. This phrasing is correct.                     |
+| `POST /auth/reset-password`          | 200         | `Password updated successfully. Please sign in with your new password.`      | ✅ Yes       | Directs user to login after reset. Actionable.                                                                    |
+| `POST /auth/resend-verification`     | 200         | `If your email is unverified, a new verification link has been sent.`        | ✅ Yes       | **Deliberately vague.** Matches forgot-password pattern — no account-existence leak.                              |
+| `POST /auth/workspace-setup-ack`     | 200         | `{ status: 'ACKNOWLEDGED' }`                                                 | ✅ Yes       | Not user-facing copy — internal status field consumed by the frontend SSR call only.                              |
+| `POST /auth/reset-password/validate` | 200         | `{ valid: true }`                                                            | ✅ Yes       | Not end-user copy. Internal validation result used by the reset-password page to decide whether to show the form. |
 
 ---
 
@@ -60,12 +60,12 @@ error handler. The following tables record every user-visible error message by d
 
 ### 2.3 Password errors
 
-| Code                       | Message                                                                        | HTTP | Assessment | Notes                                                                                                                                             |
-| -------------------------- | ------------------------------------------------------------------------------ | ---- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTH_PASSWORD_TOO_WEAK`   | `Password does not meet minimum requirements.`                                 | 400  | ✅ Correct | Generic — does not reveal exact rules, which prevents targeted password crafting                                                                  |
+| Code                       | Message                                                                         | HTTP | Assessment | Notes                                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------- | ---- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_PASSWORD_TOO_WEAK`   | `Password does not meet minimum requirements.`                                  | 400  | ✅ Correct | Generic — does not reveal exact rules, which prevents targeted password crafting                                                                   |
 | `AUTH_RESET_TOKEN_INVALID` | `This password reset link is invalid or has expired. Please request a new one.` | 400  | ✅ Correct | Unified copy now used for invalid, expired, and already-used reset-link cases. Safer and simpler than exposing separate invalid vs expired states. |
-| `AUTH_RESET_TOKEN_EXPIRED` | `This password reset link is invalid or has expired. Please request a new one.` | 400  | ✅ Correct | Intentionally aligned with `AUTH_RESET_TOKEN_INVALID` so the user sees one recovery path regardless of exact token state.                         |
-| `AUTH_SSO_ONLY_ACCOUNT`    | `This account uses SSO sign-in. Password reset is not available.`              | 400  | ✅ Correct | Correct — there is no password to reset. Disclosure of SSO status is acceptable in this context because the user is the account holder.           |
+| `AUTH_RESET_TOKEN_EXPIRED` | `This password reset link is invalid or has expired. Please request a new one.` | 400  | ✅ Correct | Intentionally aligned with `AUTH_RESET_TOKEN_INVALID` so the user sees one recovery path regardless of exact token state.                          |
+| `AUTH_SSO_ONLY_ACCOUNT`    | `This account uses SSO sign-in. Password reset is not available.`               | 400  | ✅ Correct | Correct — there is no password to reset. Disclosure of SSO status is acceptable in this context because the user is the account holder.            |
 
 ### 2.4 Admin / provisioning errors
 
@@ -94,10 +94,10 @@ error handler. The following tables record every user-visible error message by d
 This flow was updated so reset-link validity is checked on page load before the password form
 is rendered.
 
-| Surface | Endpoint | User-visible error message | Expected UI behavior |
-| ------- | -------- | -------------------------- | -------------------- |
-| Reset-password page load prevalidation | `POST /auth/reset-password/validate` | `This password reset link is invalid or has expired. Please request a new one.` | Error shown immediately. Password form is hidden. |
-| Reset-password submit fallback | `POST /auth/reset-password` | `This password reset link is invalid or has expired. Please request a new one.` | Same message remains the submit-time fallback if the token becomes invalid before submission. |
+| Surface                                | Endpoint                             | User-visible error message                                                      | Expected UI behavior                                                                          |
+| -------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Reset-password page load prevalidation | `POST /auth/reset-password/validate` | `This password reset link is invalid or has expired. Please request a new one.` | Error shown immediately. Password form is hidden.                                             |
+| Reset-password submit fallback         | `POST /auth/reset-password`          | `This password reset link is invalid or has expired. Please request a new one.` | Same message remains the submit-time fallback if the token becomes invalid before submission. |
 
 ### Notes
 

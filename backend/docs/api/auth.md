@@ -468,6 +468,7 @@ No session required.
   token: string; // min 20
 }
 ```
+
 ### Success response
 
 Returns `200` with:
