@@ -1,3 +1,18 @@
+/**
+ * cp/src/features/accounts/screens/accounts-list-screen.tsx
+ *
+ * WHY:
+ * - Renders the CP accounts list for operator re-entry and edit routing.
+ * - CP Phase 2: renders real backend data from GET /cp/accounts.
+ *   Placeholder copy and Phase 1 boundary notes have been removed.
+ *
+ * RULES:
+ * - No business logic here.
+ * - Setup progress column shows "No groups configured yet" for all accounts
+ *   in Phase 2 — group saves are deferred to a later phase.
+ * - Status toggle is deferred to a later phase.
+ */
+
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import type { ControlPlaneAccountListItem, FooterAction } from '../contracts';
@@ -73,18 +88,18 @@ type AccountsListScreenProps = {
   accounts: ControlPlaneAccountListItem[];
 };
 
-function getReviewedSummary(account: ControlPlaneAccountListItem): string {
+function getSetupProgressLabel(account: ControlPlaneAccountListItem): string {
   const reviewedCount = account.setupGroupsReviewed.length;
 
   if (reviewedCount === TOTAL_SETUP_GROUPS) {
-    return 'All four setup groups reviewed';
+    return 'All four setup groups configured';
   }
 
   if (reviewedCount === 0) {
-    return 'No setup groups reviewed yet';
+    return 'No groups configured yet';
   }
 
-  return `${reviewedCount} of ${TOTAL_SETUP_GROUPS} setup groups reviewed`;
+  return `${reviewedCount} of ${TOTAL_SETUP_GROUPS} groups configured`;
 }
 
 export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
@@ -96,15 +111,15 @@ export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
     },
   ];
 
-  const activeCount = accounts.filter((account) => account.cpStatus === 'Active').length;
-  const draftCount = accounts.filter((account) => account.cpStatus === 'Draft').length;
-  const disabledCount = accounts.filter((account) => account.cpStatus === 'Disabled').length;
+  const activeCount = accounts.filter((a) => a.cpStatus === 'Active').length;
+  const draftCount = accounts.filter((a) => a.cpStatus === 'Draft').length;
+  const disabledCount = accounts.filter((a) => a.cpStatus === 'Disabled').length;
 
   return (
     <ControlPlaneShell
       currentPath="Accounts"
       pageTitle="Accounts"
-      pageDescription="Minimal Phase 1 Control Plane list view for operator re-entry, edit routing, and review routing."
+      pageDescription="Provision and manage tenant accounts from the Control Plane."
       footerActions={footerActions}
     >
       <section style={sectionGridStyle}>
@@ -112,46 +127,30 @@ export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
           <article style={infoCardStyle}>
             <p style={labelStyle}>Total accounts</p>
             <p style={valueStyle}>{accounts.length}</p>
-            <p style={mutedTextStyle}>
-              Typed placeholder rows available for Control Plane routing review.
-            </p>
           </article>
 
           <article style={infoCardStyle}>
-            <p style={labelStyle}>Draft accounts</p>
+            <p style={labelStyle}>Draft</p>
             <p style={valueStyle}>{draftCount}</p>
-            <p style={mutedTextStyle}>
-              Draft is the expected placeholder state while real persistence is still deferred.
-            </p>
           </article>
 
           <article style={infoCardStyle}>
-            <p style={labelStyle}>Active accounts</p>
+            <p style={labelStyle}>Active</p>
             <p style={valueStyle}>{activeCount}</p>
-            <p style={mutedTextStyle}>
-              Active appears in the placeholder data only. Real publish enforcement lands later.
-            </p>
           </article>
 
           <article style={infoCardStyle}>
-            <p style={labelStyle}>Disabled accounts</p>
+            <p style={labelStyle}>Disabled</p>
             <p style={valueStyle}>{disabledCount}</p>
-            <p style={mutedTextStyle}>
-              Disabled remains part of the locked CP status vocabulary in this phase.
-            </p>
           </article>
         </div>
 
         <article style={contentPanelStyle}>
-          <h2 style={sectionTitleStyle}>Existing accounts</h2>
+          <h2 style={sectionTitleStyle}>All accounts</h2>
 
           {accounts.length === 0 ? (
             <div style={emptyStateStyle}>
               <p style={valueStyle}>No accounts yet. Create your first account to get started.</p>
-              <p style={mutedTextStyle}>
-                The Phase 1 accounts list exists so QA and engineering can re-enter saved
-                placeholder drafts and review routing behavior without database work.
-              </p>
               <Link href={getCreateFlowEntryPath()} style={inlineLinkStyle}>
                 Create Account →
               </Link>
@@ -176,7 +175,7 @@ export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
                       <td style={tableCellStyle}>
                         <span style={statusBadgeStyle(account.cpStatus)}>{account.cpStatus}</span>
                       </td>
-                      <td style={tableCellStyle}>{getReviewedSummary(account)}</td>
+                      <td style={tableCellStyle}>{getSetupProgressLabel(account)}</td>
                       <td style={tableCellStyle}>
                         <div style={actionRowStyle}>
                           <Link href={getEditSetupPath(account.key)} style={inlineLinkStyle}>
@@ -185,9 +184,6 @@ export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
                           <Link href={getEditReviewPath(account.key)} style={inlineLinkStyle}>
                             Review
                           </Link>
-                          <span style={{ ...mutedTextStyle, fontSize: '13px' }}>
-                            Status toggle comes in the real API phase.
-                          </span>
                         </div>
                       </td>
                     </tr>
@@ -199,11 +195,10 @@ export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
         </article>
 
         <article style={insetPanelStyle}>
-          <strong>Phase 1 placeholder boundary</strong>
+          <strong>Status toggle and group saves</strong>
           <p style={mutedTextStyle}>
-            This page intentionally stops at operator routing, list visibility, and placeholder
-            status display. Real list fetching, filters, status mutation, and persistence are
-            later-phase work.
+            Active / Disabled status changes and group save persistence are implemented in later
+            phases. Use Edit Setup to navigate to the account setup view.
           </p>
         </article>
       </section>

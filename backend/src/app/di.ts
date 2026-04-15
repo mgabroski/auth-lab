@@ -26,6 +26,10 @@
  * - Guard 3 — Local OIDC: LOCAL_OIDC_ENABLED must never be enabled in
  *   production. It replaces real Google/Microsoft provider adapters with the
  *   CI-only LocalOidcSsoAdapter. Rejected in production.
+ *
+ * CP Phase 2 update:
+ * - Added ControlPlaneModule wiring (createControlPlaneModule).
+ * - CP module requires only db + logger; no rate-limiter, no outbox, no session.
  */
 
 import type { AppConfig } from './config';
@@ -80,6 +84,9 @@ import type { AuthModule } from '../modules/auth/auth.module';
 import { createAuditModule } from '../modules/audit/audit.module';
 import type { AuditModule } from '../modules/audit/audit.module';
 
+import { createControlPlaneModule } from '../modules/control-plane/control-plane.module';
+import type { ControlPlaneModule } from '../modules/control-plane/control-plane.module';
+
 import { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
 import { GoogleSsoAdapter } from '../modules/auth/sso/google/google-sso.adapter';
 import { MicrosoftSsoAdapter } from '../modules/auth/sso/microsoft/microsoft-sso.adapter';
@@ -114,6 +121,7 @@ export type AppDeps = {
   memberships: MembershipModule;
   auth: AuthModule;
   audit: AuditModule;
+  controlPlane: ControlPlaneModule;
 
   close: () => Promise<void>;
 };
@@ -404,6 +412,10 @@ export async function buildDeps(
     },
   });
 
+  // CP module requires only db + logger.
+  // No rate-limiter, no outbox, no session — CP is dev-only no-auth in this phase.
+  const controlPlane = createControlPlaneModule({ db, logger });
+
   return {
     db,
     cache: redis,
@@ -430,6 +442,8 @@ export async function buildDeps(
     memberships,
     auth,
     audit,
+    controlPlane,
+
     close: async () => {
       await redis.close();
       await db.destroy();

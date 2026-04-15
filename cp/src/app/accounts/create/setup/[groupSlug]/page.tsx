@@ -19,5 +19,9 @@ export default async function CreateSetupGroupPage({ params }: CreateSetupGroupP
 
   const account = await loadCreateAccountDraft();
 
+  if (!account) {
+    notFound();
+  }
+
   return <AccountSetupGroupScreen mode="create" account={account} group={group} />;
 }

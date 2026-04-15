@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 2 backend foundation is now shipped.
 
 This repo already has:
 
@@ -25,7 +25,10 @@ This repo already has:
 - current auth and invite API surfaces
 - current QA and developer execution documents
 - a locked documentation routing model with explicit tiering
-- a separate internal Control Plane frontend app with Phase 1 shell and routing only
+- a separate internal Control Plane frontend app with Phase 1 shell and routing
+- a real CP backend module (`backend/src/modules/control-plane/`) with accounts create/read/list endpoints
+- a real `cp_accounts` table (migration `0014_cp_accounts.ts`)
+- CP frontend wired to real backend data for create basic-info submission and accounts list
 
 This repo does not yet claim that the full Auth / Provisioning closure roadmap is complete.
 Roadmap closure still depends on the remaining real-environment, proof, QA, and production-readiness work tracked elsewhere.
@@ -44,6 +47,7 @@ Use them before support docs.
 5. `backend/docs/api/auth.md` — auth contract surface
 6. `backend/docs/api/invites.md` — invite contract surface
 7. `backend/docs/api/admin.md` — admin auth/provisioning contract surface
+8. `backend/docs/api/cp-accounts.md` — CP accounts contract surface (added CP Phase 2)
 
 ### Supporting but non-canonical-by-default docs
 
@@ -97,14 +101,22 @@ The following foundations are treated as real in the repo now.
 - one canonical Auth / Provisioning QA execution surface exists: `docs/qa/qa-execution-pack.md`
 - current prompt routing is centralized through `docs/prompts/catalog.md`
 
-### Control Plane foundation
+### Control Plane foundation — Phase 2 (current)
 
 - a separate Control Plane Next.js app exists at `cp/`
 - the Control Plane is not part of the tenant frontend package
 - root Control Plane entry redirects into the create-account flow
-- the Phase 1 Control Plane scope is shell and routing only
-- the Control Plane currently has no auth, no backend API integration, no publish flow, and no persistence
-- the locked Control Plane Prerequisite Roadmap is an external document; it must be attached to any CP continuation session and is not committed to this repo
+- **real backend module exists** at `backend/src/modules/control-plane/`
+- **real `cp_accounts` table** created by migration `0014_cp_accounts.ts`
+- **real backend routes registered**: `GET /cp/accounts`, `GET /cp/accounts/:accountKey`, `POST /cp/accounts`
+- **CP accounts API contract doc** exists at `backend/docs/api/cp-accounts.md`
+- **CP frontend wired to real data**: accounts list reads `GET /cp/accounts`; Step 1 form submits `POST /cp/accounts` and navigates to setup on success
+- **CP same-origin API proxy** added at `cp/src/app/api/[...path]/route.ts`
+- CP backend is dev-only no-auth in this phase — CP authentication is a later phase
+- the locked 3-step CP flow (Basic Account Info → Account Setup → Review & Publish) remains unchanged
+- the 4 locked setup groups remain unchanged; group saves are deferred to later phases
+- `cpRevision` starts at 0 on account creation; group-save increments are deferred
+- CP provisioning truth (`cp_accounts`) is kept separate from tenant configuration truth (`tenants`)
 
 ---
 
@@ -133,9 +145,12 @@ The following should be treated as locked unless reopened by an explicit archite
 ### Control Plane boundary rules
 
 - Control Plane is a separate app, not a route subtree inside `frontend/`
-- Control Plane Phase 1 is limited to shell, route composition, and typed placeholder data boundaries
-- Control Plane must not create fake backend route handlers or pretend real APIs exist
 - direct runtime imports from `frontend/` into `cp/` are not allowed
+- CP API calls must go through the `/api/*` proxy or `cpSsrFetch` — never hardcoded backend origins
+- CP provisioning truth and tenant configuration truth must not be collapsed into a single table model
+- CP status vocabulary is locked: `Draft | Active | Disabled`
+- account identity (name + key) is immutable after creation
+- new accounts always start with `cpStatus = Draft` and `cpRevision = 0`
 
 ### QA/developer split
 
@@ -158,19 +173,20 @@ The full auth closure roadmap is still open in the areas already tracked by the 
 - complete production-readiness closure
 - final signoff that the full auth roadmap is closed
 
-### Control Plane expansion
+### Control Plane expansion (remaining phases)
 
-The Control Plane currently stops at frontend shell and route skeleton work.
-Still open:
+The Control Plane Phase 2 backend delivers create/read/list for accounts. Still open:
 
-- real backend APIs
-- create/edit persistence
-- publish logic
-- revision/state storage
-- review gating logic
-- Settings integration
-- auth / RBAC / audit surfaces for the Control Plane itself
-- the execution order and phase definitions for all of the above are owned by the external Control Plane Prerequisite Roadmap document
+- CP group save endpoints (`PUT /cp/accounts/:accountKey/access`, etc.)
+- CP publish endpoint (`POST /cp/accounts/:accountKey/publish`)
+- CP status toggle endpoint (`PATCH /cp/accounts/:accountKey/status`)
+- `cpRevision` increment on group-save mutations
+- CP frontend group save forms (Step 2 group detail pages)
+- CP frontend publish flow (Step 3 Review & Publish)
+- CP authentication and operator RBAC
+- CP audit trail UI
+- CP → Settings cascade (blocked until Settings state engine exists)
+- remaining CP schema tables: `cp_access_config`, `cp_account_settings_config`, `cp_module_config`, `cp_personal_family_config`, `cp_personal_field_config`, `cp_integration_config`
 
 ### Settings expansion
 

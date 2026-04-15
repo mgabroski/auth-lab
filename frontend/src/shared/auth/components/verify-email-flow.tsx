@@ -73,7 +73,7 @@ export function VerifyEmailFlow({
 
     setSuccessMessage('Your email has been verified. Redirecting to the next required step…');
 
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+    await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
 
     const nextPath = await resolvePostVerificationPath();
     router.replace(nextPath);

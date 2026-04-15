@@ -9,6 +9,7 @@
  * CURRENT FOUNDATION SCOPE:
  * - core routes: /metrics, /health
  * - module routes: invites, auth, audit
+ * - CP routes: /cp/accounts (Phase 2)
  *
  * HEALTH ENDPOINT:
  * - Real readiness/liveness-style probe for local/devops use.
@@ -19,6 +20,11 @@
  * METRICS ENDPOINT:
  * - Exposes low-cardinality Prometheus-text metrics for Stage 3.
  * - No vendor lock-in implied by the endpoint.
+ *
+ * CP ROUTE PREFIX:
+ * - All Control Plane backend routes are registered under /cp/*.
+ * - They are registered by deps.controlPlane.registerRoutes(app).
+ * - CP routes are dev-only no-auth for this phase.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -77,4 +83,5 @@ export function registerRoutes(
   deps.invites.registerRoutes(app);
   deps.auth.registerRoutes(app);
   deps.audit.registerRoutes(app);
+  deps.controlPlane.registerRoutes(app);
 }

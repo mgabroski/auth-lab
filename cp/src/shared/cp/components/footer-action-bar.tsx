@@ -1,3 +1,16 @@
+/**
+ * cp/src/shared/cp/components/footer-action-bar.tsx
+ *
+ * WHY:
+ * - Renders the locked CP footer action row (back / save-draft / continue pattern).
+ *
+ * Phase 2 change:
+ * - Added onClick support for the button case so form submit actions can be
+ *   wired through FooterAction without requiring a wrapper element.
+ *   This is a backwards-compatible addition: all existing callers that omit
+ *   onClick continue to work exactly as before.
+ */
+
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import type { FooterAction } from '@/features/accounts/contracts';
@@ -68,7 +81,13 @@ export function FooterActionBar({ actions }: FooterActionBarProps) {
         }
 
         return (
-          <button key={action.label} type="button" disabled={action.disabled} style={style}>
+          <button
+            key={action.label}
+            type="button"
+            disabled={action.disabled}
+            onClick={action.onClick}
+            style={style}
+          >
             {action.label}
           </button>
         );

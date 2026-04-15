@@ -50,21 +50,22 @@ Do not write ADRs for:
 
 ## ADR Index
 
-| ID       | Title                                                                        | Status | Scope                         |
-| -------- | ---------------------------------------------------------------------------- | ------ | ----------------------------- |
-| ADR-0001 | Single Public Origin Through Reverse Proxy                                   | LOCKED | topology                      |
-| ADR-0002 | Host-Derived Tenant Resolution                                               | LOCKED | topology / auth               |
-| ADR-0003 | SSR Uses Internal Backend URL With Explicit Header Forwarding                | LOCKED | frontend / backend / topology |
-| ADR-0004 | Browser Uses Same-Origin `/api/*`; SSO Starts With Navigation, Not `fetch()` | LOCKED | frontend / auth / topology    |
-| ADR-0005 | Session Cookie And SSO State Cookie Are Separate Contracts                   | LOCKED | auth / security               |
-| ADR-0006 | Proxy Conformance Tests Are The Safety Net For Dev/Prod Proxy Drift          | LOCKED | infra / topology              |
-| ADR-0007 | Next.js App Router Is The Frontend Framework                                 | LOCKED | frontend                      |
-| ADR-0008 | Workspace Setup Guidance Is Tenant-Scoped; No `FIRST_TIME_SETUP` NextAction  | LOCKED | auth / settings boundary      |
-| ADR-0009 | MFA TOTP Label Uses Verified Email, Not `userId`                             | LOCKED | auth / MFA                    |
-| ADR-0010 | Seed Bootstrap Delivery Differs By Environment                               | LOCKED | auth / ops                    |
-| ADR-0011 | Expired Invite Cannot Be Bypassed By SSO                                     | LOCKED | auth / invites / SSO          |
-| ADR-0012 | SSO Does Not Bypass App-Level MFA                                            | LOCKED | auth / SSO / MFA              |
-| ADR-0013 | Documentation System Uses Tiered Truth And One Active Prompt Pack            | LOCKED | documentation system          |
+| ID       | Title                                                                                                                     | Status | Scope                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------- |
+| ADR-0001 | Single Public Origin Through Reverse Proxy                                                                                | LOCKED | topology                      |
+| ADR-0002 | Host-Derived Tenant Resolution                                                                                            | LOCKED | topology / auth               |
+| ADR-0003 | SSR Uses Internal Backend URL With Explicit Header Forwarding                                                             | LOCKED | frontend / backend / topology |
+| ADR-0004 | Browser Uses Same-Origin `/api/*`; SSO Starts With Navigation, Not `fetch()`                                              | LOCKED | frontend / auth / topology    |
+| ADR-0005 | Session Cookie And SSO State Cookie Are Separate Contracts                                                                | LOCKED | auth / security               |
+| ADR-0006 | Proxy Conformance Tests Are The Safety Net For Dev/Prod Proxy Drift                                                       | LOCKED | infra / topology              |
+| ADR-0007 | Next.js App Router Is The Frontend Framework                                                                              | LOCKED | frontend                      |
+| ADR-0008 | Workspace Setup Guidance Is Tenant-Scoped; No `FIRST_TIME_SETUP` NextAction                                               | LOCKED | auth / settings boundary      |
+| ADR-0009 | MFA TOTP Label Uses Verified Email, Not `userId`                                                                          | LOCKED | auth / MFA                    |
+| ADR-0010 | Seed Bootstrap Delivery Differs By Environment                                                                            | LOCKED | auth / ops                    |
+| ADR-0011 | Expired Invite Cannot Be Bypassed By SSO                                                                                  | LOCKED | auth / invites / SSO          |
+| ADR-0012 | SSO Does Not Bypass App-Level MFA                                                                                         | LOCKED | auth / SSO / MFA              |
+| ADR-0013 | Documentation System Uses Tiered Truth And One Active Prompt Pack                                                         | LOCKED | documentation system          |
+| ADR-0014 | Control Plane Backend Lives Inside The Shared Backend; CP Provisioning And Tenant Configuration Truth Are Separate Tables | LOCKED | CP / architecture             |
 
 ---
 
@@ -420,6 +421,38 @@ This keeps the repo navigable for engineers and AI, reduces duplicate truth, and
 Any documentation model that duplicates truth widely, creates parallel prompt systems, or generates per-module docs by default.
 
 ---
+
+---
+
+## ADR-0014 — Control Plane Backend Lives Inside The Shared Backend; CP Provisioning And Tenant Configuration Truth Are Separate Tables
+
+### Status
+
+LOCKED
+
+### Decision
+
+The Control Plane backend is not a separate service. It lives inside the same Fastify backend process, under its own module boundary at `backend/src/modules/control-plane/`. All CP backend routes are prefixed `/cp/`.
+
+CP provisioning truth (`cp_accounts` and future `cp_*_config` tables) is kept strictly separate from tenant configuration truth (`tenants` and future Settings tables). These must not be collapsed into a single mixed table model.
+
+### Why
+
+Splitting CP into a separate service would add deployment complexity with no benefit at this scale. The `/cp/` prefix provides clear routing separation without a process boundary.
+
+Keeping CP provisioning truth and tenant configuration truth separate preserves the two-layer ownership model: CP controls what tenants are allowed to have; the tenant's own Settings control how they configure what they are allowed to have. Collapsing the two would make it impossible to change CP allowances without mutating tenant config, and would blur the Settings consumption contract.
+
+### What This Constrains
+
+- New CP domain tables must use the `cp_` prefix and must not share rows with tenant-facing tables.
+- CP routes must be registered under the `control-plane` module boundary, not scattered under other modules.
+- CP frontend must call backend through the same-origin `/api/*` proxy or `cpSsrFetch` — never via hardcoded backend origins.
+- The CP → Settings cascade integration path is kept clean: CP writes produce `cpRevision` changes; the Settings state engine will consume those as a separate, explicit contract once it exists.
+
+### Alternatives Considered
+
+- Separate backend service for CP: rejected — premature complexity at this scale.
+- Shared tables between CP and tenant Settings: rejected — blurs the ownership model and blocks clean Settings consumption.
 
 ## Maintenance Rules
 

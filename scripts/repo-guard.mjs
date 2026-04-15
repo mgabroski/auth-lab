@@ -60,6 +60,10 @@ const ROUTE_DOC_COUPLING = new Map([
   ['backend/src/modules/invites/invite.routes.ts', 'backend/docs/api/invites.md'],
   ['backend/src/modules/invites/admin/admin-invite.routes.ts', 'backend/docs/api/admin.md'],
   ['backend/src/modules/audit/admin-audit.routes.ts', 'backend/docs/api/admin.md'],
+  [
+    'backend/src/modules/control-plane/accounts/cp-accounts.routes.ts',
+    'backend/docs/api/cp-accounts.md',
+  ],
 ]);
 
 const ROUTE_FILE_PATTERN = /^backend\/src\/modules\/.+\.routes\.ts$/;
@@ -112,6 +116,15 @@ const BACKEND_SHARED_TO_MODULE_ALLOWLIST = new Set([
 const FRONTEND_PRIVATE_BACKEND_ALLOWLIST = new Set([
   'frontend/src/shared/ssr-api-client.ts',
   'frontend/src/app/api/[...path]/route.ts',
+]);
+
+// WHY: These two CP files are the intentional same-origin infrastructure files
+// that may reference INTERNAL_API_URL / localhost:3001 as a fallback only.
+// They mirror the pattern of their frontend equivalents and are the only CP
+// files permitted to reference the backend origin directly.
+const CP_PRIVATE_BACKEND_ALLOWLIST = new Set([
+  'cp/src/shared/cp/ssr-api-client.ts',
+  'cp/src/app/api/[...path]/route.ts',
 ]);
 
 const FRONTEND_PRIVATE_BACKEND_PATTERNS = [
@@ -440,11 +453,15 @@ function checkCpBoundaries() {
     }
 
     // Block cp/src/ from referencing the backend origin directly.
-    for (const pattern of CP_PRIVATE_BACKEND_PATTERNS) {
-      if (pattern.regex.test(content)) {
-        failures.push(
-          `CP same-origin violation: ${relFile} must not reference ${pattern.label}. CP API calls must go through the proxy or CP-scoped routes.`,
-        );
+    // The two intentional infrastructure files (ssr-api-client + api proxy route)
+    // are allowlisted — they are the CP equivalents of the frontend proxy files.
+    if (!CP_PRIVATE_BACKEND_ALLOWLIST.has(relFile)) {
+      for (const pattern of CP_PRIVATE_BACKEND_PATTERNS) {
+        if (pattern.regex.test(content)) {
+          failures.push(
+            `CP same-origin violation: ${relFile} must not reference ${pattern.label}. CP API calls must go through the proxy or CP-scoped routes.`,
+          );
+        }
       }
     }
   }

@@ -47,6 +47,16 @@ export interface AuthIdentities {
   user_id: string;
 }
 
+export interface CpAccounts {
+  account_key: string;
+  account_name: string;
+  cp_revision: Generated<number>;
+  cp_status: Generated<string>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface EmailVerificationTokens {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
@@ -151,6 +161,7 @@ export interface Users {
 export interface DB {
   audit_events: AuditEvents;
   auth_identities: AuthIdentities;
+  cp_accounts: CpAccounts;
   email_verification_tokens: EmailVerificationTokens;
   invites: Invites;
   memberships: Memberships;
