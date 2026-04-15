@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { loadEditableAccount } from '@/features/accounts/mock-data';
+import { loadAccountReviewByKey } from '@/features/accounts/mock-data';
 import { AccountReviewScreen } from '@/features/accounts/screens/account-review-screen';
 
 type EditAccountReviewPageProps = {
@@ -10,11 +10,11 @@ type EditAccountReviewPageProps = {
 
 export default async function EditAccountReviewPage({ params }: EditAccountReviewPageProps) {
   const { accountKey } = await params;
-  const account = await loadEditableAccount(accountKey);
+  const review = await loadAccountReviewByKey(accountKey);
 
-  if (!account) {
+  if (!review) {
     notFound();
   }
 
-  return <AccountReviewScreen mode="edit" account={account} />;
+  return <AccountReviewScreen mode="edit" review={review} />;
 }

@@ -43,4 +43,22 @@ export const CpAccountErrors = {
   personalValidation(message: string, meta?: Record<string, unknown>) {
     return AppError.validationError(message, meta);
   },
+
+  activationReadyConflict(blockingReasons: string[]) {
+    return new AppError({
+      code: 'CONFLICT',
+      status: 409,
+      message: 'Active publish is blocked until Activation Ready passes.',
+      meta: { blockingReasons },
+    });
+  },
+
+  tenantProvisioningConflict(accountKey: string) {
+    return new AppError({
+      code: 'CONFLICT',
+      status: 409,
+      message: `Cannot publish account because tenant key is already provisioned outside Control Plane: ${accountKey}`,
+      meta: { accountKey },
+    });
+  },
 } as const;

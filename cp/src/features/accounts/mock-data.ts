@@ -6,8 +6,9 @@
  * - No mock data remains in this file.
  */
 
-import { fetchCpAccount, fetchCpAccountsList } from './cp-accounts-api';
+import { fetchCpAccount, fetchCpAccountReview, fetchCpAccountsList } from './cp-accounts-api';
 
 export const loadAccountsList = fetchCpAccountsList;
 export const loadEditableAccount = fetchCpAccount;
 export const loadDraftAccountByKey = fetchCpAccount;
+export const loadAccountReviewByKey = fetchCpAccountReview;

@@ -4,8 +4,8 @@
  * WHY:
  * - Domain and response types for the Control Plane accounts subdomain.
  * - Backend controllers/services use these types to keep CP DTOs explicit.
- * - Phase 3 adds real Step 2 group DTOs, persisted progress state, and the
- *   Personal CP sub-page payload surface.
+ * - Phase 4 adds backend-owned review composition, Activation Ready DTOs, and
+ *   real provisioning-result truth for publish.
  *
  * RULES:
  * - No Kysely imports here.
@@ -150,4 +150,63 @@ export type CpAccountDetail = {
   moduleSettings: CpModuleSettingsConfig;
   personal: CpPersonalConfig;
   integrations: CpIntegrationsConfig;
+};
+
+export type CpReviewLine = {
+  label: string;
+  value: string;
+};
+
+export type CpReviewSectionKey =
+  | 'identity'
+  | 'access'
+  | 'accountSettings'
+  | 'moduleSettings'
+  | 'personalAllowances'
+  | 'integrations';
+
+export type CpReviewSection = {
+  key: CpReviewSectionKey;
+  title: string;
+  lines: CpReviewLine[];
+};
+
+export type CpActivationReadinessCheckCode =
+  | 'ACCOUNT_IDENTITY_PRESENT'
+  | 'ACCESS_DECISIONS_MADE'
+  | 'LOGIN_METHOD_SELECTED'
+  | 'ACCOUNT_SETTINGS_DECISIONS_MADE'
+  | 'MODULE_DECISIONS_MADE'
+  | 'PERSONAL_CATALOG_DEFINED'
+  | 'INTEGRATION_DECISIONS_RELEVANT';
+
+export type CpActivationReadinessCheck = {
+  code: CpActivationReadinessCheckCode;
+  label: string;
+  passed: boolean;
+  detail: string;
+};
+
+export type CpActivationReadiness = {
+  isReady: boolean;
+  checks: CpActivationReadinessCheck[];
+  blockingReasons: string[];
+};
+
+export type CpProvisioningState = 'NOT_PROVISIONED' | 'ACTIVE' | 'DISABLED';
+
+export type CpProvisioningResult = {
+  isProvisioned: boolean;
+  tenantId: string | null;
+  tenantKey: string | null;
+  tenantName: string | null;
+  tenantState: CpProvisioningState;
+  publishedAt: Date | null;
+};
+
+export type CpAccountReview = {
+  account: CpAccountDetail;
+  sections: CpReviewSection[];
+  activationReadiness: CpActivationReadiness;
+  provisioning: CpProvisioningResult;
 };

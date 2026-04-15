@@ -10,7 +10,9 @@
 
 import type {
   ControlPlaneAccountDetail,
+  ControlPlaneAccountReview,
   CreateCpAccountInput,
+  PublishCpAccountInput,
   SaveCpAccessInput,
   SaveCpAccountSettingsInput,
   SaveCpIntegrationsInput,
@@ -140,6 +142,20 @@ export function saveCpIntegrations(
     `/api/cp/accounts/${encodeURIComponent(accountKey)}/integrations`,
     {
       method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function publishCpAccount(
+  accountKey: string,
+  input: PublishCpAccountInput,
+): Promise<ControlPlaneAccountReview> {
+  return requestJson<ControlPlaneAccountReview>(
+    `/api/cp/accounts/${encodeURIComponent(accountKey)}/publish`,
+    {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     },

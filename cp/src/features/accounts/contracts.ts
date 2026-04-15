@@ -218,3 +218,66 @@ export type SaveCpIntegrationsInput = {
     }>;
   }>;
 };
+
+export type CpReviewLine = {
+  label: string;
+  value: string;
+};
+
+export type CpReviewSectionKey =
+  | 'identity'
+  | 'access'
+  | 'accountSettings'
+  | 'moduleSettings'
+  | 'personalAllowances'
+  | 'integrations';
+
+export type CpReviewSection = {
+  key: CpReviewSectionKey;
+  title: string;
+  lines: CpReviewLine[];
+};
+
+export type CpActivationReadinessCheckCode =
+  | 'ACCOUNT_IDENTITY_PRESENT'
+  | 'ACCESS_DECISIONS_MADE'
+  | 'LOGIN_METHOD_SELECTED'
+  | 'ACCOUNT_SETTINGS_DECISIONS_MADE'
+  | 'MODULE_DECISIONS_MADE'
+  | 'PERSONAL_CATALOG_DEFINED'
+  | 'INTEGRATION_DECISIONS_RELEVANT';
+
+export type CpActivationReadinessCheck = {
+  code: CpActivationReadinessCheckCode;
+  label: string;
+  passed: boolean;
+  detail: string;
+};
+
+export type CpActivationReadiness = {
+  isReady: boolean;
+  checks: CpActivationReadinessCheck[];
+  blockingReasons: string[];
+};
+
+export type CpProvisioningState = 'NOT_PROVISIONED' | 'ACTIVE' | 'DISABLED';
+
+export type CpProvisioningResult = {
+  isProvisioned: boolean;
+  tenantId: string | null;
+  tenantKey: string | null;
+  tenantName: string | null;
+  tenantState: CpProvisioningState;
+  publishedAt: string | null;
+};
+
+export type ControlPlaneAccountReview = {
+  account: ControlPlaneAccountDetail;
+  sections: CpReviewSection[];
+  activationReadiness: CpActivationReadiness;
+  provisioning: CpProvisioningResult;
+};
+
+export type PublishCpAccountInput = {
+  targetStatus: Exclude<CpStatus, 'Draft'>;
+};

@@ -2,7 +2,8 @@
  * backend/src/modules/control-plane/accounts/dal/cp-accounts.query-sql.ts
  *
  * WHY:
- * - DAL reads for Control Plane accounts and Step 2 group tables.
+ * - DAL reads for Control Plane accounts, Step 2 group tables, and Phase 4
+ *   provisioning/review reads.
  * - Returns raw DB row shapes only; services compose domain DTOs.
  *
  * RULES:
@@ -15,21 +16,25 @@ import type { Selectable } from 'kysely';
 import type { DbExecutor } from '../../../../shared/db/db';
 import type {
   CpAccessConfig,
+  CpAccountProvisioning,
   CpAccountSettingsConfig,
   CpAccounts,
   CpIntegrationConfig,
   CpModuleConfig,
   CpPersonalFamilyConfig,
   CpPersonalFieldConfig,
+  Tenants,
 } from '../../../../shared/db/database.types';
 
 export type CpAccountRow = Selectable<CpAccounts>;
 export type CpAccessConfigRow = Selectable<CpAccessConfig>;
+export type CpAccountProvisioningRow = Selectable<CpAccountProvisioning>;
 export type CpAccountSettingsConfigRow = Selectable<CpAccountSettingsConfig>;
 export type CpModuleConfigRow = Selectable<CpModuleConfig>;
 export type CpPersonalFamilyConfigRow = Selectable<CpPersonalFamilyConfig>;
 export type CpPersonalFieldConfigRow = Selectable<CpPersonalFieldConfig>;
 export type CpIntegrationConfigRow = Selectable<CpIntegrationConfig>;
+export type TenantProvisioningRow = Selectable<Tenants>;
 
 export async function findCpAccountByKeySql(
   db: DbExecutor,
@@ -52,6 +57,17 @@ export async function findCpAccessConfigSql(
 ): Promise<CpAccessConfigRow | undefined> {
   return db
     .selectFrom('cp_access_config')
+    .selectAll()
+    .where('account_id', '=', accountId)
+    .executeTakeFirst();
+}
+
+export async function findCpAccountProvisioningSql(
+  db: DbExecutor,
+  accountId: string,
+): Promise<CpAccountProvisioningRow | undefined> {
+  return db
+    .selectFrom('cp_account_provisioning')
     .selectAll()
     .where('account_id', '=', accountId)
     .executeTakeFirst();
@@ -113,4 +129,18 @@ export async function listCpIntegrationConfigSql(
     .where('account_id', '=', accountId)
     .orderBy('integration_key', 'asc')
     .execute();
+}
+
+export async function findTenantProvisioningByIdSql(
+  db: DbExecutor,
+  tenantId: string,
+): Promise<TenantProvisioningRow | undefined> {
+  return db.selectFrom('tenants').selectAll().where('id', '=', tenantId).executeTakeFirst();
+}
+
+export async function findTenantProvisioningByKeySql(
+  db: DbExecutor,
+  tenantKey: string,
+): Promise<TenantProvisioningRow | undefined> {
+  return db.selectFrom('tenants').selectAll().where('key', '=', tenantKey).executeTakeFirst();
 }

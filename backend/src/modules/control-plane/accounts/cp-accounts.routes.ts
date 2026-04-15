@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Declares the CP accounts HTTP route surface.
- * - Phase 3 adds real Step 2 group save endpoints.
+ * - Phase 4 adds backend-owned review composition and publish.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -15,6 +15,7 @@ export function registerCpAccountsRoutes(
 ): void {
   app.get('/cp/accounts', controller.listAccounts.bind(controller));
   app.get('/cp/accounts/:accountKey', controller.getAccount.bind(controller));
+  app.get('/cp/accounts/:accountKey/review', controller.getReview.bind(controller));
   app.post('/cp/accounts', controller.createAccount.bind(controller));
 
   app.put('/cp/accounts/:accountKey/access', controller.saveAccess.bind(controller));
@@ -25,4 +26,6 @@ export function registerCpAccountsRoutes(
   app.put('/cp/accounts/:accountKey/modules', controller.saveModuleSettings.bind(controller));
   app.put('/cp/accounts/:accountKey/modules/personal', controller.savePersonal.bind(controller));
   app.put('/cp/accounts/:accountKey/integrations', controller.saveIntegrations.bind(controller));
+
+  app.post('/cp/accounts/:accountKey/publish', controller.publishAccount.bind(controller));
 }

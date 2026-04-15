@@ -23,14 +23,14 @@ Current route surface:
 
 - `GET /cp/accounts`
 - `GET /cp/accounts/:accountKey`
+- `GET /cp/accounts/:accountKey/review`
 - `POST /cp/accounts`
 - `PUT /cp/accounts/:accountKey/access`
 - `PUT /cp/accounts/:accountKey/account-settings`
 - `PUT /cp/accounts/:accountKey/modules`
 - `PUT /cp/accounts/:accountKey/modules/personal`
 - `PUT /cp/accounts/:accountKey/integrations`
-
-Publish and status endpoints remain deferred.
+- `POST /cp/accounts/:accountKey/publish`
 
 ---
 
@@ -42,7 +42,7 @@ CP routes are on the same backend process as all other routes. They are prefixed
 
 ---
 
-## 3. Shared response shape
+## 3. Shared response shapes
 
 ### 3.1 Account list row
 
@@ -79,7 +79,7 @@ CP routes are on the same backend process as all other routes. They are prefixed
 
 ### 3.2 Full account detail
 
-All read and write endpoints except `GET /cp/accounts` return the full CP account detail shape.
+All read and write endpoints except `GET /cp/accounts` and `GET /cp/accounts/:accountKey/review` return the full CP account detail shape.
 
 ```json
 {
@@ -175,7 +175,7 @@ All read and write endpoints except `GET /cp/accounts` return the full CP accoun
         "label": "Identity",
         "isAllowed": true,
         "allowedLocked": true,
-        "fields": [ ... ]
+        "fields": ["..."]
       }
     ]
   },
@@ -189,6 +189,48 @@ All read and write endpoints except `GET /cp/accounts` return the full CP accoun
         "capabilities": []
       }
     ]
+  }
+}
+```
+
+### 3.3 Review response
+
+`GET /cp/accounts/:accountKey/review` and `POST /cp/accounts/:accountKey/publish` return a backend-owned Review DTO:
+
+- includes full `account` detail
+- includes server-composed read-only summary sections (frontend renders without recomputing)
+- includes backend-authoritative Activation Ready evaluation
+- includes provisioning result (the real tenant row identity/state)
+
+```json
+{
+  "account": { "...": "Full account detail" },
+  "sections": [
+    {
+      "key": "identity",
+      "title": "Account Identity",
+      "lines": [{ "label": "Account Name", "value": "GoodWill CA" }]
+    }
+  ],
+  "activationReadiness": {
+    "isReady": false,
+    "checks": [
+      {
+        "code": "ACCESS_DECISIONS_MADE",
+        "label": "Access, Identity & Security decisions made",
+        "passed": false,
+        "detail": "Save the Access, Identity & Security group first."
+      }
+    ],
+    "blockingReasons": ["Save the Access, Identity & Security group first."]
+  },
+  "provisioning": {
+    "isProvisioned": true,
+    "tenantId": "uuid",
+    "tenantKey": "goodwill-ca",
+    "tenantName": "GoodWill CA",
+    "tenantState": "DISABLED",
+    "publishedAt": "2026-01-01T00:00:00.000Z"
   }
 }
 ```
@@ -228,7 +270,27 @@ See shared full account detail shape above.
 
 ---
 
-### 4.3 `POST /cp/accounts`
+### 4.3 `GET /cp/accounts/:accountKey/review`
+
+Returns the backend-owned Review DTO for the given `accountKey`.
+
+**Important rules**
+
+- Summary sections are composed server-side.
+- Activation Ready is evaluated server-side.
+- The provisioning result is based on real persisted provisioning records (`cp_account_provisioning` + `tenants`).
+
+**Response — 200 OK**
+
+See Review response shape above.
+
+**Response — 404 Not Found**
+
+Same as `GET /cp/accounts/:accountKey`.
+
+---
+
+### 4.4 `POST /cp/accounts`
 
 Creates a new Draft CP account.
 
@@ -264,7 +326,7 @@ Returns the full created account detail.
 
 ---
 
-### 4.4 `PUT /cp/accounts/:accountKey/access`
+### 4.5 `PUT /cp/accounts/:accountKey/access`
 
 Persists the Access, Identity & Security group and marks it configured.
 
@@ -302,7 +364,7 @@ Returns the full account detail with updated `access`, `step2Progress`, and `cpR
 
 ---
 
-### 4.5 `PUT /cp/accounts/:accountKey/account-settings`
+### 4.6 `PUT /cp/accounts/:accountKey/account-settings`
 
 Persists the Account Settings group and marks it configured.
 
@@ -337,7 +399,7 @@ Returns the full account detail with updated `accountSettings`, `step2Progress`,
 
 ---
 
-### 4.6 `PUT /cp/accounts/:accountKey/modules`
+### 4.7 `PUT /cp/accounts/:accountKey/modules`
 
 Persists the Module Settings group decisions.
 
@@ -366,7 +428,7 @@ Returns the full account detail with updated `moduleSettings`, `step2Progress`, 
 
 ---
 
-### 4.7 `PUT /cp/accounts/:accountKey/modules/personal`
+### 4.8 `PUT /cp/accounts/:accountKey/modules/personal`
 
 Persists the Personal CP field-catalog sub-page.
 
@@ -405,7 +467,7 @@ Returns the full account detail with updated `personal`, `moduleSettings`, `step
 
 ---
 
-### 4.8 `PUT /cp/accounts/:accountKey/integrations`
+### 4.9 `PUT /cp/accounts/:accountKey/integrations`
 
 Persists the Integrations & Marketplace group and marks it configured.
 
@@ -436,6 +498,57 @@ Returns the full account detail with updated `integrations`, `step2Progress`, an
 
 ---
 
+### 4.10 `POST /cp/accounts/:accountKey/publish`
+
+Publishes a tenant from Control Plane.
+
+This endpoint:
+
+- evaluates Activation Ready server-side
+- blocks `Active` when Activation Ready fails
+- allows `Disabled` even when Activation Ready fails
+- creates or updates a real `tenants` row for QA use
+- records the CP-side provisioning result in `cp_account_provisioning`
+- updates `cp_accounts.cp_status` to `Active` or `Disabled`
+
+**Request body**
+
+```json
+{
+  "targetStatus": "Active"
+}
+```
+
+**Response — 200 OK**
+
+Returns the Review response shape.
+
+**Response — 409 Conflict**
+
+When `targetStatus = Active` and Activation Ready fails:
+
+```json
+{
+  "code": "CONFLICT",
+  "message": "Active publish is blocked until Activation Ready passes.",
+  "meta": {
+    "blockingReasons": ["Save the Access, Identity & Security group first."]
+  }
+}
+```
+
+If the account key matches an existing tenant created outside Control Plane:
+
+```json
+{
+  "code": "CONFLICT",
+  "message": "Cannot publish account because tenant key is already provisioned outside Control Plane: <accountKey>",
+  "meta": { "accountKey": "<accountKey>" }
+}
+```
+
+---
+
 ## 5. Status vocabulary
 
 | Value      | Meaning                            |
@@ -453,20 +566,11 @@ New accounts are always created with `cpStatus: "Draft"`.
 - `cpRevision` starts at `0` for every new account.
 - It increments on meaningful persisted CP allowance mutations.
 - It does **not** increment when a save is accepted but the resulting allowance truth is unchanged.
-- Publish and status-toggle increments remain deferred until their endpoints ship.
+- Publish updates `cpStatus` and provisioning truth but does **not** increment `cpRevision` because it does not change CP allowance truth.
 
 ---
 
-## 7. Deferred endpoints (later phases)
-
-The following endpoints remain deferred:
-
-- `POST /cp/accounts/:accountKey/publish`
-- `PATCH /cp/accounts/:accountKey/status`
-
----
-
-## 8. Module location
+## 7. Module location
 
 ```text
 backend/src/modules/control-plane/

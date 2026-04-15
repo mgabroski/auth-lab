@@ -11,6 +11,7 @@ import { AppError } from '../../../shared/http/errors';
 import {
   accountKeyParamSchema,
   createCpAccountSchema,
+  publishCpAccountSchema,
   saveCpAccessSchema,
   saveCpAccountSettingsSchema,
   saveCpIntegrationsSchema,
@@ -44,6 +45,17 @@ export class CpAccountsController {
 
     const account = await this.service.getAccount(parsed.data.accountKey);
     return reply.status(200).send(account);
+  }
+
+  async getReview(req: FastifyRequest<{ Params: { accountKey: string } }>, reply: FastifyReply) {
+    const parsed = accountKeyParamSchema.safeParse(req.params);
+
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid accountKey', { issues: parsed.error.issues });
+    }
+
+    const review = await this.service.getReview(parsed.data.accountKey);
+    return reply.status(200).send(review);
   }
 
   async listAccounts(_req: FastifyRequest, reply: FastifyReply) {
@@ -152,5 +164,25 @@ export class CpAccountsController {
       parsedBody.data,
     );
     return reply.status(200).send(account);
+  }
+
+  async publishAccount(
+    req: FastifyRequest<{ Params: { accountKey: string } }>,
+    reply: FastifyReply,
+  ) {
+    const parsedParams = accountKeyParamSchema.safeParse(req.params);
+    const parsedBody = publishCpAccountSchema.safeParse(req.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: [
+          ...(parsedParams.success ? [] : parsedParams.error.issues),
+          ...(parsedBody.success ? [] : parsedBody.error.issues),
+        ],
+      });
+    }
+
+    const review = await this.service.publishAccount(parsedParams.data.accountKey, parsedBody.data);
+    return reply.status(200).send(review);
   }
 }

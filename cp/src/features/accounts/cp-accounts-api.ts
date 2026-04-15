@@ -7,7 +7,11 @@
  */
 
 import { cpSsrFetch } from '@/shared/cp/ssr-api-client';
-import type { ControlPlaneAccountDetail, ControlPlaneAccountListItem } from './contracts';
+import type {
+  ControlPlaneAccountDetail,
+  ControlPlaneAccountListItem,
+  ControlPlaneAccountReview,
+} from './contracts';
 
 export async function fetchCpAccountsList(): Promise<ControlPlaneAccountListItem[]> {
   const res = await cpSsrFetch('/cp/accounts');
@@ -34,4 +38,22 @@ export async function fetchCpAccount(
   }
 
   return (await res.json()) as ControlPlaneAccountDetail;
+}
+
+export async function fetchCpAccountReview(
+  accountKey: string,
+): Promise<ControlPlaneAccountReview | null> {
+  const res = await cpSsrFetch(`/cp/accounts/${encodeURIComponent(accountKey)}/review`);
+
+  if (res.status === 404) {
+    return null;
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      `Failed to load CP account review "${accountKey}": ${res.status} ${res.statusText}`,
+    );
+  }
+
+  return (await res.json()) as ControlPlaneAccountReview;
 }

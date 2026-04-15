@@ -61,6 +61,15 @@ export interface CpAccessConfig {
   updated_at: Generated<Timestamp>;
 }
 
+export interface CpAccountProvisioning {
+  account_id: string;
+  created_at: Generated<Timestamp>;
+  last_published_status: string;
+  published_at: Timestamp;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface CpAccounts {
   access_configured: Generated<boolean>;
   account_key: string;
@@ -239,6 +248,7 @@ export interface DB {
   audit_events: AuditEvents;
   auth_identities: AuthIdentities;
   cp_access_config: CpAccessConfig;
+  cp_account_provisioning: CpAccountProvisioning;
   cp_account_settings_config: CpAccountSettingsConfig;
   cp_accounts: CpAccounts;
   cp_integration_config: CpIntegrationConfig;

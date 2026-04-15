@@ -2,8 +2,8 @@
  * backend/src/modules/control-plane/accounts/dal/cp-accounts.repo.ts
  *
  * WHY:
- * - DAL writes for Control Plane accounts and Step 2 group tables.
- * - Phase 3 adds upsert/replace methods for all persisted group surfaces.
+ * - DAL writes for Control Plane accounts, Step 2 group tables, and Phase 4
+ *   publish/provisioning persistence.
  *
  * RULES:
  * - No AppError.
@@ -89,7 +89,21 @@ export class CpAccountsRepo {
       .updateTable('cp_accounts')
       .set(update)
       .where('id', '=', params.accountId)
-      .executeTakeFirst();
+      .execute();
+  }
+
+  async updateAccountStatus(params: {
+    accountId: string;
+    cpStatus: 'Draft' | 'Active' | 'Disabled';
+  }): Promise<void> {
+    await this.db
+      .updateTable('cp_accounts')
+      .set({
+        cp_status: params.cpStatus,
+        updated_at: new Date(),
+      })
+      .where('id', '=', params.accountId)
+      .execute();
   }
 
   async upsertAccessConfig(params: {
@@ -283,6 +297,85 @@ export class CpAccountsRepo {
           field_mapping_allowed: row.fieldMappingAllowed,
           payments_surface_allowed: row.paymentsSurfaceAllowed,
         })),
+      )
+      .execute();
+  }
+
+  async insertTenantProvisioning(params: {
+    tenantKey: string;
+    tenantName: string;
+    isActive: boolean;
+    publicSignupEnabled: boolean;
+    adminInviteRequired: boolean;
+    memberMfaRequired: boolean;
+    allowedEmailDomains: string[];
+    allowedSso: string[];
+  }): Promise<{ tenantId: string }> {
+    const row = await this.db
+      .insertInto('tenants')
+      .values({
+        key: params.tenantKey,
+        name: params.tenantName,
+        is_active: params.isActive,
+        public_signup_enabled: params.publicSignupEnabled,
+        admin_invite_required: params.adminInviteRequired,
+        member_mfa_required: params.memberMfaRequired,
+        allowed_email_domains: sql`${JSON.stringify(params.allowedEmailDomains)}::jsonb`,
+        allowed_sso: params.allowedSso,
+      })
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
+
+    return { tenantId: row.id };
+  }
+
+  async updateTenantProvisioning(params: {
+    tenantId: string;
+    tenantName: string;
+    isActive: boolean;
+    publicSignupEnabled: boolean;
+    adminInviteRequired: boolean;
+    memberMfaRequired: boolean;
+    allowedEmailDomains: string[];
+    allowedSso: string[];
+  }): Promise<void> {
+    await this.db
+      .updateTable('tenants')
+      .set({
+        name: params.tenantName,
+        is_active: params.isActive,
+        public_signup_enabled: params.publicSignupEnabled,
+        admin_invite_required: params.adminInviteRequired,
+        member_mfa_required: params.memberMfaRequired,
+        allowed_email_domains: sql`${JSON.stringify(params.allowedEmailDomains)}::jsonb`,
+        allowed_sso: params.allowedSso,
+        updated_at: new Date(),
+      })
+      .where('id', '=', params.tenantId)
+      .execute();
+  }
+
+  async upsertProvisioningResult(params: {
+    accountId: string;
+    tenantId: string;
+    cpStatus: 'Active' | 'Disabled';
+    publishedAt: Date;
+  }): Promise<void> {
+    await this.db
+      .insertInto('cp_account_provisioning')
+      .values({
+        account_id: params.accountId,
+        tenant_id: params.tenantId,
+        last_published_status: params.cpStatus,
+        published_at: params.publishedAt,
+      })
+      .onConflict((oc) =>
+        oc.column('account_id').doUpdateSet({
+          tenant_id: params.tenantId,
+          last_published_status: params.cpStatus,
+          published_at: params.publishedAt,
+          updated_at: new Date(),
+        }),
       )
       .execute();
   }

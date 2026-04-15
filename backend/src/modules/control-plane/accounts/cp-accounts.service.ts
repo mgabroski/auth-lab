@@ -2,13 +2,15 @@
  * backend/src/modules/control-plane/accounts/cp-accounts.service.ts
  *
  * WHY:
- * - Business orchestration for CP accounts and real Phase 3 Step 2 group saves.
- * - Owns uniqueness checks, group validation, progress-state updates, and
- *   cpRevision mutation rules.
+ * - Business orchestration for CP accounts, Step 2 group saves, and Phase 4
+ *   Review & Publish.
+ * - Owns uniqueness checks, group validation, progress-state updates,
+ *   Activation Ready evaluation, and real tenant provisioning.
  *
  * RULES:
  * - All DB writes happen through the repo in a single transaction per request.
  * - cpRevision increments only on meaningful persisted CP allowance mutations.
+ * - Publish must not fake later Settings cascade behavior.
  * - CP provisioning truth remains separate from tenant Settings truth.
  */
 
@@ -16,6 +18,7 @@ import type { DbExecutor } from '../../../shared/db/db';
 import type { Logger } from '../../../shared/logger/logger';
 import type {
   CreateCpAccountInput,
+  PublishCpAccountInput,
   SaveCpAccessInput,
   SaveCpAccountSettingsInput,
   SaveCpIntegrationsInput,
@@ -25,18 +28,23 @@ import type {
 import type { CpAccountsRepo } from './dal/cp-accounts.repo';
 import type {
   CpAccessConfigRow,
+  CpAccountProvisioningRow,
   CpAccountRow,
   CpAccountSettingsConfigRow,
   CpIntegrationConfigRow,
   CpModuleConfigRow,
   CpPersonalFamilyConfigRow,
   CpPersonalFieldConfigRow,
+  TenantProvisioningRow,
 } from './dal/cp-accounts.query-sql';
 import {
   findCpAccessConfigSql,
   findCpAccountByKeySql,
+  findCpAccountProvisioningSql,
   findCpAccountSettingsConfigSql,
   findCpModuleConfigSql,
+  findTenantProvisioningByIdSql,
+  findTenantProvisioningByKeySql,
   listCpAccountsSql,
   listCpIntegrationConfigSql,
   listCpPersonalFamilyConfigSql,
@@ -59,39 +67,91 @@ import type {
   CpAccessConfig,
   CpAccountDetail,
   CpAccountListRow,
+  CpAccountReview,
   CpAccountSettingsConfig,
+  CpActivationReadiness,
+  CpActivationReadinessCheck,
   CpIntegrationsConfig,
   CpIntegrationConfigItem,
   CpModuleSettingsConfig,
   CpPersonalConfig,
   CpPersonalFamily,
   CpPersonalField,
+  CpProvisioningResult,
+  CpReviewLine,
+  CpReviewSection,
   CpStatus,
   CpStep2Progress,
 } from './cp-accounts.types';
 
+type AccountSnapshot = {
+  account: CpAccountRow;
+  accessRow: CpAccessConfigRow | undefined;
+  accountSettingsRow: CpAccountSettingsConfigRow | undefined;
+  moduleRow: CpModuleConfigRow | undefined;
+  personalFamilyRows: CpPersonalFamilyConfigRow[];
+  personalFieldRows: CpPersonalFieldConfigRow[];
+  integrationRows: CpIntegrationConfigRow[];
+  provisioningRow: CpAccountProvisioningRow | undefined;
+  tenantRow: TenantProvisioningRow | undefined;
+};
+
+type ProvisionableTenantConfig = {
+  isActive: boolean;
+  publicSignupEnabled: boolean;
+  adminInviteRequired: boolean;
+  memberMfaRequired: boolean;
+  allowedEmailDomains: string[];
+  allowedSso: Array<'google' | 'microsoft'>;
+};
+
 function normalizeDomains(values: string[]): string[] {
-  return Array.from(new Set(values.map((value) => value.trim().toLowerCase()).filter(Boolean)));
+  return Array.from(
+    new Set(values.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0)),
+  );
 }
 
 function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  }
+
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(',')}}`;
+  }
+
   return JSON.stringify(value);
 }
 
-function buildStep2Progress(account: CpAccountRow): CpStep2Progress {
-  const groups = CP_SETUP_GROUPS.map((group) => ({
-    slug: group.slug,
-    title: group.title,
-    isRequired: group.isRequired,
-    configured:
+function buildStep2Progress(
+  account: Pick<
+    CpAccountRow,
+    | 'access_configured'
+    | 'account_settings_configured'
+    | 'module_settings_configured'
+    | 'integrations_configured'
+  >,
+): CpStep2Progress {
+  const groups = CP_SETUP_GROUPS.map((group) => {
+    const configured =
       group.slug === 'access-identity-security'
         ? account.access_configured
         : group.slug === 'account-settings'
           ? account.account_settings_configured
           : group.slug === 'module-settings'
             ? account.module_settings_configured
-            : account.integrations_configured,
-  }));
+            : account.integrations_configured;
+
+    return {
+      slug: group.slug,
+      title: group.title,
+      isRequired: group.isRequired,
+      configured,
+    };
+  });
 
   const configuredCount = groups.filter((group) => group.configured).length;
   const requiredGroups = groups.filter((group) => group.isRequired);
@@ -274,16 +334,6 @@ function moduleGroupConfigured(row: CpModuleConfigRow | undefined): boolean {
   return row.personal_subpage_saved;
 }
 
-type AccountSnapshot = {
-  account: CpAccountRow;
-  accessRow: CpAccessConfigRow | undefined;
-  accountSettingsRow: CpAccountSettingsConfigRow | undefined;
-  moduleRow: CpModuleConfigRow | undefined;
-  personalFamilyRows: CpPersonalFamilyConfigRow[];
-  personalFieldRows: CpPersonalFieldConfigRow[];
-  integrationRows: CpIntegrationConfigRow[];
-};
-
 async function loadAccountSnapshot(db: DbExecutor, accountKey: string): Promise<AccountSnapshot> {
   const account = await findCpAccountByKeySql(db, accountKey);
 
@@ -298,6 +348,7 @@ async function loadAccountSnapshot(db: DbExecutor, accountKey: string): Promise<
     personalFamilyRows,
     personalFieldRows,
     integrationRows,
+    provisioningRow,
   ] = await Promise.all([
     findCpAccessConfigSql(db, account.id),
     findCpAccountSettingsConfigSql(db, account.id),
@@ -305,7 +356,12 @@ async function loadAccountSnapshot(db: DbExecutor, accountKey: string): Promise<
     listCpPersonalFamilyConfigSql(db, account.id),
     listCpPersonalFieldConfigSql(db, account.id),
     listCpIntegrationConfigSql(db, account.id),
+    findCpAccountProvisioningSql(db, account.id),
   ]);
+
+  const tenantRow = provisioningRow
+    ? await findTenantProvisioningByIdSql(db, provisioningRow.tenant_id)
+    : undefined;
 
   return {
     account,
@@ -315,6 +371,8 @@ async function loadAccountSnapshot(db: DbExecutor, accountKey: string): Promise<
     personalFamilyRows,
     personalFieldRows,
     integrationRows,
+    provisioningRow,
+    tenantRow,
   };
 }
 
@@ -352,6 +410,326 @@ function snapshotToAccountDetail(snapshot: AccountSnapshot): CpAccountDetail {
   };
 }
 
+function yesNo(value: boolean): string {
+  return value ? 'Yes' : 'No';
+}
+
+function commaList(values: string[]): string {
+  return values.length ? values.join(', ') : 'None';
+}
+
+function enabledLabels(values: Array<[string, boolean]>): string {
+  const enabled = values.filter(([, on]) => on).map(([label]) => label);
+  return enabled.length ? enabled.join(', ') : 'None selected';
+}
+
+function buildReviewSections(account: CpAccountDetail): CpReviewSection[] {
+  const allowedBranding = Object.entries(account.accountSettings.branding)
+    .filter(([, value]) => value)
+    .map(([key]) => {
+      if (key === 'menuColor') return 'Menu Color';
+      if (key === 'fontColor') return 'Font Color';
+      if (key === 'welcomeMessage') return 'Welcome Message';
+      return 'Logo';
+    });
+  const allowedOrg = Object.entries(account.accountSettings.organizationStructure)
+    .filter(([, value]) => value)
+    .map(([key]) => (key === 'employers' ? 'Employers' : 'Locations'));
+
+  const personalAllowedFamilies = account.personal.families.filter((family) => family.isAllowed);
+  const personalAllowedFields = personalAllowedFamilies.flatMap((family) =>
+    family.fields.filter((field) => field.isAllowed),
+  );
+  const personalDefaultSelected = personalAllowedFields.filter((field) => field.defaultSelected);
+
+  const integrationLines: CpReviewLine[] = account.integrations.integrations.map((integration) => ({
+    label: integration.label,
+    value: integration.isAllowed
+      ? integration.capabilities.length > 0
+        ? `Allowed (${integration.capabilities.filter((capability) => capability.isAllowed).length} capabilities enabled)`
+        : 'Allowed'
+      : 'Not allowed',
+  }));
+
+  return [
+    {
+      key: 'identity',
+      title: 'Account Identity',
+      lines: [
+        { label: 'Account Name', value: account.accountName },
+        { label: 'Account Key', value: account.accountKey },
+        { label: 'Current CP Status', value: account.cpStatus },
+        { label: 'Current cpRevision', value: String(account.cpRevision) },
+      ],
+    },
+    {
+      key: 'access',
+      title: 'Access, Identity & Security',
+      lines: [
+        {
+          label: 'Configured',
+          value: yesNo(account.access.configured),
+        },
+        {
+          label: 'Login Methods',
+          value: enabledLabels([
+            ['Username & Password', account.access.loginMethods.password],
+            ['Google SSO', account.access.loginMethods.google],
+            ['Microsoft SSO', account.access.loginMethods.microsoft],
+          ]),
+        },
+        { label: 'Admin MFA', value: account.access.mfaPolicy.adminRequired ? 'Required' : 'Off' },
+        {
+          label: 'Member MFA',
+          value: account.access.mfaPolicy.memberRequired ? 'Required' : 'Optional / Off',
+        },
+        {
+          label: 'Public Signup',
+          value: account.access.signupPolicy.publicSignup ? 'Enabled' : 'Disabled',
+        },
+        {
+          label: 'Admin Invitations Allowed',
+          value: account.access.signupPolicy.adminInvitationsAllowed ? 'Yes' : 'No',
+        },
+        {
+          label: 'Allowed Domains',
+          value: commaList(account.access.signupPolicy.allowedDomains),
+        },
+      ],
+    },
+    {
+      key: 'accountSettings',
+      title: 'Account Settings',
+      lines: [
+        { label: 'Configured', value: yesNo(account.accountSettings.configured) },
+        { label: 'Branding Surfaces Allowed', value: commaList(allowedBranding) },
+        { label: 'Organization Structure Allowed', value: commaList(allowedOrg) },
+        {
+          label: 'Company Calendar Allowed',
+          value: account.accountSettings.companyCalendar.allowed ? 'Yes' : 'No',
+        },
+      ],
+    },
+    {
+      key: 'moduleSettings',
+      title: 'Module Settings',
+      lines: [
+        { label: 'Configured', value: yesNo(account.moduleSettings.configured) },
+        {
+          label: 'Enabled Modules',
+          value: enabledLabels([
+            ['Personal', account.moduleSettings.modules.personal],
+            ['Documents', account.moduleSettings.modules.documents],
+            ['Benefits', account.moduleSettings.modules.benefits],
+            ['Payments', account.moduleSettings.modules.payments],
+          ]),
+        },
+        {
+          label: 'Personal Catalog Saved',
+          value: account.moduleSettings.modules.personal
+            ? yesNo(account.moduleSettings.personalSubpageSaved)
+            : 'Not applicable',
+        },
+      ],
+    },
+    {
+      key: 'personalAllowances',
+      title: 'Personal Allowances',
+      lines: account.moduleSettings.modules.personal
+        ? [
+            {
+              label: 'Personal Saved',
+              value: yesNo(account.personal.saved),
+            },
+            {
+              label: 'Allowed Families',
+              value: commaList(personalAllowedFamilies.map((family) => family.label)),
+            },
+            {
+              label: 'Allowed Fields',
+              value: `${personalAllowedFields.length}`,
+            },
+            {
+              label: 'Default Selected Fields',
+              value: `${personalDefaultSelected.length}`,
+            },
+          ]
+        : [{ label: 'Personal Module', value: 'Not enabled' }],
+    },
+    {
+      key: 'integrations',
+      title: 'Integrations & Marketplace',
+      lines: [
+        { label: 'Configured', value: yesNo(account.integrations.configured) },
+        ...integrationLines,
+      ],
+    },
+  ];
+}
+
+function evaluateActivationReadiness(account: CpAccountDetail): CpActivationReadiness {
+  const googleAllowed = account.integrations.integrations.find(
+    (integration) => integration.integrationKey === GOOGLE_SSO_INTEGRATION_KEY,
+  )?.isAllowed;
+  const microsoftAllowed = account.integrations.integrations.find(
+    (integration) => integration.integrationKey === MICROSOFT_SSO_INTEGRATION_KEY,
+  )?.isAllowed;
+  const hasLoginMethod = Object.values(account.access.loginMethods).some(Boolean);
+
+  const checks: CpActivationReadinessCheck[] = [
+    {
+      code: 'ACCOUNT_IDENTITY_PRESENT',
+      label: 'Account Name + Account Key exist',
+      passed: Boolean(account.accountName && account.accountKey),
+      detail:
+        account.accountName && account.accountKey
+          ? 'Basic account identity has been created.'
+          : 'Create the basic account identity before publishing Active.',
+    },
+    {
+      code: 'ACCESS_DECISIONS_MADE',
+      label: 'Access, Identity & Security decisions made',
+      passed: account.access.configured,
+      detail: account.access.configured
+        ? 'Access group has been explicitly saved.'
+        : 'Save the Access, Identity & Security group first.',
+    },
+    {
+      code: 'LOGIN_METHOD_SELECTED',
+      label: 'At least one login method selected',
+      passed: hasLoginMethod,
+      detail: hasLoginMethod
+        ? 'At least one login method is enabled.'
+        : 'Select at least one login method before publishing Active.',
+    },
+    {
+      code: 'ACCOUNT_SETTINGS_DECISIONS_MADE',
+      label: 'Account Settings decisions made',
+      passed: account.accountSettings.configured,
+      detail: account.accountSettings.configured
+        ? 'Account Settings has been explicitly saved.'
+        : 'Save the Account Settings group first.',
+    },
+    {
+      code: 'MODULE_DECISIONS_MADE',
+      label: 'Module decisions made',
+      passed: account.moduleSettings.moduleDecisionsSaved,
+      detail: account.moduleSettings.moduleDecisionsSaved
+        ? 'Module choices have been explicitly saved.'
+        : 'Save the Module Settings group first.',
+    },
+    {
+      code: 'PERSONAL_CATALOG_DEFINED',
+      label: 'Enabled module field catalog/config boundary is defined',
+      passed: !account.moduleSettings.modules.personal || account.personal.saved,
+      detail: !account.moduleSettings.modules.personal
+        ? 'Personal is not enabled, so no Personal catalog save is required.'
+        : account.personal.saved
+          ? 'Personal field catalog has been explicitly saved.'
+          : 'Save the Personal CP sub-page because Personal is enabled.',
+    },
+    {
+      code: 'INTEGRATION_DECISIONS_RELEVANT',
+      label: 'Integration decisions made where relevant',
+      passed:
+        (!account.access.loginMethods.google || Boolean(googleAllowed)) &&
+        (!account.access.loginMethods.microsoft || Boolean(microsoftAllowed)),
+      detail:
+        !account.access.loginMethods.google && !account.access.loginMethods.microsoft
+          ? 'No SSO login dependency requires an integration allowance.'
+          : !account.access.loginMethods.google || Boolean(googleAllowed)
+            ? !account.access.loginMethods.microsoft || Boolean(microsoftAllowed)
+              ? 'Required SSO integration allowances exist for the enabled login methods.'
+              : 'Microsoft login is enabled but Microsoft SSO Integration is not allowed.'
+            : 'Google login is enabled but Google SSO Integration is not allowed.',
+    },
+  ];
+
+  const blockingReasons = checks.filter((check) => !check.passed).map((check) => check.detail);
+
+  return {
+    isReady: blockingReasons.length === 0,
+    checks,
+    blockingReasons,
+  };
+}
+
+function buildProvisioningResult(snapshot: AccountSnapshot): CpProvisioningResult {
+  const provisioning = snapshot.provisioningRow;
+  const tenant = snapshot.tenantRow;
+
+  if (!provisioning || !tenant) {
+    return {
+      isProvisioned: false,
+      tenantId: null,
+      tenantKey: null,
+      tenantName: null,
+      tenantState: 'NOT_PROVISIONED',
+      publishedAt: null,
+    };
+  }
+
+  return {
+    isProvisioned: true,
+    tenantId: tenant.id,
+    tenantKey: tenant.key,
+    tenantName: tenant.name,
+    tenantState: tenant.is_active ? 'ACTIVE' : 'DISABLED',
+    publishedAt: provisioning.published_at,
+  };
+}
+
+function snapshotToReview(snapshot: AccountSnapshot): CpAccountReview {
+  const account = snapshotToAccountDetail(snapshot);
+
+  return {
+    account,
+    sections: buildReviewSections(account),
+    activationReadiness: evaluateActivationReadiness(account),
+    provisioning: buildProvisioningResult(snapshot),
+  };
+}
+
+function deriveProvisionableTenantConfig(
+  account: CpAccountDetail,
+  targetStatus: 'Active' | 'Disabled',
+): ProvisionableTenantConfig {
+  const googleAllowed = account.integrations.integrations.find(
+    (integration) => integration.integrationKey === GOOGLE_SSO_INTEGRATION_KEY,
+  )?.isAllowed;
+  const microsoftAllowed = account.integrations.integrations.find(
+    (integration) => integration.integrationKey === MICROSOFT_SSO_INTEGRATION_KEY,
+  )?.isAllowed;
+
+  const allowedSso: Array<'google' | 'microsoft'> = [];
+
+  if (account.access.configured && account.access.loginMethods.google && googleAllowed) {
+    allowedSso.push('google');
+  }
+  if (account.access.configured && account.access.loginMethods.microsoft && microsoftAllowed) {
+    allowedSso.push('microsoft');
+  }
+
+  const publicSignupEnabled = account.access.configured
+    ? account.access.signupPolicy.publicSignup
+    : false;
+  const adminInviteRequired = account.access.configured
+    ? !account.access.signupPolicy.publicSignup &&
+      account.access.signupPolicy.adminInvitationsAllowed
+    : false;
+
+  return {
+    isActive: targetStatus === 'Active',
+    publicSignupEnabled,
+    adminInviteRequired,
+    memberMfaRequired: account.access.configured ? account.access.mfaPolicy.memberRequired : false,
+    allowedEmailDomains: account.access.configured
+      ? account.access.signupPolicy.allowedDomains
+      : [],
+    allowedSso,
+  };
+}
+
 export class CpAccountsService {
   constructor(
     private readonly deps: {
@@ -385,6 +763,11 @@ export class CpAccountsService {
   async getAccount(accountKey: string): Promise<CpAccountDetail> {
     const snapshot = await loadAccountSnapshot(this.deps.db, accountKey);
     return snapshotToAccountDetail(snapshot);
+  }
+
+  async getReview(accountKey: string): Promise<CpAccountReview> {
+    const snapshot = await loadAccountSnapshot(this.deps.db, accountKey);
+    return snapshotToReview(snapshot);
   }
 
   async listAccounts(): Promise<CpAccountListRow[]> {
@@ -609,8 +992,8 @@ export class CpAccountsService {
         }
       }
 
-      const familyAllowedMap = new Map(
-        input.families.map((family) => [family.familyKey, family.isAllowed]),
+      const familyAllowedMap = new Map<PersonalFamilyKey, boolean>(
+        input.families.map((family) => [family.familyKey as PersonalFamilyKey, family.isAllowed]),
       );
 
       const normalizedFamilies = PERSONAL_FAMILY_DEFAULTS.map((family) => ({
@@ -654,15 +1037,14 @@ export class CpAccountsService {
       );
       const next = buildPersonalConfig(
         normalizedFamilies.map((family) => ({
-          id: 'preview',
           account_id: snapshot.account.id,
           family_key: family.familyKey,
           is_allowed: family.isAllowed,
           created_at: new Date(),
           updated_at: new Date(),
+          id: 'preview',
         })),
         normalizedFields.map((field) => ({
-          id: 'preview',
           account_id: snapshot.account.id,
           family_key: field.familyKey,
           field_key: field.fieldKey,
@@ -670,6 +1052,7 @@ export class CpAccountsService {
           default_selected: field.defaultSelected,
           created_at: new Date(),
           updated_at: new Date(),
+          id: 'preview',
         })),
         true,
       );
@@ -779,16 +1162,16 @@ export class CpAccountsService {
       );
       const next = buildIntegrationsConfig(
         integrationRows.map((row) => ({
-          id: 'preview',
           account_id: snapshot.account.id,
-          integration_key: row.integrationKey,
-          is_allowed: row.isAllowed,
+          created_at: new Date(),
           data_sync_allowed: row.dataSyncAllowed,
+          field_mapping_allowed: row.fieldMappingAllowed,
+          id: 'preview',
           import_enabled_allowed: row.importEnabledAllowed,
           import_rules_allowed: row.importRulesAllowed,
-          field_mapping_allowed: row.fieldMappingAllowed,
+          integration_key: row.integrationKey,
+          is_allowed: row.isAllowed,
           payments_surface_allowed: row.paymentsSurfaceAllowed,
-          created_at: new Date(),
           updated_at: new Date(),
         })),
         true,
@@ -807,6 +1190,91 @@ export class CpAccountsService {
       });
 
       return snapshotToAccountDetail(await loadAccountSnapshot(trx, accountKey));
+    });
+  }
+
+  async publishAccount(accountKey: string, input: PublishCpAccountInput): Promise<CpAccountReview> {
+    return this.deps.db.transaction().execute(async (trx) => {
+      const repo = this.deps.cpAccountsRepo.withDb(trx);
+      const snapshot = await loadAccountSnapshot(trx, accountKey);
+      const review = snapshotToReview(snapshot);
+
+      if (input.targetStatus === 'Active' && !review.activationReadiness.isReady) {
+        throw CpAccountErrors.activationReadyConflict(review.activationReadiness.blockingReasons);
+      }
+
+      const existingTenantByKey = await findTenantProvisioningByKeySql(
+        trx,
+        snapshot.account.account_key,
+      );
+
+      if (existingTenantByKey && existingTenantByKey.id !== snapshot.provisioningRow?.tenant_id) {
+        throw CpAccountErrors.tenantProvisioningConflict(snapshot.account.account_key);
+      }
+
+      const tenantConfig = deriveProvisionableTenantConfig(review.account, input.targetStatus);
+      const publishedAt = new Date();
+
+      let tenantId = snapshot.provisioningRow?.tenant_id ?? null;
+
+      if (tenantId) {
+        await repo.updateTenantProvisioning({
+          tenantId,
+          tenantName: snapshot.account.account_name,
+          isActive: tenantConfig.isActive,
+          publicSignupEnabled: tenantConfig.publicSignupEnabled,
+          adminInviteRequired: tenantConfig.adminInviteRequired,
+          memberMfaRequired: tenantConfig.memberMfaRequired,
+          allowedEmailDomains: tenantConfig.allowedEmailDomains,
+          allowedSso: tenantConfig.allowedSso,
+        });
+      } else if (existingTenantByKey) {
+        tenantId = existingTenantByKey.id;
+        await repo.updateTenantProvisioning({
+          tenantId,
+          tenantName: snapshot.account.account_name,
+          isActive: tenantConfig.isActive,
+          publicSignupEnabled: tenantConfig.publicSignupEnabled,
+          adminInviteRequired: tenantConfig.adminInviteRequired,
+          memberMfaRequired: tenantConfig.memberMfaRequired,
+          allowedEmailDomains: tenantConfig.allowedEmailDomains,
+          allowedSso: tenantConfig.allowedSso,
+        });
+      } else {
+        const inserted = await repo.insertTenantProvisioning({
+          tenantKey: snapshot.account.account_key,
+          tenantName: snapshot.account.account_name,
+          isActive: tenantConfig.isActive,
+          publicSignupEnabled: tenantConfig.publicSignupEnabled,
+          adminInviteRequired: tenantConfig.adminInviteRequired,
+          memberMfaRequired: tenantConfig.memberMfaRequired,
+          allowedEmailDomains: tenantConfig.allowedEmailDomains,
+          allowedSso: tenantConfig.allowedSso,
+        });
+        tenantId = inserted.tenantId;
+      }
+
+      await repo.upsertProvisioningResult({
+        accountId: snapshot.account.id,
+        tenantId,
+        cpStatus: input.targetStatus,
+        publishedAt,
+      });
+
+      await repo.updateAccountStatus({
+        accountId: snapshot.account.id,
+        cpStatus: input.targetStatus,
+      });
+
+      this.deps.logger.info('cp.accounts.published', {
+        event: 'cp.accounts.published',
+        accountId: snapshot.account.id,
+        accountKey: snapshot.account.account_key,
+        targetStatus: input.targetStatus,
+        tenantId,
+      });
+
+      return snapshotToReview(await loadAccountSnapshot(trx, accountKey));
     });
   }
 }
