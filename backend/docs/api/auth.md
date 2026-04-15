@@ -33,6 +33,7 @@ Current route surface:
 - `GET /auth/config`
 - `POST /auth/forgot-password`
 - `POST /auth/reset-password`
+- `POST /auth/reset-password/validate`
 - `POST /auth/mfa/setup`
 - `POST /auth/mfa/verify-setup`
 - `POST /auth/mfa/verify`
@@ -448,6 +449,34 @@ Returns `200` with:
 This endpoint updates the password but does not automatically log the user in.
 
 ---
+
+## 6.3 `POST /auth/reset-password/validate`
+
+### Purpose
+
+Validate a password reset token without consuming it.
+
+### Auth requirement
+
+Public endpoint.  
+No session required.
+
+### Request body
+
+```ts
+{
+  token: string; // min 20
+}
+```
+### Success response
+
+Returns `200` with:
+
+```ts
+{
+  valid: true;
+}
+```
 
 ## 7. Email verification endpoints
 
