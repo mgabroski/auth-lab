@@ -49,6 +49,7 @@ import {
   ssoProviderSchema,
   signupSchema,
   verifyEmailSchema,
+  validateResetPasswordTokenSchema
 } from './auth.schemas';
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';
@@ -529,5 +530,25 @@ export class AuthController {
 
     clearSessionCookie(reply, this.isProduction);
     return reply.status(200).send({ message: 'Logged out.' });
+  }
+
+  async validateResetPassword(req: FastifyRequest, reply: FastifyReply) {
+    const parsed = validateResetPasswordTokenSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: {
+          message: parsed.error.issues[0]?.message ?? 'Invalid reset token',
+        },
+      });
+    }
+
+    await this.authService.validateResetPasswordToken({
+      token: parsed.data.token,
+    });
+
+    return reply.status(200).send({
+      valid: true,
+    });
   }
 }

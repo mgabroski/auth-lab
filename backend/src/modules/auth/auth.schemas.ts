@@ -105,3 +105,11 @@ export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export const resendVerificationSchema = z.object({}).strict();
 
 export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
+
+export const validateResetPasswordTokenSchema = z.object({
+  token: z.string().min(20, 'Invalid reset token'),
+});
+
+export type ValidateResetPasswordTokenInput = z.infer<
+  typeof validateResetPasswordTokenSchema
+>;

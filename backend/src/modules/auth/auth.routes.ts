@@ -19,6 +19,7 @@ export function registerAuthRoutes(app: FastifyInstance, controller: AuthControl
   app.get('/auth/config', controller.config.bind(controller));
   app.post('/auth/forgot-password', controller.forgotPassword.bind(controller));
   app.post('/auth/reset-password', controller.resetPassword.bind(controller));
+  app.post('/auth/reset-password/validate', controller.validateResetPassword.bind(controller));
 
   // MFA
   app.post('/auth/mfa/setup', controller.mfaSetup.bind(controller));

@@ -9,6 +9,7 @@
  */
 
 import Link from 'next/link';
+import { ssrFetch } from '@/shared/ssr-api-client';
 import { redirect } from 'next/navigation';
 import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
 import { AuthCard } from '@/shared/auth/components/auth-card';
@@ -56,6 +57,40 @@ export default async function ResetPasswordPage({ searchParams }: PageProps) {
     redirect(AUTH_TENANT_UNAVAILABLE_PATH);
   }
 
+  let tokenError: string | null = null;
+  let tokenIsValid = false;
+
+  if (token) {
+    const response = await ssrFetch('/auth/reset-password/validate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    });
+
+    if (response.ok) {
+      tokenIsValid = true;
+    } else {
+      let message =
+        'This password reset link is invalid or has expired. Please request a new one.';
+
+      try {
+        const payload = (await response.json()) as {
+          error?: { message?: string };
+        };
+
+        if (payload?.error?.message) {
+          message = payload.error.message;
+        }
+      } catch {
+        // keep fallback message
+      }
+
+      tokenError = message;
+    }
+  }
+
   const tenantName = bootstrap.config.tenant.name;
   const hasAuthenticatedSession = bootstrap.routeState.kind !== 'PUBLIC_ENTRY';
 
@@ -63,7 +98,7 @@ export default async function ResetPasswordPage({ searchParams }: PageProps) {
     <AuthShell
       eyebrow="Hubins"
       title={tenantName ? `Reset your ${tenantName} password` : 'Reset your password'}
-      subtitle="Password reset does not require an existing session. The backend decides whether the reset token from the URL is still valid."
+      subtitle="Password reset does not require an existing session. This page validates the reset link before showing the password form."
       footer={
         hasAuthenticatedSession ? (
           <Link href={AUTHENTICATED_APP_ENTRY_PATH}>Back to workspace</Link>
@@ -74,10 +109,20 @@ export default async function ResetPasswordPage({ searchParams }: PageProps) {
     >
       <AuthCard
         title="Choose a new password"
-        description="This page submits the reset token from the URL directly to POST /auth/reset-password and surfaces backend truth for expired or already-used links."
+        description="Expired, invalid, or already-used links are rejected before password entry. Valid links can be used to choose a new password."
       >
         {token ? (
-          <ResetPasswordForm token={token} />
+          tokenIsValid ? (
+            <ResetPasswordForm token={token} />
+          ) : (
+            <>
+              <AuthErrorBanner
+                error={tokenError ? { message: tokenError } : null}
+                fallbackMessage="This password reset link is invalid or has expired. Please request a new one."
+              />
+              <Link href={AUTH_FORGOT_PASSWORD_PATH}>Request a new reset link</Link>
+            </>
+          )
         ) : (
           <>
             <AuthNote>

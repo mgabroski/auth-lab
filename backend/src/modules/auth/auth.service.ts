@@ -70,6 +70,10 @@ import { executeVerifyEmailFlow } from './flows/signup/execute-verify-email-flow
 import type { ResendVerificationParams } from './flows/signup/execute-resend-verification-flow';
 import { executeResendVerificationFlow } from './flows/signup/execute-resend-verification-flow';
 
+import { AuthErrors } from './auth.errors';
+import { hasAuthIdentity } from './queries/auth.queries';
+import { getUserById } from '../users';
+
 export class AuthService {
   constructor(
     private readonly deps: {
@@ -405,5 +409,33 @@ export class AuthService {
       },
       params,
     );
+  }
+
+  async validateResetPasswordToken(params: { token: string }): Promise<void> {
+    const tokenHash = this.deps.tokenHasher.hash(params.token);
+    const now = new Date();
+
+    const token = await this.deps.authRepo.findValidResetTokenByHash({
+      tokenHash,
+      now,
+    });
+
+    if (!token) {
+      throw AuthErrors.resetTokenInvalid();
+    }
+
+    const user = await getUserById(this.deps.db, token.userId);
+    if (!user) {
+      throw AuthErrors.resetTokenInvalid();
+    }
+
+    const hasPassword = await hasAuthIdentity(this.deps.db, {
+      userId: user.id,
+      provider: 'password',
+    });
+
+    if (!hasPassword) {
+      throw AuthErrors.resetTokenInvalid();
+    }
   }
 }
