@@ -24,6 +24,13 @@ Current route surface:
 - `GET /cp/accounts`
 - `GET /cp/accounts/:accountKey`
 - `POST /cp/accounts`
+- `PUT /cp/accounts/:accountKey/access`
+- `PUT /cp/accounts/:accountKey/account-settings`
+- `PUT /cp/accounts/:accountKey/modules`
+- `PUT /cp/accounts/:accountKey/modules/personal`
+- `PUT /cp/accounts/:accountKey/integrations`
+
+Publish and status endpoints remain deferred.
 
 ---
 
@@ -35,33 +42,172 @@ CP routes are on the same backend process as all other routes. They are prefixed
 
 ---
 
-## 3. Endpoints
+## 3. Shared response shape
 
-### 3.1 `GET /cp/accounts`
+### 3.1 Account list row
 
-Returns all CP accounts as a list.
-
-**Response — 200 OK**
+`GET /cp/accounts` returns:
 
 ```json
 {
   "accounts": [
     {
       "id": "uuid",
-      "accountName": "Goodwill CA",
+      "accountName": "GoodWill CA",
       "accountKey": "goodwill-ca",
       "cpStatus": "Draft",
-      "cpRevision": 0
+      "cpRevision": 2,
+      "step2Progress": {
+        "configuredCount": 3,
+        "totalCount": 4,
+        "requiredConfiguredCount": 3,
+        "requiredTotalCount": 3,
+        "canContinueToReview": true,
+        "groups": [
+          {
+            "slug": "access-identity-security",
+            "title": "Access, Identity & Security",
+            "isRequired": true,
+            "configured": true
+          }
+        ]
+      }
     }
   ]
 }
 ```
 
-`accounts` is an empty array `[]` when no accounts exist.
+### 3.2 Full account detail
+
+All read and write endpoints except `GET /cp/accounts` return the full CP account detail shape.
+
+```json
+{
+  "id": "uuid",
+  "accountName": "GoodWill CA",
+  "accountKey": "goodwill-ca",
+  "cpStatus": "Draft",
+  "cpRevision": 2,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00.000Z",
+  "step2Progress": {
+    "configuredCount": 3,
+    "totalCount": 4,
+    "requiredConfiguredCount": 3,
+    "requiredTotalCount": 3,
+    "canContinueToReview": true,
+    "groups": [
+      {
+        "slug": "access-identity-security",
+        "title": "Access, Identity & Security",
+        "isRequired": true,
+        "configured": true
+      },
+      {
+        "slug": "account-settings",
+        "title": "Account Settings",
+        "isRequired": true,
+        "configured": true
+      },
+      {
+        "slug": "module-settings",
+        "title": "Module Settings",
+        "isRequired": true,
+        "configured": true
+      },
+      {
+        "slug": "integrations-marketplace",
+        "title": "Integrations & Marketplace",
+        "isRequired": false,
+        "configured": false
+      }
+    ]
+  },
+  "access": {
+    "configured": true,
+    "loginMethods": {
+      "password": true,
+      "google": false,
+      "microsoft": false
+    },
+    "mfaPolicy": {
+      "adminRequired": true,
+      "memberRequired": false
+    },
+    "signupPolicy": {
+      "publicSignup": false,
+      "adminInvitationsAllowed": true,
+      "allowedDomains": []
+    }
+  },
+  "accountSettings": {
+    "configured": true,
+    "branding": {
+      "logo": true,
+      "menuColor": true,
+      "fontColor": true,
+      "welcomeMessage": true
+    },
+    "organizationStructure": {
+      "employers": true,
+      "locations": true
+    },
+    "companyCalendar": {
+      "allowed": true
+    }
+  },
+  "moduleSettings": {
+    "configured": false,
+    "moduleDecisionsSaved": true,
+    "personalSubpageSaved": false,
+    "modules": {
+      "personal": true,
+      "documents": false,
+      "benefits": false,
+      "payments": false
+    }
+  },
+  "personal": {
+    "saved": false,
+    "families": [
+      {
+        "familyKey": "identity",
+        "label": "Identity",
+        "isAllowed": true,
+        "allowedLocked": true,
+        "fields": [ ... ]
+      }
+    ]
+  },
+  "integrations": {
+    "configured": false,
+    "integrations": [
+      {
+        "integrationKey": "integration.sso.google",
+        "label": "Google SSO Integration",
+        "isAllowed": false,
+        "capabilities": []
+      }
+    ]
+  }
+}
+```
 
 ---
 
-### 3.2 `GET /cp/accounts/:accountKey`
+## 4. Endpoints
+
+### 4.1 `GET /cp/accounts`
+
+Returns all CP accounts as list rows suitable for the CP accounts list page.
+
+**Response — 200 OK**
+
+See shared account list row shape above.
+
+---
+
+### 4.2 `GET /cp/accounts/:accountKey`
 
 Returns the full CP account record for the given `accountKey`.
 
@@ -69,17 +215,7 @@ Returns the full CP account record for the given `accountKey`.
 
 **Response — 200 OK**
 
-```json
-{
-  "id": "uuid",
-  "accountName": "Goodwill CA",
-  "accountKey": "goodwill-ca",
-  "cpStatus": "Draft",
-  "cpRevision": 0,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-01-01T00:00:00.000Z"
-}
-```
+See shared full account detail shape above.
 
 **Response — 404 Not Found**
 
@@ -92,7 +228,7 @@ Returns the full CP account record for the given `accountKey`.
 
 ---
 
-### 3.3 `POST /cp/accounts`
+### 4.3 `POST /cp/accounts`
 
 Creates a new Draft CP account.
 
@@ -100,12 +236,12 @@ Creates a new Draft CP account.
 
 ```json
 {
-  "accountName": "Goodwill CA",
+  "accountName": "GoodWill CA",
   "accountKey": "goodwill-ca"
 }
 ```
 
-**Validation rules**:
+**Validation rules**
 
 | Field         | Rule                                                                                       |
 | ------------- | ------------------------------------------------------------------------------------------ |
@@ -114,21 +250,9 @@ Creates a new Draft CP account.
 
 **Response — 201 Created**
 
-Returns the full created account object (same shape as `GET /cp/accounts/:accountKey`).
+Returns the full created account detail.
 
-```json
-{
-  "id": "uuid",
-  "accountName": "Goodwill CA",
-  "accountKey": "goodwill-ca",
-  "cpStatus": "Draft",
-  "cpRevision": 0,
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-01-01T00:00:00.000Z"
-}
-```
-
-**Response — 409 Conflict** (accountKey already taken)
+**Response — 409 Conflict**
 
 ```json
 {
@@ -138,19 +262,181 @@ Returns the full created account object (same shape as `GET /cp/accounts/:accoun
 }
 ```
 
-**Response — 422 Validation Error**
+---
+
+### 4.4 `PUT /cp/accounts/:accountKey/access`
+
+Persists the Access, Identity & Security group and marks it configured.
+
+**Request body**
 
 ```json
 {
-  "code": "VALIDATION_ERROR",
-  "message": "Invalid request body",
-  "meta": { "issues": [ ... ] }
+  "loginMethods": {
+    "password": true,
+    "google": false,
+    "microsoft": false
+  },
+  "mfaPolicy": {
+    "adminRequired": true,
+    "memberRequired": false
+  },
+  "signupPolicy": {
+    "publicSignup": false,
+    "adminInvitationsAllowed": true,
+    "allowedDomains": ["@goodwill.org"]
+  }
 }
 ```
 
+**Important rules**
+
+- Google login method cannot be saved unless Google SSO Integration is already allowed.
+- Microsoft login method cannot be saved unless Microsoft SSO Integration is already allowed.
+- `adminRequired` is persisted as `true` in this phase.
+- Allowed domains are normalized to trimmed lowercase unique values on save.
+
+**Response — 200 OK**
+
+Returns the full account detail with updated `access`, `step2Progress`, and `cpRevision`.
+
 ---
 
-## 4. Status vocabulary
+### 4.5 `PUT /cp/accounts/:accountKey/account-settings`
+
+Persists the Account Settings group and marks it configured.
+
+**Request body**
+
+```json
+{
+  "branding": {
+    "logo": true,
+    "menuColor": true,
+    "fontColor": true,
+    "welcomeMessage": true
+  },
+  "organizationStructure": {
+    "employers": true,
+    "locations": true
+  },
+  "companyCalendar": {
+    "allowed": true
+  }
+}
+```
+
+**Important rules**
+
+- Any explicit allow/deny combination is valid.
+- Explicit save is enough to mark this group configured.
+
+**Response — 200 OK**
+
+Returns the full account detail with updated `accountSettings`, `step2Progress`, and `cpRevision`.
+
+---
+
+### 4.6 `PUT /cp/accounts/:accountKey/modules`
+
+Persists the Module Settings group decisions.
+
+**Request body**
+
+```json
+{
+  "modules": {
+    "personal": true,
+    "documents": false,
+    "benefits": false,
+    "payments": false
+  }
+}
+```
+
+**Important rules**
+
+- Explicit module save marks `moduleDecisionsSaved = true`.
+- If `personal` is enabled, Module Settings is not treated as configured until the Personal CP sub-page is explicitly saved.
+- If `personal` is disabled, Module Settings becomes configured immediately on save.
+
+**Response — 200 OK**
+
+Returns the full account detail with updated `moduleSettings`, `step2Progress`, and `cpRevision`.
+
+---
+
+### 4.7 `PUT /cp/accounts/:accountKey/modules/personal`
+
+Persists the Personal CP field-catalog sub-page.
+
+**Request body**
+
+```json
+{
+  "families": [
+    {
+      "familyKey": "identity",
+      "isAllowed": true
+    }
+  ],
+  "fields": [
+    {
+      "fieldKey": "person.first_name",
+      "isAllowed": true,
+      "defaultSelected": true
+    }
+  ]
+}
+```
+
+**Important rules**
+
+- Full replacement contract: request must include the full current family set and the full editable field set.
+- `Default Selected` is valid only when `Allowed` is `true`.
+- Unchecking `Allowed` clears `Default Selected`.
+- Required baseline fields remain allowed even if the payload attempts to disable them.
+- System-managed `System ID` is not an editable payload field.
+- Successful Personal save sets `personalSubpageSaved = true` and may complete Module Settings if module decisions were already saved.
+
+**Response — 200 OK**
+
+Returns the full account detail with updated `personal`, `moduleSettings`, `step2Progress`, and `cpRevision`.
+
+---
+
+### 4.8 `PUT /cp/accounts/:accountKey/integrations`
+
+Persists the Integrations & Marketplace group and marks it configured.
+
+**Request body**
+
+```json
+{
+  "integrations": [
+    {
+      "integrationKey": "integration.sso.google",
+      "isAllowed": true,
+      "capabilities": []
+    }
+  ]
+}
+```
+
+**Important rules**
+
+- Full replacement contract: request must include the full current integration set.
+- Explicit save is enough to mark this group configured even if all integrations remain disabled.
+- Google SSO Integration cannot be disabled while Google login method remains enabled in Access.
+- Microsoft SSO Integration cannot be disabled while Microsoft login method remains enabled in Access.
+
+**Response — 200 OK**
+
+Returns the full account detail with updated `integrations`, `step2Progress`, and `cpRevision`.
+
+---
+
+## 5. Status vocabulary
 
 | Value      | Meaning                            |
 | ---------- | ---------------------------------- |
@@ -162,32 +448,31 @@ New accounts are always created with `cpStatus: "Draft"`.
 
 ---
 
-## 5. cpRevision
+## 6. cpRevision
 
-`cpRevision` starts at `0` for every new account. It is incremented on meaningful CP mutations (group saves, publish). Group saves and publish are deferred to later phases.
+- `cpRevision` starts at `0` for every new account.
+- It increments on meaningful persisted CP allowance mutations.
+- It does **not** increment when a save is accepted but the resulting allowance truth is unchanged.
+- Publish and status-toggle increments remain deferred until their endpoints ship.
 
 ---
 
-## 6. Deferred endpoints (later phases)
+## 7. Deferred endpoints (later phases)
 
-The following endpoints are defined in the CP prerequisite roadmap but not yet implemented:
+The following endpoints remain deferred:
 
-- `PUT /cp/accounts/:accountKey/access`
-- `PUT /cp/accounts/:accountKey/account-settings`
-- `PUT /cp/accounts/:accountKey/modules`
-- `PUT /cp/accounts/:accountKey/modules/personal`
-- `PUT /cp/accounts/:accountKey/integrations`
 - `POST /cp/accounts/:accountKey/publish`
 - `PATCH /cp/accounts/:accountKey/status`
 
 ---
 
-## 7. Module location
+## 8. Module location
 
-```
+```text
 backend/src/modules/control-plane/
   control-plane.module.ts
   accounts/
+    cp-accounts.catalog.ts
     cp-accounts.controller.ts
     cp-accounts.errors.ts
     cp-accounts.module.ts

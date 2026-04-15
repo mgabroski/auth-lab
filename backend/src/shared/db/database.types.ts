@@ -47,13 +47,90 @@ export interface AuthIdentities {
   user_id: string;
 }
 
+export interface CpAccessConfig {
+  account_id: string;
+  admin_invitations_allowed: Generated<boolean>;
+  admin_mfa_required: Generated<boolean>;
+  allowed_domains: Generated<Json>;
+  created_at: Generated<Timestamp>;
+  login_google_allowed: Generated<boolean>;
+  login_microsoft_allowed: Generated<boolean>;
+  login_password_allowed: Generated<boolean>;
+  member_mfa_required: Generated<boolean>;
+  public_signup_allowed: Generated<boolean>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface CpAccounts {
+  access_configured: Generated<boolean>;
   account_key: string;
   account_name: string;
+  account_settings_configured: Generated<boolean>;
   cp_revision: Generated<number>;
   cp_status: Generated<string>;
   created_at: Generated<Timestamp>;
   id: Generated<string>;
+  integrations_configured: Generated<boolean>;
+  module_settings_configured: Generated<boolean>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface CpAccountSettingsConfig {
+  account_id: string;
+  branding_font_color_allowed: Generated<boolean>;
+  branding_logo_allowed: Generated<boolean>;
+  branding_menu_color_allowed: Generated<boolean>;
+  branding_welcome_message_allowed: Generated<boolean>;
+  company_calendar_allowed: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+  org_employers_allowed: Generated<boolean>;
+  org_locations_allowed: Generated<boolean>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface CpIntegrationConfig {
+  account_id: string;
+  created_at: Generated<Timestamp>;
+  data_sync_allowed: boolean | null;
+  field_mapping_allowed: boolean | null;
+  id: Generated<string>;
+  import_enabled_allowed: boolean | null;
+  import_rules_allowed: boolean | null;
+  integration_key: string;
+  is_allowed: boolean;
+  payments_surface_allowed: boolean | null;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface CpModuleConfig {
+  account_id: string;
+  benefits_enabled: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+  decisions_saved: Generated<boolean>;
+  documents_enabled: Generated<boolean>;
+  payments_enabled: Generated<boolean>;
+  personal_enabled: Generated<boolean>;
+  personal_subpage_saved: Generated<boolean>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface CpPersonalFamilyConfig {
+  account_id: string;
+  created_at: Generated<Timestamp>;
+  family_key: string;
+  id: Generated<string>;
+  is_allowed: boolean;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface CpPersonalFieldConfig {
+  account_id: string;
+  created_at: Generated<Timestamp>;
+  default_selected: boolean;
+  family_key: string;
+  field_key: string;
+  id: Generated<string>;
+  is_allowed: boolean;
   updated_at: Generated<Timestamp>;
 }
 
@@ -161,7 +238,13 @@ export interface Users {
 export interface DB {
   audit_events: AuditEvents;
   auth_identities: AuthIdentities;
+  cp_access_config: CpAccessConfig;
+  cp_account_settings_config: CpAccountSettingsConfig;
   cp_accounts: CpAccounts;
+  cp_integration_config: CpIntegrationConfig;
+  cp_module_config: CpModuleConfig;
+  cp_personal_family_config: CpPersonalFamilyConfig;
+  cp_personal_field_config: CpPersonalFieldConfig;
   email_verification_tokens: EmailVerificationTokens;
   invites: Invites;
   memberships: Memberships;

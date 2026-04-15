@@ -5,28 +5,32 @@ export const SETUP_GROUPS: SetupGroupDefinition[] = [
     slug: 'access-identity-security',
     title: 'Access, Identity & Security',
     shortLabel: 'Access, Identity & Security',
-    description:
-      'Control Plane authorization, tenant identity boundaries, and security defaults are reviewed here.',
+    description: 'Configure login methods, MFA policy, signup/invite policy, and allowed domains.',
+    isRequired: true,
   },
   {
     slug: 'account-settings',
     title: 'Account Settings',
     shortLabel: 'Account Settings',
     description:
-      'Account-level baseline configuration, naming, and operator-facing setup defaults live here.',
+      'Choose which branding, organization structure, and company-calendar surfaces are allowed.',
+    isRequired: true,
   },
   {
     slug: 'module-settings',
     title: 'Module Settings',
     shortLabel: 'Module Settings',
-    description: 'Allowed modules and baseline enablement rules are reviewed here before publish.',
+    description:
+      'Decide which modules are allowed. Personal is the only live configurable sub-page in this phase.',
+    isRequired: true,
   },
   {
     slug: 'integrations-marketplace',
     title: 'Integrations & Marketplace',
     shortLabel: 'Integrations & Marketplace',
     description:
-      'Integration readiness, marketplace visibility, and future dependency surfaces are reviewed here.',
+      'Choose which integrations are allowed. Explicit save is enough even when no integrations are enabled.',
+    isRequired: false,
   },
 ];
 

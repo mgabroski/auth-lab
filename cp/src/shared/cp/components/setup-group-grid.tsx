@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
-import type { ControlPlaneAccountDraft, SetupGroupSlug } from '@/features/accounts/contracts';
-import { SETUP_GROUPS } from '@/features/accounts/setup-groups';
-import { infoCardStyle, infoGridStyle, labelStyle, mutedTextStyle, valueStyle } from '../styles';
+import type { CpStep2Progress, SetupGroupSlug } from '@/features/accounts/contracts';
+import { infoCardStyle, infoGridStyle, labelStyle, valueStyle } from '../styles';
 
 const headerRowStyle: CSSProperties = {
   display: 'flex',
@@ -25,15 +24,15 @@ const groupNumberStyle: CSSProperties = {
   fontWeight: 800,
 };
 
-const stateBadgeStyle = (reviewed: boolean): CSSProperties => ({
+const stateBadgeStyle = (configured: boolean): CSSProperties => ({
   display: 'inline-flex',
   width: 'fit-content',
   padding: '6px 10px',
   borderRadius: '999px',
   fontSize: '12px',
   fontWeight: 700,
-  color: reviewed ? '#166534' : '#92400e',
-  backgroundColor: reviewed ? '#dcfce7' : '#fef3c7',
+  color: configured ? '#166534' : '#92400e',
+  backgroundColor: configured ? '#dcfce7' : '#fef3c7',
 });
 
 const metaRowStyle: CSSProperties = {
@@ -53,11 +52,11 @@ const metaBadgeStyle = (variant: 'neutral' | 'blue'): CSSProperties => ({
   color: variant === 'blue' ? '#1d4ed8' : '#334155',
 });
 
-const summaryBoxStyle = (reviewed: boolean): CSSProperties => ({
+const summaryBoxStyle = (configured: boolean): CSSProperties => ({
   padding: '12px 14px',
   borderRadius: '14px',
-  border: `1px solid ${reviewed ? '#bbf7d0' : '#fde68a'}`,
-  backgroundColor: reviewed ? '#f0fdf4' : '#fffbeb',
+  border: `1px solid ${configured ? '#bbf7d0' : '#fde68a'}`,
+  backgroundColor: configured ? '#f0fdf4' : '#fffbeb',
   display: 'grid',
   gap: '4px',
 });
@@ -87,53 +86,48 @@ const linkStyle: CSSProperties = {
 };
 
 type SetupGroupGridProps = {
-  account: Pick<ControlPlaneAccountDraft, 'setupGroupsReviewed'>;
+  progress: CpStep2Progress;
   getGroupHref: (groupSlug: SetupGroupSlug) => string;
 };
 
-export function SetupGroupGrid({ account, getGroupHref }: SetupGroupGridProps) {
+export function SetupGroupGrid({ progress, getGroupHref }: SetupGroupGridProps) {
   return (
     <div style={infoGridStyle}>
-      {SETUP_GROUPS.map((group, index) => {
-        const reviewed = account.setupGroupsReviewed.includes(group.slug);
+      {progress.groups.map((group, index) => (
+        <article key={group.slug} style={infoCardStyle}>
+          <div style={headerRowStyle}>
+            <span style={groupNumberStyle}>Group {index + 1}</span>
+            <span style={stateBadgeStyle(group.configured)}>
+              {group.configured ? 'Configured' : 'Needs save'}
+            </span>
+          </div>
 
-        return (
-          <article key={group.slug} style={infoCardStyle}>
-            <div style={headerRowStyle}>
-              <span style={groupNumberStyle}>Group {index + 1}</span>
-              <span style={stateBadgeStyle(reviewed)}>
-                {reviewed ? 'Configured in draft' : 'Needs review'}
-              </span>
-            </div>
+          <div style={{ display: 'grid', gap: '6px' }}>
+            <p style={labelStyle}>Setup group</p>
+            <p style={valueStyle}>{group.title}</p>
+          </div>
 
-            <div style={{ display: 'grid', gap: '6px' }}>
-              <p style={labelStyle}>Setup group</p>
-              <p style={valueStyle}>{group.title}</p>
-              <p style={mutedTextStyle}>{group.description}</p>
-            </div>
+          <div style={metaRowStyle}>
+            <span style={metaBadgeStyle('neutral')}>
+              {group.isRequired ? 'Required' : 'Optional'}
+            </span>
+            <span style={metaBadgeStyle('blue')}>Step 2 group</span>
+          </div>
 
-            <div style={metaRowStyle}>
-              <span style={metaBadgeStyle('neutral')}>Step 2 group</span>
-              <span style={metaBadgeStyle('blue')}>Phase 1 placeholder boundary</span>
-            </div>
+          <div style={summaryBoxStyle(group.configured)}>
+            <p style={summaryTitleStyle}>{group.configured ? 'Current state' : 'Action needed'}</p>
+            <p style={summaryTextStyle}>
+              {group.configured
+                ? 'This group has been explicitly saved and now contributes real CP allowance truth.'
+                : 'Open the group, make the required decisions, and save before continuing.'}
+            </p>
+          </div>
 
-            <div style={summaryBoxStyle(reviewed)}>
-              <p style={summaryTitleStyle}>
-                {reviewed ? 'Current draft state' : 'What happens next'}
-              </p>
-              <p style={summaryTextStyle}>
-                {reviewed
-                  ? 'This group is currently marked as reviewed in the placeholder draft state for this account.'
-                  : 'Open this group, review the locked Control Plane decisions, and save the draft state before continuing.'}
-              </p>
-            </div>
-
-            <Link href={getGroupHref(group.slug)} style={linkStyle}>
-              Open group →
-            </Link>
-          </article>
-        );
-      })}
+          <Link href={getGroupHref(group.slug)} style={linkStyle}>
+            {group.configured ? 'Review group →' : 'Configure group →'}
+          </Link>
+        </article>
+      ))}
     </div>
   );
 }

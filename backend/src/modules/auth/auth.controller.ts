@@ -49,7 +49,7 @@ import {
   ssoProviderSchema,
   signupSchema,
   verifyEmailSchema,
-  validateResetPasswordTokenSchema
+  validateResetPasswordTokenSchema,
 } from './auth.schemas';
 import { AppError } from '../../shared/http/errors';
 import type { AuthService } from './auth.service';

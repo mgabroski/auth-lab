@@ -1,9 +1,10 @@
 /**
  * cp/src/app/accounts/page.tsx
  *
- * CP Phase 2: accounts list now reads real backend data via loadAccountsList().
- * loadAccountsList() calls GET /cp/accounts and adapts the response to the
- * Phase 1 screen shape (name / key / setupGroupsReviewed).
+ * WHY:
+ * - Server entry for the CP accounts list.
+ * - Reads the real backend-backed accounts list and passes real Step 2 progress
+ *   into the list screen.
  */
 
 import { AccountsListScreen } from '@/features/accounts/screens/accounts-list-screen';

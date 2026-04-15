@@ -8,6 +8,10 @@ export const CREATE_FLOW_STEPS: StepDefinition[] = [
   { stepNumber: 3, name: 'Review & Publish' },
 ];
 
+function withAccountKey(basePath: string, accountKey?: string): string {
+  return accountKey ? `${basePath}?accountKey=${encodeURIComponent(accountKey)}` : basePath;
+}
+
 export function getAccountsListPath(): string {
   return '/accounts';
 }
@@ -20,16 +24,20 @@ export function getCreateBasicInfoPath(): string {
   return '/accounts/create/basic-info';
 }
 
-export function getCreateSetupPath(): string {
-  return '/accounts/create/setup';
+export function getCreateSetupPath(accountKey?: string): string {
+  return withAccountKey('/accounts/create/setup', accountKey);
 }
 
-export function getCreateSetupGroupPath(groupSlug: SetupGroupSlug): string {
-  return `/accounts/create/setup/${groupSlug}`;
+export function getCreateSetupGroupPath(groupSlug: SetupGroupSlug, accountKey?: string): string {
+  return withAccountKey(`/accounts/create/setup/${groupSlug}`, accountKey);
 }
 
-export function getCreateReviewPath(): string {
-  return '/accounts/create/review';
+export function getCreatePersonalSetupPath(accountKey?: string): string {
+  return withAccountKey('/accounts/create/setup/module-settings/personal', accountKey);
+}
+
+export function getCreateReviewPath(accountKey?: string): string {
+  return withAccountKey('/accounts/create/review', accountKey);
 }
 
 export function getEditFlowEntryPath(accountKey: string): string {
@@ -42,6 +50,10 @@ export function getEditSetupPath(accountKey: string): string {
 
 export function getEditSetupGroupPath(accountKey: string, groupSlug: SetupGroupSlug): string {
   return `/accounts/${accountKey}/edit/setup/${groupSlug}`;
+}
+
+export function getEditPersonalSetupPath(accountKey: string): string {
+  return `/accounts/${accountKey}/edit/setup/module-settings/personal`;
 }
 
 export function getEditReviewPath(accountKey: string): string {

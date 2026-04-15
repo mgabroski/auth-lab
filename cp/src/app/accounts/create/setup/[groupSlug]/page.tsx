@@ -1,26 +1,38 @@
-import { notFound } from 'next/navigation';
-import { loadCreateAccountDraft } from '@/features/accounts/mock-data';
+import { notFound, redirect } from 'next/navigation';
+import { loadDraftAccountByKey } from '@/features/accounts/mock-data';
 import { AccountSetupGroupScreen } from '@/features/accounts/screens/account-setup-group-screen';
 import { getSetupGroupBySlug } from '@/features/accounts/setup-groups';
+import { getCreateBasicInfoPath } from '@/shared/cp/links';
 
 type CreateSetupGroupPageProps = {
   params: Promise<{
     groupSlug: string;
   }>;
+  searchParams: Promise<{
+    accountKey?: string;
+  }>;
 };
 
-export default async function CreateSetupGroupPage({ params }: CreateSetupGroupPageProps) {
+export default async function CreateSetupGroupPage({
+  params,
+  searchParams,
+}: CreateSetupGroupPageProps) {
   const { groupSlug } = await params;
+  const { accountKey } = await searchParams;
   const group = getSetupGroupBySlug(groupSlug);
 
   if (!group) {
     notFound();
   }
 
-  const account = await loadCreateAccountDraft();
+  if (!accountKey) {
+    redirect(getCreateBasicInfoPath());
+  }
+
+  const account = await loadDraftAccountByKey(accountKey);
 
   if (!account) {
-    notFound();
+    redirect(getCreateBasicInfoPath());
   }
 
   return <AccountSetupGroupScreen mode="create" account={account} group={group} />;

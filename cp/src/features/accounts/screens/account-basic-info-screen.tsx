@@ -1,31 +1,11 @@
 'use client';
 
-/**
- * cp/src/features/accounts/screens/account-basic-info-screen.tsx
- *
- * WHY:
- * - Step 1 of the locked 3-step CP create flow.
- * - Provides the real account name + account key form.
- * - On submit: POST /api/cp/accounts → navigate to the Account Setup step.
- *
- * RULES:
- * - Client Component ('use client') — form interaction requires browser state.
- * - No hardcoded backend origin. All API calls go through /api/* proxy.
- * - Account key auto-slugs from account name while the operator has not
- *   manually edited the key field. Manual edits lock the key from auto-update.
- * - Locked CP identity: account name + account key only. No other fields.
- * - Edit mode is not a valid surface for this screen (redirected at page level).
- *
- * CP Phase 2 scope:
- * - Create mode: form submission → POST /api/cp/accounts → navigate to setup.
- * - Edit mode: unsupported here; page redirects before rendering this screen.
- */
-
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CSSProperties } from 'react';
 import type { FooterAction } from '../contracts';
-import { getAccountsListPath, getEditSetupPath } from '@/shared/cp/links';
+import { createCpAccount } from '../cp-accounts-client';
+import { getAccountsListPath, getCreateSetupPath } from '@/shared/cp/links';
 import {
   contentPanelStyle,
   insetPanelStyle,
@@ -35,8 +15,6 @@ import {
   sectionTitleStyle,
 } from '@/shared/cp/styles';
 import { ControlPlaneShell } from '@/shared/cp/components/control-plane-shell';
-
-// ─── Styles ──────────────────────────────────────────────────────────────────
 
 const fieldGroupStyle: CSSProperties = {
   display: 'grid',
@@ -87,8 +65,6 @@ const errorBannerStyle: CSSProperties = {
   fontSize: '14px',
 };
 
-// ─── Slugify helper ───────────────────────────────────────────────────────────
-
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -98,8 +74,6 @@ function slugify(value: string): string {
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
-
-// ─── Validation ───────────────────────────────────────────────────────────────
 
 const ACCOUNT_KEY_REGEX = /^[a-z0-9-]+$/;
 
@@ -121,78 +95,58 @@ function validateFields(
   return { nameError, keyError };
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
-
 export function AccountBasicInfoScreen() {
   const router = useRouter();
 
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
   const [keyManuallyEdited, setKeyManuallyEdited] = useState(false);
-
   const [nameError, setNameError] = useState<string | null>(null);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const keyInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-slug key from name while key has not been manually edited.
   useEffect(() => {
     if (!keyManuallyEdited) {
       setKey(slugify(name));
     }
   }, [name, keyManuallyEdited]);
 
-  function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setName(e.target.value);
-    setNameError(null);
-    setSubmitError(null);
-  }
-
-  function handleKeyChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setKey(e.target.value);
-    setKeyManuallyEdited(true);
-    setKeyError(null);
-    setSubmitError(null);
-  }
-
   async function handleSubmit() {
     const trimmedName = name.trim();
     const trimmedKey = key.trim();
 
-    const { nameError: ne, keyError: ke } = validateFields(trimmedName, trimmedKey);
-    setNameError(ne);
-    setKeyError(ke);
+    const { nameError: nextNameError, keyError: nextKeyError } = validateFields(
+      trimmedName,
+      trimmedKey,
+    );
 
-    if (ne || ke) return;
+    setNameError(nextNameError);
+    setKeyError(nextKeyError);
+
+    if (nextNameError || nextKeyError) {
+      return;
+    }
 
     setIsSubmitting(true);
     setSubmitError(null);
 
     try {
-      const res = await fetch('/api/cp/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountName: trimmedName, accountKey: trimmedKey }),
+      const account = await createCpAccount({
+        accountName: trimmedName,
+        accountKey: trimmedKey,
       });
 
-      if (res.status === 409) {
-        const body = (await res.json()) as { message?: string };
-        setKeyError(body.message ?? 'Account key is already taken.');
-        return;
-      }
+      router.push(getCreateSetupPath(account.accountKey));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unexpected error. Please try again.';
 
-      if (!res.ok) {
-        const body = (await res.json()) as { message?: string };
-        setSubmitError(body.message ?? `Unexpected error (${res.status}). Please try again.`);
-        return;
+      if (message.toLowerCase().includes('account key')) {
+        setKeyError(message);
+      } else {
+        setSubmitError(message);
       }
-
-      const account = (await res.json()) as { accountKey: string };
-      router.push(getEditSetupPath(account.accountKey));
-    } catch {
-      setSubmitError('Network error. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -218,7 +172,7 @@ export function AccountBasicInfoScreen() {
     <ControlPlaneShell
       currentPath="Accounts > Create Account"
       pageTitle="Basic Account Info"
-      pageDescription="Create the account identity first. Settings and modules are configured next."
+      pageDescription="Create the draft account identity first. Step 2 persists the real CP allowance truth and progress state."
       footerActions={footerActions}
       step={{ stepNumber: 1, stepName: 'Basic Account Info' }}
     >
@@ -226,9 +180,7 @@ export function AccountBasicInfoScreen() {
         <article style={contentPanelStyle}>
           <h2 style={sectionTitleStyle}>Step 1 of 3 — Basic Account Info</h2>
 
-          {submitError && (
-            <div style={{ ...errorBannerStyle, marginBottom: '20px' }}>{submitError}</div>
-          )}
+          {submitError ? <div style={errorBannerStyle}>{submitError}</div> : null}
 
           <div style={fieldGroupStyle}>
             <div style={fieldStyle}>
@@ -239,14 +191,18 @@ export function AccountBasicInfoScreen() {
                 id="accountName"
                 type="text"
                 value={name}
-                onChange={handleNameChange}
-                placeholder="e.g. Goodwill CA"
+                onChange={(event) => {
+                  setName(event.target.value);
+                  setNameError(null);
+                  setSubmitError(null);
+                }}
+                placeholder="e.g. GoodWill CA"
                 disabled={isSubmitting}
                 style={nameError ? inputErrorStyle : inputStyle}
                 autoComplete="off"
                 autoFocus
               />
-              {nameError && <p style={errorTextStyle}>{nameError}</p>}
+              {nameError ? <p style={errorTextStyle}>{nameError}</p> : null}
             </div>
 
             <div style={fieldStyle}>
@@ -255,10 +211,14 @@ export function AccountBasicInfoScreen() {
               </label>
               <input
                 id="accountKey"
-                ref={keyInputRef}
                 type="text"
                 value={key}
-                onChange={handleKeyChange}
+                onChange={(event) => {
+                  setKey(event.target.value);
+                  setKeyManuallyEdited(true);
+                  setKeyError(null);
+                  setSubmitError(null);
+                }}
                 placeholder="e.g. goodwill-ca"
                 disabled={isSubmitting}
                 style={keyError ? inputErrorStyle : inputStyle}
@@ -269,7 +229,8 @@ export function AccountBasicInfoScreen() {
                 <p style={errorTextStyle}>{keyError}</p>
               ) : (
                 <p style={inputHintStyle}>
-                  Lowercase letters, digits, and hyphens only. Cannot be changed after creation.
+                  Lowercase letters, digits, and hyphens only. The Account Key stays immutable after
+                  creation.
                 </p>
               )}
             </div>
@@ -277,10 +238,10 @@ export function AccountBasicInfoScreen() {
         </article>
 
         <article style={insetPanelStyle}>
-          <strong>Account identity is permanent</strong>
+          <strong>Locked identity boundary</strong>
           <p style={mutedTextStyle}>
-            Account Name and Account Key are the only identity fields in this step. The Account Key
-            cannot be changed after creation. Settings and module configuration happen in Step 2.
+            Step 1 contains only Account Name and Account Key. Later CP phases may add more operator
+            tooling, but identity remains name + key only in the locked model.
           </p>
         </article>
       </section>

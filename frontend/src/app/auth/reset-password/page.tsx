@@ -72,8 +72,7 @@ export default async function ResetPasswordPage({ searchParams }: PageProps) {
     if (response.ok) {
       tokenIsValid = true;
     } else {
-      let message =
-        'This password reset link is invalid or has expired. Please request a new one.';
+      let message = 'This password reset link is invalid or has expired. Please request a new one.';
 
       try {
         const payload = (await response.json()) as {

@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { ControlPlaneAccountDraft } from '@/features/accounts/contracts';
+import type { ControlPlaneAccountDetail } from '@/features/accounts/contracts';
 import { panelStyle } from '../styles';
 
 const barStyle: CSSProperties = {
@@ -11,13 +11,13 @@ const barStyle: CSSProperties = {
 };
 
 type AccountContextBarProps = {
-  account: Pick<ControlPlaneAccountDraft, 'name' | 'key'>;
+  account: Pick<ControlPlaneAccountDetail, 'accountName' | 'accountKey'>;
 };
 
 export function AccountContextBar({ account }: AccountContextBarProps) {
   return (
     <section aria-label="Account context" style={barStyle}>
-      Account Name: {account.name} | Account Key: {account.key}
+      Account Name: {account.accountName} | Account Key: {account.accountKey}
     </section>
   );
 }

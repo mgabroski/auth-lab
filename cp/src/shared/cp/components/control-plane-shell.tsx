@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
-import type { ControlPlaneAccountDraft, FooterAction } from '@/features/accounts/contracts';
-import { TOTAL_SETUP_GROUPS } from '@/features/accounts/setup-groups';
+import type { ControlPlaneAccountDetail, FooterAction } from '@/features/accounts/contracts';
 import { appInnerStyle, appPageStyle, bodyHeadingStyle, mutedTextStyle } from '../styles';
 import { AccountContextBar } from './account-context-bar';
 import { BreadcrumbHeader } from './breadcrumb-header';
@@ -13,7 +12,7 @@ type ControlPlaneShellProps = {
   pageDescription: string;
   children: ReactNode;
   footerActions: FooterAction[];
-  account?: Pick<ControlPlaneAccountDraft, 'name' | 'key' | 'setupGroupsReviewed'>;
+  account?: Pick<ControlPlaneAccountDetail, 'accountName' | 'accountKey' | 'step2Progress'>;
   step?: {
     stepNumber: 1 | 2 | 3;
     stepName: string;
@@ -40,10 +39,10 @@ export function ControlPlaneShell({
           <StepIndicator
             stepNumber={step.stepNumber}
             stepName={step.stepName}
-            reviewedCount={
-              showStepProgress && account ? account.setupGroupsReviewed.length : undefined
+            configuredCount={
+              showStepProgress && account ? account.step2Progress.configuredCount : undefined
             }
-            totalCount={showStepProgress ? TOTAL_SETUP_GROUPS : undefined}
+            totalCount={showStepProgress && account ? account.step2Progress.totalCount : undefined}
           />
         ) : null}
 

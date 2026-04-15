@@ -2,34 +2,141 @@
  * backend/src/modules/control-plane/accounts/cp-accounts.types.ts
  *
  * WHY:
- * - Domain types for the Control Plane accounts subdomain.
- * - Decoupled from DB row shape (Kysely Selectable) and HTTP DTOs (Zod).
- * - Referenced by service, controller, and DAL layers.
+ * - Domain and response types for the Control Plane accounts subdomain.
+ * - Backend controllers/services use these types to keep CP DTOs explicit.
+ * - Phase 3 adds real Step 2 group DTOs, persisted progress state, and the
+ *   Personal CP sub-page payload surface.
  *
  * RULES:
  * - No Kysely imports here.
  * - No Zod imports here.
  * - No AppError here.
- * - Types must stay compatible with the locked CP status vocabulary.
- *
- * CP STATUS VOCABULARY (locked):
- * - Draft    — created but not yet published
- * - Active   — published and reachable by tenants
- * - Disabled — published but access is suspended
- *
- * CP REVISION:
- * - cpRevision starts at 0 on creation.
- * - Incremented on meaningful allowance mutations (group saves, publish).
- * - Phase 2 scope: only creation sets cpRevision = 0. Group saves are deferred.
  */
+
+import type {
+  CpSetupGroupSlug,
+  PersonalFamilyKey,
+  PersonalMinimumRequired,
+} from './cp-accounts.catalog';
 
 export type CpStatus = 'Draft' | 'Active' | 'Disabled';
 
-/**
- * Full domain representation of a CP account.
- * Returned from service reads and used inside service orchestration.
- */
-export type CpAccount = {
+export type CpSetupGroupSummary = {
+  slug: CpSetupGroupSlug;
+  title: string;
+  isRequired: boolean;
+  configured: boolean;
+};
+
+export type CpStep2Progress = {
+  configuredCount: number;
+  totalCount: number;
+  requiredConfiguredCount: number;
+  requiredTotalCount: number;
+  canContinueToReview: boolean;
+  groups: CpSetupGroupSummary[];
+};
+
+export type CpAccountListRow = {
+  id: string;
+  accountName: string;
+  accountKey: string;
+  cpStatus: CpStatus;
+  cpRevision: number;
+  step2Progress: CpStep2Progress;
+};
+
+export type CpAccessConfig = {
+  configured: boolean;
+  loginMethods: {
+    password: boolean;
+    google: boolean;
+    microsoft: boolean;
+  };
+  mfaPolicy: {
+    adminRequired: boolean;
+    memberRequired: boolean;
+  };
+  signupPolicy: {
+    publicSignup: boolean;
+    adminInvitationsAllowed: boolean;
+    allowedDomains: string[];
+  };
+};
+
+export type CpAccountSettingsConfig = {
+  configured: boolean;
+  branding: {
+    logo: boolean;
+    menuColor: boolean;
+    fontColor: boolean;
+    welcomeMessage: boolean;
+  };
+  organizationStructure: {
+    employers: boolean;
+    locations: boolean;
+  };
+  companyCalendar: {
+    allowed: boolean;
+  };
+};
+
+export type CpModuleSettingsConfig = {
+  configured: boolean;
+  moduleDecisionsSaved: boolean;
+  personalSubpageSaved: boolean;
+  modules: {
+    personal: boolean;
+    documents: boolean;
+    benefits: boolean;
+    payments: boolean;
+  };
+};
+
+export type CpPersonalField = {
+  familyKey: PersonalFamilyKey;
+  fieldKey: string;
+  label: string;
+  notes: string;
+  isAllowed: boolean;
+  defaultSelected: boolean;
+  minimumRequired: PersonalMinimumRequired;
+  isSystemManaged: boolean;
+  allowedLocked: boolean;
+};
+
+export type CpPersonalFamily = {
+  familyKey: PersonalFamilyKey;
+  label: string;
+  isAllowed: boolean;
+  allowedLocked: boolean;
+  fields: CpPersonalField[];
+};
+
+export type CpPersonalConfig = {
+  saved: boolean;
+  families: CpPersonalFamily[];
+};
+
+export type CpIntegrationCapability = {
+  capabilityKey: string;
+  label: string;
+  isAllowed: boolean;
+};
+
+export type CpIntegrationConfigItem = {
+  integrationKey: string;
+  label: string;
+  isAllowed: boolean;
+  capabilities: CpIntegrationCapability[];
+};
+
+export type CpIntegrationsConfig = {
+  configured: boolean;
+  integrations: CpIntegrationConfigItem[];
+};
+
+export type CpAccountDetail = {
   id: string;
   accountName: string;
   accountKey: string;
@@ -37,16 +144,10 @@ export type CpAccount = {
   cpRevision: number;
   createdAt: Date;
   updatedAt: Date;
-};
-
-/**
- * Slim row shape for the accounts list endpoint.
- * Avoids over-fetching columns not needed by the list view.
- */
-export type CpAccountListRow = {
-  id: string;
-  accountName: string;
-  accountKey: string;
-  cpStatus: CpStatus;
-  cpRevision: number;
+  step2Progress: CpStep2Progress;
+  access: CpAccessConfig;
+  accountSettings: CpAccountSettingsConfig;
+  moduleSettings: CpModuleSettingsConfig;
+  personal: CpPersonalConfig;
+  integrations: CpIntegrationsConfig;
 };

@@ -3,32 +3,7 @@
  *
  * WHY:
  * - Declares the CP accounts HTTP route surface.
- * - Keeps routing separate from controller logic.
- *
- * ROUTE PREFIX:
- * - All CP backend routes are prefixed with /cp/ (per CP prerequisite roadmap §7.3).
- * - This file owns the /cp/accounts surface only.
- *
- * PHASE 2 SURFACE:
- * - GET  /cp/accounts            — list all CP accounts
- * - GET  /cp/accounts/:accountKey — get single CP account by key
- * - POST /cp/accounts            — create a new Draft CP account
- *
- * DEFERRED (to later phases):
- * - PUT  /cp/accounts/:accountKey/access
- * - PUT  /cp/accounts/:accountKey/account-settings
- * - PUT  /cp/accounts/:accountKey/modules
- * - PUT  /cp/accounts/:accountKey/modules/personal
- * - PUT  /cp/accounts/:accountKey/integrations
- * - POST /cp/accounts/:accountKey/publish
- * - PATCH /cp/accounts/:accountKey/status
- *
- * AUTH:
- * - Dev-only no-auth is acceptable for CP in this phase.
- * - CP authentication will be added in a later phase.
- *
- * RULES:
- * - No business logic here.
+ * - Phase 3 adds real Step 2 group save endpoints.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -41,4 +16,13 @@ export function registerCpAccountsRoutes(
   app.get('/cp/accounts', controller.listAccounts.bind(controller));
   app.get('/cp/accounts/:accountKey', controller.getAccount.bind(controller));
   app.post('/cp/accounts', controller.createAccount.bind(controller));
+
+  app.put('/cp/accounts/:accountKey/access', controller.saveAccess.bind(controller));
+  app.put(
+    '/cp/accounts/:accountKey/account-settings',
+    controller.saveAccountSettings.bind(controller),
+  );
+  app.put('/cp/accounts/:accountKey/modules', controller.saveModuleSettings.bind(controller));
+  app.put('/cp/accounts/:accountKey/modules/personal', controller.savePersonal.bind(controller));
+  app.put('/cp/accounts/:accountKey/integrations', controller.saveIntegrations.bind(controller));
 }

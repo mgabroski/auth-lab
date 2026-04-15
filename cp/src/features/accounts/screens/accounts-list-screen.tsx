@@ -3,14 +3,8 @@
  *
  * WHY:
  * - Renders the CP accounts list for operator re-entry and edit routing.
- * - CP Phase 2: renders real backend data from GET /cp/accounts.
- *   Placeholder copy and Phase 1 boundary notes have been removed.
- *
- * RULES:
- * - No business logic here.
- * - Setup progress column shows "No groups configured yet" for all accounts
- *   in Phase 2 — group saves are deferred to a later phase.
- * - Status toggle is deferred to a later phase.
+ * - Phase 3 shows real Step 2 progress and keeps edit/re-entry grounded in
+ *   saved backend truth.
  */
 
 import Link from 'next/link';
@@ -31,7 +25,6 @@ import {
   valueStyle,
 } from '@/shared/cp/styles';
 import { ControlPlaneShell } from '@/shared/cp/components/control-plane-shell';
-import { TOTAL_SETUP_GROUPS } from '../setup-groups';
 
 const inlineLinkStyle: CSSProperties = {
   color: '#0f172a',
@@ -84,25 +77,22 @@ const emptyStateStyle: CSSProperties = {
   gap: '10px',
 };
 
-type AccountsListScreenProps = {
-  accounts: ControlPlaneAccountListItem[];
-};
-
 function getSetupProgressLabel(account: ControlPlaneAccountListItem): string {
-  const reviewedCount = account.setupGroupsReviewed.length;
+  const { configuredCount, totalCount, requiredConfiguredCount, requiredTotalCount } =
+    account.step2Progress;
 
-  if (reviewedCount === TOTAL_SETUP_GROUPS) {
-    return 'All four setup groups configured';
-  }
-
-  if (reviewedCount === 0) {
+  if (configuredCount === 0) {
     return 'No groups configured yet';
   }
 
-  return `${reviewedCount} of ${TOTAL_SETUP_GROUPS} groups configured`;
+  if (account.step2Progress.canContinueToReview) {
+    return `${configuredCount} of ${totalCount} groups configured — ready for review`;
+  }
+
+  return `${requiredConfiguredCount} of ${requiredTotalCount} required groups configured`;
 }
 
-export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
+export function AccountsListScreen({ accounts }: { accounts: ControlPlaneAccountListItem[] }) {
   const footerActions: FooterAction[] = [
     {
       label: 'Create Account',
@@ -111,15 +101,15 @@ export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
     },
   ];
 
-  const activeCount = accounts.filter((a) => a.cpStatus === 'Active').length;
-  const draftCount = accounts.filter((a) => a.cpStatus === 'Draft').length;
-  const disabledCount = accounts.filter((a) => a.cpStatus === 'Disabled').length;
+  const activeCount = accounts.filter((account) => account.cpStatus === 'Active').length;
+  const draftCount = accounts.filter((account) => account.cpStatus === 'Draft').length;
+  const disabledCount = accounts.filter((account) => account.cpStatus === 'Disabled').length;
 
   return (
     <ControlPlaneShell
       currentPath="Accounts"
       pageTitle="Accounts"
-      pageDescription="Provision and manage tenant accounts from the Control Plane."
+      pageDescription="Provision and manage tenant accounts from the Control Plane. Step 2 progress now reflects real persisted group saves."
       footerActions={footerActions}
     >
       <section style={sectionGridStyle}>
@@ -164,24 +154,29 @@ export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
                     <th style={tableHeaderCellStyle}>Account Key</th>
                     <th style={tableHeaderCellStyle}>Status</th>
                     <th style={tableHeaderCellStyle}>Setup Progress</th>
+                    <th style={tableHeaderCellStyle}>Revision</th>
                     <th style={tableHeaderCellStyle}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {accounts.map((account) => (
                     <tr key={account.id}>
-                      <td style={tableCellStyle}>{account.name}</td>
-                      <td style={tableCellStyle}>{account.key}</td>
+                      <td style={tableCellStyle}>{account.accountName}</td>
+                      <td style={tableCellStyle}>{account.accountKey}</td>
                       <td style={tableCellStyle}>
                         <span style={statusBadgeStyle(account.cpStatus)}>{account.cpStatus}</span>
                       </td>
                       <td style={tableCellStyle}>{getSetupProgressLabel(account)}</td>
+                      <td style={tableCellStyle}>{account.cpRevision}</td>
                       <td style={tableCellStyle}>
                         <div style={actionRowStyle}>
-                          <Link href={getEditSetupPath(account.key)} style={inlineLinkStyle}>
+                          <Link href={getEditSetupPath(account.accountKey)} style={inlineLinkStyle}>
                             Edit Setup
                           </Link>
-                          <Link href={getEditReviewPath(account.key)} style={inlineLinkStyle}>
+                          <Link
+                            href={getEditReviewPath(account.accountKey)}
+                            style={inlineLinkStyle}
+                          >
                             Review
                           </Link>
                         </div>
@@ -195,10 +190,10 @@ export function AccountsListScreen({ accounts }: AccountsListScreenProps) {
         </article>
 
         <article style={insetPanelStyle}>
-          <strong>Status toggle and group saves</strong>
+          <strong>Current boundary</strong>
           <p style={mutedTextStyle}>
-            Active / Disabled status changes and group save persistence are implemented in later
-            phases. Use Edit Setup to navigate to the account setup view.
+            Phase 3 ships real group persistence and continuation gating. Final publish and status
+            toggle actions remain deferred to Review & Publish work.
           </p>
         </article>
       </section>

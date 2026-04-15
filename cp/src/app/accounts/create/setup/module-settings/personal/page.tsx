@@ -1,17 +1,17 @@
 import { redirect } from 'next/navigation';
 import { loadDraftAccountByKey } from '@/features/accounts/mock-data';
-import { AccountSetupOverviewScreen } from '@/features/accounts/screens/account-setup-overview-screen';
+import { AccountPersonalConfigScreen } from '@/features/accounts/screens/account-personal-config-screen';
 import { getCreateBasicInfoPath } from '@/shared/cp/links';
 
-type CreateAccountSetupPageProps = {
+type CreatePersonalSetupPageProps = {
   searchParams: Promise<{
     accountKey?: string;
   }>;
 };
 
-export default async function CreateAccountSetupPage({
+export default async function CreatePersonalSetupPage({
   searchParams,
-}: CreateAccountSetupPageProps) {
+}: CreatePersonalSetupPageProps) {
   const { accountKey } = await searchParams;
 
   if (!accountKey) {
@@ -24,5 +24,5 @@ export default async function CreateAccountSetupPage({
     redirect(getCreateBasicInfoPath());
   }
 
-  return <AccountSetupOverviewScreen mode="create" account={account} />;
+  return <AccountPersonalConfigScreen mode="create" account={account} />;
 }

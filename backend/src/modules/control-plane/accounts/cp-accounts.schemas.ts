@@ -2,24 +2,21 @@
  * backend/src/modules/control-plane/accounts/cp-accounts.schemas.ts
  *
  * WHY:
- * - Centralises Zod validation for all CP accounts HTTP surfaces.
- * - Controllers validate with these schemas before calling services.
+ * - Centralises Zod validation for CP accounts request shapes.
+ * - Phase 3 adds Step 2 group save schemas and Personal full-save validation.
  *
  * RULES:
- * - Zod only. No Kysely. No AppError.
- * - One schema per request shape.
- * - Inferred types are the controller ↔ service contract for input DTOs.
- *
- * ACCOUNT KEY FORMAT (locked, see CP prerequisite roadmap §11.4):
- * - lowercase letters, digits, and hyphens only
- * - matches ^[a-z0-9-]+$
- * - min 1 char, max 100 chars
- * - uniqueness enforced at the service layer (DB UNIQUE constraint + AppError)
+ * - Zod only.
+ * - No AppError here.
  */
 
 import { z } from 'zod';
 
 export const ACCOUNT_KEY_REGEX = /^[a-z0-9-]+$/;
+
+const accountKeyParamSchema = z.object({
+  accountKey: z.string().min(1, 'Account key is required'),
+});
 
 export const createCpAccountSchema = z.object({
   accountName: z
@@ -35,4 +32,93 @@ export const createCpAccountSchema = z.object({
     .regex(ACCOUNT_KEY_REGEX, 'Account key must be lowercase letters, digits, and hyphens only'),
 });
 
+export const saveCpAccessSchema = z.object({
+  loginMethods: z.object({
+    password: z.boolean(),
+    google: z.boolean(),
+    microsoft: z.boolean(),
+  }),
+  mfaPolicy: z.object({
+    adminRequired: z.boolean(),
+    memberRequired: z.boolean(),
+  }),
+  signupPolicy: z.object({
+    publicSignup: z.boolean(),
+    adminInvitationsAllowed: z.boolean(),
+    allowedDomains: z.array(z.string().trim().min(1)).max(50),
+  }),
+});
+
+export const saveCpAccountSettingsSchema = z.object({
+  branding: z.object({
+    logo: z.boolean(),
+    menuColor: z.boolean(),
+    fontColor: z.boolean(),
+    welcomeMessage: z.boolean(),
+  }),
+  organizationStructure: z.object({
+    employers: z.boolean(),
+    locations: z.boolean(),
+  }),
+  companyCalendar: z.object({
+    allowed: z.boolean(),
+  }),
+});
+
+export const saveCpModuleSettingsSchema = z.object({
+  modules: z.object({
+    personal: z.boolean(),
+    documents: z.boolean(),
+    benefits: z.boolean(),
+    payments: z.boolean(),
+  }),
+});
+
+export const saveCpPersonalSchema = z.object({
+  families: z.array(
+    z.object({
+      familyKey: z.enum([
+        'identity',
+        'contact',
+        'address',
+        'dependents',
+        'emergency',
+        'identifiers',
+        'signature',
+      ]),
+      isAllowed: z.boolean(),
+    }),
+  ),
+  fields: z.array(
+    z.object({
+      fieldKey: z.string().min(1),
+      isAllowed: z.boolean(),
+      defaultSelected: z.boolean(),
+    }),
+  ),
+});
+
+export const saveCpIntegrationsSchema = z.object({
+  integrations: z.array(
+    z.object({
+      integrationKey: z.string().min(1),
+      isAllowed: z.boolean(),
+      capabilities: z.array(
+        z.object({
+          capabilityKey: z.string().min(1),
+          isAllowed: z.boolean(),
+        }),
+      ),
+    }),
+  ),
+});
+
+export type AccountKeyParams = z.infer<typeof accountKeyParamSchema>;
 export type CreateCpAccountInput = z.infer<typeof createCpAccountSchema>;
+export type SaveCpAccessInput = z.infer<typeof saveCpAccessSchema>;
+export type SaveCpAccountSettingsInput = z.infer<typeof saveCpAccountSettingsSchema>;
+export type SaveCpModuleSettingsInput = z.infer<typeof saveCpModuleSettingsSchema>;
+export type SaveCpPersonalInput = z.infer<typeof saveCpPersonalSchema>;
+export type SaveCpIntegrationsInput = z.infer<typeof saveCpIntegrationsSchema>;
+
+export { accountKeyParamSchema };

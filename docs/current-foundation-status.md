@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 2 backend foundation is now shipped.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 3 setup-group implementation is now shipped.
 
 This repo already has:
 
@@ -28,7 +28,8 @@ This repo already has:
 - a separate internal Control Plane frontend app with Phase 1 shell and routing
 - a real CP backend module (`backend/src/modules/control-plane/`) with accounts create/read/list endpoints
 - a real `cp_accounts` table (migration `0014_cp_accounts.ts`)
-- CP frontend wired to real backend data for create basic-info submission and accounts list
+- real CP Phase 3 Step 2 persistence for setup groups and Personal field-catalog truth
+- CP frontend wired to real backend data for create basic-info submission, accounts list, Step 2 group saves, Step 2 progress state, and required-group continuation gating
 
 This repo does not yet claim that the full Auth / Provisioning closure roadmap is complete.
 Roadmap closure still depends on the remaining real-environment, proof, QA, and production-readiness work tracked elsewhere.
@@ -47,7 +48,7 @@ Use them before support docs.
 5. `backend/docs/api/auth.md` — auth contract surface
 6. `backend/docs/api/invites.md` — invite contract surface
 7. `backend/docs/api/admin.md` — admin auth/provisioning contract surface
-8. `backend/docs/api/cp-accounts.md` — CP accounts contract surface (added CP Phase 2)
+8. `backend/docs/api/cp-accounts.md` — CP accounts contract surface
 
 ### Supporting but non-canonical-by-default docs
 
@@ -101,22 +102,39 @@ The following foundations are treated as real in the repo now.
 - one canonical Auth / Provisioning QA execution surface exists: `docs/qa/qa-execution-pack.md`
 - current prompt routing is centralized through `docs/prompts/catalog.md`
 
-### Control Plane foundation — Phase 2 (current)
+### Control Plane foundation — Phase 3 (current)
 
 - a separate Control Plane Next.js app exists at `cp/`
 - the Control Plane is not part of the tenant frontend package
 - root Control Plane entry redirects into the create-account flow
 - **real backend module exists** at `backend/src/modules/control-plane/`
 - **real `cp_accounts` table** created by migration `0014_cp_accounts.ts`
-- **real backend routes registered**: `GET /cp/accounts`, `GET /cp/accounts/:accountKey`, `POST /cp/accounts`
-- **CP accounts API contract doc** exists at `backend/docs/api/cp-accounts.md`
-- **CP frontend wired to real data**: accounts list reads `GET /cp/accounts`; Step 1 form submits `POST /cp/accounts` and navigates to setup on success
-- **CP same-origin API proxy** added at `cp/src/app/api/[...path]/route.ts`
-- CP backend is dev-only no-auth in this phase — CP authentication is a later phase
+- **real Phase 3 Step 2 tables** created by migration `0015_cp_setup_groups.ts`
+- **real backend routes registered**:
+  - `GET /cp/accounts`
+  - `GET /cp/accounts/:accountKey`
+  - `POST /cp/accounts`
+  - `PUT /cp/accounts/:accountKey/access`
+  - `PUT /cp/accounts/:accountKey/account-settings`
+  - `PUT /cp/accounts/:accountKey/modules`
+  - `PUT /cp/accounts/:accountKey/modules/personal`
+  - `PUT /cp/accounts/:accountKey/integrations`
+- **real CP accounts API contract doc** exists at `backend/docs/api/cp-accounts.md`
+- **real persisted Step 2 group state** now exists for:
+  - Access, Identity & Security
+  - Account Settings
+  - Module Settings
+  - Personal CP field configuration sub-page
+  - Integrations & Marketplace
+- **real Step 2 progress state** is persisted on `cp_accounts` and returned to the CP frontend
+- **required-group continuation gating** is now real in the CP frontend overview and review shell
+- **Personal CP sub-page** exists under Module Settings and participates in Module Settings completion rules
+- **CP same-origin API proxy** exists at `cp/src/app/api/[...path]/route.ts`
+- CP backend remains dev-only no-auth in this phase — CP authentication is a later phase
 - the locked 3-step CP flow (Basic Account Info → Account Setup → Review & Publish) remains unchanged
-- the 4 locked setup groups remain unchanged; group saves are deferred to later phases
-- `cpRevision` starts at 0 on account creation; group-save increments are deferred
-- CP provisioning truth (`cp_accounts`) is kept separate from tenant configuration truth (`tenants`)
+- the 4 locked setup groups remain unchanged
+- `cpRevision` starts at 0 on account creation and now increments on meaningful Step 2 allowance mutations
+- CP provisioning truth remains separate from tenant configuration truth
 
 ---
 
@@ -175,18 +193,14 @@ The full auth closure roadmap is still open in the areas already tracked by the 
 
 ### Control Plane expansion (remaining phases)
 
-The Control Plane Phase 2 backend delivers create/read/list for accounts. Still open:
+The Control Plane now ships Phase 3 setup-group persistence. Still open:
 
-- CP group save endpoints (`PUT /cp/accounts/:accountKey/access`, etc.)
 - CP publish endpoint (`POST /cp/accounts/:accountKey/publish`)
 - CP status toggle endpoint (`PATCH /cp/accounts/:accountKey/status`)
-- `cpRevision` increment on group-save mutations
-- CP frontend group save forms (Step 2 group detail pages)
-- CP frontend publish flow (Step 3 Review & Publish)
+- final Review & Publish action wiring
 - CP authentication and operator RBAC
 - CP audit trail UI
 - CP → Settings cascade (blocked until Settings state engine exists)
-- remaining CP schema tables: `cp_access_config`, `cp_account_settings_config`, `cp_module_config`, `cp_personal_family_config`, `cp_personal_field_config`, `cp_integration_config`
 
 ### Settings expansion
 
@@ -258,7 +272,3 @@ Use this file when you need to answer any of the following:
 - what is locked vs still open
 - which docs are canonical vs secondary
 - whether a support doc is allowed to overrule a higher-truth source
-- whether a task is trying to claim completion that the repo does not yet have
-
-If the task is module-specific and a module-specific higher-truth document explicitly outranks this file for that module, follow that module-specific truth order.
-Otherwise, treat this file as the current shipped-truth snapshot for the repo.

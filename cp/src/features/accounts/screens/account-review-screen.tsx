@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { AccountFlowMode, ControlPlaneAccountDraft, FooterAction } from '../contracts';
+import type { AccountFlowMode, ControlPlaneAccountDetail, FooterAction } from '../contracts';
 import { getCreateSetupPath, getEditSetupPath } from '@/shared/cp/links';
 import {
   contentPanelStyle,
@@ -12,7 +12,6 @@ import {
   sectionTitleStyle,
   valueStyle,
 } from '@/shared/cp/styles';
-import { SETUP_GROUPS, TOTAL_SETUP_GROUPS } from '../setup-groups';
 import { ControlPlaneShell } from '@/shared/cp/components/control-plane-shell';
 
 const checklistStyle: CSSProperties = {
@@ -53,14 +52,14 @@ const finalStatusGridStyle: CSSProperties = {
   gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
 };
 
-const finalStatusCardStyle = (selected: boolean): CSSProperties => ({
+const finalStatusCardStyle: CSSProperties = {
   padding: '16px',
   borderRadius: '16px',
-  border: `1px solid ${selected ? '#cbd5e1' : '#e2e8f0'}`,
-  backgroundColor: selected ? '#f8fafc' : '#ffffff',
+  border: '1px solid #e2e8f0',
+  backgroundColor: '#ffffff',
   display: 'grid',
   gap: '8px',
-});
+};
 
 const selectedBadgeStyle: CSSProperties = {
   display: 'inline-flex',
@@ -73,27 +72,31 @@ const selectedBadgeStyle: CSSProperties = {
   fontWeight: 700,
 };
 
-type AccountReviewScreenProps = {
+export function AccountReviewScreen({
+  mode,
+  account,
+}: {
   mode: AccountFlowMode;
-  account: ControlPlaneAccountDraft;
-};
-
-export function AccountReviewScreen({ mode, account }: AccountReviewScreenProps) {
+  account: ControlPlaneAccountDetail;
+}) {
   const isEditMode = mode === 'edit';
   const currentPath = isEditMode
     ? 'Accounts > Edit Account > Review & Publish'
     : 'Accounts > Create Account > Review & Publish';
 
-  const reviewedCount = account.setupGroupsReviewed.length;
-  const allGroupsReviewed = reviewedCount === TOTAL_SETUP_GROUPS;
-
   const footerActions: FooterAction[] = [
     {
       label: 'Back',
-      href: isEditMode ? getEditSetupPath(account.key) : getCreateSetupPath(),
+      href: isEditMode
+        ? getEditSetupPath(account.accountKey)
+        : getCreateSetupPath(account.accountKey),
       variant: 'ghost',
     },
-    { label: 'Save Draft', variant: 'secondary', disabled: true },
+    {
+      label: 'Save Draft',
+      variant: 'secondary',
+      disabled: true,
+    },
     {
       label: isEditMode ? 'Save Changes' : 'Create Account',
       variant: 'primary',
@@ -101,11 +104,49 @@ export function AccountReviewScreen({ mode, account }: AccountReviewScreenProps)
     },
   ];
 
+  const googleSsoAllowed = account.integrations.integrations.find(
+    (integration) => integration.integrationKey === 'integration.sso.google',
+  )?.isAllowed;
+  const microsoftSsoAllowed = account.integrations.integrations.find(
+    (integration) => integration.integrationKey === 'integration.sso.microsoft',
+  )?.isAllowed;
+  const hasAtLeastOneLoginMethod = Object.values(account.access.loginMethods).some(Boolean);
+  const hasBrokenSsoDependency =
+    (account.access.loginMethods.google && !googleSsoAllowed) ||
+    (account.access.loginMethods.microsoft && !microsoftSsoAllowed);
+
+  const activationChecks = [
+    {
+      label: 'Basic Account Info exists',
+      complete: Boolean(account.accountName && account.accountKey),
+    },
+    {
+      label: 'Access, Identity & Security configured',
+      complete: account.access.configured,
+    },
+    {
+      label: 'Account Settings configured',
+      complete: account.accountSettings.configured,
+    },
+    {
+      label: 'Module Settings configured',
+      complete: account.moduleSettings.configured,
+    },
+    {
+      label: 'At least one login method is selected',
+      complete: hasAtLeastOneLoginMethod,
+    },
+    {
+      label: 'No broken SSO dependency state exists',
+      complete: !hasBrokenSsoDependency,
+    },
+  ];
+
   return (
     <ControlPlaneShell
       currentPath={currentPath}
       pageTitle="Review & Publish"
-      pageDescription="Step 3 consolidates the draft identity, setup coverage, and final status direction into the locked Control Plane review shell."
+      pageDescription="Step 3 now reflects real Step 2 save state, but final publish and status mutation remain intentionally deferred until the next Control Plane phase."
       footerActions={footerActions}
       account={account}
       step={{ stepNumber: 3, stepName: 'Review & Publish' }}
@@ -117,157 +158,68 @@ export function AccountReviewScreen({ mode, account }: AccountReviewScreenProps)
           <div style={infoGridStyle}>
             <div style={infoCardStyle}>
               <p style={labelStyle}>Account name</p>
-              <p style={valueStyle}>{account.name}</p>
+              <p style={valueStyle}>{account.accountName}</p>
             </div>
 
             <div style={infoCardStyle}>
               <p style={labelStyle}>Account key</p>
-              <p style={valueStyle}>{account.key}</p>
+              <p style={valueStyle}>{account.accountKey}</p>
             </div>
 
             <div style={infoCardStyle}>
-              <p style={labelStyle}>Step 2 progress</p>
-              <p style={valueStyle}>
-                {reviewedCount} of {TOTAL_SETUP_GROUPS} groups reviewed
-              </p>
-              <p style={mutedTextStyle}>
-                {allGroupsReviewed
-                  ? 'All four locked setup groups are marked as reviewed in this draft.'
-                  : 'This draft is still missing reviewed setup groups before the final publish step can become fully actionable.'}
-              </p>
-            </div>
-
-            <div style={infoCardStyle}>
-              <p style={labelStyle}>Current draft status</p>
+              <p style={labelStyle}>Current status</p>
               <p style={valueStyle}>{account.cpStatus}</p>
-              <p style={mutedTextStyle}>
-                Phase 1 keeps final persistence and publish actions disabled while preserving the
-                locked review shell.
-              </p>
-            </div>
-          </div>
-        </article>
-
-        <article style={contentPanelStyle}>
-          <h2 style={sectionTitleStyle}>Activation Ready checklist</h2>
-
-          <div style={checklistStyle}>
-            <div style={checklistRowStyle(Boolean(account.name && account.key))}>
-              <span
-                style={checklistDotStyle(Boolean(account.name && account.key))}
-                aria-hidden="true"
-              />
-              <span>Basic Account Info exists: account name and account key are present.</span>
             </div>
 
-            <div style={checklistRowStyle(allGroupsReviewed)}>
-              <span style={checklistDotStyle(allGroupsReviewed)} aria-hidden="true" />
-              <span>All four locked Step 2 setup groups are reviewed.</span>
-            </div>
-
-            <div
-              style={checklistRowStyle(
-                account.setupGroupsReviewed.includes('access-identity-security'),
-              )}
-            >
-              <span
-                style={checklistDotStyle(
-                  account.setupGroupsReviewed.includes('access-identity-security'),
-                )}
-                aria-hidden="true"
-              />
-              <span>Access, Identity &amp; Security has been reviewed in the current draft.</span>
-            </div>
-
-            <div style={checklistRowStyle(account.setupGroupsReviewed.includes('module-settings'))}>
-              <span
-                style={checklistDotStyle(account.setupGroupsReviewed.includes('module-settings'))}
-                aria-hidden="true"
-              />
-              <span>Module Settings has been reviewed in the current draft.</span>
-            </div>
-          </div>
-
-          <p style={mutedTextStyle}>
-            This checklist matches the locked Phase 1 shell direction only. Real Activation Ready
-            enforcement is intentionally deferred until backend persistence and validation arrive in
-            later phases.
-          </p>
-        </article>
-
-        <article style={contentPanelStyle}>
-          <h2 style={sectionTitleStyle}>Step 2 group coverage</h2>
-
-          <div style={infoGridStyle}>
-            {SETUP_GROUPS.map((group) => {
-              const reviewed = account.setupGroupsReviewed.includes(group.slug);
-
-              return (
-                <div key={group.slug} style={infoCardStyle}>
-                  <p style={labelStyle}>{group.shortLabel}</p>
-                  <p style={valueStyle}>{reviewed ? 'Reviewed in draft' : 'Still needs review'}</p>
-                  <p style={mutedTextStyle}>{group.description}</p>
-                </div>
-              );
-            })}
-          </div>
-        </article>
-
-        <article style={contentPanelStyle}>
-          <h2 style={sectionTitleStyle}>Final status direction</h2>
-
-          <div style={finalStatusGridStyle}>
-            <div style={finalStatusCardStyle(account.cpStatus === 'Draft')}>
-              {account.cpStatus === 'Draft' ? (
-                <span style={selectedBadgeStyle}>Current selection</span>
-              ) : null}
-              <p style={labelStyle}>Draft</p>
-              <p style={valueStyle}>Keep the account as a work in progress.</p>
-              <p style={mutedTextStyle}>
-                Used when setup review is still incomplete or the operator is not ready to finalize
-                the account state.
-              </p>
-            </div>
-
-            <div style={finalStatusCardStyle(account.cpStatus === 'Active')}>
-              {account.cpStatus === 'Active' ? (
-                <span style={selectedBadgeStyle}>Current selection</span>
-              ) : null}
-              <p style={labelStyle}>Active</p>
-              <p style={valueStyle}>Ready for a later real publish flow.</p>
-              <p style={mutedTextStyle}>
-                In later phases, this option will require real Activation Ready enforcement and
-                persistence.
-              </p>
-            </div>
-
-            <div style={finalStatusCardStyle(account.cpStatus === 'Disabled')}>
-              {account.cpStatus === 'Disabled' ? (
-                <span style={selectedBadgeStyle}>Current selection</span>
-              ) : null}
-              <p style={labelStyle}>Disabled</p>
-              <p style={valueStyle}>Account exists but remains unusable.</p>
-              <p style={mutedTextStyle}>
-                This keeps the account out of active use while preserving its Control Plane draft
-                decisions.
-              </p>
+            <div style={infoCardStyle}>
+              <p style={labelStyle}>Current revision</p>
+              <p style={valueStyle}>{account.cpRevision}</p>
             </div>
           </div>
         </article>
 
         <article style={insetPanelStyle}>
-          <strong>Phase 1 placeholder boundary</strong>
+          <h2 style={sectionTitleStyle}>Activation Ready pre-check</h2>
+          <div style={checklistStyle}>
+            {activationChecks.map((item) => (
+              <div key={item.label} style={checklistRowStyle(item.complete)}>
+                <span style={checklistDotStyle(item.complete)} aria-hidden="true" />
+                <span>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article style={contentPanelStyle}>
+          <h2 style={sectionTitleStyle}>Step 2 summary</h2>
           <ul style={summaryListStyle}>
-            <li>
-              Final create and save actions stay disabled because persistence is not implemented
-              yet.
-            </li>
-            <li>Activation Ready is shown as a shell checklist only in this phase.</li>
-            <li>
-              Real publish validation, backend save flows, and cpRevision updates are later-phase
-              work.
-            </li>
+            {account.step2Progress.groups.map((group) => (
+              <li key={group.slug}>
+                {group.title}: {group.configured ? 'Configured' : 'Not configured yet'}
+                {group.isRequired ? ' (required)' : ' (optional)'}
+              </li>
+            ))}
           </ul>
+        </article>
+
+        <article style={contentPanelStyle}>
+          <h2 style={sectionTitleStyle}>Final status</h2>
+          <div style={finalStatusGridStyle}>
+            <div style={finalStatusCardStyle}>
+              <span style={selectedBadgeStyle}>Active</span>
+              <p style={mutedTextStyle}>
+                Final Active publish is a later-phase backend mutation. This review step currently
+                shows whether the required setup gate is satisfied.
+              </p>
+            </div>
+            <div style={finalStatusCardStyle}>
+              <span style={selectedBadgeStyle}>Disabled</span>
+              <p style={mutedTextStyle}>
+                Disabled selection and save wiring are intentionally deferred with publish/status
+                workflows.
+              </p>
+            </div>
+          </div>
         </article>
       </section>
     </ControlPlaneShell>

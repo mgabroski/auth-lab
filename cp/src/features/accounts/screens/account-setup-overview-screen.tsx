@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { AccountFlowMode, ControlPlaneAccountDraft, FooterAction } from '../contracts';
+import type { AccountFlowMode, ControlPlaneAccountDetail, FooterAction } from '../contracts';
 import {
   getAccountsListPath,
   getCreateBasicInfoPath,
@@ -18,7 +18,6 @@ import {
   sectionTitleStyle,
   valueStyle,
 } from '@/shared/cp/styles';
-import { SETUP_GROUPS, TOTAL_SETUP_GROUPS } from '../setup-groups';
 import { ControlPlaneShell } from '@/shared/cp/components/control-plane-shell';
 import { SetupGroupGrid } from '@/shared/cp/components/setup-group-grid';
 
@@ -50,7 +49,7 @@ const checklistDotStyle = (isComplete: boolean): CSSProperties => ({
 
 type AccountSetupOverviewScreenProps = {
   mode: AccountFlowMode;
-  account: ControlPlaneAccountDraft;
+  account: ControlPlaneAccountDetail;
 };
 
 export function AccountSetupOverviewScreen({ mode, account }: AccountSetupOverviewScreenProps) {
@@ -59,12 +58,13 @@ export function AccountSetupOverviewScreen({ mode, account }: AccountSetupOvervi
     ? 'Accounts > Edit Account > Account Setup'
     : 'Accounts > Create Account > Account Setup';
 
-  const reviewedCount = account.setupGroupsReviewed.length;
-  const remainingCount = TOTAL_SETUP_GROUPS - reviewedCount;
-  const allGroupsReviewed = reviewedCount === TOTAL_SETUP_GROUPS;
+  const { step2Progress } = account;
+  const remainingCount = step2Progress.totalCount - step2Progress.configuredCount;
+  const nextRecommendedGroup = step2Progress.groups.find((group) => !group.configured) ?? null;
 
-  const nextRecommendedGroup =
-    SETUP_GROUPS.find((group) => !account.setupGroupsReviewed.includes(group.slug)) ?? null;
+  const reviewPath = isEditMode
+    ? getEditReviewPath(account.accountKey)
+    : getCreateReviewPath(account.accountKey);
 
   const footerActions: FooterAction[] = [
     {
@@ -72,11 +72,16 @@ export function AccountSetupOverviewScreen({ mode, account }: AccountSetupOvervi
       href: isEditMode ? getAccountsListPath() : getCreateBasicInfoPath(),
       variant: 'ghost',
     },
-    { label: 'Save Draft', variant: 'secondary', disabled: true },
     {
-      label: 'Continue',
-      href: isEditMode ? getEditReviewPath(account.key) : getCreateReviewPath(),
+      label: 'Save Draft',
+      variant: 'secondary',
+      disabled: true,
+    },
+    {
+      label: 'Continue →',
+      href: step2Progress.canContinueToReview ? reviewPath : undefined,
       variant: 'primary',
+      disabled: !step2Progress.canContinueToReview,
     },
   ];
 
@@ -84,7 +89,7 @@ export function AccountSetupOverviewScreen({ mode, account }: AccountSetupOvervi
     <ControlPlaneShell
       currentPath={currentPath}
       pageTitle="Account Setup"
-      pageDescription="Review and save the four locked Control Plane setup groups before continuing to the review and publish step."
+      pageDescription="Save the four locked Control Plane setup groups. Required groups must be configured before Review & Publish is unlocked."
       footerActions={footerActions}
       account={account}
       step={{ stepNumber: 2, stepName: 'Account Setup' }}
@@ -95,12 +100,12 @@ export function AccountSetupOverviewScreen({ mode, account }: AccountSetupOvervi
           <article style={infoCardStyle}>
             <p style={labelStyle}>Step 2 progress</p>
             <p style={valueStyle}>
-              {reviewedCount} of {TOTAL_SETUP_GROUPS} groups reviewed
+              {step2Progress.configuredCount} of {step2Progress.totalCount} groups configured
             </p>
             <p style={mutedTextStyle}>
-              {allGroupsReviewed
-                ? 'All four locked setup groups are reviewed in this draft.'
-                : `${remainingCount} group${remainingCount === 1 ? '' : 's'} still need review before Step 2 is fully complete.`}
+              {remainingCount === 0
+                ? 'All setup groups are saved. Required-group gating is now satisfied.'
+                : `${remainingCount} group${remainingCount === 1 ? '' : 's'} still need attention before Step 2 is fully complete.`}
             </p>
           </article>
 
@@ -112,7 +117,7 @@ export function AccountSetupOverviewScreen({ mode, account }: AccountSetupOvervi
             <p style={mutedTextStyle}>
               {nextRecommendedGroup
                 ? 'Open the next incomplete setup group and save its decisions.'
-                : 'All setup groups are reviewed. You can continue to the final review step.'}
+                : 'All required groups are configured. Review is now available.'}
             </p>
           </article>
 
@@ -120,45 +125,48 @@ export function AccountSetupOverviewScreen({ mode, account }: AccountSetupOvervi
             <p style={labelStyle}>Draft status</p>
             <p style={valueStyle}>{account.cpStatus}</p>
             <p style={mutedTextStyle}>
-              Phase 1 uses typed placeholder data only. Real persistence and publish rules are wired
-              in later phases.
+              Current revision: {account.cpRevision}. Step 2 saves now persist real CP allowance
+              truth and revision changes when meaningful mutations occur.
             </p>
           </article>
         </div>
 
         <article style={insetPanelStyle}>
-          <h2 style={sectionTitleStyle}>Locked Step 2 checklist</h2>
+          <h2 style={sectionTitleStyle}>Required-group continuation gate</h2>
           <div style={sectionGridStyle}>
-            {SETUP_GROUPS.map((group) => {
-              const isComplete = account.setupGroupsReviewed.includes(group.slug);
-
-              return (
-                <div key={group.slug} style={checklistItemStyle(isComplete)}>
-                  <span style={checklistDotStyle(isComplete)} aria-hidden="true" />
-                  <span>{group.title}</span>
-                </div>
-              );
-            })}
+            {step2Progress.groups.map((group) => (
+              <div key={group.slug} style={checklistItemStyle(group.configured)}>
+                <span style={checklistDotStyle(group.configured)} aria-hidden="true" />
+                <span>
+                  {group.title}
+                  {group.isRequired ? ' — required' : ' — optional'}
+                </span>
+              </div>
+            ))}
           </div>
         </article>
 
         <SetupGroupGrid
-          account={account}
+          progress={step2Progress}
           getGroupHref={(groupSlug) =>
             isEditMode
-              ? getEditSetupGroupPath(account.key, groupSlug)
-              : getCreateSetupGroupPath(groupSlug)
+              ? getEditSetupGroupPath(account.accountKey, groupSlug)
+              : getCreateSetupGroupPath(groupSlug, account.accountKey)
           }
         />
 
         <article style={insetPanelStyle}>
-          <h2 style={sectionTitleStyle}>Phase 1 placeholder boundary</h2>
+          <h2 style={sectionTitleStyle}>What counts as configured now</h2>
           <ul style={summaryListStyle}>
-            <li>Group detail pages are intentionally static in this phase.</li>
-            <li>Reviewed state comes from typed placeholder draft data only.</li>
+            <li>Access, Identity & Security is configured only after an explicit save.</li>
+            <li>Account Settings is configured by any explicit allow/deny save.</li>
             <li>
-              Real save persistence, activation-ready enforcement, and publish wiring are deferred
-              to the next implementation phases.
+              Module Settings requires a saved module decision, and if Personal is enabled the
+              Personal sub-page must also be explicitly saved.
+            </li>
+            <li>
+              Integrations & Marketplace is optional, but an explicit save is enough even when no
+              integrations are enabled.
             </li>
           </ul>
         </article>

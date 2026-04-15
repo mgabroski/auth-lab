@@ -2,25 +2,21 @@
  * backend/src/modules/control-plane/accounts/cp-accounts.controller.ts
  *
  * WHY:
- * - Maps HTTP → service calls for the CP accounts subdomain.
- * - Validates request payloads with Zod before passing to the service.
- * - Maps service results to HTTP response shapes.
- *
- * RULES:
- * - No DB access here.
- * - No business rules here.
- * - Use Zod for request validation; throw AppError.validationError on failure.
- * - No raw tenantKey dependency — CP routes are /cp/* scoped, not tenant-scoped.
- *
- * RESPONSE SHAPES:
- * - POST   /cp/accounts          → 201 + full CpAccount DTO
- * - GET    /cp/accounts          → 200 + { accounts: CpAccountListRow[] }
- * - GET    /cp/accounts/:key     → 200 + full CpAccount DTO
+ * - Maps HTTP requests to the CP accounts service layer.
+ * - Validates request shapes with Zod before service execution.
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../../../shared/http/errors';
-import { createCpAccountSchema } from './cp-accounts.schemas';
+import {
+  accountKeyParamSchema,
+  createCpAccountSchema,
+  saveCpAccessSchema,
+  saveCpAccountSettingsSchema,
+  saveCpIntegrationsSchema,
+  saveCpModuleSettingsSchema,
+  saveCpPersonalSchema,
+} from './cp-accounts.schemas';
 import type { CpAccountsService } from './cp-accounts.service';
 
 export class CpAccountsController {
@@ -36,21 +32,125 @@ export class CpAccountsController {
     }
 
     const account = await this.service.createAccount(parsed.data);
-
     return reply.status(201).send(account);
   }
 
   async getAccount(req: FastifyRequest<{ Params: { accountKey: string } }>, reply: FastifyReply) {
-    const { accountKey } = req.params;
+    const parsed = accountKeyParamSchema.safeParse(req.params);
 
-    const account = await this.service.getAccount(accountKey);
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid accountKey', { issues: parsed.error.issues });
+    }
 
+    const account = await this.service.getAccount(parsed.data.accountKey);
     return reply.status(200).send(account);
   }
 
   async listAccounts(_req: FastifyRequest, reply: FastifyReply) {
     const accounts = await this.service.listAccounts();
-
     return reply.status(200).send({ accounts });
+  }
+
+  async saveAccess(req: FastifyRequest<{ Params: { accountKey: string } }>, reply: FastifyReply) {
+    const parsedParams = accountKeyParamSchema.safeParse(req.params);
+    const parsedBody = saveCpAccessSchema.safeParse(req.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: [
+          ...(parsedParams.success ? [] : parsedParams.error.issues),
+          ...(parsedBody.success ? [] : parsedBody.error.issues),
+        ],
+      });
+    }
+
+    const account = await this.service.saveAccess(parsedParams.data.accountKey, parsedBody.data);
+    return reply.status(200).send(account);
+  }
+
+  async saveAccountSettings(
+    req: FastifyRequest<{ Params: { accountKey: string } }>,
+    reply: FastifyReply,
+  ) {
+    const parsedParams = accountKeyParamSchema.safeParse(req.params);
+    const parsedBody = saveCpAccountSettingsSchema.safeParse(req.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: [
+          ...(parsedParams.success ? [] : parsedParams.error.issues),
+          ...(parsedBody.success ? [] : parsedBody.error.issues),
+        ],
+      });
+    }
+
+    const account = await this.service.saveAccountSettings(
+      parsedParams.data.accountKey,
+      parsedBody.data,
+    );
+    return reply.status(200).send(account);
+  }
+
+  async saveModuleSettings(
+    req: FastifyRequest<{ Params: { accountKey: string } }>,
+    reply: FastifyReply,
+  ) {
+    const parsedParams = accountKeyParamSchema.safeParse(req.params);
+    const parsedBody = saveCpModuleSettingsSchema.safeParse(req.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: [
+          ...(parsedParams.success ? [] : parsedParams.error.issues),
+          ...(parsedBody.success ? [] : parsedBody.error.issues),
+        ],
+      });
+    }
+
+    const account = await this.service.saveModuleSettings(
+      parsedParams.data.accountKey,
+      parsedBody.data,
+    );
+    return reply.status(200).send(account);
+  }
+
+  async savePersonal(req: FastifyRequest<{ Params: { accountKey: string } }>, reply: FastifyReply) {
+    const parsedParams = accountKeyParamSchema.safeParse(req.params);
+    const parsedBody = saveCpPersonalSchema.safeParse(req.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: [
+          ...(parsedParams.success ? [] : parsedParams.error.issues),
+          ...(parsedBody.success ? [] : parsedBody.error.issues),
+        ],
+      });
+    }
+
+    const account = await this.service.savePersonal(parsedParams.data.accountKey, parsedBody.data);
+    return reply.status(200).send(account);
+  }
+
+  async saveIntegrations(
+    req: FastifyRequest<{ Params: { accountKey: string } }>,
+    reply: FastifyReply,
+  ) {
+    const parsedParams = accountKeyParamSchema.safeParse(req.params);
+    const parsedBody = saveCpIntegrationsSchema.safeParse(req.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: [
+          ...(parsedParams.success ? [] : parsedParams.error.issues),
+          ...(parsedBody.success ? [] : parsedBody.error.issues),
+        ],
+      });
+    }
+
+    const account = await this.service.saveIntegrations(
+      parsedParams.data.accountKey,
+      parsedBody.data,
+    );
+    return reply.status(200).send(account);
   }
 }

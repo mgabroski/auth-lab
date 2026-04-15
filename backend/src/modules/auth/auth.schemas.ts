@@ -110,6 +110,4 @@ export const validateResetPasswordTokenSchema = z.object({
   token: z.string().min(20, 'Invalid reset token'),
 });
 
-export type ValidateResetPasswordTokenInput = z.infer<
-  typeof validateResetPasswordTokenSchema
->;
+export type ValidateResetPasswordTokenInput = z.infer<typeof validateResetPasswordTokenSchema>;

@@ -25,17 +25,18 @@ const progressStyle: CSSProperties = {
 type StepIndicatorProps = {
   stepNumber: 1 | 2 | 3;
   stepName: string;
-  reviewedCount?: number;
+  configuredCount?: number;
   totalCount?: number;
 };
 
 export function StepIndicator({
   stepNumber,
   stepName,
-  reviewedCount,
+  configuredCount,
   totalCount,
 }: StepIndicatorProps) {
-  const showProgress = stepNumber === 2 && reviewedCount !== undefined && totalCount !== undefined;
+  const showProgress =
+    stepNumber === 2 && configuredCount !== undefined && totalCount !== undefined;
 
   return (
     <section aria-label="Current step" style={indicatorStyle}>
@@ -44,7 +45,7 @@ export function StepIndicator({
       </p>
       {showProgress ? (
         <p style={progressStyle}>
-          Setup Progress: {reviewedCount} / {totalCount} sections reviewed
+          Setup Progress: {configuredCount} / {totalCount} groups configured
         </p>
       ) : null}
     </section>

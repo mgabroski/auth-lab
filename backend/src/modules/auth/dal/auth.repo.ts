@@ -169,7 +169,7 @@ export class AuthRepo {
       .execute();
   }
 
-    /**
+  /**
    * Read-only lookup for a currently valid reset token.
    *
    * WHY:
@@ -180,21 +180,19 @@ export class AuthRepo {
    * - Never consumes the token.
    * - Returns null when token is missing, expired, or already used.
    */
-    async findValidResetTokenByHash(params: {
-      tokenHash: string;
-      now: Date;
-    }): Promise<{ userId: string } | null> {
-      const row = await this.db
-        .selectFrom('password_reset_tokens')
-        .select(['user_id'])
-        .where('token_hash', '=', params.tokenHash)
-        .where('used_at', 'is', null)
-        .where('expires_at', '>', params.now)
-        .executeTakeFirst();
-  
-      if (!row) return null;
-      return { userId: row.user_id };
-    }
+  async findValidResetTokenByHash(params: {
+    tokenHash: string;
+    now: Date;
+  }): Promise<{ userId: string } | null> {
+    const row = await this.db
+      .selectFrom('password_reset_tokens')
+      .select(['user_id'])
+      .where('token_hash', '=', params.tokenHash)
+      .where('used_at', 'is', null)
+      .where('expires_at', '>', params.now)
+      .executeTakeFirst();
+
+    if (!row) return null;
+    return { userId: row.user_id };
+  }
 }
-
-
