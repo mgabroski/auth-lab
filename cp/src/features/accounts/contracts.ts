@@ -157,6 +157,64 @@ export type CpIntegrationsConfig = {
   integrations: CpIntegrationConfigItem[];
 };
 
+export type CpSettingsHandoffSnapshot = {
+  contractVersion: 1;
+  producedAt: string;
+  mode: 'PRODUCER_ONLY';
+  eligibility: 'READY_FOR_FUTURE_SETTINGS_CONSUMER' | 'BLOCKED_UNPUBLISHED_ACCOUNT';
+  consumer: {
+    settingsEnginePresent: false;
+    cascadeStatus: 'NOT_WIRED';
+    blockingReasons: string[];
+  };
+  account: {
+    accountId: string;
+    accountKey: string;
+    accountName: string;
+    cpStatus: CpStatus;
+    cpRevision: number;
+  };
+  provisioning: {
+    isProvisioned: boolean;
+    tenantId: string | null;
+    tenantKey: string | null;
+    tenantName: string | null;
+    tenantState: CpProvisioningState;
+    publishedAt: string | null;
+  };
+  allowances: {
+    access: Omit<CpAccessConfig, 'configured'>;
+    account: Omit<CpAccountSettingsConfig, 'configured'>;
+    modules: {
+      modules: CpModuleSettingsConfig['modules'];
+    };
+    personal: {
+      families: Array<{
+        familyKey: PersonalFamilyKey;
+        isAllowed: boolean;
+      }>;
+      fields: Array<{
+        familyKey: PersonalFamilyKey;
+        fieldKey: string;
+        isAllowed: boolean;
+        defaultSelected: boolean;
+        minimumRequired: CpPersonalField['minimumRequired'];
+        isSystemManaged: boolean;
+      }>;
+    };
+    integrations: {
+      integrations: Array<{
+        integrationKey: string;
+        isAllowed: boolean;
+        capabilities: Array<{
+          capabilityKey: string;
+          isAllowed: boolean;
+        }>;
+      }>;
+    };
+  };
+};
+
 export type ControlPlaneAccountDetail = {
   id: string;
   accountName: string;
@@ -171,6 +229,7 @@ export type ControlPlaneAccountDetail = {
   moduleSettings: CpModuleSettingsConfig;
   personal: CpPersonalConfig;
   integrations: CpIntegrationsConfig;
+  settingsHandoff: CpSettingsHandoffSnapshot;
 };
 
 export type CreateCpAccountInput = {

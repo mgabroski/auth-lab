@@ -50,22 +50,23 @@ Do not write ADRs for:
 
 ## ADR Index
 
-| ID       | Title                                                                                                                     | Status | Scope                         |
-| -------- | ------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------- |
-| ADR-0001 | Single Public Origin Through Reverse Proxy                                                                                | LOCKED | topology                      |
-| ADR-0002 | Host-Derived Tenant Resolution                                                                                            | LOCKED | topology / auth               |
-| ADR-0003 | SSR Uses Internal Backend URL With Explicit Header Forwarding                                                             | LOCKED | frontend / backend / topology |
-| ADR-0004 | Browser Uses Same-Origin `/api/*`; SSO Starts With Navigation, Not `fetch()`                                              | LOCKED | frontend / auth / topology    |
-| ADR-0005 | Session Cookie And SSO State Cookie Are Separate Contracts                                                                | LOCKED | auth / security               |
-| ADR-0006 | Proxy Conformance Tests Are The Safety Net For Dev/Prod Proxy Drift                                                       | LOCKED | infra / topology              |
-| ADR-0007 | Next.js App Router Is The Frontend Framework                                                                              | LOCKED | frontend                      |
-| ADR-0008 | Workspace Setup Guidance Is Tenant-Scoped; No `FIRST_TIME_SETUP` NextAction                                               | LOCKED | auth / settings boundary      |
-| ADR-0009 | MFA TOTP Label Uses Verified Email, Not `userId`                                                                          | LOCKED | auth / MFA                    |
-| ADR-0010 | Seed Bootstrap Delivery Differs By Environment                                                                            | LOCKED | auth / ops                    |
-| ADR-0011 | Expired Invite Cannot Be Bypassed By SSO                                                                                  | LOCKED | auth / invites / SSO          |
-| ADR-0012 | SSO Does Not Bypass App-Level MFA                                                                                         | LOCKED | auth / SSO / MFA              |
-| ADR-0013 | Documentation System Uses Tiered Truth And One Active Prompt Pack                                                         | LOCKED | documentation system          |
-| ADR-0014 | Control Plane Backend Lives Inside The Shared Backend; CP Provisioning And Tenant Configuration Truth Are Separate Tables | LOCKED | CP / architecture             |
+| ID       | Title                                                                                                                       | Status | Scope                         |
+| -------- | --------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------- |
+| ADR-0001 | Single Public Origin Through Reverse Proxy                                                                                  | LOCKED | topology                      |
+| ADR-0002 | Host-Derived Tenant Resolution                                                                                              | LOCKED | topology / auth               |
+| ADR-0003 | SSR Uses Internal Backend URL With Explicit Header Forwarding                                                               | LOCKED | frontend / backend / topology |
+| ADR-0004 | Browser Uses Same-Origin `/api/*`; SSO Starts With Navigation, Not `fetch()`                                                | LOCKED | frontend / auth / topology    |
+| ADR-0005 | Session Cookie And SSO State Cookie Are Separate Contracts                                                                  | LOCKED | auth / security               |
+| ADR-0006 | Proxy Conformance Tests Are The Safety Net For Dev/Prod Proxy Drift                                                         | LOCKED | infra / topology              |
+| ADR-0007 | Next.js App Router Is The Frontend Framework                                                                                | LOCKED | frontend                      |
+| ADR-0008 | Workspace Setup Guidance Is Tenant-Scoped; No `FIRST_TIME_SETUP` NextAction                                                 | LOCKED | auth / settings boundary      |
+| ADR-0009 | MFA TOTP Label Uses Verified Email, Not `userId`                                                                            | LOCKED | auth / MFA                    |
+| ADR-0010 | Seed Bootstrap Delivery Differs By Environment                                                                              | LOCKED | auth / ops                    |
+| ADR-0011 | Expired Invite Cannot Be Bypassed By SSO                                                                                    | LOCKED | auth / invites / SSO          |
+| ADR-0012 | SSO Does Not Bypass App-Level MFA                                                                                           | LOCKED | auth / SSO / MFA              |
+| ADR-0013 | Documentation System Uses Tiered Truth And One Active Prompt Pack                                                           | LOCKED | documentation system          |
+| ADR-0014 | Control Plane Backend Lives Inside The Shared Backend; CP Provisioning And Tenant Configuration Truth Are Separate Tables   | LOCKED | CP / architecture             |
+| ADR-0015 | Control Plane Remains Producer-Only Until The Real Settings State Engine Exists; Future Handoff Uses One Canonical Snapshot | LOCKED | CP / Settings boundary        |
 
 ---
 
@@ -453,6 +454,42 @@ Keeping CP provisioning truth and tenant configuration truth separate preserves 
 
 - Separate backend service for CP: rejected — premature complexity at this scale.
 - Shared tables between CP and tenant Settings: rejected — blurs the ownership model and blocks clean Settings consumption.
+
+---
+
+## ADR-0015 — Control Plane Remains Producer-Only Until The Real Settings State Engine Exists; Future Handoff Uses One Canonical Snapshot
+
+### Status
+
+LOCKED
+
+### Decision
+
+Until the real Settings Step 10 Phase 2 state engine exists in this repository, Control Plane writes remain producer-only. They must not pretend to perform a live CP → Settings cascade.
+
+During this blocked phase, the canonical handoff contract is a single internal `settingsHandoff` snapshot built from CP allowance truth, provisioning truth, and `cpRevision`. That snapshot may be returned on full CP account detail DTOs and may be consumed in-process by future Settings code, but it does not represent a live cascade success state.
+
+Once the real Settings state engine exists, the future CP → Settings integration must use this same canonical contract and must execute synchronously in the same transaction boundary required by the locked Settings roadmap.
+
+### Why
+
+The prerequisite roadmap explicitly forbids fake CP → Settings integration before the real Settings engine exists. The Settings Step 10 roadmap also requires a synchronous, atomic, revision-based cascade once that engine is real.
+
+Without a locked producer-side contract, CP could drift into ad hoc handoff shapes, fake webhook placeholders, or UI states that imply Settings synchronization has already happened. A single canonical snapshot keeps current behavior honest while preparing a clean future integration point.
+
+### What This Constrains
+
+- CP may expose a producer snapshot, but it must not claim live Settings synchronization while the Settings engine is absent.
+- Producer snapshots must carry allowance truth and provisioning truth only — not CP Step 2 progress/configured flags as fake Settings truth.
+- `cpRevision` remains the tenant-scoped revision signal for meaningful CP allowance mutations.
+- Future Settings wiring must reuse the canonical handoff contract and must not invent a second cascade shape.
+- No queue, webhook, fire-and-forget bridge, or placeholder success flag may be introduced as a substitute for the future synchronous cascade.
+
+### Alternatives Considered
+
+- Fake synchronous call into a non-existent Settings service: rejected — dishonest and incompatible with the locked dependency boundary.
+- Async queue or webhook placeholder before Settings exists: rejected — violates the locked synchronous cascade model and creates drift.
+- No handoff contract until Settings work starts: rejected — leaves CP without a stable producer shape and makes later integration noisier.
 
 ## Maintenance Rules
 

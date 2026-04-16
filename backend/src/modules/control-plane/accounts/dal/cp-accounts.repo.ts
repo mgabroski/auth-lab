@@ -128,7 +128,7 @@ export class CpAccountsRepo {
         member_mfa_required: params.memberMfaRequired,
         public_signup_allowed: params.publicSignupAllowed,
         admin_invitations_allowed: params.adminInvitationsAllowed,
-        allowed_domains: params.allowedDomains,
+        allowed_domains: sql`${JSON.stringify(params.allowedDomains)}::jsonb`,
       })
       .onConflict((oc) =>
         oc.column('account_id').doUpdateSet({
@@ -139,7 +139,7 @@ export class CpAccountsRepo {
           member_mfa_required: params.memberMfaRequired,
           public_signup_allowed: params.publicSignupAllowed,
           admin_invitations_allowed: params.adminInvitationsAllowed,
-          allowed_domains: params.allowedDomains,
+          allowed_domains: sql`${JSON.stringify(params.allowedDomains)}::jsonb`,
           updated_at: new Date(),
         }),
       )

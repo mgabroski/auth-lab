@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 5 Edit and Re-entry Flow is now shipped.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 6 producer-side Settings handoff preparation is now shipped, while live CP → Settings cascade wiring remains correctly blocked until the real Settings state engine exists.
 
 This repo already has:
 
@@ -31,6 +31,7 @@ This repo already has:
 - real CP Phase 3 Step 2 persistence for setup groups and Personal field-catalog truth
 - real CP Phase 4 Review & Publish backend composition, Activation Ready validation, publish action, and tenant provisioning truth
 - real CP Phase 5 edit/re-entry surfaces, published-account status toggle, and practical accounts list actions
+- real CP Phase 6 producer-side Settings handoff snapshot on full account detail DTOs and internal backend service composition
 - CP frontend wired to real backend data for create basic-info submission, accounts list, Step 2 group saves, Step 2 progress state, required-group continuation gating, and Review & Publish
 
 This repo does not yet claim that the full Auth / Provisioning closure roadmap is complete.
@@ -104,7 +105,7 @@ The following foundations are treated as real in the repo now.
 - one canonical Auth / Provisioning QA execution surface exists: `docs/qa/qa-execution-pack.md`
 - current prompt routing is centralized through `docs/prompts/catalog.md`
 
-### Control Plane foundation — Phase 5 (current)
+### Control Plane foundation — Phase 6 producer-side handoff prep (current)
 
 - a separate Control Plane Next.js app exists at `cp/`
 - the Control Plane is not part of the tenant frontend package
@@ -145,6 +146,14 @@ The following foundations are treated as real in the repo now.
   - `PATCH /cp/accounts/:accountKey/status` updates the real provisioned tenant row and `cp_accounts.cp_status`
   - Draft accounts still use Review & Publish for first publication
   - status changes do not increment `cpRevision` because they do not mutate CP allowance truth
+- **canonical producer-side Settings handoff snapshot now exists** on full CP account detail DTOs as `settingsHandoff`
+- **internal backend handoff contract now exists** through `CpAccountsService.getSettingsHandoff(accountKey)` for future in-process Settings consumption
+- **State A stopping boundary is explicit and honest**:
+  - `settingsHandoff.mode` is `PRODUCER_ONLY`
+  - `settingsHandoff.consumer.settingsEnginePresent` is `false`
+  - `settingsHandoff.consumer.cascadeStatus` is `NOT_WIRED`
+  - blocking reasons explain why live CP → Settings cascade is not active yet
+- producer-side handoff snapshot carries allowance truth and provisioning truth only; it does **not** mirror CP Step 2 progress/configured flags as fake Settings truth
 - CP backend remains dev-only no-auth in this phase — CP authentication is a later phase
 - the locked 3-step CP flow (Basic Account Info → Account Setup → Review & Publish) remains unchanged
 - the 4 locked setup groups remain unchanged
@@ -209,7 +218,7 @@ The full auth closure roadmap is still open in the areas already tracked by the 
 
 ### Control Plane expansion (remaining phases)
 
-The Control Plane now ships Phase 5 Edit and Re-entry Flow. Still open:
+The Control Plane now ships Phase 6 producer-side Settings handoff preparation. Still open:
 
 - CP authentication and operator RBAC
 - CP audit trail UI

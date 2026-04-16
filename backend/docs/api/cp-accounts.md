@@ -1,6 +1,6 @@
 # CP Accounts API Contract
 
-This document describes the backend CP accounts API contract implemented in this repository.
+This document describes the backend CP accounts contract implemented in this repository.
 
 It is a contract document, not a product brief. It describes what the backend actually exposes now. It must stay aligned with `backend/src/modules/control-plane/accounts/cp-accounts.routes.ts`.
 
@@ -190,11 +190,126 @@ All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accou
         "capabilities": []
       }
     ]
+  },
+  "settingsHandoff": {
+    "contractVersion": 1,
+    "producedAt": "2026-01-01T00:00:00.000Z",
+    "mode": "PRODUCER_ONLY",
+    "eligibility": "BLOCKED_UNPUBLISHED_ACCOUNT",
+    "consumer": {
+      "settingsEnginePresent": false,
+      "cascadeStatus": "NOT_WIRED",
+      "blockingReasons": [
+        "Settings Step 10 Phase 2 is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.",
+        "Account \"goodwill-ca\" is not provisioned to a tenant yet. Publish the account before any future Settings cascade can become eligible."
+      ]
+    },
+    "account": {
+      "accountId": "uuid",
+      "accountKey": "goodwill-ca",
+      "accountName": "GoodWill CA",
+      "cpStatus": "Draft",
+      "cpRevision": 2
+    },
+    "provisioning": {
+      "isProvisioned": false,
+      "tenantId": null,
+      "tenantKey": null,
+      "tenantName": null,
+      "tenantState": "NOT_PROVISIONED",
+      "publishedAt": null
+    },
+    "allowances": {
+      "access": {
+        "loginMethods": {
+          "password": true,
+          "google": false,
+          "microsoft": false
+        },
+        "mfaPolicy": {
+          "adminRequired": true,
+          "memberRequired": false
+        },
+        "signupPolicy": {
+          "publicSignup": false,
+          "adminInvitationsAllowed": true,
+          "allowedDomains": []
+        }
+      },
+      "account": {
+        "branding": {
+          "logo": true,
+          "menuColor": true,
+          "fontColor": true,
+          "welcomeMessage": true
+        },
+        "organizationStructure": {
+          "employers": true,
+          "locations": true
+        },
+        "companyCalendar": {
+          "allowed": true
+        }
+      },
+      "modules": {
+        "modules": {
+          "personal": true,
+          "documents": false,
+          "benefits": false,
+          "payments": false
+        }
+      },
+      "personal": {
+        "families": [
+          {
+            "familyKey": "identity",
+            "isAllowed": true
+          }
+        ],
+        "fields": [
+          {
+            "familyKey": "identity",
+            "fieldKey": "person.first_name",
+            "isAllowed": true,
+            "defaultSelected": true,
+            "minimumRequired": "required",
+            "isSystemManaged": false
+          }
+        ]
+      },
+      "integrations": {
+        "integrations": [
+          {
+            "integrationKey": "integration.sso.google",
+            "isAllowed": false,
+            "capabilities": []
+          }
+        ]
+      }
+    }
   }
 }
 ```
 
-### 3.3 Review response
+### 3.3 Producer-side Settings handoff snapshot
+
+Every full account detail now includes `settingsHandoff`.
+
+This is **not** a live Settings integration status. It is the canonical producer snapshot that the future Settings state engine will consume once Settings Step 10 Phase 2 exists.
+
+Current truthful behavior:
+
+- `mode` is always `PRODUCER_ONLY`
+- `consumer.settingsEnginePresent` is always `false`
+- `consumer.cascadeStatus` is always `NOT_WIRED`
+- `blockingReasons` explain why live cascade wiring is not active yet
+- `allowances` carries allowance truth only — not CP Step 2 progress/configured flags
+- unpublished accounts remain `BLOCKED_UNPUBLISHED_ACCOUNT`
+- published accounts become `READY_FOR_FUTURE_SETTINGS_CONSUMER`, but still remain producer-only until the real Settings state engine ships
+
+There is no separate HTTP route for this contract in the current repo. It is included on the full account detail DTO and is also available through the internal `CpAccountsService` handoff method for future in-process Settings consumption.
+
+### 3.4 Review response
 
 `GET /cp/accounts/:accountKey/review` and `POST /cp/accounts/:accountKey/publish` return a backend-owned Review DTO:
 
@@ -622,7 +737,31 @@ New accounts are always created with `cpStatus: "Draft"`.
 
 ---
 
-## 7. Module location
+## 7. CP → Settings producer boundary (current repo state)
+
+The current repo is still in **State A** for the Control Plane prerequisite roadmap:
+
+- the real Settings Step 10 Phase 2 state engine does not exist yet
+- there is no `SettingsStateService`
+- there is no `SettingsCpCascadeService`
+- CP does **not** fake a synchronous cascade, webhook, queue handoff, or success flag
+
+What is shipped now:
+
+- CP persists real allowance truth in `cp_*` tables
+- CP maintains honest `cpRevision` behavior for allowance mutations
+- CP returns the canonical `settingsHandoff` producer snapshot on full account detail DTOs
+- CP exposes the same producer snapshot through an internal backend service contract for the future Settings module to consume in-process
+
+What is intentionally not shipped yet:
+
+- no live cascade call from CP writes into Settings
+- no fake “synced to Settings” UI or API field
+- no Settings-side tables, section state, aggregate state, or reconciliation behavior
+
+---
+
+## 8. Module location
 
 ```text
 backend/src/modules/control-plane/
@@ -636,6 +775,9 @@ backend/src/modules/control-plane/
     cp-accounts.schemas.ts
     cp-accounts.service.ts
     cp-accounts.types.ts
+    handoff/
+      cp-settings-handoff.builder.ts
+      cp-settings-handoff.types.ts
     dal/
       cp-accounts.query-sql.ts
       cp-accounts.repo.ts

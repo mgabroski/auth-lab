@@ -18,6 +18,7 @@ import type {
   PersonalFamilyKey,
   PersonalMinimumRequired,
 } from './cp-accounts.catalog';
+import type { CpSettingsHandoffSnapshot } from './handoff/cp-settings-handoff.types';
 
 export type CpStatus = 'Draft' | 'Active' | 'Disabled';
 
@@ -150,6 +151,7 @@ export type CpAccountDetail = {
   moduleSettings: CpModuleSettingsConfig;
   personal: CpPersonalConfig;
   integrations: CpIntegrationsConfig;
+  settingsHandoff: CpSettingsHandoffSnapshot;
 };
 
 export type CpReviewLine = {

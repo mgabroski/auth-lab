@@ -84,6 +84,8 @@ import type {
   CpStatus,
   CpStep2Progress,
 } from './cp-accounts.types';
+import { buildCpSettingsHandoffSnapshot } from './handoff/cp-settings-handoff.builder';
+import type { CpSettingsHandoffSnapshot } from './handoff/cp-settings-handoff.types';
 
 type AccountSnapshot = {
   account: CpAccountRow;
@@ -217,7 +219,7 @@ function buildAccessConfig(
     signupPolicy: {
       publicSignup: row?.public_signup_allowed ?? false,
       adminInvitationsAllowed: row?.admin_invitations_allowed ?? true,
-      allowedDomains: (row?.allowed_domains as string[] | undefined) ?? [],
+      allowedDomains: normalizeStoredDomains(row?.allowed_domains),
     },
   };
 }
@@ -415,7 +417,9 @@ function snapshotToAccountDetail(snapshot: AccountSnapshot): CpAccountDetail {
     module_settings_configured: moduleConfigured,
   };
 
-  return {
+  const provisioning = buildProvisioningResult(snapshot);
+
+  const accountDetail: Omit<CpAccountDetail, 'settingsHandoff'> = {
     id: snapshot.account.id,
     accountName: snapshot.account.account_name,
     accountKey: snapshot.account.account_key,
@@ -439,6 +443,14 @@ function snapshotToAccountDetail(snapshot: AccountSnapshot): CpAccountDetail {
       snapshot.integrationRows,
       snapshot.account.integrations_configured,
     ),
+  };
+
+  return {
+    ...accountDetail,
+    settingsHandoff: buildCpSettingsHandoffSnapshot({
+      account: accountDetail,
+      provisioning,
+    }),
   };
 }
 
@@ -880,6 +892,11 @@ export class CpAccountsService {
   async getReview(accountKey: string): Promise<CpAccountReview> {
     const snapshot = await loadAccountSnapshot(this.deps.db, accountKey);
     return snapshotToReview(snapshot);
+  }
+
+  async getSettingsHandoff(accountKey: string): Promise<CpSettingsHandoffSnapshot> {
+    const snapshot = await loadAccountSnapshot(this.deps.db, accountKey);
+    return snapshotToAccountDetail(snapshot).settingsHandoff;
   }
 
   async listAccounts(): Promise<CpAccountListRow[]> {
