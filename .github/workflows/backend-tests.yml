@@ -103,8 +103,11 @@ jobs:
       - name: Run backend tests
         run: yarn workspace @auth-lab/backend test
 
-      - name: Typecheck backend
+      - name: Typecheck backend source
         run: yarn typecheck:backend
+
+      - name: Typecheck backend tests
+        run: yarn typecheck:backend:tests
 
       - name: Dump logs on failure
         if: failure()

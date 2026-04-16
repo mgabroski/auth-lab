@@ -19,6 +19,7 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,
+    setupCompletedAt: overrides.setupCompletedAt ?? null,
   };
 }
 

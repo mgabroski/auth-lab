@@ -28,7 +28,7 @@
     "lint:backend": "eslint backend",
     "lint:frontend": "eslint frontend",
     "lint:cp": "eslint cp",
-    "typecheck": "yarn typecheck:backend && yarn typecheck:frontend && yarn typecheck:cp",
+    "typecheck": "yarn typecheck:backend && yarn typecheck:backend:tests && yarn typecheck:frontend && yarn typecheck:cp",
     "typecheck:backend": "yarn workspace @auth-lab/backend typecheck",
     "typecheck:frontend": "yarn workspace frontend typecheck",
     "typecheck:cp": "yarn workspace cp typecheck",
@@ -44,7 +44,8 @@
     "seed:dev": "yarn workspace @auth-lab/backend db:seed:dev",
     "seed:e2e": "yarn workspace @auth-lab/backend db:seed:e2e",
     "bootstrap:tenant": "yarn workspace @auth-lab/backend db:bootstrap:tenant",
-    "prepare": "husky"
+    "prepare": "husky",
+    "typecheck:backend:tests": "yarn workspace @auth-lab/backend typecheck:tests"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

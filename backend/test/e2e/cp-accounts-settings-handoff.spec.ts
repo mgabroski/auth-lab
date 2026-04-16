@@ -5,7 +5,6 @@ import type {
   CpAccountDetail,
   CpAccountReview,
 } from '../../src/modules/control-plane/accounts/cp-accounts.types';
-import type { CpSettingsHandoffSnapshot } from '../../src/modules/control-plane/accounts/handoff/cp-settings-handoff.types';
 import { buildTestApp } from '../helpers/build-test-app';
 
 function readJson<T>(res: { json: () => unknown }): T {
@@ -247,37 +246,44 @@ describe('cp accounts settings handoff integration boundary', () => {
       const internalHandoff =
         await deps.controlPlane.accounts.cpAccountsService.getSettingsHandoff(accountKey);
 
-      expect(internalHandoff).toMatchObject<CpSettingsHandoffSnapshot>({
-        contractVersion: 1,
-        mode: 'PRODUCER_ONLY',
-        eligibility: 'READY_FOR_FUTURE_SETTINGS_CONSUMER',
-        consumer: {
-          settingsEnginePresent: false,
-          cascadeStatus: 'NOT_WIRED',
-          blockingReasons: [
-            'Settings Step 10 Phase 2 is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
-          ],
+      expect(internalHandoff.contractVersion).toBe(1);
+      expect(internalHandoff.producedAt).toBeInstanceOf(Date);
+      expect(internalHandoff.mode).toBe('PRODUCER_ONLY');
+      expect(internalHandoff.eligibility).toBe('READY_FOR_FUTURE_SETTINGS_CONSUMER');
+      expect(internalHandoff.consumer).toEqual({
+        settingsEnginePresent: false,
+        cascadeStatus: 'NOT_WIRED',
+        blockingReasons: [
+          'Settings Step 10 Phase 2 is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
+        ],
+      });
+      expect(internalHandoff.account).toEqual({
+        accountId: created.id,
+        accountKey,
+        accountName: 'QA Phase 6 Tenant',
+        cpStatus: 'Active',
+        cpRevision: 4,
+      });
+      expect(internalHandoff.provisioning.isProvisioned).toBe(true);
+      expect(internalHandoff.provisioning.tenantId).toBe(published.provisioning.tenantId);
+      expect(internalHandoff.provisioning.tenantKey).toBe(accountKey);
+      expect(internalHandoff.provisioning.tenantName).toBe('QA Phase 6 Tenant');
+      expect(internalHandoff.provisioning.tenantState).toBe('ACTIVE');
+      expect(internalHandoff.provisioning.publishedAt).toBeInstanceOf(Date);
+      expect(internalHandoff.allowances.access).toEqual({
+        loginMethods: {
+          password: true,
+          google: true,
+          microsoft: false,
         },
-        account: {
-          accountKey,
-          accountName: 'QA Phase 6 Tenant',
-          cpStatus: 'Active',
-          cpRevision: 4,
+        mfaPolicy: {
+          adminRequired: true,
+          memberRequired: true,
         },
-        provisioning: {
-          isProvisioned: true,
-          tenantKey: accountKey,
-          tenantName: 'QA Phase 6 Tenant',
-          tenantState: 'ACTIVE',
-        },
-        allowances: {
-          access: {
-            loginMethods: {
-              password: true,
-              google: true,
-              microsoft: false,
-            },
-          },
+        signupPolicy: {
+          publicSignup: false,
+          adminInvitationsAllowed: true,
+          allowedDomains: ['example.com'],
         },
       });
     } finally {

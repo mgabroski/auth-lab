@@ -8,7 +8,7 @@
 # WHAT RUNS:
 #   fmt:check   — Prettier format check
 #   lint        — ESLint
-#   typecheck   — tsc backend + frontend
+#   typecheck   — tsc backend src + backend tests + frontend + cp
 #   test        — delegates to scripts/test.sh which runs:
 #                   backend tests (against auth_lab_test)
 #                   frontend unit tests
