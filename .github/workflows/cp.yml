@@ -58,3 +58,4 @@ jobs:
         run: yarn build:cp
         env:
           NODE_ENV: production
+          INTERNAL_API_URL: http://backend:3001
