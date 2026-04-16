@@ -16,11 +16,12 @@
 # - CORS is intentionally NOT configured here (same-origin architecture eliminates it)
 #
 # CONTROL PLANE RULES (cp.lvh.me:3000):
-# - /* → cp:3002
+# - /api/*   → backend:3001, strip /api prefix
+# - /_next/* → cp:3002, NO prefix strip
+# - /*       → cp:3002
 # - CP is a separate internal app on its own host and service.
-# - CP has no /api routing in Phase 1 — it has no backend calls yet.
-#   When Phase 2 backend CP APIs exist, add an /api/* rule to this block.
-# - No tenant Host header forwarding required for CP — CP is not tenant-scoped.
+# - Browser calls stay same-origin even though CP is not tenant-scoped.
+# - SSR/server paths inside CP still use INTERNAL_API_URL directly.
 #
 # LOCAL DEV / CI:
 # - Caddy defaults hostname-based site addresses to HTTPS, even on custom ports.
@@ -61,9 +62,30 @@
 # - Isolating it on cp.lvh.me prevents any accidental route overlap with tenant traffic.
 # - In dev, cp.lvh.me:3000 is the CP entry point; localhost:3002 also works directly.
 http://cp.lvh.me:3000 {
+  @api path /api/*
+
+  handle @api {
+    uri strip_prefix /api
+    reverse_proxy backend:3001 {
+      header_up Host {host}
+      header_up X-Forwarded-Host {host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  @nextAssets path /_next/*
+
+  handle @nextAssets {
+    reverse_proxy cp:3002 {
+      header_up Host {host}
+      header_up X-Forwarded-Host {host}
+    }
+  }
+
   handle {
     reverse_proxy cp:3002 {
       header_up Host {host}
+      header_up X-Forwarded-Host {host}
     }
   }
 }

@@ -16,6 +16,8 @@
 #   PT-06: X-Forwarded-Host           — belt-and-suspenders tenant fallback
 #   PT-07: Cross-tenant isolation     — session from tenant A rejected on tenant B
 #   PT-08: Inactive tenant anti-enum  — unknown tenant returns same locked unavailable shape
+#   CP-01: CP host reachability       — cp.lvh.me must route to the CP app
+#   CP-02: CP same-origin API route   — cp.lvh.me/api/* must reach backend cleanly
 #
 # PREREQUISITES:
 #   - Full stack running: docker compose -f infra/docker-compose.yml up --build -d
@@ -367,6 +369,36 @@ else
   fail "Expected 200 with unavailable payload, got ${UNKNOWN_CODE}"
 fi
 
+# ── CP-01: Control Plane host reachability ───────────────────────────────────
+echo ""
+echo "CP-01: Control Plane host reachability"
+log "cp.lvh.me must route to the CP app instead of the tenant app or backend"
+
+CP_ROOT_CODE=$(curl_silent -o /tmp/cp-root-body.txt -w "%{http_code}"   -H "Host: cp.lvh.me"   "${BASE_URL}/" 2>/dev/null || echo "000")
+
+if [ "$CP_ROOT_CODE" = "200" ] || [ "$CP_ROOT_CODE" = "307" ] || [ "$CP_ROOT_CODE" = "308" ]; then
+  pass "CP host routed to the CP app (HTTP ${CP_ROOT_CODE})"
+else
+  fail "Expected cp.lvh.me root to reach the CP app, got HTTP ${CP_ROOT_CODE}"
+fi
+
+rm -f /tmp/cp-root-body.txt
+
+# ── CP-02: Control Plane same-origin /api routing ───────────────────────────
+echo ""
+echo "CP-02: Control Plane same-origin /api routing"
+log "cp.lvh.me /api/* must route directly to the backend through the public proxy"
+
+CP_API_CODE=$(curl_silent -o /tmp/cp-api-health.txt -w "%{http_code}"   -H "Host: cp.lvh.me"   "${BASE_URL}/api/health" 2>/dev/null || echo "000")
+
+if [ "$CP_API_CODE" = "200" ]; then
+  pass "CP /api/* routed to backend correctly (HTTP 200)"
+else
+  fail "Expected cp.lvh.me /api/health to return 200, got ${CP_API_CODE}"
+fi
+
+rm -f /tmp/cp-api-health.txt
+
 # ─── Summary ─────────────────────────────────────────────────────────────────
 
 echo ""
@@ -384,6 +416,6 @@ if [ $FAIL -gt 0 ]; then
 else
   echo ""
   echo "✅ All proxy conformance tests passed."
-  echo "   Topology foundation is locked. Safe to proceed to frontend auth."
+  echo "   Tenant and CP proxy topology foundations are locked. Safe to proceed."
   exit 0
 fi

@@ -65,9 +65,10 @@ if [ "$MODE" = "--stack" ]; then
     up --build -d
 
   echo "✅ Full stack started (including local OIDC server)."
-  echo "   Public app: http://goodwill-ca.lvh.me:3000"
-  echo "   API health: http://goodwill-ca.lvh.me:3000/api/health"
-  echo "ℹ️  Control Plane remains a separate host-run app in current scope."
+  echo "   Public app:     http://goodwill-ca.lvh.me:3000"
+  echo "   API health:     http://goodwill-ca.lvh.me:3000/api/health"
+  echo "   Control Plane:  http://cp.lvh.me:3000"
+  echo "   CP API health:  http://cp.lvh.me:3000/api/health"
   exit 0
 fi
 

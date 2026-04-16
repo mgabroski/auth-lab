@@ -61,12 +61,18 @@ services:
     build:
       context: ..
       dockerfile: cp/Dockerfile
+      args:
+        # WHY: cp/next.config.ts validates INTERNAL_API_URL during `next build`
+        # in non-development environments. Use the same Docker-internal backend
+        # URL at build time and at runtime to keep the SSR contract honest.
+        INTERNAL_API_URL: ${CP_INTERNAL_API_URL}
     environment:
       NODE_ENV: production
+      INTERNAL_API_URL: ${CP_INTERNAL_API_URL}
     networks: [hubins_net]
-    # WHY: CP has no backend dependency in Phase 1 — it is a static shell with
-    # typed placeholder data only. This will change when Phase 2 backend APIs exist.
-    # CP does not depend on backend health for Phase 1.
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   backend:

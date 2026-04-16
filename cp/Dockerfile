@@ -6,14 +6,15 @@
 # - NOT used in host-run dev mode (yarn dev:cp runs Next.js directly on the host).
 #
 # TOPOLOGY:
-#   Caddy:3000 (cp.lvh.me:3000) → cp:3002 (/*)
+#   Browser → Caddy/nginx → cp:3002      (/* and /_next/*)
+#                      → backend:3001    (/api/*)
 #
 # RULES:
 # - Build context is the REPO ROOT (see infra/docker-compose.yml).
 # - Multi-stage build: deps → builder → runner.
 # - output: 'standalone' in cp/next.config.ts is REQUIRED for this image to work.
-# - CP has no INTERNAL_API_URL dependency in Phase 1 (no backend calls yet).
-#   This will change when Phase 2 backend APIs are wired.
+# - INTERNAL_API_URL is required for SSR/server-side CP → backend calls.
+# - The same Docker-internal backend URL is supplied at build time and runtime.
 
 FROM node:24.14.1-alpine AS base
 RUN corepack enable
@@ -37,6 +38,13 @@ COPY --from=deps /repo ./
 COPY cp ./cp
 
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# WHY ARG + ENV here:
+# cp/next.config.ts validates INTERNAL_API_URL in non-development builds.
+# The actual runtime value is still injected by docker-compose.yml, but the build
+# must use the same internal backend URL so the startup contract stays truthful.
+ARG INTERNAL_API_URL=http://backend:3001
+ENV INTERNAL_API_URL=${INTERNAL_API_URL}
 
 WORKDIR /repo/cp
 RUN yarn build

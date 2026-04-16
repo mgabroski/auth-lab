@@ -6,6 +6,7 @@ on:
       - 'infra/**'
       - 'backend/**'
       - 'frontend/**'
+      - 'cp/**'
       - 'package.json'
       - 'yarn.lock'
       - 'scripts/proxy-conformance.sh'
@@ -16,6 +17,7 @@ on:
       - 'infra/**'
       - 'backend/**'
       - 'frontend/**'
+      - 'cp/**'
       - 'package.json'
       - 'yarn.lock'
       - 'scripts/proxy-conformance.sh'
@@ -24,7 +26,7 @@ on:
 
 jobs:
   conformance:
-    name: PT-01..PT-08 Proxy Conformance + Operability Smoke
+    name: PT-01..PT-08 Proxy Conformance + CP Host Smoke + Operability Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -39,8 +41,10 @@ jobs:
             echo "127.0.0.1 goodwill-open.lvh.me"
             echo "127.0.0.1 does-not-exist.lvh.me"
             echo "127.0.0.1 acme.lvh.me"
+            echo "127.0.0.1 cp.lvh.me"
           } | sudo tee -a /etc/hosts
           getent hosts goodwill-ca.lvh.me
+          getent hosts cp.lvh.me
 
       - name: Write infra/.env.stack for CI
         run: |
@@ -93,6 +97,7 @@ jobs:
           SEED_INVITE_TTL_HOURS=168
 
           FRONTEND_INTERNAL_API_URL=http://backend:3001
+          CP_INTERNAL_API_URL=http://backend:3001
           NEXT_PUBLIC_ENV=development
           ENVEOF
 
@@ -113,7 +118,7 @@ jobs:
             echo "::warning::docker compose up returned exit code ${compose_exit}; continuing."
             docker compose --env-file infra/.env.stack \
               -f infra/docker-compose.yml \
-              logs backend proxy --tail=100 || true
+              logs backend proxy cp --tail=100 || true
           fi
 
       - name: Wait for backend healthy
@@ -148,14 +153,14 @@ jobs:
             curl -v -H "Host: goodwill-ca.lvh.me" http://localhost:3000/api/health || true
             docker compose --env-file infra/.env.stack \
               -f infra/docker-compose.yml \
-              logs proxy --tail=50 || true
+              logs proxy cp --tail=50 || true
             exit 1
           fi
 
       - name: Ensure operability smoke script is executable
         run: chmod +x ./scripts/operability-smoke.sh
 
-      - name: Run proxy conformance tests (PT-01..PT-08)
+      - name: Run proxy conformance tests (PT-01..PT-08 + CP host smoke)
         run: ./scripts/proxy-conformance.sh
 
       - name: Run operability smoke (OS-01..OS-05)

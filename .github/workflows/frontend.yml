@@ -155,6 +155,7 @@ jobs:
 
           # Frontend container runtime / build
           FRONTEND_INTERNAL_API_URL=http://backend:3001
+          CP_INTERNAL_API_URL=http://backend:3001
           NEXT_PUBLIC_ENV=development
           ENVEOF
 
@@ -178,7 +179,7 @@ jobs:
             docker compose --env-file infra/.env.stack \
               -f infra/docker-compose.yml \
               -f infra/docker-compose-ci-oidc.yml \
-              logs local-oidc backend frontend proxy --tail=100 || true
+              logs local-oidc backend frontend proxy cp --tail=100 || true
           fi
 
       - name: Wait for backend healthy
