@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 4 Review & Publish is now shipped.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 5 Edit and Re-entry Flow is now shipped.
 
 This repo already has:
 
@@ -30,6 +30,7 @@ This repo already has:
 - a real `cp_accounts` table (migration `0014_cp_accounts.ts`)
 - real CP Phase 3 Step 2 persistence for setup groups and Personal field-catalog truth
 - real CP Phase 4 Review & Publish backend composition, Activation Ready validation, publish action, and tenant provisioning truth
+- real CP Phase 5 edit/re-entry surfaces, published-account status toggle, and practical accounts list actions
 - CP frontend wired to real backend data for create basic-info submission, accounts list, Step 2 group saves, Step 2 progress state, required-group continuation gating, and Review & Publish
 
 This repo does not yet claim that the full Auth / Provisioning closure roadmap is complete.
@@ -103,7 +104,7 @@ The following foundations are treated as real in the repo now.
 - one canonical Auth / Provisioning QA execution surface exists: `docs/qa/qa-execution-pack.md`
 - current prompt routing is centralized through `docs/prompts/catalog.md`
 
-### Control Plane foundation — Phase 4 (current)
+### Control Plane foundation — Phase 5 (current)
 
 - a separate Control Plane Next.js app exists at `cp/`
 - the Control Plane is not part of the tenant frontend package
@@ -123,6 +124,7 @@ The following foundations are treated as real in the repo now.
   - `PUT /cp/accounts/:accountKey/modules/personal`
   - `PUT /cp/accounts/:accountKey/integrations`
   - `POST /cp/accounts/:accountKey/publish`
+  - `PATCH /cp/accounts/:accountKey/status`
 - **real CP accounts API contract doc** exists at `backend/docs/api/cp-accounts.md`
 - **real persisted Step 2 group state** now exists for:
   - Access, Identity & Security
@@ -138,6 +140,11 @@ The following foundations are treated as real in the repo now.
   - publish action (`POST /cp/accounts/:accountKey/publish`) creates or updates a real `tenants` row and persists CP provisioning truth
 - **Personal CP sub-page** exists under Module Settings and participates in Module Settings completion rules
 - **CP same-origin API proxy** exists at `cp/src/app/api/[...path]/route.ts`
+- **accounts list is now a practical re-entry surface**: edit/setup, review/re-save, and Active/Disabled toggle actions are all backend-backed
+- **published-account status toggle is now real**:
+  - `PATCH /cp/accounts/:accountKey/status` updates the real provisioned tenant row and `cp_accounts.cp_status`
+  - Draft accounts still use Review & Publish for first publication
+  - status changes do not increment `cpRevision` because they do not mutate CP allowance truth
 - CP backend remains dev-only no-auth in this phase — CP authentication is a later phase
 - the locked 3-step CP flow (Basic Account Info → Account Setup → Review & Publish) remains unchanged
 - the 4 locked setup groups remain unchanged
@@ -202,9 +209,8 @@ The full auth closure roadmap is still open in the areas already tracked by the 
 
 ### Control Plane expansion (remaining phases)
 
-The Control Plane now ships Phase 4 Review & Publish. Still open:
+The Control Plane now ships Phase 5 Edit and Re-entry Flow. Still open:
 
-- CP status toggle endpoint (`PATCH /cp/accounts/:accountKey/status`)
 - CP authentication and operator RBAC
 - CP audit trail UI
 - CP → Settings cascade (blocked until Settings state engine exists)

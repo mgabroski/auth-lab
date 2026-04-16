@@ -31,6 +31,7 @@ Current route surface:
 - `PUT /cp/accounts/:accountKey/modules/personal`
 - `PUT /cp/accounts/:accountKey/integrations`
 - `POST /cp/accounts/:accountKey/publish`
+- `PATCH /cp/accounts/:accountKey/status`
 
 ---
 
@@ -79,7 +80,7 @@ CP routes are on the same backend process as all other routes. They are prefixed
 
 ### 3.2 Full account detail
 
-All read and write endpoints except `GET /cp/accounts` and `GET /cp/accounts/:accountKey/review` return the full CP account detail shape.
+All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accountKey/review`, and `POST /cp/accounts/:accountKey/publish` return the full CP account detail shape.
 
 ```json
 {
@@ -241,7 +242,7 @@ All read and write endpoints except `GET /cp/accounts` and `GET /cp/accounts/:ac
 
 ### 4.1 `GET /cp/accounts`
 
-Returns all CP accounts as list rows suitable for the CP accounts list page.
+Returns all CP accounts as list rows suitable for the CP accounts list page. Rows are ordered by most recently updated first so QA and engineering can re-enter the latest accounts quickly.
 
 **Response — 200 OK**
 
@@ -549,6 +550,56 @@ If the account key matches an existing tenant created outside Control Plane:
 
 ---
 
+### 4.11 `PATCH /cp/accounts/:accountKey/status`
+
+Toggles an already-published account between `Active` and `Disabled` without reopening Step 1 identity editing.
+
+This endpoint:
+
+- is intended for quick status changes from the accounts list and edit/re-entry flows
+- updates the real provisioned tenant row
+- updates `cp_accounts.cp_status`
+- does **not** increment `cpRevision` because status changes do not mutate CP allowance truth
+- rejects Draft accounts because first publication still belongs to Review & Publish
+
+**Request body**
+
+```json
+{
+  "targetStatus": "Active"
+}
+```
+
+**Response — 200 OK**
+
+Returns the full account detail shape.
+
+**Response — 409 Conflict**
+
+When the account is still Draft / not yet provisioned:
+
+```json
+{
+  "code": "CONFLICT",
+  "message": "Status toggle is available only after the account has been published once: <accountKey>",
+  "meta": { "accountKey": "<accountKey>" }
+}
+```
+
+When `targetStatus = Active` and Activation Ready fails:
+
+```json
+{
+  "code": "CONFLICT",
+  "message": "Active publish is blocked until Activation Ready passes.",
+  "meta": {
+    "blockingReasons": ["Save the Access, Identity & Security group first."]
+  }
+}
+```
+
+---
+
 ## 5. Status vocabulary
 
 | Value      | Meaning                            |
@@ -567,6 +618,7 @@ New accounts are always created with `cpStatus: "Draft"`.
 - It increments on meaningful persisted CP allowance mutations.
 - It does **not** increment when a save is accepted but the resulting allowance truth is unchanged.
 - Publish updates `cpStatus` and provisioning truth but does **not** increment `cpRevision` because it does not change CP allowance truth.
+- `PATCH /cp/accounts/:accountKey/status` also does **not** increment `cpRevision` for the same reason.
 
 ---
 

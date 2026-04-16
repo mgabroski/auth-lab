@@ -3,7 +3,8 @@
  *
  * WHY:
  * - Maps HTTP requests to the CP accounts service layer.
- * - Validates request shapes with Zod before service execution.
+ * - Validates request shapes with Zod before service execution, including
+ *   the published-account status toggle surface added in Phase 5.
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -17,6 +18,7 @@ import {
   saveCpIntegrationsSchema,
   saveCpModuleSettingsSchema,
   saveCpPersonalSchema,
+  updateCpAccountStatusSchema,
 } from './cp-accounts.schemas';
 import type { CpAccountsService } from './cp-accounts.service';
 
@@ -163,6 +165,23 @@ export class CpAccountsController {
       parsedParams.data.accountKey,
       parsedBody.data,
     );
+    return reply.status(200).send(account);
+  }
+
+  async updateStatus(req: FastifyRequest<{ Params: { accountKey: string } }>, reply: FastifyReply) {
+    const parsedParams = accountKeyParamSchema.safeParse(req.params);
+    const parsedBody = updateCpAccountStatusSchema.safeParse(req.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: [
+          ...(parsedParams.success ? [] : parsedParams.error.issues),
+          ...(parsedBody.success ? [] : parsedBody.error.issues),
+        ],
+      });
+    }
+
+    const account = await this.service.updateStatus(parsedParams.data.accountKey, parsedBody.data);
     return reply.status(200).send(account);
   }
 

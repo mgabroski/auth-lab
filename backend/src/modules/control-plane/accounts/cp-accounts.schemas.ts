@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Centralises Zod validation for CP accounts request shapes.
- * - Phase 4 adds publish validation for the Review & Publish flow.
+ * - Phase 5 adds explicit validation for the published-account status toggle.
  *
  * RULES:
  * - Zod only.
@@ -117,6 +117,10 @@ export const publishCpAccountSchema = z.object({
   targetStatus: z.enum(['Active', 'Disabled']),
 });
 
+export const updateCpAccountStatusSchema = z.object({
+  targetStatus: z.enum(['Active', 'Disabled']),
+});
+
 export type AccountKeyParams = z.infer<typeof accountKeyParamSchema>;
 export type CreateCpAccountInput = z.infer<typeof createCpAccountSchema>;
 export type SaveCpAccessInput = z.infer<typeof saveCpAccessSchema>;
@@ -125,5 +129,6 @@ export type SaveCpModuleSettingsInput = z.infer<typeof saveCpModuleSettingsSchem
 export type SaveCpPersonalInput = z.infer<typeof saveCpPersonalSchema>;
 export type SaveCpIntegrationsInput = z.infer<typeof saveCpIntegrationsSchema>;
 export type PublishCpAccountInput = z.infer<typeof publishCpAccountSchema>;
+export type UpdateCpAccountStatusInput = z.infer<typeof updateCpAccountStatusSchema>;
 
 export { accountKeyParamSchema };

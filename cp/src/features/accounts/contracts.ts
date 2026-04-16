@@ -2,8 +2,8 @@
  * cp/src/features/accounts/contracts.ts
  *
  * WHY:
- * - Shared CP frontend type contracts for accounts, Step 2 group DTOs, and
- *   same-origin mutation payloads.
+ * - Shared CP frontend type contracts for accounts, Step 2 group DTOs, review
+ *   flows, and same-origin mutation payloads.
  */
 
 export type AccountFlowMode = 'create' | 'edit';
@@ -279,5 +279,9 @@ export type ControlPlaneAccountReview = {
 };
 
 export type PublishCpAccountInput = {
+  targetStatus: Exclude<CpStatus, 'Draft'>;
+};
+
+export type UpdateCpAccountStatusInput = {
   targetStatus: Exclude<CpStatus, 'Draft'>;
 };

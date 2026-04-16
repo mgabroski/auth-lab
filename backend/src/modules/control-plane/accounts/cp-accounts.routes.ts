@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Declares the CP accounts HTTP route surface.
- * - Phase 4 adds backend-owned review composition and publish.
+ * - Phase 5 adds the published-account Active/Disabled status toggle route.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -28,4 +28,5 @@ export function registerCpAccountsRoutes(
   app.put('/cp/accounts/:accountKey/integrations', controller.saveIntegrations.bind(controller));
 
   app.post('/cp/accounts/:accountKey/publish', controller.publishAccount.bind(controller));
+  app.patch('/cp/accounts/:accountKey/status', controller.updateStatus.bind(controller));
 }

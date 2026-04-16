@@ -24,6 +24,7 @@ import type {
   SaveCpIntegrationsInput,
   SaveCpModuleSettingsInput,
   SaveCpPersonalInput,
+  UpdateCpAccountStatusInput,
 } from './cp-accounts.schemas';
 import type { CpAccountsRepo } from './dal/cp-accounts.repo';
 import type {
@@ -124,6 +125,37 @@ function stableStringify(value: unknown): string {
   }
 
   return JSON.stringify(value);
+}
+
+function normalizeStoredDomains(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return normalizeDomains(value.filter((entry): entry is string => typeof entry === 'string'));
+}
+
+function accessAllowanceChanged(
+  snapshot: Pick<AccountSnapshot, 'account' | 'accessRow'>,
+  next: SaveCpAccessInput,
+): boolean {
+  if (!snapshot.accessRow || !snapshot.account.access_configured) {
+    return true;
+  }
+
+  const previousDomains = normalizeStoredDomains(snapshot.accessRow.allowed_domains);
+  const nextDomains = normalizeDomains(next.signupPolicy.allowedDomains);
+
+  return (
+    snapshot.accessRow.login_password_allowed !== next.loginMethods.password ||
+    snapshot.accessRow.login_google_allowed !== next.loginMethods.google ||
+    snapshot.accessRow.login_microsoft_allowed !== next.loginMethods.microsoft ||
+    snapshot.accessRow.admin_mfa_required !== next.mfaPolicy.adminRequired ||
+    snapshot.accessRow.member_mfa_required !== next.mfaPolicy.memberRequired ||
+    snapshot.accessRow.public_signup_allowed !== next.signupPolicy.publicSignup ||
+    snapshot.accessRow.admin_invitations_allowed !== next.signupPolicy.adminInvitationsAllowed ||
+    stableStringify(previousDomains) !== stableStringify(nextDomains)
+  );
 }
 
 function buildStep2Progress(
@@ -739,6 +771,86 @@ export class CpAccountsService {
     },
   ) {}
 
+  private async applyProvisioningStatus(
+    trx: DbExecutor,
+    snapshot: AccountSnapshot,
+    review: CpAccountReview,
+    targetStatus: 'Active' | 'Disabled',
+    logEvent: 'cp.accounts.published' | 'cp.accounts.status_toggled',
+  ): Promise<void> {
+    const repo = this.deps.cpAccountsRepo.withDb(trx);
+    const existingTenantByKey = await findTenantProvisioningByKeySql(
+      trx,
+      snapshot.account.account_key,
+    );
+
+    if (existingTenantByKey && existingTenantByKey.id !== snapshot.provisioningRow?.tenant_id) {
+      throw CpAccountErrors.tenantProvisioningConflict(snapshot.account.account_key);
+    }
+
+    const tenantConfig = deriveProvisionableTenantConfig(review.account, targetStatus);
+    const publishedAt = new Date();
+
+    let tenantId = snapshot.provisioningRow?.tenant_id ?? null;
+
+    if (tenantId) {
+      await repo.updateTenantProvisioning({
+        tenantId,
+        tenantName: snapshot.account.account_name,
+        isActive: tenantConfig.isActive,
+        publicSignupEnabled: tenantConfig.publicSignupEnabled,
+        adminInviteRequired: tenantConfig.adminInviteRequired,
+        memberMfaRequired: tenantConfig.memberMfaRequired,
+        allowedEmailDomains: tenantConfig.allowedEmailDomains,
+        allowedSso: tenantConfig.allowedSso,
+      });
+    } else if (existingTenantByKey) {
+      tenantId = existingTenantByKey.id;
+      await repo.updateTenantProvisioning({
+        tenantId,
+        tenantName: snapshot.account.account_name,
+        isActive: tenantConfig.isActive,
+        publicSignupEnabled: tenantConfig.publicSignupEnabled,
+        adminInviteRequired: tenantConfig.adminInviteRequired,
+        memberMfaRequired: tenantConfig.memberMfaRequired,
+        allowedEmailDomains: tenantConfig.allowedEmailDomains,
+        allowedSso: tenantConfig.allowedSso,
+      });
+    } else {
+      const inserted = await repo.insertTenantProvisioning({
+        tenantKey: snapshot.account.account_key,
+        tenantName: snapshot.account.account_name,
+        isActive: tenantConfig.isActive,
+        publicSignupEnabled: tenantConfig.publicSignupEnabled,
+        adminInviteRequired: tenantConfig.adminInviteRequired,
+        memberMfaRequired: tenantConfig.memberMfaRequired,
+        allowedEmailDomains: tenantConfig.allowedEmailDomains,
+        allowedSso: tenantConfig.allowedSso,
+      });
+      tenantId = inserted.tenantId;
+    }
+
+    await repo.upsertProvisioningResult({
+      accountId: snapshot.account.id,
+      tenantId,
+      cpStatus: targetStatus,
+      publishedAt,
+    });
+
+    await repo.updateAccountStatus({
+      accountId: snapshot.account.id,
+      cpStatus: targetStatus,
+    });
+
+    this.deps.logger.info(logEvent, {
+      event: logEvent,
+      accountId: snapshot.account.id,
+      accountKey: snapshot.account.account_key,
+      targetStatus,
+      tenantId,
+    });
+  }
+
   async createAccount(input: CreateCpAccountInput): Promise<CpAccountDetail> {
     const existing = await findCpAccountByKeySql(this.deps.db, input.accountKey);
 
@@ -825,14 +937,7 @@ export class CpAccountsService {
         );
       }
 
-      const previous = buildAccessConfig(snapshot.accessRow, snapshot.account.access_configured);
-      const next: CpAccessConfig = {
-        configured: true,
-        loginMethods: normalized.loginMethods,
-        mfaPolicy: normalized.mfaPolicy,
-        signupPolicy: normalized.signupPolicy,
-      };
-      const changed = stableStringify(previous) !== stableStringify(next);
+      const changed = accessAllowanceChanged(snapshot, normalized);
 
       await repo.upsertAccessConfig({
         accountId: snapshot.account.id,
@@ -1193,9 +1298,45 @@ export class CpAccountsService {
     });
   }
 
+  async updateStatus(
+    accountKey: string,
+    input: UpdateCpAccountStatusInput,
+  ): Promise<CpAccountDetail> {
+    return this.deps.db.transaction().execute(async (trx) => {
+      const snapshot = await loadAccountSnapshot(trx, accountKey);
+
+      if (
+        snapshot.account.cp_status === 'Draft' ||
+        !snapshot.provisioningRow ||
+        !snapshot.tenantRow
+      ) {
+        throw CpAccountErrors.statusToggleUnavailable(accountKey);
+      }
+
+      if (snapshot.account.cp_status === input.targetStatus) {
+        return snapshotToAccountDetail(snapshot);
+      }
+
+      const review = snapshotToReview(snapshot);
+
+      if (input.targetStatus === 'Active' && !review.activationReadiness.isReady) {
+        throw CpAccountErrors.activationReadyConflict(review.activationReadiness.blockingReasons);
+      }
+
+      await this.applyProvisioningStatus(
+        trx,
+        snapshot,
+        review,
+        input.targetStatus,
+        'cp.accounts.status_toggled',
+      );
+
+      return snapshotToAccountDetail(await loadAccountSnapshot(trx, accountKey));
+    });
+  }
+
   async publishAccount(accountKey: string, input: PublishCpAccountInput): Promise<CpAccountReview> {
     return this.deps.db.transaction().execute(async (trx) => {
-      const repo = this.deps.cpAccountsRepo.withDb(trx);
       const snapshot = await loadAccountSnapshot(trx, accountKey);
       const review = snapshotToReview(snapshot);
 
@@ -1203,76 +1344,13 @@ export class CpAccountsService {
         throw CpAccountErrors.activationReadyConflict(review.activationReadiness.blockingReasons);
       }
 
-      const existingTenantByKey = await findTenantProvisioningByKeySql(
+      await this.applyProvisioningStatus(
         trx,
-        snapshot.account.account_key,
+        snapshot,
+        review,
+        input.targetStatus,
+        'cp.accounts.published',
       );
-
-      if (existingTenantByKey && existingTenantByKey.id !== snapshot.provisioningRow?.tenant_id) {
-        throw CpAccountErrors.tenantProvisioningConflict(snapshot.account.account_key);
-      }
-
-      const tenantConfig = deriveProvisionableTenantConfig(review.account, input.targetStatus);
-      const publishedAt = new Date();
-
-      let tenantId = snapshot.provisioningRow?.tenant_id ?? null;
-
-      if (tenantId) {
-        await repo.updateTenantProvisioning({
-          tenantId,
-          tenantName: snapshot.account.account_name,
-          isActive: tenantConfig.isActive,
-          publicSignupEnabled: tenantConfig.publicSignupEnabled,
-          adminInviteRequired: tenantConfig.adminInviteRequired,
-          memberMfaRequired: tenantConfig.memberMfaRequired,
-          allowedEmailDomains: tenantConfig.allowedEmailDomains,
-          allowedSso: tenantConfig.allowedSso,
-        });
-      } else if (existingTenantByKey) {
-        tenantId = existingTenantByKey.id;
-        await repo.updateTenantProvisioning({
-          tenantId,
-          tenantName: snapshot.account.account_name,
-          isActive: tenantConfig.isActive,
-          publicSignupEnabled: tenantConfig.publicSignupEnabled,
-          adminInviteRequired: tenantConfig.adminInviteRequired,
-          memberMfaRequired: tenantConfig.memberMfaRequired,
-          allowedEmailDomains: tenantConfig.allowedEmailDomains,
-          allowedSso: tenantConfig.allowedSso,
-        });
-      } else {
-        const inserted = await repo.insertTenantProvisioning({
-          tenantKey: snapshot.account.account_key,
-          tenantName: snapshot.account.account_name,
-          isActive: tenantConfig.isActive,
-          publicSignupEnabled: tenantConfig.publicSignupEnabled,
-          adminInviteRequired: tenantConfig.adminInviteRequired,
-          memberMfaRequired: tenantConfig.memberMfaRequired,
-          allowedEmailDomains: tenantConfig.allowedEmailDomains,
-          allowedSso: tenantConfig.allowedSso,
-        });
-        tenantId = inserted.tenantId;
-      }
-
-      await repo.upsertProvisioningResult({
-        accountId: snapshot.account.id,
-        tenantId,
-        cpStatus: input.targetStatus,
-        publishedAt,
-      });
-
-      await repo.updateAccountStatus({
-        accountId: snapshot.account.id,
-        cpStatus: input.targetStatus,
-      });
-
-      this.deps.logger.info('cp.accounts.published', {
-        event: 'cp.accounts.published',
-        accountId: snapshot.account.id,
-        accountKey: snapshot.account.account_key,
-        targetStatus: input.targetStatus,
-        tenantId,
-      });
 
       return snapshotToReview(await loadAccountSnapshot(trx, accountKey));
     });

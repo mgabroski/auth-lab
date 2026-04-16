@@ -48,7 +48,7 @@ export async function findCpAccountByKeySql(
 }
 
 export async function listCpAccountsSql(db: DbExecutor): Promise<CpAccountRow[]> {
-  return db.selectFrom('cp_accounts').selectAll().orderBy('created_at', 'asc').execute();
+  return db.selectFrom('cp_accounts').selectAll().orderBy('updated_at', 'desc').execute();
 }
 
 export async function findCpAccessConfigSql(

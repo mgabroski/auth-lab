@@ -44,6 +44,15 @@ export const CpAccountErrors = {
     return AppError.validationError(message, meta);
   },
 
+  statusToggleUnavailable(accountKey: string) {
+    return new AppError({
+      code: 'CONFLICT',
+      status: 409,
+      message: `Status toggle is available only after the account has been published once: ${accountKey}`,
+      meta: { accountKey },
+    });
+  },
+
   activationReadyConflict(blockingReasons: string[]) {
     return new AppError({
       code: 'CONFLICT',

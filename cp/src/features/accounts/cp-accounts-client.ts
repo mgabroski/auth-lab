@@ -4,7 +4,7 @@
  * cp/src/features/accounts/cp-accounts-client.ts
  *
  * WHY:
- * - Client-side same-origin API helpers for CP Step 1 and Step 2 mutations.
+ * - Client-side same-origin API helpers for CP create/edit/review mutations.
  * - Keeps /api/* fetch details out of UI components.
  */
 
@@ -18,6 +18,7 @@ import type {
   SaveCpIntegrationsInput,
   SaveCpModuleSettingsInput,
   SaveCpPersonalInput,
+  UpdateCpAccountStatusInput,
 } from './contracts';
 
 type ErrorResponseBody = {
@@ -156,6 +157,20 @@ export function publishCpAccount(
     `/api/cp/accounts/${encodeURIComponent(accountKey)}/publish`,
     {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function updateCpAccountStatus(
+  accountKey: string,
+  input: UpdateCpAccountStatusInput,
+): Promise<ControlPlaneAccountDetail> {
+  return requestJson<ControlPlaneAccountDetail>(
+    `/api/cp/accounts/${encodeURIComponent(accountKey)}/status`,
+    {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     },

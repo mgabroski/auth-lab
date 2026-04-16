@@ -1,5 +1,15 @@
 'use client';
 
+/**
+ * cp/src/features/accounts/screens/account-review-screen.tsx
+ *
+ * WHY:
+ * - Renders the backend-owned Review & Publish surface for both create and
+ *   edit/re-entry flows.
+ * - Phase 5 keeps re-save behavior on the same review contract while the new
+ *   list-level status toggle handles quick Active/Disabled changes.
+ */
+
 import type { CSSProperties } from 'react';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -211,7 +221,13 @@ export function AccountReviewScreen({
       variant: 'ghost',
     },
     {
-      label: isPublishing ? 'Publishing…' : 'Publish',
+      label: isPublishing
+        ? review.provisioning.isProvisioned
+          ? 'Saving…'
+          : 'Publishing…'
+        : isEditMode || review.provisioning.isProvisioned
+          ? 'Save Changes'
+          : 'Publish',
       variant: 'primary',
       disabled: publishDisabled,
       onClick: () => {
@@ -224,7 +240,7 @@ export function AccountReviewScreen({
     <ControlPlaneShell
       currentPath={currentPath}
       pageTitle="Review & Publish"
-      pageDescription="Review the read-only account configuration, confirm Activation Ready, then publish the tenant as Active or Disabled."
+      pageDescription="Review the current account configuration, confirm Activation Ready, then publish or re-save the tenant as Active or Disabled."
       footerActions={footerActions}
       account={account}
       step={{ stepNumber: 3, stepName: 'Review & Publish' }}
@@ -369,8 +385,8 @@ export function AccountReviewScreen({
           </div>
 
           <p style={{ marginTop: '12px', ...mutedTextStyle }}>
-            Publish will set CP Status to the selected value and create/update the provisioned
-            tenant record.
+            Save will set CP Status to the selected value and create or update the provisioned
+            tenant record from the current CP allowance truth.
           </p>
         </article>
 
