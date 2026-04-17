@@ -2,6 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import type { ConfigResponse } from '../../src/modules/auth/auth.types';
+
+type ErrorResponseBody = {
+  error: {
+    code: string;
+    message: string;
+  };
+};
 import type { CpAccountReview } from '../../src/modules/control-plane/accounts/cp-accounts.types';
 import { buildTestApp } from '../helpers/build-test-app';
 
@@ -50,6 +57,12 @@ describe('cp accounts review & publish', () => {
       });
 
       expect(publishActiveRes.statusCode).toBe(409);
+      expect(readJson<ErrorResponseBody>(publishActiveRes)).toEqual({
+        error: {
+          code: 'CONFLICT',
+          message: 'Active publish is blocked until Activation Ready passes.',
+        },
+      });
 
       const publishDisabledRes = await app.inject({
         method: 'POST',

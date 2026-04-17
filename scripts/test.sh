@@ -19,7 +19,8 @@
 #   1. Ensure auth_lab_test exists and is migrated
 #   2. Run backend tests against auth_lab_test (dev server untouched)
 #   3. Run frontend unit tests
-#   4. If stack is running:
+#   4. Run Control Plane unit tests
+#   5. If stack is running:
 #      a. Seed E2E fixtures (idempotent — does not disturb running dev server)
 #      b. Flush Redis
 #      c. Run Playwright E2E
@@ -36,7 +37,7 @@ echo "🗄️  Ensuring auth_lab_test database exists..."
 docker exec auth-lab-postgres \
   psql -U auth_lab -d postgres \
   -c "CREATE DATABASE auth_lab_test OWNER auth_lab;" \
-  2>/dev/null || true   # no-op if already exists
+  2>/dev/null || true
 echo "   Done."
 
 echo "🗄️  Running migrations on auth_lab_test..."
@@ -57,6 +58,12 @@ DATABASE_URL=postgres://auth_lab:auth_lab@localhost:5432/auth_lab_test \
 echo ""
 echo "🧪 Running frontend unit tests..."
 yarn test:frontend:unit
+
+# ── Control Plane unit tests ──────────────────────────────────────────────────
+
+echo ""
+echo "🧪 Running Control Plane unit tests..."
+yarn test:cp
 
 # ── E2E — only when stack is running ─────────────────────────────────────────
 

@@ -26,7 +26,6 @@ type ErrorEnvelopeBody = {
     code?: string;
     message?: string;
   };
-  message?: string;
 };
 
 function isErrorEnvelopeBody(value: unknown): value is ErrorEnvelopeBody {
@@ -49,7 +48,7 @@ function isErrorEnvelopeBody(value: unknown): value is ErrorEnvelopeBody {
     return false;
   }
 
-  return candidate['message'] === undefined || typeof candidate['message'] === 'string';
+  return true;
 }
 
 async function readJsonBody(res: Response): Promise<unknown> {
@@ -69,10 +68,6 @@ async function readJsonBody(res: Response): Promise<unknown> {
 function resolveErrorMessage(status: number, body: unknown): string {
   if (isErrorEnvelopeBody(body) && typeof body.error?.message === 'string') {
     return body.error.message;
-  }
-
-  if (isErrorEnvelopeBody(body) && typeof body.message === 'string') {
-    return body.message;
   }
 
   return `Request failed (${status})`;

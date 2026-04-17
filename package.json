@@ -38,6 +38,7 @@
     "test": "./scripts/test.sh",
     "test:backend": "yarn workspace @auth-lab/backend test",
     "test:frontend:unit": "yarn workspace frontend test:unit",
+    "test:cp": "yarn workspace cp test:unit",
     "test:e2e": "yarn workspace frontend test:e2e",
     "test:watch": "yarn workspace @auth-lab/backend test:watch",
     "verify": "./scripts/verify.sh",

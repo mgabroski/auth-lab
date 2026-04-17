@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import type { ConfigResponse } from '../../src/modules/auth/auth.types';
+import {
+  EDITABLE_PERSONAL_FIELD_CATALOG,
+  PERSONAL_FAMILY_DEFAULTS,
+} from '../../src/modules/control-plane/accounts/cp-accounts.catalog';
+import type { SaveCpPersonalInput } from '../../src/modules/control-plane/accounts/cp-accounts.schemas';
 import type {
   CpAccountDetail,
   CpAccountListRow,
@@ -14,6 +19,20 @@ function readJson<T>(res: { json: () => unknown }): T {
 
 function hostForTenant(tenantKey: string): string {
   return `${tenantKey}.hubins.com`;
+}
+
+function buildValidPersonalPayload(): SaveCpPersonalInput {
+  return {
+    families: PERSONAL_FAMILY_DEFAULTS.map((family) => ({
+      familyKey: family.familyKey,
+      isAllowed: family.defaultAllowed,
+    })),
+    fields: EDITABLE_PERSONAL_FIELD_CATALOG.map((field) => ({
+      fieldKey: field.fieldKey,
+      isAllowed: field.defaultAllowed,
+      defaultSelected: field.defaultSelected,
+    })),
+  };
 }
 
 describe('cp accounts edit / re-entry / status toggle', () => {
@@ -116,7 +135,7 @@ describe('cp accounts edit / re-entry / status toggle', () => {
         url: `/cp/accounts/${accountKey}/modules`,
         payload: {
           modules: {
-            personal: false,
+            personal: true,
             documents: false,
             benefits: false,
             payments: false,
@@ -127,8 +146,25 @@ describe('cp accounts edit / re-entry / status toggle', () => {
       expect(moduleRes.statusCode).toBe(200);
       const moduleAccount = readJson<CpAccountDetail>(moduleRes);
       expect(moduleAccount.cpRevision).toBe(3);
-      expect(moduleAccount.moduleSettings.configured).toBe(true);
-      expect(moduleAccount.step2Progress.canContinueToReview).toBe(true);
+      expect(moduleAccount.moduleSettings.modules.personal).toBe(true);
+      expect(moduleAccount.moduleSettings.personalSubpageSaved).toBe(false);
+      expect(moduleAccount.moduleSettings.configured).toBe(false);
+      expect(moduleAccount.step2Progress.canContinueToReview).toBe(false);
+
+      const personalSaveRes = await app.inject({
+        method: 'PUT',
+        url: `/cp/accounts/${accountKey}/modules/personal`,
+        payload: buildValidPersonalPayload(),
+      });
+
+      expect(personalSaveRes.statusCode).toBe(200);
+      const personalAccount = readJson<CpAccountDetail>(personalSaveRes);
+      expect(personalAccount.cpRevision).toBe(4);
+      expect(personalAccount.moduleSettings.modules.personal).toBe(true);
+      expect(personalAccount.moduleSettings.personalSubpageSaved).toBe(true);
+      expect(personalAccount.moduleSettings.configured).toBe(true);
+      expect(personalAccount.personal.saved).toBe(true);
+      expect(personalAccount.step2Progress.canContinueToReview).toBe(true);
 
       const detailRes = await app.inject({
         method: 'GET',
@@ -141,8 +177,10 @@ describe('cp accounts edit / re-entry / status toggle', () => {
       expect(detail.access.configured).toBe(true);
       expect(detail.accountSettings.configured).toBe(true);
       expect(detail.moduleSettings.configured).toBe(true);
+      expect(detail.moduleSettings.personalSubpageSaved).toBe(true);
+      expect(detail.personal.saved).toBe(true);
       expect(detail.cpStatus).toBe('Draft');
-      expect(detail.cpRevision).toBe(3);
+      expect(detail.cpRevision).toBe(4);
 
       const publishDisabledRes = await app.inject({
         method: 'POST',
@@ -155,7 +193,7 @@ describe('cp accounts edit / re-entry / status toggle', () => {
       expect(publishDisabledRes.statusCode).toBe(200);
       const disabledAfterPublish = readJson<{ account: CpAccountDetail }>(publishDisabledRes);
       expect(disabledAfterPublish.account.cpStatus).toBe('Disabled');
-      expect(disabledAfterPublish.account.cpRevision).toBe(3);
+      expect(disabledAfterPublish.account.cpRevision).toBe(4);
 
       const listAfterPublishRes = await app.inject({
         method: 'GET',
@@ -179,7 +217,7 @@ describe('cp accounts edit / re-entry / status toggle', () => {
       expect(activateRes.statusCode).toBe(200);
       const activated = readJson<CpAccountDetail>(activateRes);
       expect(activated.cpStatus).toBe('Active');
-      expect(activated.cpRevision).toBe(3);
+      expect(activated.cpRevision).toBe(4);
 
       const activeConfigRes = await app.inject({
         method: 'GET',
@@ -212,7 +250,7 @@ describe('cp accounts edit / re-entry / status toggle', () => {
       expect(disableAgainRes.statusCode).toBe(200);
       const disabledAgain = readJson<CpAccountDetail>(disableAgainRes);
       expect(disabledAgain.cpStatus).toBe('Disabled');
-      expect(disabledAgain.cpRevision).toBe(3);
+      expect(disabledAgain.cpRevision).toBe(4);
 
       const disabledNoOpRes = await app.inject({
         method: 'PATCH',
@@ -225,7 +263,7 @@ describe('cp accounts edit / re-entry / status toggle', () => {
       expect(disabledNoOpRes.statusCode).toBe(200);
       const disabledNoOp = readJson<CpAccountDetail>(disabledNoOpRes);
       expect(disabledNoOp.cpStatus).toBe('Disabled');
-      expect(disabledNoOp.cpRevision).toBe(3);
+      expect(disabledNoOp.cpRevision).toBe(4);
 
       const disabledConfigRes = await app.inject({
         method: 'GET',

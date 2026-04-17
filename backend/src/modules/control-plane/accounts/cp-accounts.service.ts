@@ -621,7 +621,7 @@ function buildReviewSections(account: CpAccountDetail): CpReviewSection[] {
   ];
 }
 
-function evaluateActivationReadiness(account: CpAccountDetail): CpActivationReadiness {
+export function evaluateCpActivationReadiness(account: CpAccountDetail): CpActivationReadiness {
   const googleAllowed = account.integrations.integrations.find(
     (integration) => integration.integrationKey === GOOGLE_SSO_INTEGRATION_KEY,
   )?.isAllowed;
@@ -739,7 +739,7 @@ function snapshotToReview(snapshot: AccountSnapshot): CpAccountReview {
   return {
     account,
     sections: buildReviewSections(account),
-    activationReadiness: evaluateActivationReadiness(account),
+    activationReadiness: evaluateCpActivationReadiness(account),
     provisioning: buildProvisioningResult(snapshot),
   };
 }

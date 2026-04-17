@@ -26,7 +26,7 @@ env:
 
 jobs:
   quality:
-    name: Lint + typecheck + build
+    name: Lint + typecheck + unit tests + build
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -53,6 +53,9 @@ jobs:
 
       - name: Typecheck Control Plane
         run: yarn typecheck:cp
+
+      - name: Run Control Plane unit tests
+        run: yarn test:cp
 
       - name: Build Control Plane
         run: yarn build:cp
