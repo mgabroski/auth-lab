@@ -71,3 +71,10 @@
 # Broad application ownership surface
 /backend/** @mgabroski
 /frontend/** @mgabroski
+
+# High-risk CP topology / runtime surfaces
+/cp/src/app/api/** @mgabroski
+/cp/src/shared/cp/ssr-api-client.ts @mgabroski
+
+# Broad CP application ownership surface
+/cp/** @mgabroski

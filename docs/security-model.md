@@ -322,6 +322,19 @@ The backend assumes the proxy is trusted and the client cannot directly reach th
 
 **Engineering rule:** ER-50 — forwarded headers are only meaningful inside the locked topology.
 
+### 8.1 Control Plane dev-only no-auth deviation
+
+The Control Plane (CP) is currently permitted to run without authentication **only in local development** as a bounded build-out exception for the prerequisite provisioning track. This is not a normalization of the platform security model.
+
+The rule is strict:
+
+- CP no-auth is local-dev-only
+- CP must not be exposed publicly under this posture
+- CP must not be exposed to shared staging or production until its own authentication boundary is implemented
+- this temporary deviation does not change the tenant-app session, cookie, proxy, or forwarded-header trust model described in this document
+
+**Why this note exists:** CP is a separate internal surface, not a tenant-facing app. The temporary dev-only shortcut is allowed to unblock prerequisite implementation work, but it must remain visibly exceptional and time-bounded.
+
 ---
 
 ## 9. MFA Model

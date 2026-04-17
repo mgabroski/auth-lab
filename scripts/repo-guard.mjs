@@ -83,6 +83,8 @@ const ARCHITECTURE_LAW_PATTERNS = [
   /^frontend\/src\/app\/api\/\[\.\.\.path\]\/route\.ts$/,
   /^frontend\/src\/shared\/api-client\.ts$/,
   /^frontend\/src\/shared\/ssr-api-client\.ts$/,
+  /^cp\/src\/app\/api\/\[\.\.\.path\]\/route\.ts$/,
+  /^cp\/src\/shared\/cp\/ssr-api-client\.ts$/,
   /^frontend\/src\/shared\/auth\/bootstrap\.server\.ts$/,
   /^backend\/src\/shared\/http\//,
   /^backend\/src\/shared\/session\//,

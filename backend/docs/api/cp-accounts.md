@@ -351,6 +351,24 @@ There is no separate HTTP route for this contract in the current repo. It is inc
 }
 ```
 
+### 3.3 Error envelope
+
+All CP account errors use the shared backend HTTP error envelope:
+
+```json
+{
+  "error": {
+    "code": "CONFLICT",
+    "message": "Account key is already taken: goodwill-ca"
+  }
+}
+```
+
+Notes:
+
+- The backend does **not** return a flat `{ "message": ... }` body for CP errors.
+- The backend does **not** expose `meta` in HTTP responses, even when server-side `AppError` metadata exists for logs and diagnostics.
+
 ---
 
 ## 4. Endpoints
@@ -379,8 +397,10 @@ See shared full account detail shape above.
 
 ```json
 {
-  "code": "NOT_FOUND",
-  "message": "CP account not found: <accountKey>"
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "CP account not found: <accountKey>"
+  }
 }
 ```
 
@@ -408,7 +428,7 @@ Same as `GET /cp/accounts/:accountKey`.
 
 ### 4.4 `POST /cp/accounts`
 
-Creates a new Draft CP account.
+Creates a new Draft CP account. A successful create writes a durable audit event: `cp.account.created`.
 
 **Request body**
 
@@ -421,10 +441,10 @@ Creates a new Draft CP account.
 
 **Validation rules**
 
-| Field         | Rule                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------ |
-| `accountName` | Required. Non-empty string. Max 255 characters.                                            |
-| `accountKey`  | Required. Non-empty string. Max 100 characters. Must match `^[a-z0-9-]+$`. Must be unique. |
+| Field         | Rule                                                                                                                                                              |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `accountName` | Required. Non-empty string. Max 255 characters.                                                                                                                   |
+| `accountKey`  | Required. Non-empty string. Max 100 characters. Must match `^[a-z0-9-]+$`. Must be unique. Reserved namespaces (`cp`, `api`, `admin`, `auth`, `www`) are blocked. |
 
 **Response — 201 Created**
 
@@ -434,9 +454,23 @@ Returns the full created account detail.
 
 ```json
 {
-  "code": "CONFLICT",
-  "message": "Account key is already taken: <accountKey>",
-  "meta": { "accountKey": "<accountKey>" }
+  "error": {
+    "code": "CONFLICT",
+    "message": "Account key is already taken: <accountKey>"
+  }
+}
+```
+
+**Response — 400 Validation Error**
+
+When the requested key is a reserved namespace:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Account key is reserved and cannot be used: <accountKey>"
+  }
 }
 ```
 
@@ -626,6 +660,7 @@ This endpoint:
 - creates or updates a real `tenants` row for QA use
 - records the CP-side provisioning result in `cp_account_provisioning`
 - updates `cp_accounts.cp_status` to `Active` or `Disabled`
+- writes a durable audit event: `cp.account.published`
 
 **Request body**
 
@@ -645,10 +680,9 @@ When `targetStatus = Active` and Activation Ready fails:
 
 ```json
 {
-  "code": "CONFLICT",
-  "message": "Active publish is blocked until Activation Ready passes.",
-  "meta": {
-    "blockingReasons": ["Save the Access, Identity & Security group first."]
+  "error": {
+    "code": "CONFLICT",
+    "message": "Active publish is blocked until Activation Ready passes."
   }
 }
 ```
@@ -657,9 +691,10 @@ If the account key matches an existing tenant created outside Control Plane:
 
 ```json
 {
-  "code": "CONFLICT",
-  "message": "Cannot publish account because tenant key is already provisioned outside Control Plane: <accountKey>",
-  "meta": { "accountKey": "<accountKey>" }
+  "error": {
+    "code": "CONFLICT",
+    "message": "Cannot publish account because tenant key is already provisioned outside Control Plane: <accountKey>"
+  }
 }
 ```
 
@@ -676,6 +711,7 @@ This endpoint:
 - updates `cp_accounts.cp_status`
 - does **not** increment `cpRevision` because status changes do not mutate CP allowance truth
 - rejects Draft accounts because first publication still belongs to Review & Publish
+- writes a durable audit event: `cp.account.status_toggled`
 
 **Request body**
 
@@ -695,9 +731,10 @@ When the account is still Draft / not yet provisioned:
 
 ```json
 {
-  "code": "CONFLICT",
-  "message": "Status toggle is available only after the account has been published once: <accountKey>",
-  "meta": { "accountKey": "<accountKey>" }
+  "error": {
+    "code": "CONFLICT",
+    "message": "Status toggle is available only after the account has been published once: <accountKey>"
+  }
 }
 ```
 
@@ -705,10 +742,9 @@ When `targetStatus = Active` and Activation Ready fails:
 
 ```json
 {
-  "code": "CONFLICT",
-  "message": "Active publish is blocked until Activation Ready passes.",
-  "meta": {
-    "blockingReasons": ["Save the Access, Identity & Security group first."]
+  "error": {
+    "code": "CONFLICT",
+    "message": "Active publish is blocked until Activation Ready passes."
   }
 }
 ```

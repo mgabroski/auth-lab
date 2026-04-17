@@ -21,6 +21,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../shared/db/db';
 import type { Logger } from '../../shared/logger/logger';
 
@@ -28,7 +29,11 @@ import { createCpAccountsModule, type CpAccountsModule } from './accounts/cp-acc
 
 export type ControlPlaneModule = ReturnType<typeof createControlPlaneModule>;
 
-export function createControlPlaneModule(deps: { db: DbExecutor; logger: Logger }) {
+export function createControlPlaneModule(deps: {
+  db: DbExecutor;
+  logger: Logger;
+  auditRepo: AuditRepo;
+}) {
   const accounts: CpAccountsModule = createCpAccountsModule(deps);
 
   return {

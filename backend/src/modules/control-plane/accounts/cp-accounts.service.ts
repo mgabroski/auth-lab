@@ -16,6 +16,8 @@
 
 import type { DbExecutor } from '../../../shared/db/db';
 import type { Logger } from '../../../shared/logger/logger';
+import type { AuditRepo } from '../../../shared/audit/audit.repo';
+import { AuditWriter } from '../../../shared/audit/audit.writer';
 import type {
   CreateCpAccountInput,
   PublishCpAccountInput,
@@ -52,6 +54,12 @@ import {
   listCpPersonalFieldConfigSql,
 } from './dal/cp-accounts.query-sql';
 import { CpAccountErrors } from './cp-accounts.errors';
+import {
+  auditCpAccountCreated,
+  auditCpAccountPublished,
+  auditCpAccountStatusToggled,
+  type CpAuditRequestContext,
+} from './cp-accounts.audit';
 import {
   CP_SETUP_GROUPS,
   EDITABLE_PERSONAL_FIELD_CATALOG,
@@ -98,6 +106,8 @@ type AccountSnapshot = {
   provisioningRow: CpAccountProvisioningRow | undefined;
   tenantRow: TenantProvisioningRow | undefined;
 };
+
+const RESERVED_ACCOUNT_KEYS = new Set(['cp', 'api', 'admin', 'auth', 'www']);
 
 type ProvisionableTenantConfig = {
   isActive: boolean;
@@ -779,9 +789,18 @@ export class CpAccountsService {
     private readonly deps: {
       db: DbExecutor;
       logger: Logger;
+      auditRepo: AuditRepo;
       cpAccountsRepo: CpAccountsRepo;
     },
   ) {}
+
+  private buildAuditWriter(db: DbExecutor, context?: CpAuditRequestContext): AuditWriter {
+    return new AuditWriter(this.deps.auditRepo.withDb(db), {
+      requestId: context?.requestId ?? null,
+      ip: context?.ip ?? null,
+      userAgent: context?.userAgent ?? null,
+    });
+  }
 
   private async applyProvisioningStatus(
     trx: DbExecutor,
@@ -863,25 +882,43 @@ export class CpAccountsService {
     });
   }
 
-  async createAccount(input: CreateCpAccountInput): Promise<CpAccountDetail> {
-    const existing = await findCpAccountByKeySql(this.deps.db, input.accountKey);
-
-    if (existing) {
-      throw CpAccountErrors.accountKeyConflict(input.accountKey);
+  async createAccount(
+    input: CreateCpAccountInput,
+    auditContext?: CpAuditRequestContext,
+  ): Promise<CpAccountDetail> {
+    if (RESERVED_ACCOUNT_KEYS.has(input.accountKey)) {
+      throw CpAccountErrors.reservedAccountKey(input.accountKey);
     }
 
-    const { id, accountKey } = await this.deps.cpAccountsRepo.insertAccount({
-      accountName: input.accountName,
-      accountKey: input.accountKey,
-    });
+    return this.deps.db.transaction().execute(async (trx) => {
+      const existing = await findCpAccountByKeySql(trx, input.accountKey);
 
-    this.deps.logger.info('cp.accounts.created', {
-      event: 'cp.accounts.created',
-      accountKey,
-      id,
-    });
+      if (existing) {
+        throw CpAccountErrors.accountKeyConflict(input.accountKey);
+      }
 
-    return this.getAccount(accountKey);
+      const { id, accountKey } = await this.deps.cpAccountsRepo.withDb(trx).insertAccount({
+        accountName: input.accountName,
+        accountKey: input.accountKey,
+      });
+
+      const snapshot = await loadAccountSnapshot(trx, accountKey);
+      const audit = this.buildAuditWriter(trx, auditContext);
+
+      await auditCpAccountCreated(audit, {
+        accountId: snapshot.account.id,
+        accountKey: snapshot.account.account_key,
+        cpRevision: snapshot.account.cp_revision,
+      });
+
+      this.deps.logger.info('cp.accounts.created', {
+        event: 'cp.accounts.created',
+        accountKey,
+        id,
+      });
+
+      return snapshotToAccountDetail(snapshot);
+    });
   }
 
   async getAccount(accountKey: string): Promise<CpAccountDetail> {
@@ -1318,6 +1355,7 @@ export class CpAccountsService {
   async updateStatus(
     accountKey: string,
     input: UpdateCpAccountStatusInput,
+    auditContext?: CpAuditRequestContext,
   ): Promise<CpAccountDetail> {
     return this.deps.db.transaction().execute(async (trx) => {
       const snapshot = await loadAccountSnapshot(trx, accountKey);
@@ -1348,11 +1386,26 @@ export class CpAccountsService {
         'cp.accounts.status_toggled',
       );
 
-      return snapshotToAccountDetail(await loadAccountSnapshot(trx, accountKey));
+      const updatedSnapshot = await loadAccountSnapshot(trx, accountKey);
+      const audit = this.buildAuditWriter(trx, auditContext);
+
+      await auditCpAccountStatusToggled(audit, {
+        accountId: updatedSnapshot.account.id,
+        accountKey: updatedSnapshot.account.account_key,
+        targetStatus: input.targetStatus,
+        cpRevision: updatedSnapshot.account.cp_revision,
+        tenantId: updatedSnapshot.provisioningRow?.tenant_id ?? null,
+      });
+
+      return snapshotToAccountDetail(updatedSnapshot);
     });
   }
 
-  async publishAccount(accountKey: string, input: PublishCpAccountInput): Promise<CpAccountReview> {
+  async publishAccount(
+    accountKey: string,
+    input: PublishCpAccountInput,
+    auditContext?: CpAuditRequestContext,
+  ): Promise<CpAccountReview> {
     return this.deps.db.transaction().execute(async (trx) => {
       const snapshot = await loadAccountSnapshot(trx, accountKey);
       const review = snapshotToReview(snapshot);
@@ -1369,7 +1422,18 @@ export class CpAccountsService {
         'cp.accounts.published',
       );
 
-      return snapshotToReview(await loadAccountSnapshot(trx, accountKey));
+      const updatedSnapshot = await loadAccountSnapshot(trx, accountKey);
+      const audit = this.buildAuditWriter(trx, auditContext);
+
+      await auditCpAccountPublished(audit, {
+        accountId: updatedSnapshot.account.id,
+        accountKey: updatedSnapshot.account.account_key,
+        targetStatus: input.targetStatus,
+        cpRevision: updatedSnapshot.account.cp_revision,
+        tenantId: updatedSnapshot.provisioningRow?.tenant_id ?? null,
+      });
+
+      return snapshotToReview(updatedSnapshot);
     });
   }
 }

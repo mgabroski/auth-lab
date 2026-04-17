@@ -21,16 +21,34 @@ import type {
   UpdateCpAccountStatusInput,
 } from './contracts';
 
-type ErrorResponseBody = {
+type ErrorEnvelopeBody = {
+  error?: {
+    code?: string;
+    message?: string;
+  };
   message?: string;
 };
 
-function isErrorResponseBody(value: unknown): value is ErrorResponseBody {
+function isErrorEnvelopeBody(value: unknown): value is ErrorEnvelopeBody {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
 
   const candidate = value as Record<string, unknown>;
+  const error = candidate['error'];
+
+  if (error !== undefined && (typeof error !== 'object' || error === null)) {
+    return false;
+  }
+
+  if (
+    error &&
+    typeof (error as Record<string, unknown>)['message'] !== 'undefined' &&
+    typeof (error as Record<string, unknown>)['message'] !== 'string'
+  ) {
+    return false;
+  }
+
   return candidate['message'] === undefined || typeof candidate['message'] === 'string';
 }
 
@@ -48,6 +66,18 @@ async function readJsonBody(res: Response): Promise<unknown> {
   }
 }
 
+function resolveErrorMessage(status: number, body: unknown): string {
+  if (isErrorEnvelopeBody(body) && typeof body.error?.message === 'string') {
+    return body.error.message;
+  }
+
+  if (isErrorEnvelopeBody(body) && typeof body.message === 'string') {
+    return body.message;
+  }
+
+  return `Request failed (${status})`;
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -60,12 +90,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const body = await readJsonBody(res);
 
   if (!res.ok) {
-    const message =
-      isErrorResponseBody(body) && typeof body.message === 'string'
-        ? body.message
-        : `Request failed (${res.status})`;
-
-    throw new Error(message);
+    throw new Error(resolveErrorMessage(res.status, body));
   }
 
   return body as T;

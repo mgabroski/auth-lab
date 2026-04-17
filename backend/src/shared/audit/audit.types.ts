@@ -43,7 +43,10 @@ export type KnownAuditAction =
   | 'auth.logout'
   | 'user.created'
   | 'membership.activated'
-  | 'membership.created';
+  | 'membership.created'
+  | 'cp.account.created'
+  | 'cp.account.published'
+  | 'cp.account.status_toggled';
 
 // Escape hatch: allows new actions without updating this file every time.
 // Remove the escape hatch once all modules are stable.

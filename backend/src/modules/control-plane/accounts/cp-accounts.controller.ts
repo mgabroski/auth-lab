@@ -9,6 +9,7 @@
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../../../shared/http/errors';
+import type { CpAuditRequestContext } from './cp-accounts.audit';
 import {
   accountKeyParamSchema,
   createCpAccountSchema,
@@ -25,6 +26,16 @@ import type { CpAccountsService } from './cp-accounts.service';
 export class CpAccountsController {
   constructor(private readonly service: CpAccountsService) {}
 
+  private buildAuditContext(req: FastifyRequest): CpAuditRequestContext {
+    const userAgentHeader = req.headers['user-agent'];
+
+    return {
+      requestId: req.requestContext?.requestId ?? null,
+      ip: req.ip ?? null,
+      userAgent: typeof userAgentHeader === 'string' ? userAgentHeader : null,
+    };
+  }
+
   async createAccount(req: FastifyRequest, reply: FastifyReply) {
     const parsed = createCpAccountSchema.safeParse(req.body);
 
@@ -34,7 +45,7 @@ export class CpAccountsController {
       });
     }
 
-    const account = await this.service.createAccount(parsed.data);
+    const account = await this.service.createAccount(parsed.data, this.buildAuditContext(req));
     return reply.status(201).send(account);
   }
 
@@ -181,7 +192,11 @@ export class CpAccountsController {
       });
     }
 
-    const account = await this.service.updateStatus(parsedParams.data.accountKey, parsedBody.data);
+    const account = await this.service.updateStatus(
+      parsedParams.data.accountKey,
+      parsedBody.data,
+      this.buildAuditContext(req),
+    );
     return reply.status(200).send(account);
   }
 
@@ -201,7 +216,11 @@ export class CpAccountsController {
       });
     }
 
-    const review = await this.service.publishAccount(parsedParams.data.accountKey, parsedBody.data);
+    const review = await this.service.publishAccount(
+      parsedParams.data.accountKey,
+      parsedBody.data,
+      this.buildAuditContext(req),
+    );
     return reply.status(200).send(review);
   }
 }

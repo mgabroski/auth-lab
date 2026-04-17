@@ -29,7 +29,7 @@
  *
  * CP Phase 2 update:
  * - Added ControlPlaneModule wiring (createControlPlaneModule).
- * - CP module requires only db + logger; no rate-limiter, no outbox, no session.
+ * - CP module requires db + logger + auditRepo. No rate-limiter, no outbox, no session.
  */
 
 import type { AppConfig } from './config';
@@ -412,9 +412,9 @@ export async function buildDeps(
     },
   });
 
-  // CP module requires only db + logger.
+  // CP module requires db + logger + auditRepo.
   // No rate-limiter, no outbox, no session — CP is dev-only no-auth in this phase.
-  const controlPlane = createControlPlaneModule({ db, logger });
+  const controlPlane = createControlPlaneModule({ db, logger, auditRepo });
 
   return {
     db,

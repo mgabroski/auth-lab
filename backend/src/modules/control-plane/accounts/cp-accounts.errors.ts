@@ -13,6 +13,12 @@ export const CpAccountErrors = {
     return AppError.notFound(`CP account not found: ${accountKey}`);
   },
 
+  reservedAccountKey(accountKey: string) {
+    return AppError.validationError(`Account key is reserved and cannot be used: ${accountKey}`, {
+      accountKey,
+    });
+  },
+
   accountKeyConflict(accountKey: string) {
     return new AppError({
       code: 'CONFLICT',
