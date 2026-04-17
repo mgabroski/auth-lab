@@ -50,6 +50,6 @@ describe('CP route helpers', () => {
     expect(getEditPersonalSetupPath('acme')).toBe(
       '/accounts/acme/edit/setup/module-settings/personal',
     );
-    expect(getEditReviewPath('acme')).toBe('/accounts/acme/edit/review');
+    expect(getEditReviewPath('acme')).toBe('/accounts/acme/review');
   });
 });

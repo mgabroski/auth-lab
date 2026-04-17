@@ -45,8 +45,21 @@ export type KnownAuditAction =
   | 'membership.activated'
   | 'membership.created'
   | 'cp.account.created'
+  | 'cp.account.create.failed'
+  | 'cp.account.access.saved'
+  | 'cp.account.access.save.failed'
+  | 'cp.account.account_settings.saved'
+  | 'cp.account.account_settings.save.failed'
+  | 'cp.account.modules.saved'
+  | 'cp.account.modules.save.failed'
+  | 'cp.account.personal.saved'
+  | 'cp.account.personal.save.failed'
+  | 'cp.account.integrations.saved'
+  | 'cp.account.integrations.save.failed'
   | 'cp.account.published'
-  | 'cp.account.status_toggled';
+  | 'cp.account.publish.failed'
+  | 'cp.account.status_toggled'
+  | 'cp.account.status_toggle.failed';
 
 // Escape hatch: allows new actions without updating this file every time.
 // Remove the escape hatch once all modules are stable.

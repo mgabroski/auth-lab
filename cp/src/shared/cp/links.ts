@@ -63,5 +63,5 @@ export function getEditPersonalSetupPath(accountKey: string): string {
 }
 
 export function getEditReviewPath(accountKey: string): string {
-  return `/accounts/${accountKey}/edit/review`;
+  return `/accounts/${accountKey}/review`;
 }

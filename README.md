@@ -120,8 +120,9 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
   - Integrations & Marketplace
 - Personal field-catalog sub-page under Module Settings
 - Review & Publish backed by Activation Ready evaluation and tenant provisioning truth
-- edit/re-entry flows for setup and review
+- edit/re-entry flows for the Step 2 setup overview, group pages, and review
 - published-account Active/Disabled status toggle
+- meaningful CP Step 2 saves emit audit events for access, account settings, modules, personal, and integrations
 - producer-only `settingsHandoff` snapshot on full account detail DTOs
 - same-origin CP `/api/*` proxy for browser mutations and SSR helpers for server reads
 - dev-only no-auth mode in current scope

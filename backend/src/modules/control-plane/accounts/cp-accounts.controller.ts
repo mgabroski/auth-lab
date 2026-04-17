@@ -89,7 +89,11 @@ export class CpAccountsController {
       });
     }
 
-    const account = await this.service.saveAccess(parsedParams.data.accountKey, parsedBody.data);
+    const account = await this.service.saveAccess(
+      parsedParams.data.accountKey,
+      parsedBody.data,
+      this.buildAuditContext(req),
+    );
     return reply.status(200).send(account);
   }
 
@@ -112,6 +116,7 @@ export class CpAccountsController {
     const account = await this.service.saveAccountSettings(
       parsedParams.data.accountKey,
       parsedBody.data,
+      this.buildAuditContext(req),
     );
     return reply.status(200).send(account);
   }
@@ -135,6 +140,7 @@ export class CpAccountsController {
     const account = await this.service.saveModuleSettings(
       parsedParams.data.accountKey,
       parsedBody.data,
+      this.buildAuditContext(req),
     );
     return reply.status(200).send(account);
   }
@@ -152,7 +158,11 @@ export class CpAccountsController {
       });
     }
 
-    const account = await this.service.savePersonal(parsedParams.data.accountKey, parsedBody.data);
+    const account = await this.service.savePersonal(
+      parsedParams.data.accountKey,
+      parsedBody.data,
+      this.buildAuditContext(req),
+    );
     return reply.status(200).send(account);
   }
 
@@ -175,6 +185,7 @@ export class CpAccountsController {
     const account = await this.service.saveIntegrations(
       parsedParams.data.accountKey,
       parsedBody.data,
+      this.buildAuditContext(req),
     );
     return reply.status(200).send(account);
   }

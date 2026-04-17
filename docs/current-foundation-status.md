@@ -143,7 +143,7 @@ The following foundations are treated as real in the repo now.
   - publish action (`POST /cp/accounts/:accountKey/publish`) creates or updates a real `tenants` row and persists CP provisioning truth
 - **Personal CP sub-page** exists under Module Settings and participates in Module Settings completion rules
 - **CP same-origin API proxy** exists at `cp/src/app/api/[...path]/route.ts`
-- **accounts list is now a practical re-entry surface**: edit/setup, review/re-save, and Active/Disabled toggle actions are all backend-backed
+- **accounts list is now a practical re-entry surface**: edit/setup now re-enters at the real Step 2 setup overview, review/re-save remains available, and Active/Disabled toggle actions are all backend-backed
 - **published-account status toggle is now real**:
   - `PATCH /cp/accounts/:accountKey/status` updates the real provisioned tenant row and `cp_accounts.cp_status`
   - Draft accounts still use Review & Publish for first publication
@@ -159,9 +159,10 @@ The following foundations are treated as real in the repo now.
 - CP backend remains dev-only no-auth in this phase — CP authentication is a later phase
 - the locked 3-step CP flow (Basic Account Info → Account Setup → Review & Publish) remains unchanged
 - the 4 locked setup groups remain unchanged
-- `cpRevision` starts at 0 on account creation and now increments on meaningful Step 2 allowance mutations
+- `cpRevision` starts at 0 on account creation and increments only on meaningful Step 2 allowance mutations; publish and status-only changes do not increment it because they do not change allowance truth
 - publish updates `cpStatus` and provisioning truth but does not increment `cpRevision` because it does not change CP allowance truth
 - CP provisioning truth remains separate from tenant configuration truth
+- meaningful Step 2 save routes now produce CP audit events for access, account settings, modules, personal, and integrations, with failure audit handling following the platform two-phase audit pattern
 
 ---
 
