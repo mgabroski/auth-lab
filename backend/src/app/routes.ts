@@ -9,7 +9,7 @@
  * CURRENT FOUNDATION SCOPE:
  * - core routes: /metrics, /health
  * - module routes: invites, auth, audit
- * - CP routes: /cp/accounts (Phase 2)
+ * - CP routes: real /cp/accounts create/read/list plus Step 2 saves, review/publish, and status toggle
  *
  * HEALTH ENDPOINT:
  * - Real readiness/liveness-style probe for local/devops use.

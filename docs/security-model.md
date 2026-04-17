@@ -329,8 +329,10 @@ The Control Plane (CP) is currently permitted to run without authentication **on
 The rule is strict:
 
 - CP no-auth is local-dev-only
+- CP must remain on its own dedicated host surface and must not be embedded under the tenant app route tree
 - CP must not be exposed publicly under this posture
 - CP must not be exposed to shared staging or production until its own authentication boundary is implemented
+- reserved host/system namespaces such as `cp`, `api`, `admin`, `app`, `auth`, and `www` must remain blocked from tenant/account-key use to avoid routing and trust-boundary collision
 - this temporary deviation does not change the tenant-app session, cookie, proxy, or forwarded-header trust model described in this document
 
 **Why this note exists:** CP is a separate internal surface, not a tenant-facing app. The temporary dev-only shortcut is allowed to unblock prerequisite implementation work, but it must remain visibly exceptional and time-bounded.

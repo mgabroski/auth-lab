@@ -12,6 +12,12 @@ function withAccountKey(basePath: string, accountKey?: string): string {
   return accountKey ? `${basePath}?accountKey=${encodeURIComponent(accountKey)}` : basePath;
 }
 
+// WHY:
+// - Create flow routes do not own the account key in the path yet, so they carry it
+//   as a query param while the draft moves through Step 2 and review.
+// - Edit flow routes are re-entry routes for an existing published/draft account and
+//   therefore own the account key as a stable route segment.
+
 export function getAccountsListPath(): string {
   return '/accounts';
 }

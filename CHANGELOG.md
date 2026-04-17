@@ -45,6 +45,14 @@ The format is based on Keep a Changelog principles, adapted to the current repo 
 - Updated `.github/workflows/backend-tests.yml` so root dependency-surface changes such as root `package.json`, `yarn.lock`, and repo Yarn config still trigger backend CI.
 - Updated `.github/workflows/frontend.yml` so root dependency-surface changes such as root `package.json`, `yarn.lock`, and repo Yarn config still trigger frontend CI and Playwright auth smoke coverage.
 - Updated `.github/CODEOWNERS` to expand ownership metadata across major repo areas using valid CODEOWNERS glob patterns.
+- Updated `README.md`, `docs/qa/qa-execution-pack.md`, `docs/ops/runbooks.md`, `docs/security-model.md`, and `docs/decision-log.md` so the shipped CP surface, QA execution path, bounded-risk note, and operational recovery guidance now match the real current implementation.
+- Updated stale CP/backend module comments so they describe the current shipped CP surface rather than earlier phase-only placeholders.
+- Updated `docs/prompts/catalog.md` to remove ghost references to prompt files that are not part of the approved prompt inventory.
+
+### Fixed
+
+- Fixed the CP integrations validation path to use an integration-scoped validation error instead of incorrectly reusing the personal-validation error factory.
+- Renamed the CP server-side account loader facade away from `mock-data.ts` so the file name matches its real runtime role.
 
 ---
 

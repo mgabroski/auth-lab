@@ -46,6 +46,10 @@ export const CpAccountErrors = {
     });
   },
 
+  integrationsValidation(message: string, meta?: Record<string, unknown>) {
+    return AppError.validationError(message, meta);
+  },
+
   personalValidation(message: string, meta?: Record<string, unknown>) {
     return AppError.validationError(message, meta);
   },

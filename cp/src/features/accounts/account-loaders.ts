@@ -1,9 +1,10 @@
 /**
- * cp/src/features/accounts/mock-data.ts
+ * cp/src/features/accounts/account-loaders.ts
  *
  * WHY:
- * - Retained as a thin data-loader facade so existing page imports can stay stable.
- * - No mock data remains in this file.
+ * - Thin server-side account loader facade for CP pages.
+ * - Keeps page imports stable and centralizes the runtime-backed loader names.
+ * - No mock data lives here.
  */
 
 import { fetchCpAccount, fetchCpAccountReview, fetchCpAccountsList } from './cp-accounts-api';

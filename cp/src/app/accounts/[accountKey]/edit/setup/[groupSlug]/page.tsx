@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { loadEditableAccount } from '@/features/accounts/mock-data';
+import { loadEditableAccount } from '@/features/accounts/account-loaders';
 import { AccountSetupGroupScreen } from '@/features/accounts/screens/account-setup-group-screen';
 import { getSetupGroupBySlug } from '@/features/accounts/setup-groups';
 

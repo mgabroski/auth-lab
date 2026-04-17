@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Top-level module boundary for the Control Plane domain.
- * - Composes all CP subdomains (accounts now; settings, tasks, benefits later).
+ * - Composes the currently shipped CP subdomains. Accounts is real in this repo; later CP areas stay deferred until explicitly added.
  * - DI (di.ts) only touches this file — never the subdomain modules directly.
  *
  * RULES:
@@ -11,13 +11,11 @@
  * - One registerRoutes() delegates to each subdomain module.
  * - Adding a new CP subdomain means: create subdomain module, import here, wire.
  *
- * SUBDOMAIN MODULES (Phase 2):
- * - accounts: GET/POST /cp/accounts, GET /cp/accounts/:accountKey
+ * SHIPPED SUBDOMAIN MODULES:
+ * - accounts: create/read/list, Step 2 saves, review/publish, status toggle, and producer-side handoff reads
  *
  * DEFERRED (later phases):
- * - settings group save modules (access, account-settings, modules, integrations)
- * - publish module
- * - status management
+ * - additional CP domains beyond accounts
  */
 
 import type { FastifyInstance } from 'fastify';

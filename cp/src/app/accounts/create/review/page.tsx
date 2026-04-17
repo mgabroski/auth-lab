@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { loadAccountReviewByKey } from '@/features/accounts/mock-data';
+import { loadAccountReviewByKey } from '@/features/accounts/account-loaders';
 import { AccountReviewScreen } from '@/features/accounts/screens/account-review-screen';
 import { getCreateBasicInfoPath } from '@/shared/cp/links';
 

@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { loadDraftAccountByKey } from '@/features/accounts/mock-data';
+import { loadDraftAccountByKey } from '@/features/accounts/account-loaders';
 import { AccountSetupGroupScreen } from '@/features/accounts/screens/account-setup-group-screen';
 import { getSetupGroupBySlug } from '@/features/accounts/setup-groups';
 import { getCreateBasicInfoPath } from '@/shared/cp/links';

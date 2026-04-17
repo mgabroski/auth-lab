@@ -67,6 +67,7 @@ Do not write ADRs for:
 | ADR-0013 | Documentation System Uses Tiered Truth And One Active Prompt Pack                                                           | LOCKED | documentation system          |
 | ADR-0014 | Control Plane Backend Lives Inside The Shared Backend; CP Provisioning And Tenant Configuration Truth Are Separate Tables   | LOCKED | CP / architecture             |
 | ADR-0015 | Control Plane Remains Producer-Only Until The Real Settings State Engine Exists; Future Handoff Uses One Canonical Snapshot | LOCKED | CP / Settings boundary        |
+| ADR-0016 | Control Plane Uses A Dedicated Host Surface Rather Than A Tenant-App Route Subtree                                          | LOCKED | CP / topology / security      |
 
 ---
 
@@ -490,6 +491,40 @@ Without a locked producer-side contract, CP could drift into ad hoc handoff shap
 - Fake synchronous call into a non-existent Settings service: rejected — dishonest and incompatible with the locked dependency boundary.
 - Async queue or webhook placeholder before Settings exists: rejected — violates the locked synchronous cascade model and creates drift.
 - No handoff contract until Settings work starts: rejected — leaves CP without a stable producer shape and makes later integration noisier.
+
+---
+
+## ADR-0016 — Control Plane Uses A Dedicated Host Surface Rather Than A Tenant-App Route Subtree
+
+### Status
+
+LOCKED
+
+### Decision
+
+The Control Plane is exposed as its own host surface and application package. It must not be embedded as a route subtree inside the tenant-facing frontend.
+
+In local development, the preferred proof path is the proxy-routed CP host (`cp.lvh.me:3000`). The direct Next.js dev server (`localhost:3002`) may still be used for local UI iteration, but it does not replace the dedicated-host topology contract.
+
+### Why
+
+The Control Plane serves a different audience, carries a different trust posture, and follows a different rollout sequence than the tenant-facing app. Keeping it on a dedicated host surface preserves a clean boundary for future CP authentication, avoids mixing operator routing with tenant routing, and keeps same-origin CP browser calls explicit.
+
+This also prevents namespace confusion between CP routing and tenant/account-key routing. The repo already enforces reserved keys such as `cp`, `api`, `admin`, `app`, `auth`, and `www` to avoid host and path collisions.
+
+### What This Constrains
+
+- CP remains a separate `cp/` application package.
+- CP must not be mounted under the tenant frontend route tree.
+- CP browser calls still use same-origin `/api/*` on the CP host; server reads use the CP SSR helper.
+- Proxy and runtime docs must describe CP as a dedicated host surface, not as a tenant-app sub-route.
+- Reserved host/system namespaces must remain blocked from CP account-key use.
+
+### Alternatives Considered
+
+- Embed CP under the tenant app as `/admin` or `/control-plane`: rejected — blurs trust boundaries and couples operator routing to the tenant surface.
+- Give CP its own backend service as part of this stage: rejected — unnecessary process split for the current repo scope.
+- Rely only on the direct Next.js dev server with no dedicated host story: rejected — weakens topology truth and makes proxy-path verification less honest.
 
 ## Maintenance Rules
 

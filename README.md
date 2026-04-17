@@ -9,7 +9,7 @@ This repo exists to prove and protect a small number of critical things before b
 - host-derived tenant resolution
 - session and cookie behavior
 - the first shipped module: Auth + User Provisioning
-- the separate internal Control Plane shell foundation
+- the separate internal Control Plane application and provisioning surface
 
 This file is the single human entrypoint for the repo.
 
@@ -52,7 +52,7 @@ Today, this repository is the working foundation for:
 - SSR direct-to-backend calls with forwarded tenant and session headers
 - backend session-aware auth and tenant resolution
 - frontend auth and provisioning flows
-- the separate internal Control Plane app shell for future account setup work
+- the separate internal Control Plane app for account provisioning, setup, review, and publish flows
 - Auth + User Provisioning as the first real module
 
 It is not the full future Hubins product.
@@ -107,27 +107,24 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 ### Control Plane Surface
 
 - separate `cp/` Next.js application
-
 - root entry redirect into the create-account flow
-
-- accounts list route for QA re-entry and edit/review navigation
-
-- create flow route skeleton:
+- accounts list route for practical QA/operator re-entry and edit/review navigation
+- real three-step create flow:
   - Basic Account Info
   - Account Setup
   - Review & Publish
-
-- setup group detail routes for:
+- real setup group persistence for:
   - Access, Identity & Security
   - Account Settings
   - Module Settings
   - Integrations & Marketplace
-
-- edit/re-entry route skeleton
-
+- Personal field-catalog sub-page under Module Settings
+- Review & Publish backed by Activation Ready evaluation and tenant provisioning truth
+- edit/re-entry flows for setup and review
+- published-account Active/Disabled status toggle
+- producer-only `settingsHandoff` snapshot on full account detail DTOs
+- same-origin CP `/api/*` proxy for browser mutations and SSR helpers for server reads
 - dev-only no-auth mode in current scope
-
-- typed placeholder data boundaries only, with no fake backend handlers
 
 Do not collapse broader architecture vision into shipped truth.
 
@@ -208,7 +205,8 @@ Primary local tenant URLs:
 
 Control Plane:
 
-- `http://localhost:3002`
+- preferred same-origin proof path: `http://cp.lvh.me:3000`
+- direct Next.js app (acceptable for local UI work): `http://localhost:3002`
 
 Mailpit:
 

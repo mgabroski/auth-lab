@@ -1255,7 +1255,7 @@ export class CpAccountsService {
       const access = buildAccessConfig(snapshot.accessRow, snapshot.account.access_configured);
 
       if (input.integrations.length !== INTEGRATION_CATALOG.length) {
-        throw CpAccountErrors.personalValidation(
+        throw CpAccountErrors.integrationsValidation(
           'Integrations save must include the full integration set for the current CP catalog.',
         );
       }
@@ -1266,7 +1266,7 @@ export class CpAccountsService {
         );
 
         if (!payload) {
-          throw CpAccountErrors.personalValidation(
+          throw CpAccountErrors.integrationsValidation(
             'Integrations save must include the full integration set for the current CP catalog.',
           );
         }

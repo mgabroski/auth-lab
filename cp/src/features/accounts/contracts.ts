@@ -237,13 +237,11 @@ export type CreateCpAccountInput = {
   accountKey: string;
 };
 
-export type SaveCpAccessInput = CpAccessConfig['loginMethods'] extends infer _T
-  ? {
-      loginMethods: CpAccessConfig['loginMethods'];
-      mfaPolicy: CpAccessConfig['mfaPolicy'];
-      signupPolicy: CpAccessConfig['signupPolicy'];
-    }
-  : never;
+export type SaveCpAccessInput = {
+  loginMethods: CpAccessConfig['loginMethods'];
+  mfaPolicy: CpAccessConfig['mfaPolicy'];
+  signupPolicy: CpAccessConfig['signupPolicy'];
+};
 
 export type SaveCpAccountSettingsInput = {
   branding: CpAccountSettingsConfig['branding'];

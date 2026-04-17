@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { loadDraftAccountByKey } from '@/features/accounts/mock-data';
+import { loadDraftAccountByKey } from '@/features/accounts/account-loaders';
 import { AccountPersonalConfigScreen } from '@/features/accounts/screens/account-personal-config-screen';
 import { getCreateBasicInfoPath } from '@/shared/cp/links';
 

@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { loadEditableAccount } from '@/features/accounts/mock-data';
+import { loadEditableAccount } from '@/features/accounts/account-loaders';
 import { AccountPersonalConfigScreen } from '@/features/accounts/screens/account-personal-config-screen';
 
 type EditPersonalSetupPageProps = {

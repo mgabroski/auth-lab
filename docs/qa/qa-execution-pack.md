@@ -1,8 +1,8 @@
-# QA Execution Pack — Auth + User Provisioning
+# QA Execution Pack — Auth + User Provisioning + Control Plane
 
 ## Purpose
 
-This is the single canonical QA execution document for the Auth + User Provisioning module.
+This is the single canonical QA execution document for the Auth + User Provisioning and Control Plane surfaces shipped in this repository.
 
 Use it for:
 
@@ -54,12 +54,13 @@ This pack covers QA execution for the current shipped Auth + User Provisioning s
 - access-control denial cases
 - Google SSO staging proof
 - Microsoft SSO staging proof
+- Control Plane create/setup/review/publish/re-entry/status-toggle proof
 
 ---
 
 ## Out Of Scope
 
-Do not use this pack to claim QA signoff for work outside the current shipped auth/provisioning slice.
+Do not use this pack to claim QA signoff for work outside the current shipped auth/provisioning and Control Plane slices.
 
 Out of scope here:
 
@@ -68,6 +69,7 @@ Out of scope here:
 - HRIS module UX
 - device/session management UX beyond current shipped flows
 - broader Settings module implementation beyond the currently shipped auth dependency
+- CP authentication, operator RBAC, or audit UI work that is not shipped in this repo
 - future modules not yet shipped in the repo
 - performance/load testing unless explicitly added later
 
@@ -133,6 +135,7 @@ If they change, update this file and `docs/developer-guide.md` in the same PR.
 - one fresh signup email for signup tests
 - one real Google staging account for Google SSO proof
 - one real Microsoft staging account for Microsoft SSO proof
+- one CP draft account key and one CP published account key for re-entry/status-toggle checks
 
 ### Typical local examples
 
@@ -163,6 +166,7 @@ At minimum confirm:
 - public-signup tenant login page loads
 - Mailpit loads for local email testing
 - seeded baseline member login works where expected
+- CP host loads and CP accounts list page renders
 
 Do not begin deeper QA against a broken baseline environment.
 
@@ -231,28 +235,75 @@ Run cases in this order unless a focused bug task explicitly needs a smaller sub
 - role-aware post-SSO landing
 - MFA continuation where applicable
 
+### Group 8 — Control Plane
+
+- create account draft
+- save all four Step 2 setup groups
+- save Personal sub-page when Personal remains enabled
+- confirm review gating blocks until required groups are truly configured
+- publish as Disabled
+- publish as Active only when Activation Ready passes
+- re-enter published account from accounts list
+- status toggle Active ↔ Disabled after publish
+- confirm `cpRevision` changes on allowance saves but not on publish-only or status-only changes
+
 ---
 
 ## Core Test Coverage Matrix
 
 Keep this matrix aligned with current shipped behavior.
 
-| Area             | Must be proven                                                    | Environment |
-| ---------------- | ----------------------------------------------------------------- | ----------- |
-| Login            | member success, admin continuation, wrong password, unknown email | Local       |
-| Logout           | protected pages rejected after logout                             | Local       |
-| Signup           | open-tenant signup works, invite-only signup blocked              | Local       |
-| Verification     | verify, resend, invalid/expired handling                          | Local       |
-| Password Reset   | send, reset, old-password invalidation, invalid/reused token      | Local       |
-| MFA              | setup, verify, recovery, single-use recovery code                 | Local       |
-| Invite Lifecycle | create, accept, cancel, resend, expired, already-used             | Local       |
-| Access Control   | suspended, no-membership, role-aware landing                      | Local       |
-| Setup Guidance   | workspace setup banner behavior where currently shipped           | Local       |
-| Rate Limiting    | repeated bad login triggers lockout behavior                      | Local       |
-| Google SSO       | live provider round-trip                                          | Staging     |
-| Microsoft SSO    | live provider round-trip                                          | Staging     |
+| Area             | Must be proven                                                                                                    | Environment |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- | ----------- |
+| Login            | member success, admin continuation, wrong password, unknown email                                                 | Local       |
+| Logout           | protected pages rejected after logout                                                                             | Local       |
+| Signup           | open-tenant signup works, invite-only signup blocked                                                              | Local       |
+| Verification     | verify, resend, invalid/expired handling                                                                          | Local       |
+| Password Reset   | send, reset, old-password invalidation, invalid/reused token                                                      | Local       |
+| MFA              | setup, verify, recovery, single-use recovery code                                                                 | Local       |
+| Invite Lifecycle | create, accept, cancel, resend, expired, already-used                                                             | Local       |
+| Access Control   | suspended, no-membership, role-aware landing                                                                      | Local       |
+| Setup Guidance   | workspace setup banner behavior where currently shipped                                                           | Local       |
+| Rate Limiting    | repeated bad login triggers lockout behavior                                                                      | Local       |
+| Google SSO       | live provider round-trip                                                                                          | Staging     |
+| Microsoft SSO    | live provider round-trip                                                                                          | Staging     |
+| Control Plane    | create, group saves, Personal save, review gating, publish, re-entry, status toggle, honest `cpRevision` behavior | Local       |
 
 ---
+
+## Control Plane execution notes
+
+Use the proxy-routed CP host for the honest browser proof path:
+
+```text
+http://cp.lvh.me:3000
+```
+
+The direct Next.js dev server (`http://localhost:3002`) is acceptable for local UI debugging, but QA signoff should use the host that exercises the same-origin `/api/*` path.
+
+### Required CP checkpoints
+
+For a clean CP execution pass, prove these checkpoints in order:
+
+1. create a new Draft account from Basic Account Info
+2. save Access, Identity & Security
+3. save Account Settings
+4. save Module Settings
+5. if Personal remains enabled, save the Personal sub-page explicitly
+6. save Integrations & Marketplace
+7. confirm Review & Publish unlocks only after the required saves are complete
+8. publish as `Disabled` first when testing the minimal provisioning path
+9. re-enter the account from the accounts list and confirm review/edit links work
+10. toggle `Disabled` -> `Active` only after Activation Ready passes
+
+### CP-specific expected truths
+
+- new accounts start as `Draft` with `cpRevision = 0`
+- Step 2 allowance saves increment `cpRevision` only when the persisted allowance truth actually changes
+- publish persists provisioning truth but does not increment `cpRevision` by itself
+- status toggles do not increment `cpRevision`
+- the review surface must explain blocking reasons when Activation Ready is not met
+- `settingsHandoff` may be present on full DTOs, but QA must not treat it as live Settings synchronization
 
 ## Evidence Expectations
 
@@ -265,6 +316,7 @@ For each executed case, collect only the evidence that materially proves the res
 - tester notes for exact user-visible message comparisons
 - staging screenshots for Google and Microsoft SSO completion
 - clear record of any developer-assisted precondition needed for DB-backed cases
+- CP screenshots showing account key, current status, and route when proving publish/re-entry/status-toggle behavior
 
 ### Message discipline
 
@@ -327,7 +379,7 @@ If tenant isolation is violated, stop testing and escalate immediately.
 
 ## Signoff Criteria
 
-Do not sign off Auth + User Provisioning unless all of the following are true:
+Do not sign off Auth + User Provisioning + Control Plane unless all of the following are true:
 
 - core local auth flows executed successfully or failed only with known accepted issues
 - email-driven local flows executed successfully
@@ -338,6 +390,7 @@ Do not sign off Auth + User Provisioning unless all of the following are true:
 - workspace setup banner behavior verified where in current shipped scope
 - Google SSO staging proof completed
 - Microsoft SSO staging proof completed
+- CP create/setup/review/publish/re-entry/status-toggle proof completed
 - screenshots and evidence package are complete
 - no open P0 bugs
 - no open P1 bugs

@@ -1,8 +1,8 @@
-# Hubins Auth-Lab — Operations Runbooks
+# Hubins Auth-Lab — Operations Runbooks (Auth + Control Plane)
 
 ## Purpose
 
-This document is the operator-facing runbook for the currently implemented Auth + User Provisioning foundation.
+This document is the operator-facing runbook for the currently implemented Auth + User Provisioning and Control Plane foundations.
 
 It is intentionally practical.
 It is not a design essay.
@@ -10,7 +10,8 @@ It exists to answer:
 
 - how to check whether the stack is healthy
 - how to bootstrap and validate the current auth flows
-- how to triage the most likely auth failures
+- how to validate and recover the current Control Plane publish/status flows
+- how to triage the most likely auth and CP failures
 - how to rotate security-sensitive keys safely in the current repo
 - what adversarial review must happen before major releases
 
@@ -33,6 +34,7 @@ Before testing or debugging any auth issue locally, confirm the stack is actuall
 - Redis
 - Mailpit
 - local proxy
+- Control Plane frontend
 
 ### Commands
 
@@ -56,11 +58,7 @@ Open:
 http://goodwill-ca.lvh.me:3000/api/health
 ```
 
-Expected result:
-
-```json
-{ "status": "ok" }
-```
+Expected result: JSON response with `ok: true` and healthy dependency checks. In non-production environments the body may also include `env`, `service`, `requestId`, `tenantKey`, and per-dependency `checks`.
 
 #### Mailpit
 
@@ -85,6 +83,18 @@ http://goodwill-open.lvh.me:3000/auth/login
 Expected result:
 
 Login page renders without server error.
+
+#### Control Plane surface
+
+Open:
+
+```text
+http://cp.lvh.me:3000/accounts
+```
+
+Expected result:
+
+Accounts list page renders without server error and browser requests stay same-origin under the CP host.
 
 #### Seeded member login smoke
 
@@ -113,6 +123,44 @@ yarn dev
 ```
 
 ---
+
+## 1.2 Control Plane publish and recovery checks
+
+Use this section when CP publish, review, or status-toggle behavior looks wrong.
+
+### Core CP validation path
+
+1. open `http://cp.lvh.me:3000/accounts`
+2. confirm the target account row exists and note `cpStatus`
+3. open the review page for the target account
+4. confirm Activation Ready checks and blocking reasons match the saved Step 2 truth
+5. if publish was expected to provision a tenant, confirm the review DTO now shows provisioning state and published timestamp
+6. if only a status toggle was performed, confirm the status changed without implying a new allowance revision
+
+### What to check when publish fails
+
+Work these checks in order:
+
+1. confirm the account is still visible in the CP accounts list and uses the expected `accountKey`
+2. confirm all required Step 2 groups were actually saved
+3. if Personal is enabled, confirm the Personal sub-page was explicitly saved
+4. confirm integrations are compatible with Access decisions (for example, Google/Microsoft login cannot stay enabled while the matching integration is disabled)
+5. confirm the target status is valid for the current Activation Ready state
+6. if the error mentions an existing tenant collision, treat it as a real provisioning conflict rather than a UI bug
+
+### Provisioning truth consistency check
+
+If a publish attempt looks partially applied, verify the following together:
+
+- CP account detail still returns the expected `cpStatus`
+- CP review/provisioning data shows whether the account is provisioned
+- the tenant key expected from the account key is not duplicated by a tenant created outside Control Plane
+
+The repo contract is that CP provisioning truth and tenant configuration truth stay separate. Do not “fix” a publish issue by inventing manual Settings state.
+
+### Topology note
+
+When validating CP recovery, prefer the proxy-routed host (`cp.lvh.me:3000`) instead of the direct dev server. That is the path that exercises the same-origin `/api/*` contract honestly.
 
 ## 2. Local bootstrap and invite proof
 

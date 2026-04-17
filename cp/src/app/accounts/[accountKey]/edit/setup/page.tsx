@@ -1,14 +1,14 @@
 import { notFound } from 'next/navigation';
-import { loadEditableAccount } from '@/features/accounts/mock-data';
-import { AccountSetupOverviewScreen } from '@/features/accounts/screens/account-setup-overview-screen';
+import { loadEditableAccount } from '@/features/accounts/account-loaders';
+import { AccountPersonalConfigScreen } from '@/features/accounts/screens/account-personal-config-screen';
 
-type EditAccountSetupPageProps = {
+type EditPersonalSetupPageProps = {
   params: Promise<{
     accountKey: string;
   }>;
 };
 
-export default async function EditAccountSetupPage({ params }: EditAccountSetupPageProps) {
+export default async function EditPersonalSetupPage({ params }: EditPersonalSetupPageProps) {
   const { accountKey } = await params;
   const account = await loadEditableAccount(accountKey);
 
@@ -16,5 +16,5 @@ export default async function EditAccountSetupPage({ params }: EditAccountSetupP
     notFound();
   }
 
-  return <AccountSetupOverviewScreen mode="edit" account={account} />;
+  return <AccountPersonalConfigScreen mode="edit" account={account} />;
 }

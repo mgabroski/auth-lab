@@ -8,7 +8,7 @@
  */
 
 import { AccountsListScreen } from '@/features/accounts/screens/accounts-list-screen';
-import { loadAccountsList } from '@/features/accounts/mock-data';
+import { loadAccountsList } from '@/features/accounts/account-loaders';
 
 export default async function AccountsPage() {
   const accounts = await loadAccountsList();

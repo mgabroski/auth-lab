@@ -25,8 +25,8 @@ This repo already has:
 - current auth and invite API surfaces
 - current QA and developer execution documents
 - a locked documentation routing model with explicit tiering
-- a separate internal Control Plane frontend app with Phase 1 shell and routing
-- a real CP backend module (`backend/src/modules/control-plane/`) with accounts create/read/list endpoints
+- a separate internal Control Plane frontend app with real create, setup, review, publish, re-entry, and status-toggle surfaces
+- a real CP backend module (`backend/src/modules/control-plane/`) with create/read/list, group-save, review/publish, status-toggle, and producer-side handoff endpoints
 - a real `cp_accounts` table (migration `0014_cp_accounts.ts`)
 - real CP Phase 3 Step 2 persistence for setup groups and Personal field-catalog truth
 - real CP Phase 4 Review & Publish backend composition, Activation Ready validation, publish action, and tenant provisioning truth
@@ -64,6 +64,8 @@ These are active support docs, but they do not outrank the current-truth set abo
 - `docs/prompts/catalog.md`
 - other docs under `docs/prompts/`
 - folder-map docs such as `backend/docs/README.md`, `frontend/README.md`, and `infra/README.md`
+
+The support docs above now also carry explicit Control Plane execution/recovery guidance where that guidance is part of shipped repo truth.
 
 ### Historical and raw-input rule
 

@@ -27,8 +27,9 @@
  *   production. It replaces real Google/Microsoft provider adapters with the
  *   CI-only LocalOidcSsoAdapter. Rejected in production.
  *
- * CP Phase 2 update:
- * - Added ControlPlaneModule wiring (createControlPlaneModule).
+ * CP current-state note:
+ * - ControlPlaneModule wiring is now real for create/read/list, Step 2 saves, review/publish,
+ *   status toggle, and producer-side handoff reads.
  * - CP module requires db + logger + auditRepo. No rate-limiter, no outbox, no session.
  */
 
