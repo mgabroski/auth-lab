@@ -7,6 +7,7 @@
  *   into the list screen.
  */
 
+import React from 'react';
 import { AccountsListScreen } from '@/features/accounts/screens/accounts-list-screen';
 import { loadAccountsList } from '@/features/accounts/account-loaders';
 

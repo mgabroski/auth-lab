@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --config vitest.config.mts",
     "test:unit:watch": "vitest --config vitest.config.mts",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test test/e2e/auth.spec.ts",
+    "test:e2e:auth": "playwright test test/e2e/auth.spec.ts",
+    "test:e2e:cp": "playwright test test/e2e/cp-smoke.spec.ts",
+    "test:e2e:all": "playwright test",
     "test": "yarn test:unit"
   },
   "dependencies": {

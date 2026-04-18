@@ -56,7 +56,7 @@ jobs:
           NODE_ENV: test
 
   e2e:
-    name: Playwright auth smoke
+    name: Playwright tenant auth smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: unit
@@ -316,8 +316,8 @@ jobs:
           docker exec auth-lab-redis redis-cli FLUSHALL > /dev/null
           echo "Redis flushed — rate limit counters reset for clean E2E run."
 
-      - name: Run Playwright auth smoke tests
-        run: yarn test:e2e
+      - name: Run Playwright tenant auth smoke tests
+        run: yarn workspace frontend playwright test test/e2e/auth.spec.ts
         env:
           MAILPIT_API_URL: http://localhost:8025
           CI: 'true'
@@ -327,7 +327,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: playwright-traces
+          name: playwright-auth-traces
           path: frontend/test-results/
           retention-days: 7
 

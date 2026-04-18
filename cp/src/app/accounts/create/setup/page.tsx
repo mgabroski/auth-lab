@@ -1,3 +1,4 @@
+import React from 'react';
 import { redirect } from 'next/navigation';
 import { loadDraftAccountByKey } from '@/features/accounts/account-loaders';
 import { AccountSetupOverviewScreen } from '@/features/accounts/screens/account-setup-overview-screen';

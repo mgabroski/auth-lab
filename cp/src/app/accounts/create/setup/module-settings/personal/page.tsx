@@ -1,3 +1,4 @@
+import React from 'react';
 import { redirect } from 'next/navigation';
 import { loadDraftAccountByKey } from '@/features/accounts/account-loaders';
 import { AccountPersonalConfigScreen } from '@/features/accounts/screens/account-personal-config-screen';

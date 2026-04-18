@@ -1,3 +1,4 @@
+import React from 'react';
 import { redirect } from 'next/navigation';
 import { loadAccountReviewByKey } from '@/features/accounts/account-loaders';
 import { AccountReviewScreen } from '@/features/accounts/screens/account-review-screen';

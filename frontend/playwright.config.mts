@@ -2,18 +2,26 @@
  * frontend/playwright.config.mts
  *
  * Single Playwright config for the repo.
- * Targets the real Docker Compose stack: Caddy proxy at *.lvh.me:3000.
  *
- * PREREQUISITES (stack must be running before tests execute):
- *   yarn dev        — starts infra + seeds + backend + frontend (host-run)
- *   yarn dev:stack  — starts full Docker topology including Caddy proxy
+ * TOPOLOGY MODES:
+ * - yarn dev
+ *   Host-run local dev:
+ *     frontend -> localhost:3000
+ *     cp       -> localhost:3002
+ *   Valid for tenant-auth smoke.
  *
- * TOPOLOGY:
- *   browser → Caddy *.lvh.me:3000 → backend:3001 / frontend:3000
- *   *.lvh.me resolves to 127.0.0.1 in public DNS — no /etc/hosts needed.
+ * - yarn dev:stack
+ *   Full Docker topology with the real public proxy:
+ *     browser -> Caddy *.lvh.me:3000 -> backend / frontend / cp
+ *   Required for CP proxy-host smoke and full same-origin routing proof.
+ *
+ * IMPORTANT:
+ * - Not every spec is valid in every topology.
+ * - auth.spec.ts works in host-run dev and full-stack dev.
+ * - cp-smoke.spec.ts requires the real proxy topology (yarn dev:stack or CI CP workflow).
  *
  * WHY workers: 1:
- *   Real DB state and a shared Mailpit inbox. Serialising tests avoids
+ * - Real DB state and a shared Mailpit inbox. Serialising tests avoids
  *   race conditions on seeded rows and email pickup.
  */
 
@@ -49,5 +57,5 @@ export default defineConfig({
   ],
 
   // No webServer block — the stack must already be running.
-  // yarn dev / yarn dev:stack handles startup and seeding automatically.
+  // yarn dev / yarn dev:stack handles startup and seeding separately.
 });

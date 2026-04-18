@@ -32,10 +32,14 @@ The format is based on Keep a Changelog principles, adapted to the current repo 
 
 - Added `docs/ops/release-engineering.md` as the repo’s release-engineering contract covering release lanes, applicable merge gates, migration safety, rollback expectations, post-change verification, incident severity, hotfix handling, changelog discipline, and explicit external GitHub-control dependencies.
 - Added `CHANGELOG.md` as the repo’s human-written release-relevant history surface.
+- Added dedicated Control Plane route-integrity unit coverage for the create flow and edit / re-entry flow so server-page regressions on the CP app surface are test-detectable before browser proof.
+- Added a dedicated real-stack Control Plane Playwright smoke in CI that exercises the real CP host through create, required-group saves, review, publish, re-entry, and status-toggle behavior.
 
 ### Changed
 
 - Updated `docs/current-foundation-status.md` to reflect the current repo truth more precisely, including that Stage 5 practical closure is now completed to the strongest honest repo-visible depth, while external GitHub branch-protection and required-review behavior remain explicit external dependencies.
+- Updated shipped-truth documentation to state explicitly that CP now has route-level integrity proof plus a dedicated real-stack browser smoke in CI, closing the remaining proof-gap between shipped CP behavior and repo-visible closure evidence.
+- Updated CI workflow behavior so Control Plane browser proof is first-class and no longer only implied by adjacent frontend coverage.
 - Updated `README.md` to match the real current command, host, stack, and verification behavior.
 - Updated `infra/README.md` to clarify host-run versus full-topology local modes and the correct proof path for topology-sensitive changes.
 - Updated `docs/developer-guide.md` to match current setup, env, seed/bootstrap, test, and Playwright behavior.

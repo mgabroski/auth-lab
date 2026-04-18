@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 6 producer-side Settings handoff preparation is now shipped, while live CP → Settings cascade wiring remains correctly blocked until the real Settings state engine exists.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. CP Phase 6 producer-side Settings handoff preparation is now shipped, and CP proof / CI closure now includes dedicated route-level integrity coverage plus a real browser smoke in CI, while live CP → Settings cascade wiring remains correctly blocked until the real Settings state engine exists.
 
 This repo already has:
 
@@ -26,6 +26,8 @@ This repo already has:
 - current QA and developer execution documents
 - a locked documentation routing model with explicit tiering
 - a separate internal Control Plane frontend app with real create, setup, review, publish, re-entry, and status-toggle surfaces
+- dedicated CP route-level integrity tests for create and edit / re-entry page surfaces
+- a dedicated real-stack CP browser smoke in CI covering create → required-group saves → review → publish → re-enter → status toggle
 - a real CP backend module (`backend/src/modules/control-plane/`) with create/read/list, group-save, review/publish, status-toggle, and producer-side handoff endpoints
 - a real `cp_accounts` table (migration `0014_cp_accounts.ts`)
 - real CP Phase 3 Step 2 persistence for setup groups and Personal field-catalog truth

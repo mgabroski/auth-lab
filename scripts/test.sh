@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/test.sh
 #
-# Runs all tests.
+# Runs the repo test suite used by local verify flows.
 #
 # WHY auth_lab_test is created here:
 # - In CI, backend tests use a separate auth_lab_test database (see backend-tests.yml).
@@ -15,15 +15,25 @@
 # - backend tests may leave sessions and rate limit counters in Redis.
 # - Flushing resets all counters. Sessions are re-created by each test's login step.
 #
+# WHY local Playwright here is auth-only:
+# - The default local dev topology (yarn dev) is host-run:
+#     frontend -> localhost:3000
+#     cp       -> localhost:3002
+# - In that mode Caddy is NOT the active public entrypoint for cp.lvh.me:3000,
+#   so CP proxy-host smoke is not a valid expectation.
+# - CP smoke belongs to the full-stack / real-proxy topology:
+#     yarn dev:stack
+#     yarn workspace frontend test:e2e:cp
+#
 # SEQUENCE:
 #   1. Ensure auth_lab_test exists and is migrated
 #   2. Run backend tests against auth_lab_test (dev server untouched)
 #   3. Run frontend unit tests
 #   4. Run Control Plane unit tests
-#   5. If stack is running:
+#   5. If tenant stack is running:
 #      a. Seed E2E fixtures (idempotent — does not disturb running dev server)
 #      b. Flush Redis
-#      c. Run Playwright E2E
+#      c. Run Playwright tenant auth smoke only
 
 set -euo pipefail
 
@@ -65,7 +75,7 @@ echo ""
 echo "🧪 Running Control Plane unit tests..."
 yarn test:cp
 
-# ── E2E — only when stack is running ─────────────────────────────────────────
+# ── E2E — only when tenant stack is running ──────────────────────────────────
 
 echo ""
 if curl -sf http://goodwill-ca.lvh.me:3000/api/health >/dev/null 2>&1; then
@@ -78,12 +88,14 @@ if curl -sf http://goodwill-ca.lvh.me:3000/api/health >/dev/null 2>&1; then
   echo "   Redis flushed."
 
   echo ""
-  echo "🐳 Stack is running — running E2E auth smoke tests..."
-  yarn test:e2e
-  echo "✅ E2E passed."
+  echo "🐳 Tenant stack is running — running E2E auth smoke tests..."
+  yarn workspace frontend test:e2e:auth
+  echo "✅ E2E auth smoke passed."
 else
-  echo "ℹ️  Stack not running — E2E skipped."
+  echo "ℹ️  Tenant stack not running — E2E skipped."
   echo "   Start the stack with yarn dev, then run yarn test again."
+  echo "   For CP proxy-host smoke, use yarn dev:stack and run:"
+  echo "   yarn workspace frontend test:e2e:cp"
 fi
 
 echo ""

@@ -10,6 +10,7 @@
  *   submits via POST /api/cp/accounts on continue.
  */
 
+import React from 'react';
 import { AccountBasicInfoScreen } from '@/features/accounts/screens/account-basic-info-screen';
 
 export default function CreateAccountBasicInfoPage() {
