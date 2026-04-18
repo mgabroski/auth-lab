@@ -5,8 +5,8 @@
  *
  * WHY:
  * - Renders the CP accounts list for operator re-entry and edit routing.
- * - Phase 5 adds practical re-entry actions for existing draft/published accounts
- *   and a real backend-owned Active/Disabled status toggle.
+ * - Covers the shipped accounts-list actions for existing draft/published accounts,
+ *   including backend-owned Active/Disabled status toggles.
  */
 
 import Link from 'next/link';
@@ -312,7 +312,7 @@ export function AccountsListScreen({ accounts }: { accounts: ControlPlaneAccount
         </article>
 
         <article style={insetPanelStyle}>
-          <strong>Phase 5 operator surface</strong>
+          <strong>Operator surface</strong>
           <p style={mutedTextStyle}>
             Accounts list, edit/re-entry, re-review, and the Active/Disabled status toggle are now
             real. Draft accounts still move through Review & Publish to leave Draft for the first

@@ -2,8 +2,8 @@
  * backend/src/modules/control-plane/accounts/cp-accounts.service.ts
  *
  * WHY:
- * - Business orchestration for CP accounts, Step 2 group saves, and Phase 4
- *   Review & Publish.
+ * - Business orchestration for CP accounts, Step 2 group saves, Review & Publish,
+ *   and published-account status changes.
  * - Owns uniqueness checks, group validation, progress-state updates,
  *   Activation Ready evaluation, and real tenant provisioning.
  *
@@ -121,7 +121,7 @@ type AccountSnapshot = {
   tenantRow: TenantProvisioningRow | undefined;
 };
 
-const RESERVED_ACCOUNT_KEYS = new Set(['cp', 'api', 'admin', 'auth', 'www']);
+const RESERVED_ACCOUNT_KEYS = new Set(['cp', 'api', 'admin', 'auth', 'www', 'app']);
 
 type ProvisionableTenantConfig = {
   isActive: boolean;

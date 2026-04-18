@@ -24,7 +24,7 @@
  * CP ROUTE PREFIX:
  * - All Control Plane backend routes are registered under /cp/*.
  * - They are registered by deps.controlPlane.registerRoutes(app).
- * - CP routes are dev-only no-auth for this phase.
+ * - CP routes are currently dev-only no-auth until a dedicated CP auth model ships.
  */
 
 import type { FastifyInstance } from 'fastify';

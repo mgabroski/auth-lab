@@ -21,7 +21,7 @@ export const SETUP_GROUPS: SetupGroupDefinition[] = [
     title: 'Module Settings',
     shortLabel: 'Module Settings',
     description:
-      'Decide which modules are allowed. Personal is the only live configurable sub-page in this phase.',
+      'Decide which modules are allowed. Personal is the only live configurable sub-page in the current shipped surface.',
     isRequired: true,
   },
   {

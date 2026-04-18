@@ -641,7 +641,7 @@ export function AccountSetupGroupScreen({
             {renderCheckboxRow({
               label: 'Personal',
               description:
-                'The only live configurable module in this phase. Its Personal sub-page must be saved before Module Settings is treated as configured.',
+                'The only live configurable module in the current shipped surface. Its Personal sub-page must be saved before Module Settings is treated as configured.',
               checked: moduleState.modules.personal,
               onChange: (checked) =>
                 setModuleState((current) => ({
@@ -650,7 +650,8 @@ export function AccountSetupGroupScreen({
             })}
             {renderCheckboxRow({
               label: 'Documents',
-              description: 'Future placeholder module. No CP sub-page in this phase.',
+              description:
+                'Future placeholder module. No CP sub-page in the current shipped surface.',
               checked: moduleState.modules.documents,
               onChange: (checked) =>
                 setModuleState((current) => ({
@@ -659,7 +660,8 @@ export function AccountSetupGroupScreen({
             })}
             {renderCheckboxRow({
               label: 'Benefits',
-              description: 'Future placeholder module. No CP sub-page in this phase.',
+              description:
+                'Future placeholder module. No CP sub-page in the current shipped surface.',
               checked: moduleState.modules.benefits,
               onChange: (checked) =>
                 setModuleState((current) => ({
@@ -668,7 +670,8 @@ export function AccountSetupGroupScreen({
             })}
             {renderCheckboxRow({
               label: 'Payments',
-              description: 'Future placeholder module. No CP sub-page in this phase.',
+              description:
+                'Future placeholder module. No CP sub-page in the current shipped surface.',
               checked: moduleState.modules.payments,
               onChange: (checked) =>
                 setModuleState((current) => ({
@@ -716,7 +719,7 @@ export function AccountSetupGroupScreen({
                   description:
                     integration.capabilities.length > 0
                       ? 'Use the child capabilities below when this integration is allowed.'
-                      : 'Integration surface only. No child capabilities in this phase.',
+                      : 'Integration surface only. No child capabilities in the current shipped surface.',
                   checked: stateIntegration.isAllowed,
                   onChange: (checked) =>
                     setIntegrationsState((current) => ({

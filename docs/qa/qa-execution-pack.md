@@ -285,20 +285,22 @@ The direct Next.js dev server (`http://localhost:3002`) is acceptable for local 
 
 For a clean CP execution pass, prove these checkpoints in order:
 
-1. create a new Draft account from Basic Account Info
-2. save Access, Identity & Security
-3. save Account Settings
-4. save Module Settings
-5. if Personal remains enabled, save the Personal sub-page explicitly
-6. save Integrations & Marketplace
-7. confirm Review & Publish unlocks only after the required saves are complete
-8. publish as `Disabled` first when testing the minimal provisioning path
-9. re-enter the account from the accounts list and confirm review/edit links work
-10. toggle `Disabled` -> `Active` only after Activation Ready passes
+1. confirm obviously reserved account keys such as `app` are rejected with a clear validation error before a draft is created
+2. create a new Draft account from Basic Account Info
+3. save Access, Identity & Security
+4. save Account Settings
+5. save Module Settings
+6. if Personal remains enabled, save the Personal sub-page explicitly
+7. save Integrations & Marketplace
+8. confirm Review & Publish unlocks only after the required saves are complete
+9. publish as `Disabled` first when testing the minimal provisioning path
+10. re-enter the account from the accounts list and confirm review/edit links work
+11. toggle `Disabled` -> `Active` only after Activation Ready passes
 
 ### CP-specific expected truths
 
 - new accounts start as `Draft` with `cpRevision = 0`
+- reserved CP namespaces such as `cp`, `api`, `admin`, `auth`, `www`, and `app` must be rejected at create time
 - Step 2 allowance saves increment `cpRevision` only when the persisted allowance truth actually changes
 - publish persists provisioning truth but does not increment `cpRevision` by itself
 - status toggles do not increment `cpRevision`

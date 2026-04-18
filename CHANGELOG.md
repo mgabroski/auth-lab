@@ -37,6 +37,7 @@ The format is based on Keep a Changelog principles, adapted to the current repo 
 
 ### Changed
 
+- Updated final shipped-truth wording across CP backend comments, CP operator-facing copy, and current-status documentation so the repo describes the current Control Plane surface without stale phase-coupled language.
 - Updated `docs/current-foundation-status.md` to reflect the current repo truth more precisely, including that Stage 5 practical closure is now completed to the strongest honest repo-visible depth, while external GitHub branch-protection and required-review behavior remain explicit external dependencies.
 - Updated shipped-truth documentation to state explicitly that CP now has route-level integrity proof plus a dedicated real-stack browser smoke in CI, closing the remaining proof-gap between shipped CP behavior and repo-visible closure evidence.
 - Updated CI workflow behavior so Control Plane browser proof is first-class and no longer only implied by adjacent frontend coverage.
@@ -55,6 +56,7 @@ The format is based on Keep a Changelog principles, adapted to the current repo 
 
 ### Fixed
 
+- Fixed Control Plane reserved account-key enforcement so namespace collisions such as `app` are rejected consistently at create time, and added regression coverage for that validation path.
 - Fixed the CP integrations validation path to use an integration-scoped validation error instead of incorrectly reusing the personal-validation error factory.
 - Renamed the CP server-side account loader facade away from `mock-data.ts` so the file name matches its real runtime role.
 
@@ -73,10 +75,12 @@ Use this template when adding a new release-relevant entry.
 
 ### Changed
 
+- Updated final shipped-truth wording across CP backend comments, CP operator-facing copy, and current-status documentation so the repo describes the current Control Plane surface without stale phase-coupled language.
 - ...
 
 ### Fixed
 
+- Fixed Control Plane reserved account-key enforcement so namespace collisions such as `app` are rejected consistently at create time, and added regression coverage for that validation path.
 - ...
 
 ### Removed
