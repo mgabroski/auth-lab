@@ -3,9 +3,11 @@
  *
  * WHY:
  * - Proves the Control Plane against the real full stack and real proxy host.
- * - Exercises the minimum load-bearing operator path:
- *   open CP host → create account → save required groups → review → publish
- *   → re-enter → status toggle.
+ * - Exercises the minimum load-bearing operator paths:
+ *   1) open CP host → create account → save required groups → review → publish
+ *      → re-enter → status toggle
+ *   2) Personal-enabled branch remains real end-to-end
+ *   3) tenant hosts must not reach /api/cp/*
  * - Keeps the proof honest: browser uses the public CP host, backend calls stay
  *   same-origin through Caddy, and CP SSR continues to use INTERNAL_API_URL.
  *
@@ -22,10 +24,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const CP_ORIGIN = 'http://cp.lvh.me:3000';
+const TENANT_ORIGIN = 'http://goodwill-ca.lvh.me:3000';
 
-function buildUniqueAccountKey(): string {
+function buildUniqueAccountKey(prefix = 'cp-smoke'): string {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  return `cp-smoke-${suffix}`;
+  return `${prefix}-${suffix}`;
 }
 
 async function openSetupGroup(page: Page, title: string) {
@@ -145,5 +148,75 @@ test.describe('control plane full-stack smoke', () => {
 
     await expect(page.getByText(`${accountName} is now Active.`)).toBeVisible();
     await expect(page.locator('tr').filter({ hasText: accountKey })).toContainText('Active');
+  });
+
+  test('keeps the Personal-enabled branch real and requires the Personal sub-page before review unlocks', async ({
+    page,
+  }) => {
+    const accountName = `CP Personal ${Date.now()}`;
+    const accountKey = buildUniqueAccountKey('cp-personal');
+
+    await page.goto(`${CP_ORIGIN}/accounts/create/basic-info`);
+    await page.getByLabel(/Account Name/i).fill(accountName);
+    await page.getByLabel(/Account Key/i).fill(accountKey);
+    await page.getByRole('button', { name: 'Continue →' }).click();
+
+    await saveRequiredSetupGroup(page, {
+      title: 'Access, Identity & Security',
+      accountKey,
+    });
+
+    await saveRequiredSetupGroup(page, {
+      title: 'Account Settings',
+      accountKey,
+    });
+
+    await openSetupGroup(page, 'Module Settings');
+    await expect(page.getByRole('heading', { name: 'Module Settings' })).toBeVisible();
+
+    const personalCheckbox = page
+      .locator('label')
+      .filter({ hasText: 'Personal' })
+      .locator('input[type="checkbox"]')
+      .first();
+
+    await personalCheckbox.check();
+    await page.getByRole('button', { name: 'Save & Close' }).click();
+
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+    await expect(page.getByRole('button', { name: 'Continue →' })).toBeDisabled();
+
+    await openSetupGroup(page, 'Module Settings');
+    await page.getByRole('link', { name: 'Open Personal CP sub-page →' }).click();
+
+    await expect(
+      page.getByRole('heading', { name: 'Personal CP field configuration' }),
+    ).toBeVisible();
+    await expect(page.getByText('Personal save state')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save & Close' }).click();
+
+    await expect(page).toHaveURL(
+      `${CP_ORIGIN}/accounts/create/setup/module-settings?accountKey=${accountKey}`,
+    );
+    await expect(
+      page.getByText('Personal catalog decisions have already been saved for this account.'),
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save & Close' }).click();
+
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+    await expect(page.getByRole('link', { name: 'Continue →' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Continue →' }).click();
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
+    await expect(page.getByText('Activation Ready passed.')).toBeVisible();
+  });
+
+  test('tenant hosts reject /api/cp/* so the tenant surface cannot reach the CP backend', async ({
+    page,
+  }) => {
+    const response = await page.request.get(`${TENANT_ORIGIN}/api/cp/accounts`);
+    expect(response.status()).toBe(404);
   });
 });

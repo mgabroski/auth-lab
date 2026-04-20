@@ -41,6 +41,13 @@ CP routes are on the same backend process as all other routes. They are prefixed
 
 **Internal non-public no-auth**: CP routes carry no authentication in this phase only for bounded internal environments such as local development and CI. This is a deliberate prerequisite-track shortcut. CP authentication will be added in a later phase, and this posture must not be exposed publicly.
 
+**Boundary hardening now enforced**:
+
+- CP routes are registered only when `CP_NO_AUTH_ALLOWED=true`
+- tenant hosts must reject `/api/cp/*`
+- backend CP routes return a generic `404 Not found` when reached from non-CP hosts
+- `CP_NO_AUTH_ALLOWED=true` is a production startup error
+
 ---
 
 ## 3. Shared response shapes
@@ -441,10 +448,10 @@ Creates a new Draft CP account. A successful create writes a durable audit event
 
 **Validation rules**
 
-| Field         | Rule                                                                                                                                                              |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `accountName` | Required. Non-empty string. Max 255 characters.                                                                                                                   |
-| `accountKey`  | Required. Non-empty string. Max 100 characters. Must match `^[a-z0-9-]+$`. Must be unique. Reserved namespaces (`cp`, `api`, `admin`, `auth`, `www`) are blocked. |
+| Field         | Rule                                                                                                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `accountName` | Required. Non-empty string. Max 255 characters.                                                                                                                          |
+| `accountKey`  | Required. Non-empty string. Max 100 characters. Must match `^[a-z0-9-]+$`. Must be unique. Reserved namespaces (`cp`, `api`, `admin`, `app`, `auth`, `www`) are blocked. |
 
 **Response — 201 Created**
 

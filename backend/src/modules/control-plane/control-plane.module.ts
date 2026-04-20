@@ -16,6 +16,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+
+import type { AppConfig } from '../../app/config';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../shared/db/db';
 import type { Logger } from '../../shared/logger/logger';
@@ -34,8 +36,8 @@ export function createControlPlaneModule(deps: {
   return {
     accounts,
 
-    registerRoutes(app: FastifyInstance) {
-      accounts.registerRoutes(app);
+    registerRoutes(app: FastifyInstance, config: AppConfig) {
+      accounts.registerRoutes(app, config);
     },
   };
 }

@@ -26,6 +26,9 @@
  * - Guard 3 — Local OIDC: LOCAL_OIDC_ENABLED must never be enabled in
  *   production. It replaces real Google/Microsoft provider adapters with the
  *   CI-only LocalOidcSsoAdapter. Rejected in production.
+ * - Guard 4 — Control Plane no-auth: CP_NO_AUTH_ALLOWED must never be enabled
+ *   in production. The current Control Plane route surface is local-dev/CI only
+ *   until a dedicated CP auth boundary ships.
  *
  * CP current-state note:
  * - ControlPlaneModule wiring is now real for create/read/list, Step 2 saves, review/publish,
@@ -221,6 +224,29 @@ export function assertLocalOidcDisabledInProduction(config: AppConfig): void {
   }
 }
 
+/**
+ * STARTUP GUARD 4 — Control Plane no-auth must never be enabled in production.
+ *
+ * The current CP route surface is a deliberate local-dev/CI-only exception. If
+ * CP_NO_AUTH_ALLOWED=true leaks into a production-like environment, the backend
+ * would expose unauthenticated /cp/* routes. Fail fast instead of relying on
+ * deploy discipline or doc comments to keep that posture bounded.
+ */
+export function assertControlPlaneNoAuthDisabledInProduction(config: AppConfig): void {
+  if (config.nodeEnv !== 'production') return;
+
+  if (config.controlPlane.noAuthAllowed) {
+    throw new Error(
+      [
+        'PRODUCTION STARTUP GUARD: CP_NO_AUTH_ALLOWED must never be enabled in production.',
+        'The current Control Plane route surface is a local-dev/CI-only no-auth exception.',
+        'Disable CP_NO_AUTH_ALLOWED before any non-local deployment, or ship a dedicated',
+        'Control Plane authentication boundary first.',
+      ].join('\n'),
+    );
+  }
+}
+
 function buildOutboxEncryptionConfig(config: AppConfig): OutboxEncryptionConfig {
   const defaultVersionRaw = config.outbox.encDefaultVersion;
   if (!isOutboxEncVersion(defaultVersionRaw)) {
@@ -317,6 +343,7 @@ export async function buildDeps(
   assertKeySeparation(config);
   assertSsoStateKey(config);
   assertLocalOidcDisabledInProduction(config);
+  assertControlPlaneNoAuthDisabledInProduction(config);
 
   const db = createDb(config.databaseUrl);
 

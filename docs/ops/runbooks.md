@@ -86,7 +86,13 @@ Login page renders without server error.
 
 #### Control Plane surface
 
-Open:
+Default host-run mode (`yarn dev`):
+
+```text
+http://localhost:3002/accounts
+```
+
+Full-stack proxy mode (`yarn dev:stack`):
 
 ```text
 http://cp.lvh.me:3000/accounts
@@ -160,7 +166,17 @@ The repo contract is that CP provisioning truth and tenant configuration truth s
 
 ### Topology note
 
-When validating CP recovery, prefer the proxy-routed host (`cp.lvh.me:3000`) instead of the direct dev server. That is the path that exercises the same-origin `/api/*` contract honestly.
+When validating CP recovery in full-stack mode, prefer the proxy-routed host (`cp.lvh.me:3000`) instead of the direct dev server. That is the path that exercises the same-origin `/api/*` contract honestly.
+
+### Boundary checks
+
+If CP routes unexpectedly return 404:
+
+1. confirm you are using the dedicated CP host or the direct local CP dev server
+2. confirm tenant hosts such as `goodwill-ca.lvh.me:3000` are not being used for `/api/cp/*`
+3. confirm `CP_NO_AUTH_ALLOWED=true` is present in the bounded local/CI environment you are testing
+4. in non-development CP frontend environments, a missing/false `CP_NO_AUTH_ALLOWED` must produce a 404 rather than a live CP surface
+5. if `NODE_ENV=production`, treat `CP_NO_AUTH_ALLOWED=true` as a startup-blocking misconfiguration, not as a recoverable runtime state
 
 ## 2. Local bootstrap and invite proof
 

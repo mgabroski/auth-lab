@@ -42,6 +42,30 @@ afterEach(() => {
 });
 
 describe('frontend api proxy route', () => {
+  it('rejects tenant-host /api/cp/* requests locally so the host-run shim cannot reach CP backend routes', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = makeRequest({
+      method: 'GET',
+      url: 'http://goodwill-ca.lvh.me:3000/api/cp/accounts',
+      headers: {
+        host: 'goodwill-ca.lvh.me:3000',
+      },
+    });
+
+    const response = await GET(request, makeContext(['cp', 'accounts']));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Not found',
+      },
+    });
+  });
+
   it('proxies GET requests to INTERNAL_API_URL, preserves tenant-bearing headers, and passes upstream response headers back', async () => {
     process.env.INTERNAL_API_URL = 'http://backend-internal:4000/';
 

@@ -131,6 +131,9 @@ const ConfigSchema = z.object({
   // X10 — Sentry (optional; omitting disables Sentry entirely)
   SENTRY_DSN: z.string().url().optional(),
 
+  // Control Plane no-auth exposure guard
+  CP_NO_AUTH_ALLOWED: z.coerce.boolean().default(false),
+
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),
   SEED_TENANT_KEY: z.string().default('goodwill-ca'),
@@ -206,6 +209,10 @@ export type AppConfig = {
 
   /** X10: undefined when SENTRY_DSN is not set — Sentry stays uninitialised. */
   sentryDsn: string | undefined;
+
+  controlPlane: {
+    noAuthAllowed: boolean;
+  };
 
   seed: {
     enabled: boolean;
@@ -307,6 +314,10 @@ export function buildConfig(): AppConfig {
     },
 
     sentryDsn: parsed.SENTRY_DSN,
+
+    controlPlane: {
+      noAuthAllowed: parsed.CP_NO_AUTH_ALLOWED,
+    },
 
     seed: {
       enabled: parsed.SEED_ON_START,

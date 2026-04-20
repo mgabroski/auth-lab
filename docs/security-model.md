@@ -330,6 +330,9 @@ The rule is strict:
 
 - CP no-auth is restricted to bounded internal non-public environments such as local development and CI
 - CP must remain on its own dedicated host surface and must not be embedded under the tenant app route tree
+- tenant hosts must reject `/api/cp/*` so the tenant app cannot proxy into the CP backend surface
+- CP route registration is disabled by default and only enabled when `CP_NO_AUTH_ALLOWED=true`
+- `CP_NO_AUTH_ALLOWED=true` must fail backend startup in `NODE_ENV=production`, and CP frontend rendering must stay disabled unless the flag is explicitly enabled in bounded local/CI environments
 - CP must not be exposed publicly under this posture
 - CP must not be exposed to shared staging, public preview, or production until its own authentication boundary is implemented
 - reserved host/system namespaces such as `cp`, `api`, `admin`, `app`, `auth`, and `www` must remain blocked from tenant/account-key use to avoid routing and trust-boundary collision

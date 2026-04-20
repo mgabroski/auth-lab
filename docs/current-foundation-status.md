@@ -159,6 +159,8 @@ The following foundations are treated as real in the repo now.
   - blocking reasons explain why live CP → Settings cascade is not active yet
 - producer-side handoff snapshot carries allowance truth and provisioning truth only; it does **not** mirror CP Step 2 progress/configured flags as fake Settings truth
 - CP backend remains bounded internal no-auth for the current non-public surface (local dev and CI only) — CP authentication is still deferred
+- CP route registration is now disabled by default and enabled only when `CP_NO_AUTH_ALLOWED=true`
+- tenant hosts reject `/api/cp/*`, backend CP routes return generic 404s on non-CP hosts, and the CP frontend returns 404 when `CP_NO_AUTH_ALLOWED` is not enabled for the current environment
 - the locked 3-step CP flow (Basic Account Info → Account Setup → Review & Publish) remains unchanged
 - the 4 locked setup groups remain unchanged
 - `cpRevision` starts at 0 on account creation and increments only on meaningful Step 2 allowance mutations; publish and status-only changes do not increment it because they do not change allowance truth

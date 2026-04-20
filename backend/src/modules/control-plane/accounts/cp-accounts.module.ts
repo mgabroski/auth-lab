@@ -13,6 +13,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+
+import type { AppConfig } from '../../../app/config';
 import type { AuditRepo } from '../../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../../shared/db/db';
 import type { Logger } from '../../../shared/logger/logger';
@@ -43,8 +45,8 @@ export function createCpAccountsModule(deps: {
   return {
     cpAccountsService,
 
-    registerRoutes(app: FastifyInstance) {
-      registerCpAccountsRoutes(app, cpAccountsController);
+    registerRoutes(app: FastifyInstance, config: AppConfig) {
+      registerCpAccountsRoutes(app, cpAccountsController, config);
     },
   };
 }

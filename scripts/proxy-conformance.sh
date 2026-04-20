@@ -18,6 +18,7 @@
 #   PT-08: Inactive tenant anti-enum  — unknown tenant returns same locked unavailable shape
 #   CP-01: CP host reachability       — cp.lvh.me must route to the CP app
 #   CP-02: CP same-origin API route   — cp.lvh.me/api/* must reach backend cleanly
+#   CP-03: Tenant host isolation      — tenant hosts must reject /api/cp/*
 #
 # PREREQUISITES:
 #   - Full stack running: docker compose -f infra/docker-compose.yml up --build -d
@@ -408,6 +409,22 @@ else
 fi
 
 rm -f /tmp/cp-api-health.txt
+
+
+# ── CP-03: Tenant hosts must reject Control Plane API paths ──────────────────
+echo ""
+echo "CP-03: Tenant hosts must reject Control Plane API paths"
+log "goodwill-ca.lvh.me /api/cp/* must not reach the CP backend surface"
+
+TENANT_CP_CODE=$(curl_silent -o /tmp/cp-tenant-block.txt -w "%{http_code}"   -H "Host: ${TENANT}.lvh.me"   "${BASE_URL}/api/cp/accounts" 2>/dev/null || echo "000")
+
+if [ "$TENANT_CP_CODE" = "404" ]; then
+  pass "Tenant host rejected /api/cp/* with HTTP 404"
+else
+  fail "Expected tenant host /api/cp/accounts to return 404, got ${TENANT_CP_CODE}"
+fi
+
+rm -f /tmp/cp-tenant-block.txt
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 

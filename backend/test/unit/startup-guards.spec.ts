@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   assertKeySeparation,
+  assertControlPlaneNoAuthDisabledInProduction,
   assertLocalOidcDisabledInProduction,
   assertSsoStateKey,
 } from '../../src/app/di';
@@ -14,14 +15,18 @@ import type { AppConfig } from '../../src/app/config';
  * - assertKeySeparation and assertSsoStateKey are documented in .env.example
  *   as startup guards. These tests prove the guards actually throw — so the
  *   documentation claim is backed by real enforcement.
+ * - assertLocalOidcDisabledInProduction and
+ *   assertControlPlaneNoAuthDisabledInProduction protect production posture and
+ *   must fail fast under the exact flagged configs.
  * - Pure unit tests: no DB, no Redis, no network. Just config objects and
- *   the two guard functions.
+ *   the guard functions.
  *
  * RULES:
  * - Never use nodeEnv='test' when testing the "should throw" cases — the
  *   guards explicitly exempt test mode. Use 'development' or 'production'.
- * - Always use nodeEnv='test' for the "should pass" cases that represent
- *   CI/test usage with placeholder keys.
+ * - Keep the config factory honest: any override used by a test must be merged
+ *   into the returned AppConfig. Do not hardcode nested defaults in ways that
+ *   silently discard test overrides.
  */
 
 // ── Minimal config factory ────────────────────────────────────────────────────
@@ -41,10 +46,15 @@ type MakeConfigOverrides = Omit<Partial<AppConfig>, 'sso'> & {
 };
 
 function makeConfig(overrides: MakeConfigOverrides = {}): AppConfig {
-  const nodeEnv = overrides.nodeEnv ?? 'development';
-  const mfaKey = overrides.mfaKey ?? KEY_A;
-  const outboxKey = overrides.outboxKey ?? KEY_B;
-  const ssoStateKey = overrides.ssoStateKey ?? KEY_B;
+  const {
+    nodeEnv = 'development',
+    mfaKey = KEY_A,
+    outboxKey = KEY_B,
+    ssoStateKey = KEY_B,
+    sso: ssoOverrides,
+    controlPlane: controlPlaneOverrides,
+    ...topLevelOverrides
+  } = overrides;
 
   return {
     nodeEnv,
@@ -67,7 +77,7 @@ function makeConfig(overrides: MakeConfigOverrides = {}): AppConfig {
       googleClientSecret: 'test-google-client-secret',
       microsoftClientId: 'test-microsoft-client-id',
       microsoftClientSecret: 'test-microsoft-client-secret',
-      ...overrides.sso,
+      ...ssoOverrides,
     },
     outbox: {
       pollIntervalMs: 5_000,
@@ -78,6 +88,10 @@ function makeConfig(overrides: MakeConfigOverrides = {}): AppConfig {
     },
     email: { provider: 'noop', smtp: null },
     sentryDsn: undefined,
+    controlPlane: {
+      noAuthAllowed: false,
+      ...controlPlaneOverrides,
+    },
     seed: {
       enabled: false,
       tenantKey: 'test',
@@ -85,6 +99,7 @@ function makeConfig(overrides: MakeConfigOverrides = {}): AppConfig {
       adminEmail: 'admin@example.com',
       inviteTtlHours: 168,
     },
+    ...topLevelOverrides,
   };
 }
 
@@ -204,5 +219,43 @@ describe('assertLocalOidcDisabledInProduction', () => {
   it('does not throw in production when Local OIDC is disabled', () => {
     const config = makeConfig({ nodeEnv: 'production' });
     expect(() => assertLocalOidcDisabledInProduction(config)).not.toThrow();
+  });
+});
+
+// ── assertControlPlaneNoAuthDisabledInProduction ─────────────────────────────
+
+describe('assertControlPlaneNoAuthDisabledInProduction', () => {
+  it('throws when CP no-auth is enabled in production', () => {
+    const config = makeConfig({
+      nodeEnv: 'production',
+      controlPlane: { noAuthAllowed: true },
+    });
+
+    expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).toThrow(
+      /CP_NO_AUTH_ALLOWED/i,
+    );
+  });
+
+  it('does not throw when CP no-auth is enabled in development', () => {
+    const config = makeConfig({
+      nodeEnv: 'development',
+      controlPlane: { noAuthAllowed: true },
+    });
+
+    expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).not.toThrow();
+  });
+
+  it('does not throw when CP no-auth is enabled in test', () => {
+    const config = makeConfig({
+      nodeEnv: 'test',
+      controlPlane: { noAuthAllowed: true },
+    });
+
+    expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).not.toThrow();
+  });
+
+  it('does not throw in production when CP no-auth is disabled', () => {
+    const config = makeConfig({ nodeEnv: 'production' });
+    expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).not.toThrow();
   });
 });

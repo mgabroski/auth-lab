@@ -13,6 +13,8 @@
  * - Request bodies are forwarded as Blob instances created from request.arrayBuffer().
  *   This avoids unstable direct stream forwarding and keeps RequestInit.body compatible
  *   with the TypeScript/body contract in this repo.
+ * - Tenant-host /api/cp/* must be blocked here so the host-run compatibility
+ *   shim cannot reopen the Control Plane backend surface outside the CP app.
  */
 
 import type { NextRequest } from 'next/server';
@@ -52,6 +54,31 @@ type RouteContext = {
     path: string[];
   }>;
 };
+
+function isControlPlanePath(path: string[]): boolean {
+  return path[0] === 'cp';
+}
+
+function buildBlockedControlPlaneResponse(method: string): Response {
+  const headers = new Headers({
+    'content-type': 'application/json',
+  });
+
+  const body =
+    method.toUpperCase() === 'HEAD'
+      ? null
+      : JSON.stringify({
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Not found',
+          },
+        });
+
+  return new Response(body, {
+    status: 404,
+    headers,
+  });
+}
 
 function backendBaseUrl(): string {
   return (process.env.INTERNAL_API_URL ?? 'http://localhost:3001').replace(/\/+$/g, '');
@@ -148,6 +175,11 @@ async function buildUpstreamBody(request: NextRequest): Promise<Blob | undefined
 
 async function proxy(request: NextRequest, context: RouteContext): Promise<Response> {
   const { path } = await context.params;
+
+  if (isControlPlanePath(path)) {
+    return buildBlockedControlPlaneResponse(request.method);
+  }
+
   const url = buildUpstreamUrl(request, path);
   const headers = buildUpstreamHeaders(request);
   const body = await buildUpstreamBody(request);

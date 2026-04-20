@@ -92,6 +92,13 @@ http://cp.lvh.me:3000 {
 
 # ── Tenant app (all other subdomains) ────────────────────────────────────────
 http://*.lvh.me:3000 {
+  # ── Tenant hosts must never expose CP backend routes ───────────────────
+  @tenantCpApi path /api/cp/*
+
+  handle @tenantCpApi {
+    respond 404
+  }
+
   # ── API routes → backend (strip /api prefix) ──────────────────────────
   @api path /api/*
 

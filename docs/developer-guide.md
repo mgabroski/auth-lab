@@ -126,8 +126,8 @@ Use reset when:
 
 ### Support URLs
 
-- Control Plane (preferred proxy-routed host): `http://cp.lvh.me:3000`
-- Control Plane direct dev server: `http://localhost:3002`
+- Control Plane direct dev server (default `yarn dev` browser entry): `http://localhost:3002`
+- Control Plane proxy-routed host (full Docker stack via `yarn dev:stack`): `http://cp.lvh.me:3000`
 - Mailpit: `http://localhost:8025`
 - tenant health: `http://goodwill-ca.lvh.me:3000/api/health`
 - backend direct health: `http://localhost:3001/health`
@@ -158,8 +158,20 @@ http://goodwill-ca.lvh.me:3000/api/health
 Expected result:
 
 ```json
-{ "status": "ok" }
+{
+  "ok": true,
+  "env": "development",
+  "service": "auth-lab-backend",
+  "checks": {
+    "db": true,
+    "redis": true
+  },
+  "requestId": "...",
+  "tenantKey": "goodwill-ca"
+}
 ```
+
+The exact non-production shape may include different `requestId` values, but `ok: true` and healthy dependency checks are the load-bearing signals.
 
 ### 2. Invite-only login page
 
@@ -189,10 +201,10 @@ Expected result:
 
 ### 4. Control Plane shell
 
-Open:
+Default `yarn dev` host-run mode:
 
 ```text
-http://cp.lvh.me:3000
+http://localhost:3002
 ```
 
 Expected result:
@@ -201,7 +213,13 @@ Expected result:
 - Control Plane shell loads
 - no auth screen is expected in current scope
 
-Direct Next.js host-run iteration remains available at `http://localhost:3002`, but the proxy-routed host above is the canonical browser proof path for topology-sensitive CP work.
+Proxy-routed CP proof path (only when using `yarn dev:stack`):
+
+```text
+http://cp.lvh.me:3000
+```
+
+Use the proxy-routed host for topology-sensitive CP testing. Under the default host-run mode, `cp.lvh.me:3000` is not the active public entrypoint.
 
 ### 5. Mailpit
 

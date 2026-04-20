@@ -76,6 +76,10 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     // Sentry is never initialised in tests.
     sentryDsn: undefined,
 
+    controlPlane: {
+      noAuthAllowed: true,
+    },
+
     // Email — always noop in tests.
     // The production guard in di.ts rejects noop only when nodeEnv='production'.
     // In test mode this is the correct setting: no real emails are sent,
@@ -114,6 +118,10 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
         ...baseConfig.outbox.encKeysByVersion,
         ...(overrides.outbox?.encKeysByVersion ?? {}),
       },
+    },
+    controlPlane: {
+      ...baseConfig.controlPlane,
+      ...(overrides.controlPlane ?? {}),
     },
     email: {
       ...baseConfig.email,
