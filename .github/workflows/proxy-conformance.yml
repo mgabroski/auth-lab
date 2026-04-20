@@ -98,6 +98,7 @@ jobs:
 
           FRONTEND_INTERNAL_API_URL=http://backend:3001
           CP_INTERNAL_API_URL=http://backend:3001
+          CP_NO_AUTH_ALLOWED=true
           NEXT_PUBLIC_ENV=development
           ENVEOF
 

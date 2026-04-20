@@ -30,6 +30,7 @@ const METHODS_WITHOUT_BODY = new Set(['GET', 'HEAD']);
 const REQUEST_HEADERS_TO_DROP = new Set([
   'connection',
   'content-length',
+  'cookie',
   'host',
   'keep-alive',
   'proxy-authenticate',

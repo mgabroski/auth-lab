@@ -98,6 +98,30 @@ describe('request context', () => {
     }
   });
 
+  it('parses bracketed IPv6 loopback host correctly in request context', async () => {
+    const { app, close } = await buildTestApp();
+
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/health',
+        headers: {
+          host: '[::1]:3001',
+          'x-forwarded-proto': 'http',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+
+      const body = readJson<HealthResponse>(res);
+      expect(body.ok).toBe(true);
+      expect(body.tenantKey).toBeNull();
+      expect(readHeader(res, 'x-request-id')).toBe(body.requestId);
+    } finally {
+      await close();
+    }
+  });
+
   it('preserves a sanitized inbound x-request-id and echoes it on the response', async () => {
     const { app, close } = await buildTestApp();
     const inboundRequestId = 'stage3-request-id-001';

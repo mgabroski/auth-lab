@@ -68,6 +68,7 @@ jobs:
         env:
           NODE_ENV: production
           INTERNAL_API_URL: http://backend:3001
+          CP_NO_AUTH_ALLOWED: 'true'
 
   e2e:
     name: Playwright full-stack smoke
@@ -165,6 +166,7 @@ jobs:
           # Frontend / CP internal backend URLs
           FRONTEND_INTERNAL_API_URL=http://backend:3001
           CP_INTERNAL_API_URL=http://backend:3001
+          CP_NO_AUTH_ALLOWED=true
           NEXT_PUBLIC_ENV=development
           ENVEOF
 

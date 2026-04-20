@@ -74,7 +74,20 @@ function parseHostName(rawHost: unknown): string | null {
   const authority = parseAuthority(rawHost);
   if (!authority) return null;
 
-  return authority.split(':')[0] ?? null;
+  if (authority.startsWith('[')) {
+    const closingBracketIndex = authority.indexOf(']');
+    if (closingBracketIndex === -1) {
+      return authority;
+    }
+    return authority.slice(0, closingBracketIndex + 1);
+  }
+
+  const portSeparatorIndex = authority.lastIndexOf(':');
+  if (portSeparatorIndex === -1) {
+    return authority;
+  }
+
+  return authority.slice(0, portSeparatorIndex) || authority;
 }
 
 function parseForwardedProto(rawProto: unknown): 'http' | 'https' {

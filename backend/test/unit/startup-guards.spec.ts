@@ -29,12 +29,8 @@ import type { AppConfig } from '../../src/app/config';
  *   silently discard test overrides.
  */
 
-// ── Minimal config factory ────────────────────────────────────────────────────
-// Builds the minimum AppConfig shape needed to exercise the guards.
-// Does not wire any real infrastructure — guards run before any service is built.
-
-const KEY_A = 'VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0='; // 32-byte base64
-const KEY_B = 'pjVKt5jeXMDX5YJkbDc1dDFW4ztqO1iRyHiAHi/9TjM='; // 32-byte base64, distinct
+const KEY_A = 'VjJlYds7lPHtOzCrEQNNR0O7Ukst5HzX+cnszDyXvq0=';
+const KEY_B = 'pjVKt5jeXMDX5YJkbDc1dDFW4ztqO1iRyHiAHi/9TjM=';
 const ALL_ZEROS = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 type MakeConfigOverrides = Omit<Partial<AppConfig>, 'sso'> & {
@@ -103,8 +99,6 @@ function makeConfig(overrides: MakeConfigOverrides = {}): AppConfig {
   };
 }
 
-// ── assertKeySeparation ───────────────────────────────────────────────────────
-
 describe('assertKeySeparation', () => {
   it('throws when MFA key and active Outbox key are the same value in development', () => {
     const config = makeConfig({ nodeEnv: 'development', mfaKey: KEY_A, outboxKey: KEY_A });
@@ -137,8 +131,6 @@ describe('assertKeySeparation', () => {
   });
 });
 
-// ── assertSsoStateKey ─────────────────────────────────────────────────────────
-
 describe('assertSsoStateKey', () => {
   it('throws when SSO state key is all-zeros in development', () => {
     const config = makeConfig({ nodeEnv: 'development', ssoStateKey: ALL_ZEROS });
@@ -170,8 +162,6 @@ describe('assertSsoStateKey', () => {
     expect(() => assertSsoStateKey(config)).not.toThrow();
   });
 });
-
-// ── assertLocalOidcDisabledInProduction ───────────────────────────────────────
 
 describe('assertLocalOidcDisabledInProduction', () => {
   it('throws when Local OIDC is enabled in production', () => {
@@ -221,8 +211,6 @@ describe('assertLocalOidcDisabledInProduction', () => {
     expect(() => assertLocalOidcDisabledInProduction(config)).not.toThrow();
   });
 });
-
-// ── assertControlPlaneNoAuthDisabledInProduction ─────────────────────────────
 
 describe('assertControlPlaneNoAuthDisabledInProduction', () => {
   it('throws when CP no-auth is enabled in production', () => {

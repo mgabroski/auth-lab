@@ -12,7 +12,7 @@
  * - cp_status uses TEXT (not ENUM) to allow future vocabulary extensions
  *   without a schema migration.  Application code validates the vocabulary.
  * - cp_revision starts at 0 and is incremented by application code on
- *   meaningful CP mutations (group saves, publish). DB never auto-increments it.
+ *   meaningful allowance-truth mutations (group saves that change CP-owned configuration). Publish and status-toggle do not increment it. DB never auto-increments it.
  * - account_key has a UNIQUE constraint enforced at both the DB level and
  *   the service layer (explicit pre-insert check for cleaner error messages).
  *
