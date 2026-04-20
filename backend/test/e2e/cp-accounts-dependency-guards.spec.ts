@@ -35,7 +35,7 @@ function buildIntegrationsPayload(account: CpAccountDetail, overrides: Record<st
 describe('cp accounts dependency guards', () => {
   it('blocks Google and Microsoft login methods until their matching SSO integrations are allowed', async () => {
     const { app, close, reset } = await buildTestApp();
-    const accountKey = `qa-phase3-deps-${randomUUID().slice(0, 8)}`;
+    const accountKey = `qa-cp-deps-${randomUUID().slice(0, 8)}`;
 
     try {
       await reset();
@@ -44,7 +44,7 @@ describe('cp accounts dependency guards', () => {
         method: 'POST',
         url: '/cp/accounts',
         payload: {
-          accountName: 'QA Phase 3 Dependency Tenant',
+          accountName: 'QA CP Dependency Tenant',
           accountKey,
         },
       });
@@ -151,7 +151,7 @@ describe('cp accounts dependency guards', () => {
 
   it('blocks disabling a required SSO integration while the dependent login method is still enabled', async () => {
     const { app, close, reset } = await buildTestApp();
-    const accountKey = `qa-phase3-integration-${randomUUID().slice(0, 8)}`;
+    const accountKey = `qa-cp-integration-${randomUUID().slice(0, 8)}`;
 
     try {
       await reset();
@@ -160,7 +160,7 @@ describe('cp accounts dependency guards', () => {
         method: 'POST',
         url: '/cp/accounts',
         payload: {
-          accountName: 'QA Phase 3 Integration Tenant',
+          accountName: 'QA CP Integration Tenant',
           accountKey,
         },
       });
@@ -216,6 +216,80 @@ describe('cp accounts dependency guards', () => {
           code: 'CONFLICT',
           message:
             'Google SSO integration cannot be disabled while Google login method remains enabled in Access, Identity & Security.',
+        },
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it('blocks disabling Microsoft SSO while Microsoft login method is still enabled', async () => {
+    const { app, close, reset } = await buildTestApp();
+    const accountKey = `qa-cp-microsoft-${randomUUID().slice(0, 8)}`;
+
+    try {
+      await reset();
+
+      const createRes = await app.inject({
+        method: 'POST',
+        url: '/cp/accounts',
+        payload: {
+          accountName: 'QA CP Microsoft Integration Tenant',
+          accountKey,
+        },
+      });
+
+      expect(createRes.statusCode).toBe(201);
+      const created = readJson<CpAccountDetail>(createRes);
+
+      const allowMicrosoftIntegrationRes = await app.inject({
+        method: 'PUT',
+        url: `/cp/accounts/${accountKey}/integrations`,
+        payload: buildIntegrationsPayload(created, {
+          'integration.sso.microsoft': true,
+        }),
+      });
+
+      expect(allowMicrosoftIntegrationRes.statusCode).toBe(200);
+      const withMicrosoftIntegration = readJson<CpAccountDetail>(allowMicrosoftIntegrationRes);
+
+      const saveAccessRes = await app.inject({
+        method: 'PUT',
+        url: `/cp/accounts/${accountKey}/access`,
+        payload: {
+          loginMethods: {
+            password: false,
+            google: false,
+            microsoft: true,
+          },
+          mfaPolicy: {
+            adminRequired: true,
+            memberRequired: false,
+          },
+          signupPolicy: {
+            publicSignup: false,
+            adminInvitationsAllowed: true,
+            allowedDomains: [],
+          },
+        },
+      });
+
+      expect(saveAccessRes.statusCode).toBe(200);
+
+      const disableMicrosoftIntegrationRes = await app.inject({
+        method: 'PUT',
+        url: `/cp/accounts/${accountKey}/integrations`,
+        payload: buildIntegrationsPayload(withMicrosoftIntegration, {
+          'integration.sso.microsoft': false,
+        }),
+      });
+
+      expect(disableMicrosoftIntegrationRes.statusCode).toBe(409);
+      expect(readJson<ErrorResponseBody>(disableMicrosoftIntegrationRes)).toEqual({
+        error: {
+          code: 'CONFLICT',
+          message:
+            'Microsoft SSO integration cannot be disabled while Microsoft login method remains enabled in Access, Identity & Security.',
         },
       });
     } finally {

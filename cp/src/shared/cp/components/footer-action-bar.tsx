@@ -3,12 +3,7 @@
  *
  * WHY:
  * - Renders the locked CP footer action row (back / save-draft / continue pattern).
- *
- * Phase 2 change:
- * - Added onClick support for the button case so form submit actions can be
- *   wired through FooterAction without requiring a wrapper element.
- *   This is a backwards-compatible addition: all existing callers that omit
- *   onClick continue to work exactly as before.
+ * - Supports both link actions and button actions without requiring wrapper-specific composition.
  */
 
 import Link from 'next/link';

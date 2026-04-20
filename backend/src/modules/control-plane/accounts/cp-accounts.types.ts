@@ -3,9 +3,9 @@
  *
  * WHY:
  * - Domain and response types for the Control Plane accounts subdomain.
- * - Backend controllers/services use these types to keep CP DTOs explicit.
- * - Phase 4 adds backend-owned review composition, Activation Ready DTOs, and
- *   real provisioning-result truth for publish.
+ * - Backend controllers and services use these types to keep CP DTOs explicit.
+ * - Carries backend-owned review composition, activation-readiness truth, and
+ *   provisioning-result truth without leaking persistence rows.
  *
  * RULES:
  * - No Kysely imports here.

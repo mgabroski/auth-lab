@@ -126,7 +126,8 @@ Use reset when:
 
 ### Support URLs
 
-- Control Plane: `http://localhost:3002`
+- Control Plane (preferred proxy-routed host): `http://cp.lvh.me:3000`
+- Control Plane direct dev server: `http://localhost:3002`
 - Mailpit: `http://localhost:8025`
 - tenant health: `http://goodwill-ca.lvh.me:3000/api/health`
 - backend direct health: `http://localhost:3001/health`
@@ -191,7 +192,7 @@ Expected result:
 Open:
 
 ```text
-http://localhost:3002
+http://cp.lvh.me:3000
 ```
 
 Expected result:
@@ -199,6 +200,8 @@ Expected result:
 - redirects into the create-account flow
 - Control Plane shell loads
 - no auth screen is expected in current scope
+
+Direct Next.js host-run iteration remains available at `http://localhost:3002`, but the proxy-routed host above is the canonical browser proof path for topology-sensitive CP work.
 
 ### 5. Mailpit
 
@@ -272,7 +275,7 @@ If the actual seed changes, update this section and the QA pack in the same chan
 ## Local development
 
 - tenant browser origin: local `*.lvh.me` through the dev proxy
-- Control Plane browser origin: `http://localhost:3002`
+- Control Plane browser origin: preferred proof path `http://cp.lvh.me:3000`; direct `http://localhost:3002` is host-run UI iteration only
 - backend routing: same-origin browser `/api/*`
 - SSR routing: internal backend path with forwarded headers
 - email mode: Mailpit / local capture
@@ -442,7 +445,7 @@ Run the relevant backend tests for the touched area.
 
 Run the relevant frontend tests for the touched area.
 
-If the touched area is the Control Plane, apply the same rule to `cp/` and verify the route/shell surface you changed.
+If the touched area is the Control Plane, apply the same rule to `cp/` and verify the route/shell surface you changed. Use `http://cp.lvh.me:3000` for topology-sensitive browser proof and `http://localhost:3002` only for isolated host-run UI iteration.
 
 ### Playwright / browser proof
 

@@ -2,12 +2,12 @@
  * backend/src/modules/control-plane/accounts/handoff/cp-settings-handoff.builder.ts
  *
  * WHY:
- * - Builds the canonical CP producer snapshot that the later Settings state
+ * - Builds the canonical CP producer snapshot that a future Settings state
  *   engine will consume.
  * - Strips CP authoring-progress concerns and keeps only allowance truth,
  *   provisioning truth, and the honest cascade boundary.
- * - Makes the State A stopping point explicit: producer contract exists, live
- *   synchronous cascade does not.
+ * - Makes the current stopping point explicit: the producer contract exists,
+ *   but live synchronous Settings cascade wiring does not.
  *
  * RULES:
  * - Pure builder only.
@@ -32,7 +32,7 @@ function buildBlockingReasons(
   provisioning: CpProvisioningResult,
 ): string[] {
   const reasons = [
-    'Settings Step 10 Phase 2 is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
+    'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
   ];
 
   if (!provisioning.isProvisioned) {

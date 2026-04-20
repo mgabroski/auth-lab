@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Centralises Zod validation for CP accounts request shapes.
- * - Phase 5 adds explicit validation for the published-account status toggle.
+ * - Keeps create, Step 2 save, publish, and status-toggle payload validation in one backend-owned surface.
  *
  * RULES:
  * - Zod only.

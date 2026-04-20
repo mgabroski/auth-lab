@@ -3,8 +3,8 @@
  *
  * WHY:
  * - Maps HTTP requests to the CP accounts service layer.
- * - Validates request shapes with Zod before service execution, including
- *   the published-account status toggle surface added in Phase 5.
+ * - Validates request shapes with Zod before service execution for create,
+ *   Step 2 saves, publish, and status-toggle mutations.
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';

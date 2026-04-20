@@ -12,10 +12,9 @@
  * - cache: 'no-store' — CP operator data is never cacheable.
  *
  * CP AUTH NOTE:
- * - CP is dev-only no-auth in this phase.
- * - Cookie forwarding is intentionally omitted for now because there is no CP
- *   session model yet.
- * - Host and X-Forwarded-* context are still forwarded so later auth/RBAC work
+ * - The current CP surface has no session model.
+ * - Cookie forwarding is intentionally omitted for now.
+ * - Host and X-Forwarded-* context are still forwarded so future auth/RBAC work
  *   does not require a topology rewrite.
  */
 

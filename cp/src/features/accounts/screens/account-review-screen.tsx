@@ -4,10 +4,8 @@
  * cp/src/features/accounts/screens/account-review-screen.tsx
  *
  * WHY:
- * - Renders the backend-owned Review & Publish surface for both create and
- *   edit/re-entry flows.
- * - Phase 5 keeps re-save behavior on the same review contract while the new
- *   list-level status toggle handles quick Active/Disabled changes.
+ * - Renders the backend-owned Review & Publish surface for both create and edit/re-entry flows.
+ * - Keeps publish and re-save behavior on the same review contract while list-level status toggle remains a separate quick action.
  */
 
 import type { CSSProperties } from 'react';

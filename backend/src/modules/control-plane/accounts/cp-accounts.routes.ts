@@ -2,8 +2,8 @@
  * backend/src/modules/control-plane/accounts/cp-accounts.routes.ts
  *
  * WHY:
- * - Declares the CP accounts HTTP route surface.
- * - Phase 5 adds the published-account Active/Disabled status toggle route.
+ * - Declares the shipped CP accounts HTTP route surface.
+ * - Keeps create/read/list, Step 2 saves, review/publish, and status toggle registered in one explicit place.
  */
 
 import type { FastifyInstance } from 'fastify';

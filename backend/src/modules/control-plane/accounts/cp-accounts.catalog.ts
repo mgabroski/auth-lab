@@ -2,7 +2,7 @@
  * backend/src/modules/control-plane/accounts/cp-accounts.catalog.ts
  *
  * WHY:
- * - Owns the locked CP Phase 3 catalog/defaults for Step 2 setup groups.
+ * - Owns the locked CP catalog and defaults for the four Step 2 setup groups.
  * - Provides one backend-authoritative source for Personal families/fields,
  *   integration keys, group labels, and default draft values.
  * - Keeps service validation and GET response composition aligned.

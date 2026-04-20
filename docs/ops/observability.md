@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the Stage 3 operability surface for the Auth Lab stack.
+This document defines the current operability surface for the Auth Lab stack.
 
 It exists so operators can answer, with evidence:
 
@@ -13,7 +13,7 @@ It exists so operators can answer, with evidence:
 - how to triage it
 
 This document is intentionally implementation-grounded.
-It only describes signals that the repository can emit today or that are directly tied to code paths already added in Stage 3.
+It only describes signals that the repository can emit today or that are directly tied to code paths already added in the current repo state.
 It does **not** assume Grafana, Prometheus server, Datadog, OpenTelemetry collectors, or any other external observability platform.
 
 ---
@@ -36,7 +36,7 @@ That means:
 
 Dashboards and alerts are only useful if they are backed by stable emitted signals.
 
-Stage 3 therefore starts with:
+The current baseline therefore starts with:
 
 - structured logs
 - request correlation
@@ -60,7 +60,7 @@ Never use any of the following as metric labels:
 
 ### 4. Request ID is the primary correlation key
 
-For the current Stage 3 foundation, `x-request-id` is the canonical correlation key.
+For the current repo baseline, `x-request-id` is the canonical correlation key.
 
 Rules:
 
@@ -111,6 +111,47 @@ Important event families:
 - `outbox.retry_scheduled`
 - `outbox.dead_lettered`
 - `outbox.finalize_lost_claim`
+
+### Control Plane mutation logs and audit trail
+
+The Control Plane currently relies on structured backend logs plus the shared audit trail for mutation diagnosis.
+There is no separate CP metrics family yet.
+
+Structured backend log events currently emitted by the CP accounts service include:
+
+- `cp.accounts.created`
+- `cp.accounts.published`
+- `cp.accounts.status_toggled`
+- `cp.accounts.create.failure_audit_failed`
+- `cp.accounts.access.failure_audit_failed`
+- `cp.accounts.account_settings.failure_audit_failed`
+- `cp.accounts.modules.failure_audit_failed`
+- `cp.accounts.personal.failure_audit_failed`
+- `cp.accounts.integrations.failure_audit_failed`
+- `cp.accounts.status_toggle.failure_audit_failed`
+- `cp.accounts.publish.failure_audit_failed`
+
+The shared audit trail is the canonical evidence source for successful and failed CP account mutations.
+Current CP audit actions include:
+
+- `cp.account.created`
+- `cp.account.access.saved`
+- `cp.account.account_settings.saved`
+- `cp.account.modules.saved`
+- `cp.account.personal.saved`
+- `cp.account.integrations.saved`
+- `cp.account.published`
+- `cp.account.status_toggled`
+- `cp.account.create.failed`
+- `cp.account.access.save.failed`
+- `cp.account.account_settings.save.failed`
+- `cp.account.modules.save.failed`
+- `cp.account.personal.save.failed`
+- `cp.account.integrations.save.failed`
+- `cp.account.publish.failed`
+- `cp.account.status_toggle.failed`
+
+For CP troubleshooting, correlate the backend request log, `x-request-id`, CP mutation log event, and the matching audit row. That is the current honest diagnosis path until dedicated CP dashboards or metrics exist.
 
 ### Frontend server paths
 
@@ -311,6 +352,11 @@ Labels:
 - `stage`
 - `reason`
 
+### Control Plane note
+
+The repository does not currently emit a dedicated CP metrics family.
+CP diagnosis depends on normalized request metrics, structured backend logs, and the shared audit trail described above.
+
 ---
 
 ## Metric reason taxonomy
@@ -431,6 +477,27 @@ Required panels:
 
 4. request rate / error rate for invite and reset routes
    - source: `http_requests_total`
+
+## Dashboard 4 — Control Plane mutation health
+
+Purpose:
+
+- answer whether CP create, Step 2 save, publish, or status-toggle flows are failing
+- give operators one triage path for CP mutation incidents even before dedicated CP metrics exist
+
+Required panels:
+
+1. CP mutation request rate / error rate
+   - source: `http_requests_total` filtered to `/cp/*` routes
+
+2. CP mutation latency
+   - source: `http_request_duration_ms` filtered to `/cp/*` routes
+
+3. CP mutation log events over time
+   - source: structured backend logs for `cp.accounts.*`
+
+4. CP audit mutations over time
+   - source: shared audit storage filtered to `cp.account.*` actions
 
 ---
 
@@ -595,7 +662,7 @@ Important note:
 
 ## Operability smoke scope
 
-The CI/deploy smoke script for Stage 3 must prove:
+The CI/deploy smoke script for the current baseline must prove:
 
 - `/api/health` works through the proxy
 - `x-request-id` is returned on a normal proxied request
@@ -666,7 +733,7 @@ The triage procedure lives in `docs/ops/runbooks.md`.
 
 ## Evidence expectations during incidents
 
-For a Stage 3-quality incident review, capture:
+For an incident review against the current baseline, capture:
 
 - time window of degradation
 - affected routes and flows
@@ -680,7 +747,7 @@ For a Stage 3-quality incident review, capture:
 
 ## Deferred but expected later
 
-These are intentionally **not** part of the current Stage 3 minimum:
+These are intentionally **not** part of the current minimum:
 
 - external metrics backend selection
 - dashboard vendor implementation details
@@ -689,7 +756,7 @@ These are intentionally **not** part of the current Stage 3 minimum:
 - distributed tracing across external services
 - tenant-scoped business analytics dashboards
 
-They may be added later, but they are not required to make Stage 3 real.
+They may be added later, but they are not required to make the current observability baseline real.
 
 ---
 

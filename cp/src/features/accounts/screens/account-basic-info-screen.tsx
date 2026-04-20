@@ -240,8 +240,8 @@ export function AccountBasicInfoScreen() {
         <article style={insetPanelStyle}>
           <strong>Locked identity boundary</strong>
           <p style={mutedTextStyle}>
-            Step 1 contains only Account Name and Account Key. Later CP phases may add more operator
-            tooling, but identity remains name + key only in the locked model.
+            Step 1 contains only Account Name and Account Key. Additional operator tooling can grow
+            elsewhere, but identity remains name + key only in the locked model.
           </p>
         </article>
       </section>

@@ -2,8 +2,7 @@
  * backend/src/modules/control-plane/accounts/dal/cp-accounts.query-sql.ts
  *
  * WHY:
- * - DAL reads for Control Plane accounts, Step 2 group tables, and Phase 4
- *   provisioning/review reads.
+ * - DAL reads for Control Plane accounts, Step 2 group tables, and provisioning/review state.
  * - Returns raw DB row shapes only; services compose domain DTOs.
  *
  * RULES:

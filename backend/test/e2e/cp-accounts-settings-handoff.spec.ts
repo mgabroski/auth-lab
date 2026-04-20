@@ -36,7 +36,7 @@ describe('cp accounts settings handoff integration boundary', () => {
       expect(created.settingsHandoff.consumer.cascadeStatus).toBe('NOT_WIRED');
       expect(created.settingsHandoff.eligibility).toBe('BLOCKED_UNPUBLISHED_ACCOUNT');
       expect(created.settingsHandoff.consumer.blockingReasons).toEqual([
-        'Settings Step 10 Phase 2 is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
+        'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
         `Account "${accountKey}" is not provisioned to a tenant yet. Publish the account before any future Settings cascade can become eligible.`,
       ]);
       expect(created.settingsHandoff.account.cpRevision).toBe(0);
@@ -234,7 +234,7 @@ describe('cp accounts settings handoff integration boundary', () => {
         'READY_FOR_FUTURE_SETTINGS_CONSUMER',
       );
       expect(published.account.settingsHandoff.consumer.blockingReasons).toEqual([
-        'Settings Step 10 Phase 2 is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
+        'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
       ]);
       expect(published.account.settingsHandoff.provisioning).toMatchObject({
         isProvisioned: true,
@@ -254,7 +254,7 @@ describe('cp accounts settings handoff integration boundary', () => {
         settingsEnginePresent: false,
         cascadeStatus: 'NOT_WIRED',
         blockingReasons: [
-          'Settings Step 10 Phase 2 is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
+          'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
         ],
       });
       expect(internalHandoff.account).toEqual({

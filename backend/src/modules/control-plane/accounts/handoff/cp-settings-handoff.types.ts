@@ -4,10 +4,10 @@
  * WHY:
  * - Defines the canonical internal producer contract for the future CP →
  *   Settings handoff.
- * - Gives the later Settings state engine one allowance-only snapshot shape to
+ * - Gives the future Settings state engine one allowance-only snapshot shape to
  *   consume without re-reading CP authoring progress semantics.
  * - Keeps CP allowance truth, provisioning truth, and cascade-boundary truth
- *   explicit while Settings Step 10 Phase 2 is still absent.
+ *   explicit while the Settings engine is still absent from this repo.
  *
  * RULES:
  * - Internal integration contract only. No HTTP, Zod, or AppError here.

@@ -2,8 +2,7 @@
  * backend/src/modules/control-plane/accounts/dal/cp-accounts.repo.ts
  *
  * WHY:
- * - DAL writes for Control Plane accounts, Step 2 group tables, and Phase 4
- *   publish/provisioning persistence.
+ * - DAL writes for Control Plane accounts, Step 2 group tables, and publish/provisioning persistence.
  *
  * RULES:
  * - No AppError.

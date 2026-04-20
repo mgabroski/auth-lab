@@ -20,8 +20,8 @@
 #     frontend -> localhost:3000
 #     cp       -> localhost:3002
 # - In that mode Caddy is NOT the active public entrypoint for cp.lvh.me:3000,
-#   so CP proxy-host smoke is not a valid expectation.
-# - CP smoke belongs to the full-stack / real-proxy topology:
+#   which is the canonical browser-proof host for Control Plane topology work.
+# - CP smoke therefore belongs to the full-stack / real-proxy topology:
 #     yarn dev:stack
 #     yarn workspace frontend test:e2e:cp
 #
@@ -94,7 +94,7 @@ if curl -sf http://goodwill-ca.lvh.me:3000/api/health >/dev/null 2>&1; then
 else
   echo "ℹ️  Tenant stack not running — E2E skipped."
   echo "   Start the stack with yarn dev, then run yarn test again."
-  echo "   For CP proxy-host smoke, use yarn dev:stack and run:"
+  echo "   For CP proxy-host smoke on http://cp.lvh.me:3000, use yarn dev:stack and run:"
   echo "   yarn workspace frontend test:e2e:cp"
 fi
 

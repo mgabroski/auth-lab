@@ -12,9 +12,8 @@
  * - This file is a host-run compatibility shim, not a replacement for the real proxy.
  *
  * CP AUTH NOTE:
- * - CP is dev-only no-auth in this phase. No Cookie forwarding is needed for sessions.
- *   The proxy still forwards all headers faithfully so that later phases can add auth
- *   without modifying this file.
+ * - The current CP surface has no session model, so Cookie forwarding is intentionally omitted.
+ * - The proxy still forwards request context faithfully so future auth work does not require a topology rewrite.
  *
  * BACKEND ORIGIN RULE:
  * - Never hardcode localhost:3001 in CP application code.
