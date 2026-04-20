@@ -795,7 +795,7 @@ test.describe('auth smoke', () => {
   // - The outbox worker delivers the email to Mailpit via real SMTP.
   // - The invite link is shaped correctly (tenant-scoped, contains token).
   // - POST /auth/invites/accept returns nextAction: SET_PASSWORD.
-  // - POST /auth/register with the token creates a real session.
+  // - POST /auth/register with the token succeeds with 201 and creates a real session.
   // - MEMBER role + no MFA → nextAction: NONE → frontend routes to /app.
   //
   // WHY this test uses a SECOND admin persona (e2e-invite-admin@example.com):
@@ -806,7 +806,7 @@ test.describe('auth smoke', () => {
   //   before test 11 runs), giving this test a fully independent setup path.
   //   See seed-e2e-fixtures.ts for the second persona's seeding logic.
 
-  test('invite acceptance journey: admin creates invite → email → accept → register → /app', async ({
+  test('invite acceptance journey: admin creates invite → email → accept → register → session → /app', async ({
     page,
   }) => {
     // WHY 120s: this test does more sequential work than any other test —
@@ -881,7 +881,20 @@ test.describe('auth smoke', () => {
       await freshPage.getByLabel('Full name').fill('Invited Browser User');
       await freshPage.getByLabel('Email').fill(inviteRecipientEmail);
       await freshPage.getByLabel('Password').fill('Password123!');
+
+      const registerResponsePromise = freshPage.waitForResponse(
+        (response) =>
+          response.url() === `${OPEN_ORIGIN}/api/auth/register` &&
+          response.request().method() === 'POST',
+      );
+
       await freshPage.getByRole('button', { name: 'Set password and continue' }).click();
+
+      const registerResponse = await registerResponsePromise;
+      expect(
+        registerResponse.status(),
+        `POST /auth/register must return 201 (got ${registerResponse.status()})`,
+      ).toBe(201);
 
       // ── G. Verify landing on /app (MEMBER, no MFA required) ───────────────
       await expect(freshPage).toHaveURL(`${OPEN_ORIGIN}/app`, { timeout: 15_000 });
