@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateCpActivationReadiness } from '../../../src/modules/control-plane/accounts/cp-accounts.service';
+import { evaluateCpActivationReadiness } from '../../../src/modules/control-plane/accounts/cp-accounts.domain';
 import type { CpAccountDetail } from '../../../src/modules/control-plane/accounts/cp-accounts.types';
 
 function makeBaseAccount(): CpAccountDetail {

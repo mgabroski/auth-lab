@@ -39,7 +39,7 @@ Current route surface:
 
 CP routes are on the same backend process as all other routes. They are prefixed with `/cp/` to keep them distinct from tenant-facing routes.
 
-**Dev-only no-auth**: CP routes carry no authentication in this phase. This is a deliberate development-phase shortcut. CP authentication will be added in a later phase.
+**Internal non-public no-auth**: CP routes carry no authentication in this phase only for bounded internal environments such as local development and CI. This is a deliberate prerequisite-track shortcut. CP authentication will be added in a later phase, and this posture must not be exposed publicly.
 
 ---
 
@@ -200,7 +200,7 @@ All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accou
       "settingsEnginePresent": false,
       "cascadeStatus": "NOT_WIRED",
       "blockingReasons": [
-        "Settings Step 10 Phase 2 is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.",
+        "The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.",
         "Account \"goodwill-ca\" is not provisioned to a tenant yet. Publish the account before any future Settings cascade can become eligible."
       ]
     },
@@ -295,7 +295,7 @@ All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accou
 
 Every full account detail now includes `settingsHandoff`.
 
-This is **not** a live Settings integration status. It is the canonical producer snapshot that the future Settings state engine will consume once Settings Step 10 Phase 2 exists.
+This is **not** a live Settings integration status. It is the canonical producer snapshot that the future Settings state engine will consume once that engine exists.
 
 Current truthful behavior:
 
@@ -777,7 +777,7 @@ New accounts are always created with `cpStatus: "Draft"`.
 
 The current repo is still in **State A** for the Control Plane prerequisite roadmap:
 
-- the real Settings Step 10 Phase 2 state engine does not exist yet
+- the real Settings state engine does not exist yet
 - there is no `SettingsStateService`
 - there is no `SettingsCpCascadeService`
 - CP does **not** fake a synchronous cascade, webhook, queue handoff, or success flag

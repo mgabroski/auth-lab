@@ -125,7 +125,7 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 - meaningful CP Step 2 saves emit audit events for access, account settings, modules, personal, and integrations
 - producer-only `settingsHandoff` snapshot on full account detail DTOs
 - same-origin CP `/api/*` proxy for browser mutations and SSR helpers for server reads
-- dev-only no-auth mode in current scope
+- bounded internal no-auth mode in current scope (local dev and CI only)
 
 Do not collapse broader architecture vision into shipped truth.
 

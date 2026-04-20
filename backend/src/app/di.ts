@@ -414,7 +414,7 @@ export async function buildDeps(
   });
 
   // CP module requires db + logger + auditRepo.
-  // No rate-limiter, no outbox, no session — CP is currently dev-only no-auth.
+  // No rate-limiter, no outbox, no session — CP is currently bounded internal no-auth only.
   const controlPlane = createControlPlaneModule({ db, logger, auditRepo });
 
   return {

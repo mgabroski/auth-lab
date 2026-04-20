@@ -158,7 +158,7 @@ The following foundations are treated as real in the repo now.
   - `settingsHandoff.consumer.cascadeStatus` is `NOT_WIRED`
   - blocking reasons explain why live CP → Settings cascade is not active yet
 - producer-side handoff snapshot carries allowance truth and provisioning truth only; it does **not** mirror CP Step 2 progress/configured flags as fake Settings truth
-- CP backend remains dev-only no-auth for the current internal surface — CP authentication is still deferred
+- CP backend remains bounded internal no-auth for the current non-public surface (local dev and CI only) — CP authentication is still deferred
 - the locked 3-step CP flow (Basic Account Info → Account Setup → Review & Publish) remains unchanged
 - the 4 locked setup groups remain unchanged
 - `cpRevision` starts at 0 on account creation and increments only on meaningful Step 2 allowance mutations; publish and status-only changes do not increment it because they do not change allowance truth
