@@ -162,7 +162,7 @@ If a publish attempt looks partially applied, verify the following together:
 - CP review/provisioning data shows whether the account is provisioned
 - the tenant key expected from the account key is not duplicated by a tenant created outside Control Plane
 
-The repo contract is that CP provisioning truth and tenant configuration truth stay separate. Do not “fix” a publish issue by inventing manual Settings state.
+The repo contract is that CP provisioning truth and tenant configuration truth stay separate. Step 10 Phase 1 now seeds foundation-only Settings rows automatically during tenant bootstrap and CP provisioning, but those rows are not a live state-engine result. Do not “fix” a publish issue by inventing or hand-editing manual Settings state.
 
 ### Topology note
 

@@ -235,6 +235,37 @@ export interface Tenants {
   updated_at: Generated<Timestamp>;
 }
 
+export interface TenantSetupSectionState {
+  applied_cp_revision: Generated<number>;
+  created_at: Generated<Timestamp>;
+  last_reviewed_at: Timestamp | null;
+  last_reviewed_by_user_id: string | null;
+  last_saved_at: Timestamp | null;
+  last_saved_by_user_id: string | null;
+  last_transition_at: Generated<Timestamp>;
+  last_transition_reason_code: string | null;
+  section_key: string;
+  status: string;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
+export interface TenantSetupState {
+  applied_cp_revision: Generated<number>;
+  created_at: Generated<Timestamp>;
+  last_reviewed_at: Timestamp | null;
+  last_reviewed_by_user_id: string | null;
+  last_saved_at: Timestamp | null;
+  last_saved_by_user_id: string | null;
+  last_transition_at: Generated<Timestamp>;
+  last_transition_reason_code: string | null;
+  overall_status: string;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+  version: Generated<number>;
+}
+
 export interface Users {
   created_at: Generated<Timestamp>;
   email: string;
@@ -262,6 +293,8 @@ export interface DB {
   mfa_secrets: MfaSecrets;
   outbox_messages: OutboxMessages;
   password_reset_tokens: PasswordResetTokens;
+  tenant_setup_section_state: TenantSetupSectionState;
+  tenant_setup_state: TenantSetupState;
   tenants: Tenants;
   users: Users;
 }

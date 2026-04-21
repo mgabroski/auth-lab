@@ -91,6 +91,8 @@ import type {
   CpStatus,
 } from './cp-accounts.types';
 import type { CpSettingsHandoffSnapshot } from './handoff/cp-settings-handoff.types';
+import { SettingsFoundationRepo } from '../../settings/dal/settings-foundation.repo';
+import { SETTINGS_REASON_CODES } from '../../settings/settings.types';
 
 const RESERVED_ACCOUNT_KEYS = new Set(['cp', 'api', 'admin', 'auth', 'www', 'app']);
 
@@ -240,6 +242,13 @@ export class CpAccountsService {
       tenantId,
       cpStatus: targetStatus,
       publishedAt,
+    });
+
+    await new SettingsFoundationRepo(trx).ensureFoundationRows({
+      tenantId,
+      appliedCpRevision: snapshot.account.cp_revision,
+      creationReasonCode: SETTINGS_REASON_CODES.CP_PROVISIONING_FOUNDATION,
+      transitionAt: publishedAt,
     });
 
     await repo.updateAccountStatus({

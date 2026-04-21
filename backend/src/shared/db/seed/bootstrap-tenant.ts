@@ -8,9 +8,10 @@
  *   still allowing local-only raw-token logging convenience.
  *
  * RULES:
- * - Bootstrap creates/ensures exactly one target tenant and one pending ADMIN
- *   invite for the requested email. It must not create extra convenience
- *   personas or extra tenants.
+ * - Bootstrap creates/ensures exactly one target tenant, the foundational
+ *   native Settings rows for that tenant, and one pending ADMIN invite for the
+ *   requested email. It must not create extra convenience personas or extra
+ *   tenants.
  * - Outbox-backed invite delivery remains the source of truth when
  *   outboxRepo/outboxEncryption are provided.
  * - Raw invite token logging is opt-in and allowed only for local developer
@@ -25,6 +26,8 @@ import type { TokenHasher } from '../../security/token-hasher';
 import type { OutboxRepo } from '../../outbox/outbox.repo';
 import type { OutboxEncryption } from '../../outbox/outbox-encryption';
 import { logger } from '../../logger/logger';
+import { SettingsFoundationRepo } from '../../../modules/settings/dal/settings-foundation.repo';
+import { SETTINGS_REASON_CODES } from '../../../modules/settings/settings.types';
 
 export type BootstrapTenantOptions = {
   tenantKey: string;
@@ -214,6 +217,12 @@ export async function runTenantBootstrap(opts: {
     },
     logInfo,
   );
+
+  await new SettingsFoundationRepo(db).ensureFoundationRows({
+    tenantId: tenant.id,
+    appliedCpRevision: 0,
+    creationReasonCode: SETTINGS_REASON_CODES.TENANT_BOOTSTRAP_FOUNDATION,
+  });
 
   await ensureBootstrapAdminInvite({
     db,

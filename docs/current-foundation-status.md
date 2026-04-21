@@ -50,10 +50,10 @@ The locked Settings execution baseline for future repo work is now:
 What this means today:
 
 - the repo still ships the auth-phase workspace-setup scaffold (`/auth/config` + `/auth/workspace-setup-ack`) as the current banner/acknowledgement behavior
-- the repo does **not** yet ship `GET /settings/bootstrap`, persisted Settings state tables, or the live Settings state engine
+- the repo does **not** yet ship `GET /settings/bootstrap` or the live Settings state engine; Step 10 Phase 1 foundation tables now exist, but Phase 2 read surfaces and state orchestration do not
 - the current CP `settingsHandoff` snapshot remains producer-only and honest; it is not a live cascade result
 - future Settings work must treat the auth scaffold as temporary rollout-bridge behavior, not as the permanent Settings bootstrap owner
-- no part of this baseline acceptance should be read as Phase 1+ Settings implementation already being shipped
+- no part of this baseline acceptance should be read as Phase 2+ Settings implementation already being shipped; the repo now holds only the foundational schema and rollout bridge groundwork
 
 ---
 
@@ -256,6 +256,7 @@ Current truthful boundary:
 
 - `/auth/config` + `/auth/workspace-setup-ack` still carry the shipped workspace-setup scaffold today
 - `GET /settings/bootstrap` is not shipped yet and remains future Settings-native truth
+- Step 10 Phase 1 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) now exist, but they are not yet consumed by live Settings read surfaces
 - CP `settingsHandoff` is producer-only and does not represent a live cascade result
 - Step 10 Phase 0 is now locked at the documentation/contract level; later Settings phases remain intentionally unimplemented
 

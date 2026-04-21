@@ -5,6 +5,7 @@
  *
  * Creates or ensures:
  * - a canonical admin-bootstrap tenant with public signup disabled
+ * - foundational native Settings rows for seeded tenants
  * - an initial admin invite for onboarding proof
  * - a canonical public-signup-enabled tenant
  * - a canonical member login persona with password auth
@@ -21,6 +22,8 @@ import type { DbExecutor } from '../db';
 import type { TokenHasher } from '../../security/token-hasher';
 import type { PasswordHasher } from '../../security/password-hasher';
 import { logger } from '../../logger/logger';
+import { SettingsFoundationRepo } from '../../../modules/settings/dal/settings-foundation.repo';
+import { SETTINGS_REASON_CODES } from '../../../modules/settings/settings.types';
 import type { OutboxRepo } from '../../outbox/outbox.repo';
 import type { OutboxEncryption } from '../../outbox/outbox-encryption';
 import { runTenantBootstrap } from './bootstrap-tenant';
@@ -260,6 +263,12 @@ export async function runDevSeed(opts: {
     name: 'GoodWill Open Signup',
     publicSignupEnabled: true,
     memberMfaRequired: false,
+  });
+
+  await new SettingsFoundationRepo(db).ensureFoundationRows({
+    tenantId: publicSignupTenant.id,
+    appliedCpRevision: 0,
+    creationReasonCode: SETTINGS_REASON_CODES.TENANT_BOOTSTRAP_FOUNDATION,
   });
 
   await ensureMemberPersona({
