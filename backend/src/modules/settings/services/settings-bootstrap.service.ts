@@ -10,46 +10,8 @@
  */
 
 import { SettingsReadRepo } from '../dal/settings-read.repo';
-import {
-  type SettingsBootstrapDto,
-  type SettingsNextAction,
-  type SettingsSetupStatus,
-} from '../settings.types';
-
-function deriveNextAction(params: {
-  overallStatus: SettingsSetupStatus;
-  accessStatus: SettingsSetupStatus;
-  personalStatus: SettingsSetupStatus;
-  personalRequired: boolean;
-}): SettingsNextAction | null {
-  if (params.overallStatus === 'COMPLETE') {
-    return null;
-  }
-
-  if (params.accessStatus !== 'COMPLETE') {
-    return {
-      key: 'access',
-      label:
-        params.accessStatus === 'NEEDS_REVIEW'
-          ? 'Review Access & Security'
-          : 'Review Access & Security',
-      href: '/admin/settings/access',
-    };
-  }
-
-  if (params.personalRequired && params.personalStatus !== 'COMPLETE') {
-    return {
-      key: 'modules',
-      label:
-        params.personalStatus === 'NEEDS_REVIEW'
-          ? 'Review Personal settings'
-          : 'Continue Personal setup',
-      href: '/admin/settings/modules/personal',
-    };
-  }
-
-  return null;
-}
+import { type SettingsBootstrapDto } from '../settings.types';
+import { deriveSettingsNextAction } from './settings-next-action';
 
 export class SettingsBootstrapService {
   constructor(private readonly readRepo: SettingsReadRepo) {}
@@ -63,7 +25,7 @@ export class SettingsBootstrapService {
     }
 
     const personalRequired = cpHandoff?.allowances.modules.modules.personal ?? true;
-    const nextAction = deriveNextAction({
+    const nextAction = deriveSettingsNextAction({
       overallStatus: state.aggregate.overallStatus,
       accessStatus: state.sections.access.status,
       personalStatus: state.sections.personal.status,

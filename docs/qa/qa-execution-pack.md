@@ -224,7 +224,7 @@ Run cases in this order unless a focused bug task explicitly needs a smaller sub
 
 - role-aware landing
 - rate limiting
-- workspace setup banner behavior and `/admin/settings` overview consumption
+- workspace setup banner behavior, `/admin/settings` overview consumption, and real `/admin/settings/access` acknowledge behavior
 - suspended account denial
 - no-membership denial
 - cross-workspace isolation if included in current proof scope
@@ -254,22 +254,22 @@ Run cases in this order unless a focused bug task explicitly needs a smaller sub
 
 Keep this matrix aligned with current shipped behavior.
 
-| Area                  | Must be proven                                                                                                                 | Environment |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------- |
-| Login                 | member success, admin continuation, wrong password, unknown email                                                              | Local       |
-| Logout                | protected pages rejected after logout                                                                                          | Local       |
-| Signup                | open-tenant signup works, invite-only signup blocked                                                                           | Local       |
-| Verification          | verify, resend, invalid/expired handling                                                                                       | Local       |
-| Password Reset        | send, reset, old-password invalidation, invalid/reused token                                                                   | Local       |
-| MFA                   | setup, verify, recovery, single-use recovery code                                                                              | Local       |
-| Invite Lifecycle      | create, accept, cancel, resend, expired, already-used                                                                          | Local       |
-| Access Control        | suspended, no-membership, role-aware landing                                                                                   | Local       |
-| Setup Guidance        | Settings-native workspace setup banner, `/admin/settings` overview, Communications placeholder route, Permissions absence      | Local       |
-| Rate Limiting         | repeated bad login triggers lockout behavior                                                                                   | Local       |
-| Google SSO            | live provider round-trip                                                                                                       | Staging     |
-| Microsoft SSO         | live provider round-trip                                                                                                       | Staging     |
-| Control Plane         | create, group saves, Personal save, review gating, publish, re-entry, status toggle, honest `cpRevision` behavior              | Local       |
-| Settings read closure | `/settings/bootstrap`, `/settings/overview`, synchronous CP cascade, persisted aggregate/section state, honest route treatment | Local       |
+| Area                  | Must be proven                                                                                                                                                                     | Environment |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Login                 | member success, admin continuation, wrong password, unknown email                                                                                                                  | Local       |
+| Logout                | protected pages rejected after logout                                                                                                                                              | Local       |
+| Signup                | open-tenant signup works, invite-only signup blocked                                                                                                                               | Local       |
+| Verification          | verify, resend, invalid/expired handling                                                                                                                                           | Local       |
+| Password Reset        | send, reset, old-password invalidation, invalid/reused token                                                                                                                       | Local       |
+| MFA                   | setup, verify, recovery, single-use recovery code                                                                                                                                  | Local       |
+| Invite Lifecycle      | create, accept, cancel, resend, expired, already-used                                                                                                                              | Local       |
+| Access Control        | suspended, no-membership, role-aware landing                                                                                                                                       | Local       |
+| Setup Guidance        | Settings-native workspace setup banner, `/admin/settings` overview, real `/admin/settings/access` acknowledge flow, Communications placeholder route, Permissions absence          | Local       |
+| Rate Limiting         | repeated bad login triggers lockout behavior                                                                                                                                       | Local       |
+| Google SSO            | live provider round-trip                                                                                                                                                           | Staging     |
+| Microsoft SSO         | live provider round-trip                                                                                                                                                           | Staging     |
+| Control Plane         | create, group saves, Personal save, review gating, publish, re-entry, status toggle, honest `cpRevision` behavior                                                                  | Local       |
+| Settings read closure | `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/access/acknowledge`, synchronous CP cascade, persisted aggregate/section state, honest route treatment | Local       |
 
 ---
 
@@ -391,7 +391,7 @@ Do not sign off Auth + User Provisioning + Control Plane unless all of the follo
 - invite lifecycle proof executed successfully
 - role-aware landing and access denial behavior verified
 - rate-limiting behavior verified
-- workspace setup banner behavior and `/admin/settings` overview consumption verified where in current shipped scope
+- workspace setup banner behavior, `/admin/settings` overview consumption, and `/admin/settings/access` explicit acknowledge flow verified where in current shipped scope
 - Google SSO staging proof completed
 - Microsoft SSO staging proof completed
 - CP create/setup/review/publish/re-entry/status-toggle proof completed

@@ -106,6 +106,16 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         isRequired: true,
       },
       {
+        key: 'account',
+        title: 'Account Settings',
+        description: 'Live non-gating section.',
+        href: '/admin/settings/account',
+        classification: 'LIVE_NON_GATING',
+        status: 'NOT_STARTED',
+        warnings: [],
+        isRequired: false,
+      },
+      {
         key: 'communications',
         title: 'Communications',
         description: 'Placeholder only.',
@@ -173,11 +183,11 @@ describe('SettingsRouteShellPage', () => {
 
     const html = renderToStaticMarkup(
       await SettingsRouteShellPage({
-        params: Promise.resolve({ slug: ['access'] }),
+        params: Promise.resolve({ slug: ['account'] }),
       }),
     );
 
-    expect(html).toContain('Access &amp; Security');
+    expect(html).toContain('Account Settings');
     expect(html).toContain('This route now resolves honestly');
   });
 

@@ -3,10 +3,10 @@
  *
  * WHY:
  * - Centralises the Settings persistence vocabulary, read DTO contracts, and
- *   stable section/classification constants used by the Step 10 Phase 2 state
- *   engine and read surfaces.
- * - Gives migrations, repos, services, and future write surfaces one shared
- *   source for statuses, section keys, route ownership, and bootstrap-safe DTOs.
+ *   stable section/classification constants used by the Step 10 state engine,
+ *   read surfaces, and the first real Access write surface.
+ * - Gives migrations, repos, services, and frontend contracts one shared
+ *   source for statuses, section keys, route ownership, and DTO shapes.
  *
  * RULES:
  * - Pure types/constants only.
@@ -63,6 +63,7 @@ export const SETTINGS_REASON_CODES = {
   TENANT_BOOTSTRAP_FOUNDATION: 'TENANT_BOOTSTRAP_FOUNDATION',
   CP_PROVISIONING_FOUNDATION: 'CP_PROVISIONING_FOUNDATION',
   LEGACY_AUTH_ACK_BRIDGE: 'LEGACY_AUTH_ACK_BRIDGE',
+  ACCESS_ACKNOWLEDGED: 'ACCESS_ACKNOWLEDGED',
   CP_REQUIRED_TARGET_REMOVED: 'CP_REQUIRED_TARGET_REMOVED',
   CP_OPTIONAL_TARGET_REMOVED: 'CP_OPTIONAL_TARGET_REMOVED',
   CP_REQUIRED_TARGET_ADDED: 'CP_REQUIRED_TARGET_ADDED',
@@ -200,8 +201,66 @@ export type SettingsOverviewDto = {
   cards: SettingsOverviewCardDto[];
 };
 
+export type AccessSettingsRowStatus = 'READY' | 'WARNING' | 'BLOCKED';
+
+export type AccessSettingsRowDto = {
+  key: string;
+  label: string;
+  value: string;
+  readOnly: true;
+  managedBy: 'CONTROL_PLANE' | 'PLATFORM';
+  status: AccessSettingsRowStatus;
+  warning: string | null;
+  blocker: string | null;
+  resolutionHref: string | null;
+};
+
+export type AccessSettingsGroupDto = {
+  key: 'loginMethods' | 'mfaPolicy' | 'signupPolicy';
+  title: string;
+  description: string;
+  rows: AccessSettingsRowDto[];
+};
+
+export type AccessSettingsDto = {
+  sectionKey: 'access';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  canAcknowledge: boolean;
+  acknowledgeLabel: string;
+  groups: AccessSettingsGroupDto[];
+  blockers: string[];
+  warnings: string[];
+  nextAction: SettingsNextAction | null;
+};
+
+export type SettingsMutationSectionSummaryDto = {
+  key: SettingsSectionKey;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+};
+
+export type SettingsMutationAggregateSummaryDto = {
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  nextAction: SettingsNextAction | null;
+};
+
+export type SettingsMutationResultDto = {
+  section: SettingsMutationSectionSummaryDto;
+  aggregate: SettingsMutationAggregateSummaryDto;
+  warnings: string[];
+};
+
 export type SettingsBootstrapResponse = SettingsBootstrapDto;
 export type SettingsOverviewResponse = SettingsOverviewDto;
+export type AccessSettingsResponse = AccessSettingsDto;
+export type SettingsMutationResponse = SettingsMutationResultDto;
 
 export type SettingsStateBundle = {
   aggregate: TenantSetupStateRecord;

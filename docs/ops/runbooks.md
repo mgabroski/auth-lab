@@ -178,9 +178,9 @@ If CP routes unexpectedly return 404:
 4. in non-development CP frontend environments, a missing/false `CP_NO_AUTH_ALLOWED` must produce a 404 rather than a live CP surface
 5. if `NODE_ENV=production`, treat `CP_NO_AUTH_ALLOWED=true` as a startup-blocking misconfiguration, not as a recoverable runtime state
 
-## 1.3 Settings Phase 2 read-surface and cascade checks
+## 1.3 Settings read/access surface and cascade checks
 
-Use this section when validating the new backend Settings-native truth.
+Use this section when validating the currently shipped backend Settings-native truth.
 
 ### Bootstrap-safe read check
 
@@ -223,9 +223,40 @@ When testing a CP-published tenant:
 5. confirm only required affected boundaries move to `NEEDS_REVIEW`
 6. confirm non-gating Account changes do not regress aggregate completion
 
+### Access read/write check
+
+With the same fully authenticated admin session, call:
+
+```text
+GET /settings/access
+```
+
+Expected result:
+
+- the response contains the real Access page DTO
+- items are grouped into Login Methods, MFA Policy, and Signup & Invite Access Policy
+- rows are read-only in v1
+- CP mismatch states surface as blockers
+- operational readiness issues surface as warnings and may point to `/admin/settings/integrations`
+
+Then call:
+
+```text
+POST /settings/access/acknowledge
+```
+
+with the current `expectedVersion` and `expectedCpRevision`.
+
+Expected result:
+
+- Access moves to `COMPLETE` only through this explicit acknowledge action
+- the aggregate recomputes in the same transaction
+- unrelated section versions do not change
+- stale version or stale `cpRevision` returns `409` instead of silently overwriting state
+
 ### Important honesty rule
 
-The frontend still uses the auth-phase workspace setup scaffold until later Settings phases wire `/admin` and `/admin/settings` to the new DTOs. A working `/settings/bootstrap` response does not mean the frontend banner has already moved off the scaffold.
+The frontend no longer reads the auth-phase workspace setup scaffold for `/admin` or `/admin/settings`. Those routes now consume `GET /settings/bootstrap` and `GET /settings/overview` as their tenant-facing Settings truth. `/admin/settings/access` now consumes the real `GET /settings/access` DTO and uses `POST /settings/access/acknowledge` as the only completion path for Access.
 
 ---
 

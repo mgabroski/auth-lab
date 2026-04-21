@@ -260,9 +260,10 @@ Current truthful boundary:
 - `/admin` now consumes `GET /settings/bootstrap` and no longer reads auth scaffold truth for banner semantics
 - `/admin/settings` now consumes `GET /settings/overview` and no longer uses the one-shot auth acknowledgement placeholder as its main content model
 - Step 10 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) are now consumed by live backend read surfaces and the synchronous CP cascade service
-- live v1 route treatment is now honest in the frontend: `/admin/settings/access`, `/account`, `/modules`, `/modules/personal`, and `/integrations` resolve as SSR-gated route shells; `/admin/settings/communications` resolves as a placeholder-only route; Permissions remains absent
+- `/admin/settings/access` now resolves to the first real Settings section page backed by `GET /settings/access` and the explicit `POST /settings/access/acknowledge` write path
+- the remaining live v1 section routes (`/admin/settings/account`, `/modules`, `/modules/personal`, `/integrations`) still resolve as honest SSR-gated shells; `/admin/settings/communications` remains placeholder-only; Permissions remains absent
 - CP `settingsHandoff` remains producer-shaped but now honestly reports live Settings engine presence and active synchronous cascade wiring
-- later Settings write phases remain intentionally unimplemented
+- later Settings write phases beyond Access remain intentionally unimplemented
 
 ### Future modules and later-scope surfaces
 

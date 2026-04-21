@@ -453,6 +453,7 @@ export async function buildDeps(
 
   const settings = createSettingsModule({
     db,
+    auditRepo,
     config: {
       sso: config.sso,
     },

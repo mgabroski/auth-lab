@@ -2,9 +2,9 @@
  * frontend/src/shared/settings/contracts.ts
  *
  * WHY:
- * - Central frontend contract layer for Settings-native read DTOs.
- * - Keeps `/admin` and `/admin/settings` grounded in the backend-owned
- *   bootstrap/overview shapes instead of ad-hoc inline types.
+ * - Central frontend contract layer for Settings-native read and write DTOs.
+ * - Keeps `/admin`, `/admin/settings`, and `/admin/settings/access` grounded in
+ *   backend-owned shapes instead of ad-hoc inline types.
  * - Makes it explicit that Settings bootstrap truth now lives outside auth
  *   bootstrap even while auth still owns session and role routing.
  *
@@ -61,4 +61,56 @@ export type SettingsOverviewResponse = {
   overallStatus: SettingsSetupStatus;
   nextAction: SettingsNextAction | null;
   cards: SettingsOverviewCardResponse[];
+};
+
+export type AccessSettingsRowStatus = 'READY' | 'WARNING' | 'BLOCKED';
+
+export type AccessSettingsRowResponse = {
+  key: string;
+  label: string;
+  value: string;
+  readOnly: true;
+  managedBy: 'CONTROL_PLANE' | 'PLATFORM';
+  status: AccessSettingsRowStatus;
+  warning: string | null;
+  blocker: string | null;
+  resolutionHref: string | null;
+};
+
+export type AccessSettingsGroupResponse = {
+  key: 'loginMethods' | 'mfaPolicy' | 'signupPolicy';
+  title: string;
+  description: string;
+  rows: AccessSettingsRowResponse[];
+};
+
+export type AccessSettingsResponse = {
+  sectionKey: 'access';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  canAcknowledge: boolean;
+  acknowledgeLabel: string;
+  groups: AccessSettingsGroupResponse[];
+  blockers: string[];
+  warnings: string[];
+  nextAction: SettingsNextAction | null;
+};
+
+export type SettingsMutationResultResponse = {
+  section: {
+    key: 'access' | 'account' | 'personal' | 'integrations';
+    status: SettingsSetupStatus;
+    version: number;
+    cpRevision: number;
+  };
+  aggregate: {
+    status: SettingsSetupStatus;
+    version: number;
+    cpRevision: number;
+    nextAction: SettingsNextAction | null;
+  };
+  warnings: string[];
 };

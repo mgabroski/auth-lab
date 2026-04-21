@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiHttpError } from '../../../../src/shared/auth/api-errors';
 import type {
+  AccessSettingsResponse,
   SettingsBootstrapResponse,
   SettingsOverviewResponse,
 } from '../../../../src/shared/settings/contracts';
@@ -27,6 +28,7 @@ vi.mock('@/shared/server/logger', () => ({
 }));
 
 import {
+  loadAccessSettings,
   loadSettingsBootstrap,
   loadSettingsOverview,
 } from '../../../../src/shared/settings/loaders';
@@ -48,6 +50,47 @@ function makeBootstrap(
   return {
     overallStatus: 'IN_PROGRESS',
     showSetupBanner: true,
+    nextAction: {
+      key: 'access',
+      label: 'Review Access & Security',
+      href: '/admin/settings/access',
+    },
+    ...overrides,
+  };
+}
+
+function makeAccess(overrides: Partial<AccessSettingsResponse> = {}): AccessSettingsResponse {
+  return {
+    sectionKey: 'access',
+    title: 'Access & Security',
+    description: 'Review the access envelope.',
+    status: 'IN_PROGRESS',
+    version: 1,
+    cpRevision: 2,
+    canAcknowledge: true,
+    acknowledgeLabel: 'Acknowledge & Mark Reviewed',
+    groups: [
+      {
+        key: 'loginMethods',
+        title: 'Login Methods',
+        description: 'Platform-managed methods.',
+        rows: [
+          {
+            key: 'password',
+            label: 'Username & Password',
+            value: 'Enabled',
+            readOnly: true,
+            managedBy: 'CONTROL_PLANE',
+            status: 'READY',
+            warning: null,
+            blocker: null,
+            resolutionHref: null,
+          },
+        ],
+      },
+    ],
+    blockers: [],
+    warnings: [],
     nextAction: {
       key: 'access',
       label: 'Review Access & Security',
@@ -158,5 +201,25 @@ describe('settings loaders', () => {
 
     expect(result.data.cards).toHaveLength(1);
     expect(result.data.cards[0]?.key).toBe('access');
+  });
+
+  it('loadAccessSettings calls the real Access endpoint with SSR headers', async () => {
+    ssrFetchMock.mockResolvedValueOnce(jsonResponse(makeAccess()));
+
+    const result = await loadAccessSettings();
+
+    expect(ssrFetchMock).toHaveBeenCalledWith('/settings/access', {
+      headers: {
+        'X-Settings-Access': '1',
+      },
+    });
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      throw new Error('Expected settings access success');
+    }
+
+    expect(result.data.sectionKey).toBe('access');
+    expect(result.data.acknowledgeLabel).toBe('Acknowledge & Mark Reviewed');
   });
 });

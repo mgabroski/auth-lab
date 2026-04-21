@@ -2,7 +2,7 @@
  * backend/src/modules/settings/services/settings-overview.service.ts
  *
  * WHY:
- * - Composes the first real Settings overview read surface from persisted
+ * - Composes the real Settings overview read surface from persisted
  *   Settings-native truth plus the locked v1 route/classification model.
  * - Keeps overview-card treatment, placeholder handling, and next-action
  *   derivation out of controllers.
@@ -11,7 +11,6 @@
 import { SettingsReadRepo } from '../dal/settings-read.repo';
 import {
   SETTINGS_SECTION_ROUTES,
-  type SettingsNextAction,
   type SettingsOverviewCardDto,
   type SettingsOverviewDto,
 } from '../settings.types';
@@ -19,41 +18,7 @@ import { AccessSettingsQueryService } from './access-settings-query.service';
 import { AccountSettingsQueryService } from './account-settings-query.service';
 import { ModulesHubQueryService } from './modules-hub-query.service';
 import { IntegrationsSettingsQueryService } from './integrations-settings-query.service';
-
-function deriveNextAction(params: {
-  overallStatus: SettingsOverviewDto['overallStatus'];
-  accessStatus: SettingsOverviewCardDto['status'];
-  personalStatus: SettingsOverviewCardDto['status'];
-  personalRequired: boolean;
-}): SettingsNextAction | null {
-  if (params.overallStatus === 'COMPLETE') {
-    return null;
-  }
-
-  if (params.accessStatus !== 'COMPLETE') {
-    return {
-      key: 'access',
-      label:
-        params.accessStatus === 'NEEDS_REVIEW'
-          ? 'Review Access & Security'
-          : 'Review Access & Security',
-      href: '/admin/settings/access',
-    };
-  }
-
-  if (params.personalRequired && params.personalStatus !== 'COMPLETE') {
-    return {
-      key: 'modules',
-      label:
-        params.personalStatus === 'NEEDS_REVIEW'
-          ? 'Review Personal settings'
-          : 'Continue Personal setup',
-      href: '/admin/settings/modules/personal',
-    };
-  }
-
-  return null;
-}
+import { deriveSettingsNextAction } from './settings-next-action';
 
 export class SettingsOverviewService {
   constructor(
@@ -86,6 +51,24 @@ export class SettingsOverviewService {
     });
     const integrationsModel = this.integrationsQuery.build({ tenant, cpHandoff });
 
+    const googleIntegrationAllowed =
+      cpHandoff?.allowances.integrations.integrations.find(
+        (integration) => integration.integrationKey === 'integration.sso.google',
+      )?.isAllowed ?? tenant.allowedSso.includes('google');
+
+    const microsoftIntegrationAllowed =
+      cpHandoff?.allowances.integrations.integrations.find(
+        (integration) => integration.integrationKey === 'integration.sso.microsoft',
+      )?.isAllowed ?? tenant.allowedSso.includes('microsoft');
+
+    const accessSurface = this.accessQuery.buildSurface({
+      access: accessModel,
+      googleIntegrationAllowed,
+      microsoftIntegrationAllowed,
+      googleIntegrationStatus: integrationsModel.google,
+      microsoftIntegrationStatus: integrationsModel.microsoft,
+    });
+
     const cards: SettingsOverviewCardDto[] = [
       {
         key: 'access',
@@ -94,16 +77,7 @@ export class SettingsOverviewService {
         href: SETTINGS_SECTION_ROUTES.access.href,
         classification: SETTINGS_SECTION_ROUTES.access.classification,
         status: state.sections.access.status,
-        warnings: [
-          ...(accessModel.loginMethods.google &&
-          integrationsModel.google.displayStatus === 'BLOCKED'
-            ? integrationsModel.google.warnings
-            : []),
-          ...(accessModel.loginMethods.microsoft &&
-          integrationsModel.microsoft.displayStatus === 'BLOCKED'
-            ? integrationsModel.microsoft.warnings
-            : []),
-        ],
+        warnings: [...accessSurface.blockers, ...accessSurface.warnings],
         isRequired: true,
       },
       {
@@ -160,7 +134,7 @@ export class SettingsOverviewService {
       },
     ];
 
-    const nextAction = deriveNextAction({
+    const nextAction = deriveSettingsNextAction({
       overallStatus: state.aggregate.overallStatus,
       accessStatus: state.sections.access.status,
       personalStatus: state.sections.personal.status,

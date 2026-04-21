@@ -5,14 +5,16 @@
  * - Keeps the locked v1 Settings route family honest after wiring the real
  *   overview page, without pretending that later section implementations are
  *   already interactive.
- * - Provides SSR-gated route shells for the live v1 paths and the
- *   Communications placeholder route.
+ * - Provides SSR-gated route shells for the remaining live v1 paths and the
+ *   Communications placeholder route. Access now has a dedicated page.
  * - Preserves absent treatment for Permissions by returning 404.
  *
  * RULES:
  * - Auth bootstrap still owns route gating.
  * - Settings overview remains the only read source used here.
  * - No write flows, fake save buttons, or section-specific completion logic.
+ * - Access is intentionally excluded because `/admin/settings/access` now has
+ *   a dedicated real page.
  */
 import React from 'react';
 import Link from 'next/link';
@@ -37,13 +39,6 @@ type SettingsRouteDefinition = {
 };
 
 const ROUTES: Record<string, SettingsRouteDefinition> = {
-  access: {
-    slugPath: 'access',
-    title: 'Access & Security',
-    overviewCardKey: 'access',
-    description:
-      'This section route is now live and SSR-gated, but the detailed acknowledgement and blocker UX is not yet interactive in the current repo.',
-  },
   account: {
     slugPath: 'account',
     title: 'Account Settings',
