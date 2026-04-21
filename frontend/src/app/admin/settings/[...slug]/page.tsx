@@ -13,8 +13,8 @@
  * - Auth bootstrap still owns route gating.
  * - Settings overview remains the only read source used here.
  * - No write flows, fake save buttons, or section-specific completion logic.
- * - Access is intentionally excluded because `/admin/settings/access` now has
- *   a dedicated real page.
+ * - Access and Account are intentionally excluded because they now have
+ *   dedicated real pages.
  */
 import React from 'react';
 import Link from 'next/link';
@@ -39,13 +39,6 @@ type SettingsRouteDefinition = {
 };
 
 const ROUTES: Record<string, SettingsRouteDefinition> = {
-  account: {
-    slugPath: 'account',
-    title: 'Account Settings',
-    overviewCardKey: 'account',
-    description:
-      'This section route is now live and SSR-gated, but branding, organization structure, and calendar save flows are not yet interactive in the current repo.',
-  },
   modules: {
     slugPath: 'modules',
     title: 'Modules',

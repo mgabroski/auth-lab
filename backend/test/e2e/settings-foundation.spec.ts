@@ -8,6 +8,7 @@ import {
   down as downSettingsFoundationMigration,
   up as upSettingsFoundationMigration,
 } from '../../src/shared/db/migrations/0017_settings_foundation';
+import { up as upSettingsAccountMigration } from '../../src/shared/db/migrations/0018_settings_account';
 import type { DbExecutor } from '../../src/shared/db/db';
 import { buildTestApp } from '../helpers/build-test-app';
 import { createAdminSession } from '../helpers/create-admin-session';
@@ -94,6 +95,7 @@ describe('settings phase 1 foundation schema and rollout bridge', () => {
       });
 
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const repo = new SettingsFoundationRepo(deps.db);
       const aggregate = await repo.findAggregateState(tenant.id);
@@ -153,6 +155,7 @@ describe('settings phase 1 foundation schema and rollout bridge', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const tenant = await createTenant({
         db: deps.db,
@@ -242,6 +245,7 @@ describe('settings phase 1 foundation schema and rollout bridge', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       await runDevSeed({
         db: deps.db,
@@ -292,6 +296,7 @@ describe('settings phase 1 foundation schema and rollout bridge', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const createRes = await app.inject({
         method: 'POST',

@@ -12,8 +12,11 @@ import { AuditWriter } from '../../../shared/audit/audit.writer';
 import {
   auditAccessAcknowledged,
   auditAccessAcknowledgeFailed,
+  auditAccountCardSaved,
+  auditAccountCardSaveFailed,
   type SettingsAuditRequestContext,
 } from '../settings.audit';
+import type { SettingsAccountCardKey } from '../settings.types';
 
 export class SettingsAuditService {
   constructor(private readonly auditRepo: AuditRepo) {}
@@ -60,6 +63,46 @@ export class SettingsAuditService {
     const writer = this.buildWriter(params.context);
     await auditAccessAcknowledgeFailed(writer, {
       tenantId: params.context.tenantId,
+      errorCode: params.errorCode,
+      message: params.message,
+      expectedVersion: params.expectedVersion,
+      expectedCpRevision: params.expectedCpRevision,
+    });
+  }
+
+  async recordAccountCardSaved(params: {
+    writer: AuditWriter;
+    tenantId: string;
+    cardKey: SettingsAccountCardKey;
+    cardVersion: number;
+    sectionVersion: number;
+    cpRevision: number;
+    sectionStatus: string;
+    aggregateStatus: string;
+  }): Promise<void> {
+    await auditAccountCardSaved(params.writer, {
+      tenantId: params.tenantId,
+      cardKey: params.cardKey,
+      cardVersion: params.cardVersion,
+      sectionVersion: params.sectionVersion,
+      cpRevision: params.cpRevision,
+      sectionStatus: params.sectionStatus,
+      aggregateStatus: params.aggregateStatus,
+    });
+  }
+
+  async recordAccountCardSaveFailed(params: {
+    context: SettingsAuditRequestContext;
+    cardKey: SettingsAccountCardKey;
+    errorCode: string;
+    message: string;
+    expectedVersion: number;
+    expectedCpRevision: number;
+  }): Promise<void> {
+    const writer = this.buildWriter(params.context);
+    await auditAccountCardSaveFailed(writer, {
+      tenantId: params.context.tenantId,
+      cardKey: params.cardKey,
       errorCode: params.errorCode,
       message: params.message,
       expectedVersion: params.expectedVersion,

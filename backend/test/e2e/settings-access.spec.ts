@@ -15,6 +15,7 @@ import type {
   SettingsMutationResponse,
 } from '../../src/modules/settings/settings.types';
 import { up as upSettingsFoundationMigration } from '../../src/shared/db/migrations/0017_settings_foundation';
+import { up as upSettingsAccountMigration } from '../../src/shared/db/migrations/0018_settings_account';
 import { buildTestApp } from '../helpers/build-test-app';
 import { createAdminSession } from '../helpers/create-admin-session';
 
@@ -191,6 +192,7 @@ describe('settings access phase 4 surface', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const tenant = await provisionActiveCpTenant({
         app,
@@ -253,6 +255,7 @@ describe('settings access phase 4 surface', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const tenant = await provisionActiveCpTenant({
         app,
@@ -346,6 +349,7 @@ describe('settings access phase 4 surface', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const tenant = await provisionActiveCpTenant({
         app,
@@ -435,6 +439,7 @@ describe('settings access phase 4 surface', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const tenant = await provisionActiveCpTenant({
         app,

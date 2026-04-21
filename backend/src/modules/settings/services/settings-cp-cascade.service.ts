@@ -2,8 +2,7 @@
  * backend/src/modules/settings/services/settings-cp-cascade.service.ts
  *
  * WHY:
- * - Implements the real synchronous CP -> Settings cascade contract introduced
- *   in Step 10 Phase 2.
+ * - Implements the real synchronous CP -> Settings cascade contract.
  * - Applies replay-safe revision alignment and only marks required surviving
  *   boundaries as NEEDS_REVIEW when the locked rules say a tenant must review
  *   again.
@@ -19,6 +18,7 @@
 
 import type { DbExecutor } from '../../../shared/db/db';
 import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+import { AccountSettingsRepo } from '../dal/account-settings.repo';
 import { SettingsFoundationRepo } from '../dal/settings-foundation.repo';
 import { SETTINGS_REASON_CODES } from '../settings.types';
 import { NeedsReviewCascadeEvaluator } from './settings-evaluators';
@@ -27,12 +27,17 @@ import { SettingsStateService } from './settings-state.service';
 export class SettingsCpCascadeService {
   constructor(
     private readonly foundationRepo: SettingsFoundationRepo,
+    private readonly accountRepo: AccountSettingsRepo,
     private readonly stateService: SettingsStateService,
   ) {}
 
   withDb(db: DbExecutor): SettingsCpCascadeService {
     const foundationRepo = this.foundationRepo.withDb(db);
-    return new SettingsCpCascadeService(foundationRepo, this.stateService.withDb(db));
+    return new SettingsCpCascadeService(
+      foundationRepo,
+      this.accountRepo.withDb(db),
+      this.stateService.withDb(db),
+    );
   }
 
   async applyCascade(params: {
@@ -50,6 +55,12 @@ export class SettingsCpCascadeService {
       appliedCpRevision: targetRevision,
       creationReasonCode: SETTINGS_REASON_CODES.CP_PROVISIONING_FOUNDATION,
       transitionAt,
+    });
+
+    await this.accountRepo.ensureRow({
+      tenantId: params.tenantId,
+      appliedCpRevision: targetRevision,
+      createdAt: transitionAt,
     });
 
     const current = await this.foundationRepo.getStateBundle(params.tenantId);
@@ -95,10 +106,11 @@ export class SettingsCpCascadeService {
       });
     }
 
-    const refreshed = await this.foundationRepo.getStateBundle(params.tenantId);
-    if (!refreshed) {
-      throw new Error(`Settings foundation rows not found for tenant ${params.tenantId}`);
-    }
+    await this.accountRepo.syncAllCardRevisions({
+      tenantId: params.tenantId,
+      appliedCpRevision: targetRevision,
+      syncedAt: transitionAt,
+    });
 
     const aggregateReasonCode =
       needsReview.impactedSections[0]?.reasonCode ?? SETTINGS_REASON_CODES.CP_REVISION_SYNC;

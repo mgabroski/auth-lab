@@ -3,8 +3,9 @@
  *
  * WHY:
  * - Central frontend contract layer for Settings-native read and write DTOs.
- * - Keeps `/admin`, `/admin/settings`, and `/admin/settings/access` grounded in
- *   backend-owned shapes instead of ad-hoc inline types.
+ * - Keeps `/admin`, `/admin/settings`, `/admin/settings/access`, and
+ *   `/admin/settings/account` grounded in backend-owned shapes instead of
+ *   ad-hoc inline types.
  * - Makes it explicit that Settings bootstrap truth now lives outside auth
  *   bootstrap even while auth still owns session and role routing.
  *
@@ -33,6 +34,8 @@ export type SettingsOverviewCardKey =
   | 'integrations'
   | 'communications'
   | 'workspaceExperience';
+
+export type SettingsAccountCardKey = 'branding' | 'orgStructure' | 'calendar';
 
 export type SettingsNextAction = {
   key: 'access' | 'modules';
@@ -99,9 +102,83 @@ export type AccessSettingsResponse = {
   nextAction: SettingsNextAction | null;
 };
 
+export type AccountBrandingCardResponse = {
+  key: 'branding';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  visibility: {
+    logo: boolean;
+    menuColor: boolean;
+    fontColor: boolean;
+    welcomeMessage: boolean;
+  };
+  values: {
+    logoUrl: string | null;
+    menuColor: string | null;
+    fontColor: string | null;
+    welcomeMessage: string | null;
+  };
+};
+
+export type AccountOrgStructureCardResponse = {
+  key: 'orgStructure';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  visibility: {
+    employers: boolean;
+    locations: boolean;
+  };
+  values: {
+    employers: string[];
+    locations: string[];
+  };
+};
+
+export type AccountCalendarCardResponse = {
+  key: 'calendar';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  visibility: {
+    allowed: true;
+  };
+  values: {
+    observedDates: string[];
+  };
+};
+
+export type AccountSettingsCardResponse =
+  | AccountBrandingCardResponse
+  | AccountOrgStructureCardResponse
+  | AccountCalendarCardResponse;
+
+export type AccountSettingsResponse = {
+  sectionKey: 'account';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  cards: AccountSettingsCardResponse[];
+  warnings: string[];
+  nextAction: SettingsNextAction | null;
+};
+
 export type SettingsMutationResultResponse = {
   section: {
     key: 'access' | 'account' | 'personal' | 'integrations';
+    status: SettingsSetupStatus;
+    version: number;
+    cpRevision: number;
+  };
+  card?: {
+    key: SettingsAccountCardKey;
     status: SettingsSetupStatus;
     version: number;
     cpRevision: number;

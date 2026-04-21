@@ -59,7 +59,15 @@ export type KnownAuditAction =
   | 'cp.account.published'
   | 'cp.account.publish.failed'
   | 'cp.account.status_toggled'
-  | 'cp.account.status_toggle.failed';
+  | 'cp.account.status_toggle.failed'
+  | 'settings.access.acknowledged'
+  | 'settings.access.acknowledge.failed'
+  | 'settings.account.branding.saved'
+  | 'settings.account.branding.save.failed'
+  | 'settings.account.org_structure.saved'
+  | 'settings.account.org_structure.save.failed'
+  | 'settings.account.calendar.saved'
+  | 'settings.account.calendar.save.failed';
 
 // Escape hatch: allows new actions without updating this file every time.
 // Remove the escape hatch once all modules are stable.

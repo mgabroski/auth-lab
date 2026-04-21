@@ -3,8 +3,8 @@
  *
  * WHY:
  * - Centralises the Settings persistence vocabulary, read DTO contracts, and
- *   stable section/classification constants used by the Step 10 state engine,
- *   read surfaces, and the first real Access write surface.
+ *   stable section/classification constants used by the Settings state engine,
+ *   read surfaces, and the shipped write surfaces.
  * - Gives migrations, repos, services, and frontend contracts one shared
  *   source for statuses, section keys, route ownership, and DTO shapes.
  *
@@ -58,12 +58,19 @@ export const SETTINGS_PLACEHOLDER_CARD_KEYS = ['communications', 'workspaceExper
 
 export type SettingsPlaceholderCardKey = (typeof SETTINGS_PLACEHOLDER_CARD_KEYS)[number];
 
+export const SETTINGS_ACCOUNT_CARD_KEYS = ['branding', 'orgStructure', 'calendar'] as const;
+
+export type SettingsAccountCardKey = (typeof SETTINGS_ACCOUNT_CARD_KEYS)[number];
+
 export const SETTINGS_REASON_CODES = {
   FOUNDATION_INITIALIZED: 'FOUNDATION_INITIALIZED',
   TENANT_BOOTSTRAP_FOUNDATION: 'TENANT_BOOTSTRAP_FOUNDATION',
   CP_PROVISIONING_FOUNDATION: 'CP_PROVISIONING_FOUNDATION',
   LEGACY_AUTH_ACK_BRIDGE: 'LEGACY_AUTH_ACK_BRIDGE',
   ACCESS_ACKNOWLEDGED: 'ACCESS_ACKNOWLEDGED',
+  ACCOUNT_BRANDING_SAVED: 'ACCOUNT_BRANDING_SAVED',
+  ACCOUNT_ORG_STRUCTURE_SAVED: 'ACCOUNT_ORG_STRUCTURE_SAVED',
+  ACCOUNT_CALENDAR_SAVED: 'ACCOUNT_CALENDAR_SAVED',
   CP_REQUIRED_TARGET_REMOVED: 'CP_REQUIRED_TARGET_REMOVED',
   CP_OPTIONAL_TARGET_REMOVED: 'CP_OPTIONAL_TARGET_REMOVED',
   CP_REQUIRED_TARGET_ADDED: 'CP_REQUIRED_TARGET_ADDED',
@@ -237,8 +244,93 @@ export type AccessSettingsDto = {
   nextAction: SettingsNextAction | null;
 };
 
+export type AccountBrandingValuesDto = {
+  logoUrl: string | null;
+  menuColor: string | null;
+  fontColor: string | null;
+  welcomeMessage: string | null;
+};
+
+export type AccountBrandingVisibilityDto = {
+  logo: boolean;
+  menuColor: boolean;
+  fontColor: boolean;
+  welcomeMessage: boolean;
+};
+
+export type AccountBrandingCardDto = {
+  key: 'branding';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  visibility: AccountBrandingVisibilityDto;
+  values: AccountBrandingValuesDto;
+};
+
+export type AccountOrgStructureValuesDto = {
+  employers: string[];
+  locations: string[];
+};
+
+export type AccountOrgStructureVisibilityDto = {
+  employers: boolean;
+  locations: boolean;
+};
+
+export type AccountOrgStructureCardDto = {
+  key: 'orgStructure';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  visibility: AccountOrgStructureVisibilityDto;
+  values: AccountOrgStructureValuesDto;
+};
+
+export type AccountCalendarValuesDto = {
+  observedDates: string[];
+};
+
+export type AccountCalendarCardDto = {
+  key: 'calendar';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  visibility: {
+    allowed: true;
+  };
+  values: AccountCalendarValuesDto;
+};
+
+export type AccountSettingsCardDto =
+  | AccountBrandingCardDto
+  | AccountOrgStructureCardDto
+  | AccountCalendarCardDto;
+
+export type AccountSettingsDto = {
+  sectionKey: 'account';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  cards: AccountSettingsCardDto[];
+  warnings: string[];
+  nextAction: SettingsNextAction | null;
+};
+
 export type SettingsMutationSectionSummaryDto = {
   key: SettingsSectionKey;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+};
+
+export type SettingsMutationCardSummaryDto = {
+  key: SettingsAccountCardKey;
   status: SettingsSetupStatus;
   version: number;
   cpRevision: number;
@@ -253,6 +345,7 @@ export type SettingsMutationAggregateSummaryDto = {
 
 export type SettingsMutationResultDto = {
   section: SettingsMutationSectionSummaryDto;
+  card?: SettingsMutationCardSummaryDto;
   aggregate: SettingsMutationAggregateSummaryDto;
   warnings: string[];
 };
@@ -260,6 +353,7 @@ export type SettingsMutationResultDto = {
 export type SettingsBootstrapResponse = SettingsBootstrapDto;
 export type SettingsOverviewResponse = SettingsOverviewDto;
 export type AccessSettingsResponse = AccessSettingsDto;
+export type AccountSettingsResponse = AccountSettingsDto;
 export type SettingsMutationResponse = SettingsMutationResultDto;
 
 export type SettingsStateBundle = {

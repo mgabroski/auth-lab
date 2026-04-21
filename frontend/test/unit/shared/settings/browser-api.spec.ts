@@ -8,7 +8,12 @@ vi.mock('@/shared/api-client', () => ({
   apiFetch: apiFetchMock,
 }));
 
-import { acknowledgeAccessSettings } from '../../../../src/shared/settings/browser-api';
+import {
+  acknowledgeAccessSettings,
+  saveAccountBranding,
+  saveAccountCalendar,
+  saveAccountOrgStructure,
+} from '../../../../src/shared/settings/browser-api';
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body), {
@@ -69,5 +74,163 @@ describe('settings browser api', () => {
 
     expect(result.data.section.status).toBe('COMPLETE');
     expect(result.data.aggregate.nextAction?.href).toBe('/admin/settings/modules/personal');
+  });
+
+  it('puts the Branding payload to the same-origin account endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        section: {
+          key: 'account',
+          status: 'IN_PROGRESS',
+          version: 2,
+          cpRevision: 4,
+        },
+        card: {
+          key: 'branding',
+          status: 'COMPLETE',
+          version: 2,
+          cpRevision: 4,
+        },
+        aggregate: {
+          status: 'IN_PROGRESS',
+          version: 2,
+          cpRevision: 4,
+          nextAction: {
+            key: 'access',
+            label: 'Review Access & Security',
+            href: '/admin/settings/access',
+          },
+        },
+        warnings: [],
+      }),
+    );
+
+    const result = await saveAccountBranding({
+      expectedVersion: 1,
+      expectedCpRevision: 4,
+      values: {
+        logoUrl: 'https://cdn.example.com/logo.svg',
+        menuColor: '#0f172a',
+        fontColor: '#ffffff',
+        welcomeMessage: 'Welcome',
+      },
+    });
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/settings/account/branding', {
+      method: 'PUT',
+      body: JSON.stringify({
+        expectedVersion: 1,
+        expectedCpRevision: 4,
+        values: {
+          logoUrl: 'https://cdn.example.com/logo.svg',
+          menuColor: '#0f172a',
+          fontColor: '#ffffff',
+          welcomeMessage: 'Welcome',
+        },
+      }),
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('puts the Organization Structure payload to the same-origin account endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        section: {
+          key: 'account',
+          status: 'IN_PROGRESS',
+          version: 2,
+          cpRevision: 4,
+        },
+        card: {
+          key: 'orgStructure',
+          status: 'COMPLETE',
+          version: 2,
+          cpRevision: 4,
+        },
+        aggregate: {
+          status: 'IN_PROGRESS',
+          version: 2,
+          cpRevision: 4,
+          nextAction: {
+            key: 'access',
+            label: 'Review Access & Security',
+            href: '/admin/settings/access',
+          },
+        },
+        warnings: [],
+      }),
+    );
+
+    const result = await saveAccountOrgStructure({
+      expectedVersion: 1,
+      expectedCpRevision: 4,
+      values: {
+        employers: ['Acme'],
+        locations: ['Skopje'],
+      },
+    });
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/settings/account/org-structure', {
+      method: 'PUT',
+      body: JSON.stringify({
+        expectedVersion: 1,
+        expectedCpRevision: 4,
+        values: {
+          employers: ['Acme'],
+          locations: ['Skopje'],
+        },
+      }),
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('puts the Company Calendar payload to the same-origin account endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        section: {
+          key: 'account',
+          status: 'IN_PROGRESS',
+          version: 2,
+          cpRevision: 4,
+        },
+        card: {
+          key: 'calendar',
+          status: 'COMPLETE',
+          version: 2,
+          cpRevision: 4,
+        },
+        aggregate: {
+          status: 'IN_PROGRESS',
+          version: 2,
+          cpRevision: 4,
+          nextAction: {
+            key: 'access',
+            label: 'Review Access & Security',
+            href: '/admin/settings/access',
+          },
+        },
+        warnings: [],
+      }),
+    );
+
+    const result = await saveAccountCalendar({
+      expectedVersion: 1,
+      expectedCpRevision: 4,
+      values: {
+        observedDates: ['2026-01-01'],
+      },
+    });
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/settings/account/calendar', {
+      method: 'PUT',
+      body: JSON.stringify({
+        expectedVersion: 1,
+        expectedCpRevision: 4,
+        values: {
+          observedDates: ['2026-01-01'],
+        },
+      }),
+    });
+    expect(result.ok).toBe(true);
   });
 });

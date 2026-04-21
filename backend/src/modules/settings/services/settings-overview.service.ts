@@ -80,7 +80,10 @@ export class SettingsOverviewService {
         warnings: [...accessSurface.blockers, ...accessSurface.warnings],
         isRequired: true,
       },
-      {
+    ];
+
+    if (this.accountQuery.hasVisibleCards(accountModel)) {
+      cards.push({
         key: 'account',
         title: SETTINGS_SECTION_ROUTES.account.title,
         description: SETTINGS_SECTION_ROUTES.account.description,
@@ -89,7 +92,10 @@ export class SettingsOverviewService {
         status: state.sections.account.status,
         warnings: [],
         isRequired: false,
-      },
+      });
+    }
+
+    cards.push(
       {
         key: 'modules',
         title: SETTINGS_SECTION_ROUTES.modules.title,
@@ -132,7 +138,7 @@ export class SettingsOverviewService {
         warnings: [],
         isRequired: false,
       },
-    ];
+    );
 
     const nextAction = deriveSettingsNextAction({
       overallStatus: state.aggregate.overallStatus,
@@ -140,8 +146,6 @@ export class SettingsOverviewService {
       personalStatus: state.sections.personal.status,
       personalRequired: modulesModel.personalEnabled,
     });
-
-    void accountModel;
 
     return {
       overallStatus: state.aggregate.overallStatus,

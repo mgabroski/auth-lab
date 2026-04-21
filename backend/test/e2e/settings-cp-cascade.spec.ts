@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildTestApp } from '../helpers/build-test-app';
 import { up as upSettingsFoundationMigration } from '../../src/shared/db/migrations/0017_settings_foundation';
+import { up as upSettingsAccountMigration } from '../../src/shared/db/migrations/0018_settings_account';
 import { createAdminSession } from '../helpers/create-admin-session';
 
 function hostForTenant(tenantKey: string): string {
@@ -35,6 +36,7 @@ describe('settings phase 2 CP cascade', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const createRes = await app.inject({
         method: 'POST',
@@ -159,6 +161,7 @@ describe('settings phase 2 CP cascade', () => {
     try {
       await reset();
       await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
 
       const createRes = await app.inject({
         method: 'POST',

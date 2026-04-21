@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the Step 10 Phase 3 tenant-facing Settings closure for `/admin` and `/admin/settings`: real synchronous CP -> Settings cascade handling, `GET /settings/bootstrap`, `GET /settings/overview`, Settings-native banner consumption on `/admin`, a real Settings overview page at `/admin/settings`, honest SSR-gated route shells for the locked v1 section paths, a placeholder-only Communications route, and continued absence of Permissions.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the current tenant-facing Settings slice for `/admin` and `/admin/settings`: real synchronous CP -> Settings cascade handling, `GET /settings/bootstrap`, `GET /settings/overview`, Settings-native banner consumption on `/admin`, a real Settings overview page at `/admin/settings`, a real Access page at `/admin/settings/access`, a real Account page at `/admin/settings/account` with per-card save boundaries, a placeholder-only Communications route, honest SSR-gated shells for the remaining later section paths, and continued absence of Permissions.
 
 This repo already has:
 
@@ -55,7 +55,7 @@ What this means today:
 - the repo now ships the real backend state engine foundation: persisted aggregate/section truth, aggregate recompute service, and synchronous CP cascade handling
 - the current CP `settingsHandoff` snapshot remains producer-shaped, but it honestly reports that the Settings engine is present and synchronous cascade wiring is active
 - the auth scaffold is no longer the tenant-facing truth path for banner or overview behavior, even though the bridge endpoint and compatibility field still exist in the backend
-- no part of this baseline acceptance should be read as later Settings write surfaces already being shipped; the repo now holds the real read-side closure plus honest route treatment, not the full tenant Settings write UI
+- no part of this baseline acceptance should be read as the full tenant Settings module already being shipped; the repo now holds the real read-side closure, the Access acknowledge path, the Account per-card save surface, and honest route treatment for the remaining later Settings pages
 
 ---
 
@@ -261,9 +261,10 @@ Current truthful boundary:
 - `/admin/settings` now consumes `GET /settings/overview` and no longer uses the one-shot auth acknowledgement placeholder as its main content model
 - Step 10 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) are now consumed by live backend read surfaces and the synchronous CP cascade service
 - `/admin/settings/access` now resolves to the first real Settings section page backed by `GET /settings/access` and the explicit `POST /settings/access/acknowledge` write path
-- the remaining live v1 section routes (`/admin/settings/account`, `/modules`, `/modules/personal`, `/integrations`) still resolve as honest SSR-gated shells; `/admin/settings/communications` remains placeholder-only; Permissions remains absent
+- `/admin/settings/account` now resolves to the real Account Settings page backed by `GET /settings/account` plus the explicit per-card write routes for Branding, Organization Structure, and Company Calendar
+- the remaining live v1 section routes (`/modules`, `/modules/personal`, `/integrations`) still resolve as honest SSR-gated shells; `/admin/settings/communications` remains placeholder-only; Permissions remains absent
 - CP `settingsHandoff` remains producer-shaped but now honestly reports live Settings engine presence and active synchronous cascade wiring
-- later Settings write phases beyond Access remain intentionally unimplemented
+- later Settings write phases beyond Access + Account remain intentionally unimplemented
 
 ### Future modules and later-scope surfaces
 

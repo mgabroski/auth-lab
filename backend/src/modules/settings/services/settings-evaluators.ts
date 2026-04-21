@@ -2,7 +2,7 @@
  * backend/src/modules/settings/services/settings-evaluators.ts
  *
  * WHY:
- * - Collects the pure evaluator logic required by Step 10 Phase 2.
+ * - Collects the pure evaluator logic required by the Settings state engine.
  * - Keeps transition rules explicit and testable outside of controller/service
  *   orchestration.
  * - Centralises the locked v1 classification model so future write surfaces do
@@ -130,7 +130,11 @@ export const SetupAggregateEvaluator = {
       'NOT_STARTED',
     );
 
-    return strongest === 'NOT_STARTED' ? 'NOT_STARTED' : 'IN_PROGRESS';
+    if (strongest === 'NOT_STARTED') {
+      return 'NOT_STARTED';
+    }
+
+    return 'IN_PROGRESS';
   },
 };
 

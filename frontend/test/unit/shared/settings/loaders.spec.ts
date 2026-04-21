@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiHttpError } from '../../../../src/shared/auth/api-errors';
 import type {
   AccessSettingsResponse,
+  AccountSettingsResponse,
   SettingsBootstrapResponse,
   SettingsOverviewResponse,
 } from '../../../../src/shared/settings/contracts';
@@ -29,6 +30,7 @@ vi.mock('@/shared/server/logger', () => ({
 
 import {
   loadAccessSettings,
+  loadAccountSettings,
   loadSettingsBootstrap,
   loadSettingsOverview,
 } from '../../../../src/shared/settings/loaders';
@@ -90,6 +92,44 @@ function makeAccess(overrides: Partial<AccessSettingsResponse> = {}): AccessSett
       },
     ],
     blockers: [],
+    warnings: [],
+    nextAction: {
+      key: 'access',
+      label: 'Review Access & Security',
+      href: '/admin/settings/access',
+    },
+    ...overrides,
+  };
+}
+
+function makeAccount(overrides: Partial<AccountSettingsResponse> = {}): AccountSettingsResponse {
+  return {
+    sectionKey: 'account',
+    title: 'Account Settings',
+    description: 'Configure branding, structure, and calendar values.',
+    status: 'IN_PROGRESS',
+    cards: [
+      {
+        key: 'branding',
+        title: 'Branding',
+        description: 'Branding values.',
+        status: 'COMPLETE',
+        version: 2,
+        cpRevision: 4,
+        visibility: {
+          logo: true,
+          menuColor: true,
+          fontColor: true,
+          welcomeMessage: true,
+        },
+        values: {
+          logoUrl: 'https://cdn.example.com/logo.svg',
+          menuColor: '#0f172a',
+          fontColor: '#ffffff',
+          welcomeMessage: 'Welcome',
+        },
+      },
+    ],
     warnings: [],
     nextAction: {
       key: 'access',
@@ -201,6 +241,26 @@ describe('settings loaders', () => {
 
     expect(result.data.cards).toHaveLength(1);
     expect(result.data.cards[0]?.key).toBe('access');
+  });
+
+  it('loadAccountSettings calls the real Account endpoint with SSR headers', async () => {
+    ssrFetchMock.mockResolvedValueOnce(jsonResponse(makeAccount()));
+
+    const result = await loadAccountSettings();
+
+    expect(ssrFetchMock).toHaveBeenCalledWith('/settings/account', {
+      headers: {
+        'X-Settings-Account': '1',
+      },
+    });
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      throw new Error('Expected settings account success');
+    }
+
+    expect(result.data.sectionKey).toBe('account');
+    expect(result.data.cards[0]?.key).toBe('branding');
   });
 
   it('loadAccessSettings calls the real Access endpoint with SSR headers', async () => {

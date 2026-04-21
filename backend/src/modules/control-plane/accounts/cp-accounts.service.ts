@@ -91,6 +91,7 @@ import type {
   CpStatus,
 } from './cp-accounts.types';
 import type { CpSettingsHandoffSnapshot } from './handoff/cp-settings-handoff.types';
+import { AccountSettingsRepo } from '../../settings/dal/account-settings.repo';
 import { SettingsFoundationRepo } from '../../settings/dal/settings-foundation.repo';
 import { SettingsCpCascadeService } from '../../settings/services/settings-cp-cascade.service';
 import { SettingsStateService } from '../../settings/services/settings-state.service';
@@ -139,6 +140,7 @@ export class CpAccountsService {
 
     const cascadeService = new SettingsCpCascadeService(
       new SettingsFoundationRepo(params.trx),
+      new AccountSettingsRepo(params.trx),
       new SettingsStateService(new SettingsFoundationRepo(params.trx)),
     );
 

@@ -180,7 +180,7 @@ If CP routes unexpectedly return 404:
 
 ## 1.3 Settings read/access surface and cascade checks
 
-Use this section when validating the currently shipped backend Settings-native truth.
+Use this section when validating the currently shipped backend Settings-native truth, including the live Account page and its per-card writes.
 
 ### Bootstrap-safe read check
 
@@ -208,6 +208,7 @@ Expected result:
 
 - Access appears as required/gating
 - Account and Integrations appear as live non-gating
+- Account is omitted entirely when CP disallows all Account cards for that tenant
 - Modules appears as navigation-only
 - Communications and Workspace Experience appear as placeholder-only
 - Permissions does not appear at all
@@ -222,6 +223,36 @@ When testing a CP-published tenant:
 4. confirm `applied_cp_revision` advanced to the new CP revision
 5. confirm only required affected boundaries move to `NEEDS_REVIEW`
 6. confirm non-gating Account changes do not regress aggregate completion
+
+### Account read/write check
+
+With the same fully authenticated admin session, call:
+
+```text
+GET /settings/account
+```
+
+Expected result:
+
+- only CP-allowed Account cards appear
+- Branding, Organization Structure, and Company Calendar are the only live Account cards in v1
+- each visible card includes its own `version` and `cpRevision` for later writes
+- Account remains non-gating and must not become the source of banner truth by itself
+
+Then call the explicit per-card write routes as needed:
+
+```text
+PUT /settings/account/branding
+PUT /settings/account/org-structure
+PUT /settings/account/calendar
+```
+
+Expected result:
+
+- each card save updates only its own card boundary plus the Account section and aggregate recompute
+- stale card versions fail with `409 CONFLICT`
+- stale CP revisions fail only when the submitted payload is no longer valid under the latest CP allowance truth
+- successful Account saves never make `/settings/bootstrap` flip from `COMPLETE` back to banner-visible truth by themselves
 
 ### Access read/write check
 
@@ -256,7 +287,7 @@ Expected result:
 
 ### Important honesty rule
 
-The frontend no longer reads the auth-phase workspace setup scaffold for `/admin` or `/admin/settings`. Those routes now consume `GET /settings/bootstrap` and `GET /settings/overview` as their tenant-facing Settings truth. `/admin/settings/access` now consumes the real `GET /settings/access` DTO and uses `POST /settings/access/acknowledge` as the only completion path for Access.
+The frontend no longer reads the auth-phase workspace setup scaffold for `/admin` or `/admin/settings`. Those routes now consume `GET /settings/bootstrap` and `GET /settings/overview` as their tenant-facing Settings truth. `/admin/settings/access` now consumes the real `GET /settings/access` DTO and uses `POST /settings/access/acknowledge` as the only completion path for Access. `/admin/settings/account` now consumes the real `GET /settings/account` DTO and uses the three explicit per-card write routes as its only save boundaries.
 
 ---
 

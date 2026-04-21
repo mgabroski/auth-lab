@@ -2,8 +2,7 @@
  * frontend/src/shared/settings/loaders.ts
  *
  * WHY:
- * - Provides the SSR loaders for the current Settings-native frontend consumers:
- *   `/admin`, `/admin/settings`, and `/admin/settings/access`.
+ * - Provides the SSR loaders for the current Settings-native frontend consumers.
  * - Keeps Settings fetch/log/error handling out of route pages.
  * - Makes the auth-vs-settings boundary explicit: auth bootstrap still owns
  *   session and route gating, while Settings loaders own setup progress truth.
@@ -19,6 +18,7 @@ import { serverLogger } from '@/shared/server/logger';
 import { ApiHttpError, readApiError } from '@/shared/auth/api-errors';
 import type {
   AccessSettingsResponse,
+  AccountSettingsResponse,
   SettingsBootstrapResponse,
   SettingsOverviewResponse,
 } from './contracts';
@@ -47,9 +47,13 @@ const SETTINGS_ACCESS_HEADERS = {
   'X-Settings-Access': '1',
 } as const;
 
+const SETTINGS_ACCOUNT_HEADERS = {
+  'X-Settings-Account': '1',
+} as const;
+
 async function fetchSettingsJson<T>(params: {
-  path: '/settings/bootstrap' | '/settings/overview' | '/settings/access';
-  target: 'bootstrap' | 'overview' | 'access';
+  path: '/settings/bootstrap' | '/settings/overview' | '/settings/access' | '/settings/account';
+  target: 'bootstrap' | 'overview' | 'access' | 'account';
   headers: Record<string, string>;
 }): Promise<T> {
   try {
@@ -150,6 +154,26 @@ export async function loadAccessSettings(): Promise<SettingsLoadResult<AccessSet
     return {
       ok: false,
       error: error instanceof Error ? error : new Error('Unknown settings access error'),
+    };
+  }
+}
+
+export async function loadAccountSettings(): Promise<SettingsLoadResult<AccountSettingsResponse>> {
+  try {
+    const data = await fetchSettingsJson<AccountSettingsResponse>({
+      path: '/settings/account',
+      target: 'account',
+      headers: SETTINGS_ACCOUNT_HEADERS,
+    });
+
+    return {
+      ok: true,
+      data,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error('Unknown settings account error'),
     };
   }
 }

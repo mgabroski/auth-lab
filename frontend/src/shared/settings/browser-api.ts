@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Centralizes browser-side Settings writes around the locked same-origin `/api/*` rule.
- * - Gives the Access acknowledge CTA one thin browser helper instead of hand-written fetch logic.
+ * - Gives the live Settings write surfaces thin browser helpers instead of hand-written fetch logic.
  */
 
 import { apiFetch } from '@/shared/api-client';
@@ -51,6 +51,49 @@ export function acknowledgeAccessSettings(input: {
 }): Promise<BrowserSettingsResult<SettingsMutationResultResponse>> {
   return requestJson<SettingsMutationResultResponse>('/settings/access/acknowledge', {
     method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function saveAccountBranding(input: {
+  expectedVersion: number;
+  expectedCpRevision: number;
+  values: {
+    logoUrl: string | null;
+    menuColor: string | null;
+    fontColor: string | null;
+    welcomeMessage: string | null;
+  };
+}): Promise<BrowserSettingsResult<SettingsMutationResultResponse>> {
+  return requestJson<SettingsMutationResultResponse>('/settings/account/branding', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export function saveAccountOrgStructure(input: {
+  expectedVersion: number;
+  expectedCpRevision: number;
+  values: {
+    employers: string[];
+    locations: string[];
+  };
+}): Promise<BrowserSettingsResult<SettingsMutationResultResponse>> {
+  return requestJson<SettingsMutationResultResponse>('/settings/account/org-structure', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export function saveAccountCalendar(input: {
+  expectedVersion: number;
+  expectedCpRevision: number;
+  values: {
+    observedDates: string[];
+  };
+}): Promise<BrowserSettingsResult<SettingsMutationResultResponse>> {
+  return requestJson<SettingsMutationResultResponse>('/settings/account/calendar', {
+    method: 'PUT',
     body: JSON.stringify(input),
   });
 }

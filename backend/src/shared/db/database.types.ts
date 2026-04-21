@@ -235,6 +235,34 @@ export interface Tenants {
   updated_at: Generated<Timestamp>;
 }
 
+export interface TenantAccountSettings {
+  branding_applied_cp_revision: Generated<number>;
+  branding_font_color: string | null;
+  branding_last_saved_at: Timestamp | null;
+  branding_last_saved_by_user_id: string | null;
+  branding_logo_url: string | null;
+  branding_menu_color: string | null;
+  branding_status: Generated<string>;
+  branding_version: Generated<number>;
+  branding_welcome_message: string | null;
+  calendar_applied_cp_revision: Generated<number>;
+  calendar_last_saved_at: Timestamp | null;
+  calendar_last_saved_by_user_id: string | null;
+  calendar_observed_dates: Generated<Json>;
+  calendar_status: Generated<string>;
+  calendar_version: Generated<number>;
+  created_at: Generated<Timestamp>;
+  org_employers: Generated<Json>;
+  org_locations: Generated<Json>;
+  org_structure_applied_cp_revision: Generated<number>;
+  org_structure_last_saved_at: Timestamp | null;
+  org_structure_last_saved_by_user_id: string | null;
+  org_structure_status: Generated<string>;
+  org_structure_version: Generated<number>;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface TenantSetupSectionState {
   applied_cp_revision: Generated<number>;
   created_at: Generated<Timestamp>;
@@ -293,6 +321,7 @@ export interface DB {
   mfa_secrets: MfaSecrets;
   outbox_messages: OutboxMessages;
   password_reset_tokens: PasswordResetTokens;
+  tenant_account_settings: TenantAccountSettings;
   tenant_setup_section_state: TenantSetupSectionState;
   tenant_setup_state: TenantSetupState;
   tenants: Tenants;

@@ -166,29 +166,13 @@ describe('SettingsRouteShellPage', () => {
     expect(html).toContain('This route is intentionally placeholder-only in the current repo.');
   });
 
-  it('renders live route shells for shipped v1 section paths', async () => {
-    loadAuthBootstrapMock.mockResolvedValue({
-      ok: true,
-      routeState: {
-        kind: 'AUTHENTICATED_ADMIN',
-        config: makeConfig(),
-        me: makeMe(),
-      },
-      me: makeMe(),
-    });
-    loadSettingsOverviewMock.mockResolvedValue({
-      ok: true,
-      data: makeOverview(),
-    });
-
-    const html = renderToStaticMarkup(
-      await SettingsRouteShellPage({
+  it('treats dedicated Account routes as not found for the shell catch-all', async () => {
+    await expect(
+      SettingsRouteShellPage({
         params: Promise.resolve({ slug: ['account'] }),
       }),
-    );
-
-    expect(html).toContain('Account Settings');
-    expect(html).toContain('This route now resolves honestly');
+    ).rejects.toThrow('NOT_FOUND');
+    expect(notFoundMock).toHaveBeenCalled();
   });
 
   it('treats absent or unsupported routes as not found', async () => {

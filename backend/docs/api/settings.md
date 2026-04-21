@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes the currently shipped Settings-native backend read and first-write surface.
+This document describes the currently shipped Settings-native backend read and write surface.
 
 Current scope in this repo:
 
@@ -10,16 +10,20 @@ Current scope in this repo:
 - `GET /settings/overview`
 - `GET /settings/access`
 - `POST /settings/access/acknowledge`
+- `GET /settings/account`
+- `PUT /settings/account/branding`
+- `PUT /settings/account/org-structure`
+- `PUT /settings/account/calendar`
 
-This is the currently shipped Settings-native tenant surface used by the frontend `/admin`, `/admin/settings`, and the dedicated `/admin/settings/access` page.
-It establishes the persisted Settings state engine, the real overview DTOs, and the first real section-specific write path.
+This is the currently shipped Settings-native tenant surface used by the frontend `/admin`, `/admin/settings`, the dedicated `/admin/settings/access` page, and the dedicated `/admin/settings/account` page.
+It establishes the persisted Settings state engine, the real overview DTOs, the real Access acknowledge path, and the real Account per-card save boundaries.
 It does **not** mean the full tenant Settings write surface is already shipped.
 
 ---
 
 ## Guard model
 
-Both endpoints require a fully authenticated admin session.
+All endpoints in this document require a fully authenticated admin session.
 
 Controller guard:
 
@@ -321,12 +325,213 @@ It updates only the Access section plus aggregate recompute. It does not mutate 
 - `settings.access.acknowledged`
 - `settings.access.acknowledge.failed`
 
+## GET `/settings/account`
+
+### Purpose
+
+Returns the real Account Settings page DTO for `/admin/settings/account`.
+
+This route is the shipped v1 Account surface. It is live, tenant-configurable, and explicitly non-gating. It only covers the locked v1 Account cards:
+
+- Branding
+- Organization Structure
+- Company Calendar
+
+### Response
+
+```json
+{
+  "sectionKey": "account",
+  "title": "Account Settings",
+  "description": "Configure the allowed branding, organization structure, and company calendar values for this workspace. Account Settings is live in v1 but remains non-gating.",
+  "status": "NOT_STARTED",
+  "cards": [
+    {
+      "key": "branding",
+      "title": "Branding",
+      "description": "Manage the allowed branding values for this workspace.",
+      "status": "NOT_STARTED",
+      "version": 1,
+      "cpRevision": 4,
+      "visibility": {
+        "logo": true,
+        "menuColor": true,
+        "fontColor": true,
+        "welcomeMessage": true
+      },
+      "values": {
+        "logoUrl": null,
+        "menuColor": null,
+        "fontColor": null,
+        "welcomeMessage": null
+      }
+    },
+    {
+      "key": "orgStructure",
+      "title": "Organization Structure",
+      "description": "Manage the allowed employer and location lists for this workspace.",
+      "status": "NOT_STARTED",
+      "version": 1,
+      "cpRevision": 4,
+      "visibility": {
+        "employers": true,
+        "locations": true
+      },
+      "values": {
+        "employers": [],
+        "locations": []
+      }
+    },
+    {
+      "key": "calendar",
+      "title": "Company Calendar",
+      "description": "Maintain the observed company dates used by this workspace.",
+      "status": "NOT_STARTED",
+      "version": 1,
+      "cpRevision": 4,
+      "visibility": {
+        "allowed": true
+      },
+      "values": {
+        "observedDates": []
+      }
+    }
+  ],
+  "warnings": [],
+  "nextAction": {
+    "key": "access",
+    "label": "Review Access & Security",
+    "href": "/admin/settings/access"
+  }
+}
+```
+
+### Read rules
+
+- hidden if the tenant has no CP-allowed Account cards at all
+- only CP-allowed cards appear
+- no read-only Account mode is invented in v1
+- card `version` and `cpRevision` are the authoritative mutation preconditions for each card save
+- Account remains live but non-gating in aggregate setup behavior
+
+## PUT `/settings/account/branding`
+
+### Purpose
+
+Saves the Branding card only.
+
+### Request
+
+```json
+{
+  "expectedVersion": 1,
+  "expectedCpRevision": 4,
+  "values": {
+    "logoUrl": "https://cdn.example.com/logo.svg",
+    "menuColor": "#0f172a",
+    "fontColor": "#ffffff",
+    "welcomeMessage": "Welcome to the workspace"
+  }
+}
+```
+
+## PUT `/settings/account/org-structure`
+
+### Purpose
+
+Saves the Organization Structure card only.
+
+### Request
+
+```json
+{
+  "expectedVersion": 1,
+  "expectedCpRevision": 4,
+  "values": {
+    "employers": ["Acme"],
+    "locations": ["Skopje"]
+  }
+}
+```
+
+## PUT `/settings/account/calendar`
+
+### Purpose
+
+Saves the Company Calendar card only.
+
+### Request
+
+```json
+{
+  "expectedVersion": 1,
+  "expectedCpRevision": 4,
+  "values": {
+    "observedDates": ["2026-01-01", "2026-12-25"]
+  }
+}
+```
+
+### Shared Account mutation response
+
+All three Account card writes return the same envelope:
+
+```json
+{
+  "section": {
+    "key": "account",
+    "status": "IN_PROGRESS",
+    "version": 2,
+    "cpRevision": 4
+  },
+  "card": {
+    "key": "branding",
+    "status": "COMPLETE",
+    "version": 2,
+    "cpRevision": 4
+  },
+  "aggregate": {
+    "status": "IN_PROGRESS",
+    "version": 2,
+    "cpRevision": 4,
+    "nextAction": {
+      "key": "access",
+      "label": "Review Access & Security",
+      "href": "/admin/settings/access"
+    }
+  },
+  "warnings": []
+}
+```
+
+### Shared Account mutation rules
+
+- requires a fully authenticated admin session
+- each card is an explicit save boundary; there is no page-level save-all flow
+- fails with `404 NOT FOUND` when the whole Account section or the specific card is not CP-allowed for that tenant
+- fails with `409 CONFLICT` when `expectedVersion` is stale for that card
+- fails with `409 CONFLICT` when `expectedCpRevision` is stale **and** the submitted payload no longer fits the latest CP allowance truth for that card
+- a stale `expectedCpRevision` is still accepted when the payload remains valid under the current allowance truth
+- writes success audit inside the transaction
+- writes failure audit outside the transaction so it survives rollback
+- Account saves do not block overall completion and do not control the setup banner lifecycle
+
+### Current shipped Account audit actions
+
+- `settings.account.branding.saved`
+- `settings.account.branding.save.failed`
+- `settings.account.org_structure.saved`
+- `settings.account.org_structure.save.failed`
+- `settings.account.calendar.saved`
+- `settings.account.calendar.save.failed`
+
 ## Persistence boundary
 
 These routes read persisted state from:
 
 - `tenant_setup_state`
 - `tenant_setup_section_state`
+- `tenant_account_settings`
 
 They may compose allowance/readiness metadata around that persisted state, but they do not compute aggregate completion truth as a substitute for persisted ownership.
 
