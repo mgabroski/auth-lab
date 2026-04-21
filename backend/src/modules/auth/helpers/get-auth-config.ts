@@ -21,11 +21,12 @@
  *   caused the frontend to show a signup link that the backend would reject with 403.
  *   The frontend now has a single authoritative boolean to use for signup UI gating.
  *
- * PHASE 9 UPDATE (ADR 0003):
- * - Added setupCompleted to the response.
- *   Derived from tenant.setupCompletedAt IS NOT NULL.
- *   When false, the admin dashboard shows a non-blocking setup banner.
- *   UNAVAILABLE shape returns setupCompleted: false (consistent with inactive tenant).
+ * LEGACY SCAFFOLD NOTE:
+ * - setupCompleted remains in the response because the auth-phase acknowledgement
+ *   timestamp still exists in the backend bridge.
+ * - Current `/admin` and `/admin/settings` consumers no longer read this field
+ *   for live Settings progress; they use Settings-native DTOs instead.
+ * - UNAVAILABLE shape still returns setupCompleted: false for compatibility.
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
@@ -68,8 +69,8 @@ export async function getAuthConfig(
       // in which case signup is still blocked — the frontend must use this field.
       signupAllowed: tenant.publicSignupEnabled && !tenant.adminInviteRequired,
       allowedSso: PROVIDER_ORDER.filter((provider) => tenant.allowedSso.includes(provider)),
-      // Phase 9: setupCompleted drives the admin dashboard setup banner.
-      // True once any admin visits /admin/settings and calls the ack endpoint.
+      // Legacy auth scaffold compatibility field.
+      // Current admin pages use Settings-native bootstrap/overview reads instead.
       setupCompleted: tenant.setupCompletedAt !== null,
     },
   };

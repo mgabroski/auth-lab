@@ -2,8 +2,8 @@
  * backend/src/modules/auth/flows/settings/workspace-setup-ack-flow.ts
  *
  * WHY:
- * - Implements the current shipped auth-phase acknowledgement used by the
- *   admin banner scaffold.
+ * - Implements the legacy auth-phase acknowledgement bridge that still exists
+ *   in the backend after Settings-native frontend consumers have shipped.
  * - Bridges that legacy scaffold conservatively into the native Step 10 Phase 1
  *   Settings foundation rows so rollout can begin without creating a permanent
  *   second truth source.
@@ -19,8 +19,8 @@
  *   do not weaken stronger native Settings states.
  * - This flow remains rollout-bridge behavior only. It must never mark the
  *   aggregate Settings state COMPLETE from legacy acknowledgement alone.
- * - No dedicated settings audit is introduced here. This remains the legacy
- *   auth scaffold bridge, not the final Settings write surface.
+ * - No dedicated settings audit is introduced here. This remains a legacy
+ *   backend bridge endpoint, not the final Settings write surface.
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';

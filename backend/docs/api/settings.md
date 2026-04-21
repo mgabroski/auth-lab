@@ -9,9 +9,9 @@ Current scope in this repo:
 - `GET /settings/bootstrap`
 - `GET /settings/overview`
 
-This is the Step 10 Phase 2 backend-only surface.
-It establishes the persisted Settings state engine and first read DTOs.
-It does **not** mean the full tenant Settings UI is already shipped.
+This is the currently shipped Settings read surface used by the frontend `/admin` and `/admin/settings` routes.
+It establishes the persisted Settings state engine and the first real tenant-facing read DTOs.
+It does **not** mean the full tenant Settings write surface is already shipped.
 
 ---
 
@@ -70,7 +70,7 @@ It is the Settings-native replacement foundation for using auth scaffolding as t
 ### Important contract rule
 
 `/admin` may consume this endpoint.
-It must not consume detailed section-resolution truth from elsewhere once the frontend wiring is moved to Settings-native bootstrap.
+`/admin` now consumes this endpoint as its only bootstrap-safe Settings source. It must not consume detailed section-resolution truth from elsewhere.
 
 ---
 
@@ -80,8 +80,7 @@ It must not consume detailed section-resolution truth from elsewhere once the fr
 
 Returns the first real Settings overview read model.
 
-This endpoint is for `/admin/settings` consumers and later child-route consumers.
-It includes top-level card treatment, persisted statuses, placeholder handling, and a next-action pointer.
+This endpoint is for `/admin/settings` and the current SSR-gated Settings section route shells. It includes top-level card treatment, persisted statuses, placeholder handling, and a next-action pointer.
 
 ### Response
 

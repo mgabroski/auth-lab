@@ -28,13 +28,12 @@
  *   Without this, a tenant with publicSignupEnabled=true and adminInviteRequired=true
  *   causes the frontend to show a signup path that the backend immediately rejects.
  *
- * PHASE 9 UPDATE (ADR 0003):
- * - Added setupCompleted to ConfigResponse.tenant.
- *   Derived from: setup_completed_at IS NOT NULL.
- *   When false, the admin dashboard shows a non-blocking setup banner.
- *   Any admin visiting /admin/settings calls POST /auth/workspace-setup-ack
- *   which sets setup_completed_at = now(). Banner disappears for all admins.
- *   AuthNextAction is NOT extended — workspace setup is tenant state, not
+ * LEGACY SCAFFOLD NOTE:
+ * - setupCompleted remains in ConfigResponse.tenant because `/auth/config` still
+ *   exposes the old auth-phase acknowledgement timestamp bridge.
+ * - Current `/admin` and `/admin/settings` pages no longer use this field for
+ *   live Settings progress. They read Settings-native DTOs instead.
+ * - AuthNextAction is NOT extended — workspace setup is tenant state, not
  *   auth continuation state.
  */
 
@@ -83,9 +82,9 @@ export type EmailVerificationToken = {
  *   MFA_REQUIRED                 — admin/member must verify MFA
  *   NONE                         — fully authenticated
  *
- * Note (Phase 9): workspace setup state is NOT represented here.
- * setupCompleted lives in ConfigResponse.tenant and drives a UI banner
- * on the admin dashboard, not an auth continuation redirect. See ADR 0003.
+ * Workspace setup state is NOT represented here.
+ * setupCompleted lives in ConfigResponse.tenant only as a compatibility field
+ * and does not drive auth continuation redirects.
  */
 export type AuthNextAction =
   | 'NONE'
@@ -144,10 +143,9 @@ export type MeResponse = {
  * points — NOT publicSignupEnabled alone. When adminInviteRequired=true, the
  * backend blocks public signup even when publicSignupEnabled=true.
  *
- * setupCompleted (Phase 9): derived from setup_completed_at IS NOT NULL.
- * When false, the admin dashboard renders a non-blocking setup banner.
- * Any admin calling POST /auth/workspace-setup-ack sets this to true for
- * the entire workspace. Frontend reads this field; never re-derives it.
+ * setupCompleted: legacy auth scaffold field derived from setup_completed_at.
+ * It remains in `/auth/config` for compatibility, but the current admin pages
+ * no longer use it for live Settings progress. Frontend must not derive it.
  */
 export type ConfigResponse = {
   tenant: {
@@ -161,9 +159,9 @@ export type ConfigResponse = {
     signupAllowed: boolean;
     allowedSso: ('google' | 'microsoft')[];
     /**
-     * Phase 9 (ADR 0003): true when any admin has visited /admin/settings and
-     * called the workspace-setup-ack endpoint. False = show setup banner.
-     * This is tenant-level state, not per-user state.
+     * Legacy compatibility field derived from the auth-phase acknowledgement
+     * bridge. It is tenant-level state, not per-user state, and current admin
+     * pages no longer use it for live Settings progress.
      */
     setupCompleted: boolean;
   };

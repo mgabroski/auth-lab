@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the Step 10 Phase 2 backend Settings state engine foundation: real synchronous CP -> Settings cascade handling plus `GET /settings/bootstrap` and `GET /settings/overview` read surfaces. Frontend banner/overview consumption still remains on the earlier auth scaffold until later Settings phases wire the tenant UI to these new DTOs.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the Step 10 Phase 3 tenant-facing Settings closure for `/admin` and `/admin/settings`: real synchronous CP -> Settings cascade handling, `GET /settings/bootstrap`, `GET /settings/overview`, Settings-native banner consumption on `/admin`, a real Settings overview page at `/admin/settings`, honest SSR-gated route shells for the locked v1 section paths, a placeholder-only Communications route, and continued absence of Permissions.
 
 This repo already has:
 
@@ -49,12 +49,13 @@ The locked Settings execution baseline for future repo work is now:
 
 What this means today:
 
-- the repo still ships the auth-phase workspace-setup scaffold (`/auth/config` + `/auth/workspace-setup-ack`) as the current frontend banner/acknowledgement behavior
-- the repo now ships `GET /settings/bootstrap` and `GET /settings/overview` as the first real Settings-native read surfaces
-- the repo now ships the real Phase 2 backend state engine foundation: persisted aggregate/section truth, aggregate recompute service, and synchronous CP cascade handling
-- the current CP `settingsHandoff` snapshot remains producer-shaped, but it now reports that the Settings engine is present and synchronous cascade wiring is active
-- future Settings work must still treat the auth scaffold as temporary rollout-bridge behavior, not as the permanent Settings bootstrap owner, until `/admin` and `/admin/settings` are wired to the new Settings DTOs
-- no part of this baseline acceptance should be read as later Settings write surfaces or tenant child pages already being shipped; the repo now holds Phase 2 backend truth, not the full tenant Settings UI
+- the repo still retains the auth-phase workspace-setup scaffold (`/auth/config` + `/auth/workspace-setup-ack`) as a backend compatibility bridge
+- `/admin` now reads `GET /settings/bootstrap` as the only tenant-facing bootstrap-safe Settings source
+- `/admin/settings` now reads `GET /settings/overview` as the real Settings overview source
+- the repo now ships the real backend state engine foundation: persisted aggregate/section truth, aggregate recompute service, and synchronous CP cascade handling
+- the current CP `settingsHandoff` snapshot remains producer-shaped, but it honestly reports that the Settings engine is present and synchronous cascade wiring is active
+- the auth scaffold is no longer the tenant-facing truth path for banner or overview behavior, even though the bridge endpoint and compatibility field still exist in the backend
+- no part of this baseline acceptance should be read as later Settings write surfaces already being shipped; the repo now holds the real read-side closure plus honest route treatment, not the full tenant Settings write UI
 
 ---
 
@@ -256,11 +257,12 @@ Current shipped auth/settings surfaces must not be mistaken for full Settings co
 
 Current truthful boundary:
 
-- `/auth/config` + `/auth/workspace-setup-ack` still carry the shipped workspace-setup scaffold in the frontend today
-- `GET /settings/bootstrap` and `GET /settings/overview` are now shipped as backend Settings-native truth surfaces
-- Step 10 Phase 1 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) are now consumed by live backend read surfaces and the synchronous CP cascade service
+- `/admin` now consumes `GET /settings/bootstrap` and no longer reads auth scaffold truth for banner semantics
+- `/admin/settings` now consumes `GET /settings/overview` and no longer uses the one-shot auth acknowledgement placeholder as its main content model
+- Step 10 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) are now consumed by live backend read surfaces and the synchronous CP cascade service
+- live v1 route treatment is now honest in the frontend: `/admin/settings/access`, `/account`, `/modules`, `/modules/personal`, and `/integrations` resolve as SSR-gated route shells; `/admin/settings/communications` resolves as a placeholder-only route; Permissions remains absent
 - CP `settingsHandoff` remains producer-shaped but now honestly reports live Settings engine presence and active synchronous cascade wiring
-- Step 10 Phase 0 is now locked at the documentation/contract level; later Settings phases remain intentionally unimplemented
+- later Settings write phases remain intentionally unimplemented
 
 ### Future modules and later-scope surfaces
 

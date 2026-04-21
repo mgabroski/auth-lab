@@ -12,11 +12,11 @@
  * - `nextAction` is authoritative.
  * - Do not infer auth continuation from scattered frontend heuristics.
  *
- * Note (Phase 9): workspace setup state (setupCompleted) lives in
- * ConfigResponse.tenant and is read directly by the admin dashboard page
- * to render a non-blocking banner. It does not produce a distinct route state —
- * all fully-authenticated admins resolve to AUTHENTICATED_ADMIN regardless of
- * whether setup is complete. See ADR 0003.
+ * Legacy compatibility note: `setupCompleted` still passes through the auth
+ * config contract, but Settings progress is no longer owned here. `/admin` and
+ * `/admin/settings` now read Settings-native DTOs for live setup semantics.
+ * Route-state ownership stays the same: all fully-authenticated admins resolve
+ * to AUTHENTICATED_ADMIN regardless of setup progress.
  */
 
 import type { ConfigResponse, MeResponse } from './contracts';

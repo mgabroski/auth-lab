@@ -2,27 +2,14 @@
  * frontend/src/app/admin/settings/page.tsx
  *
  * WHY:
- * - Phase 9 (ADR 0003): creates the real /admin/settings SSR route.
- * - All admins can reach this page at any time via the WorkspaceSetupBanner
- *   on /admin or directly by URL.
- * - When config.tenant.setupCompleted is false (workspace has never been
- *   configured), this page calls POST /auth/workspace-setup-ack on SSR load.
- *   The ack sets setup_completed_at on the tenant row. All admins in the
- *   workspace stop seeing the setup banner on their next page load.
- * - Content is intentionally minimal at this phase. The route must exist,
- *   be SSR-gated correctly, and correctly call the ack endpoint. Settings
- *   configuration content belongs to later product phases.
- *
- * RULES:
- * - Server Component only — no 'use client'.
- * - Access gate: AUTHENTICATED_ADMIN only. Any other route state redirects.
- * - The ack call is only fired when setupCompleted is false — idempotent
- *   at the DB level (WHERE setup_completed_at IS NULL) but we skip the
- *   network call entirely when already completed.
- * - Ack failure is swallowed (best-effort). The banner simply remains
- *   visible on /admin until the next successful visit.
+ * - Replaces the old auth-scaffold placeholder with the first real Settings
+ *   overview consumer.
+ * - Uses auth bootstrap only for SSR route gating and `GET /settings/overview`
+ *   for all setup progress, card treatment, and next-action truth.
+ * - Preserves the locked v1 overview contract: required vs optional grouping,
+ *   placeholder-only cards, and absent Permissions treatment.
  */
-
+import React from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
@@ -32,23 +19,11 @@ import {
   ADMIN_INVITES_PATH,
   getRouteStateRedirectPath,
 } from '@/shared/auth/redirects';
-import { ssrFetch } from '@/shared/ssr-api-client';
+import { SettingsOverviewCard } from '@/shared/settings/components/settings-overview-card';
+import { SettingsStatusChip } from '@/shared/settings/components/settings-status-chip';
+import { loadSettingsOverview } from '@/shared/settings/loaders';
 
 export const dynamic = 'force-dynamic';
-
-/**
- * Calls POST /auth/workspace-setup-ack via the SSR fetch path.
- * Tenant-scoped and idempotent — safe to call multiple times.
- * Errors are swallowed: ack failure is non-fatal. The banner on /admin
- * will remain until the next successful visit.
- */
-async function callWorkspaceSetupAck(): Promise<void> {
-  try {
-    await ssrFetch('/auth/workspace-setup-ack', { method: 'POST' });
-  } catch {
-    // Intentionally swallowed — ack failure must not block page render.
-  }
-}
 
 const navLinkStyle = {
   color: '#0f172a',
@@ -57,44 +32,53 @@ const navLinkStyle = {
   textDecoration: 'none',
 } as const;
 
-const sectionStyle = {
-  display: 'grid',
-  gap: '16px',
-} as const;
-
-const infoCardStyle = {
+const calloutBaseStyle = {
   display: 'grid',
   gap: '8px',
-  padding: '16px',
-  borderRadius: '12px',
-  border: '1px solid rgba(148, 163, 184, 0.2)',
-  backgroundColor: '#f8fafc',
+  padding: '18px 20px',
+  borderRadius: '20px',
+  border: '1px solid transparent',
 } as const;
 
-const labelStyle = {
+const inProgressCalloutStyle = {
+  ...calloutBaseStyle,
+  backgroundColor: '#eff6ff',
+  borderColor: '#bfdbfe',
+  color: '#1d4ed8',
+} as const;
+
+const completeCalloutStyle = {
+  ...calloutBaseStyle,
+  backgroundColor: '#f0fdf4',
+  borderColor: '#bbf7d0',
+  color: '#166534',
+} as const;
+
+const errorCalloutStyle = {
+  ...calloutBaseStyle,
+  backgroundColor: '#fef2f2',
+  borderColor: '#fecaca',
+  color: '#991b1b',
+} as const;
+
+const sectionHeadingStyle = {
   margin: 0,
-  fontSize: '12px',
-  fontWeight: 700,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase' as const,
-  color: '#64748b',
+  fontSize: '22px',
+  lineHeight: 1.2,
+  color: '#0f172a',
 } as const;
 
-const valueStyle = {
+const sectionCaptionStyle = {
   margin: 0,
   fontSize: '14px',
-  lineHeight: 1.6,
+  lineHeight: 1.7,
   color: '#475569',
 } as const;
 
-const placeholderStyle = {
-  padding: '16px 20px',
-  borderRadius: '12px',
-  border: '1px solid #e2e8f0',
-  backgroundColor: '#f8fafc',
-  fontSize: '14px',
-  lineHeight: 1.7,
-  color: '#64748b',
+const cardGridStyle = {
+  display: 'grid',
+  gap: '16px',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
 } as const;
 
 export default async function AdminSettingsPage() {
@@ -118,22 +102,16 @@ export default async function AdminSettingsPage() {
     redirect(getRouteStateRedirectPath(routeState));
   }
 
-  // Phase 9: acknowledge workspace setup when visiting for the first time.
-  // This sets setup_completed_at on the tenant row so the banner on /admin
-  // disappears for all admins. Only fires when not yet acknowledged.
-  const isFirstSetupVisit = !routeState.config.tenant.setupCompleted;
-  if (isFirstSetupVisit) {
-    await callWorkspaceSetupAck();
-  }
+  const overview = await loadSettingsOverview();
 
   return (
     <AuthenticatedShell
       eyebrow="Hubins admin workspace"
       title="Workspace settings"
-      subtitle="Configure workspace behaviour, security policies, and onboarding options for this tenant."
+      subtitle="Review required setup progress, open section routes, and track which tenant surfaces are live, optional, or placeholder-only."
       me={routeState.me}
     >
-      <div style={sectionStyle}>
+      <div style={{ display: 'grid', gap: '20px' }}>
         <div style={{ display: 'grid', gap: '10px' }}>
           <Link href={AUTHENTICATED_ADMIN_ENTRY_PATH} style={navLinkStyle}>
             ← Back to admin dashboard
@@ -143,37 +121,79 @@ export default async function AdminSettingsPage() {
           </Link>
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gap: '12px',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          }}
-        >
-          <div style={infoCardStyle}>
-            <p style={labelStyle}>Workspace name</p>
-            <p style={valueStyle}>{routeState.me.tenant.name}</p>
-          </div>
-          <div style={infoCardStyle}>
-            <p style={labelStyle}>Workspace key</p>
-            <p style={valueStyle}>
-              <code>{routeState.me.tenant.key}</code>
-            </p>
-          </div>
-          <div style={infoCardStyle}>
-            <p style={labelStyle}>Setup</p>
-            <p style={valueStyle}>
-              {isFirstSetupVisit ? 'Marked complete on this visit' : 'Already completed'}
-            </p>
-          </div>
-        </div>
+        {overview.ok ? (
+          <>
+            <section
+              style={
+                overview.data.overallStatus === 'COMPLETE'
+                  ? completeCalloutStyle
+                  : inProgressCalloutStyle
+              }
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <h2 style={{ margin: 0, fontSize: '20px', lineHeight: 1.2 }}>
+                  {overview.data.overallStatus === 'COMPLETE'
+                    ? 'Your workspace is fully configured'
+                    : 'Continue workspace setup'}
+                </h2>
+                <SettingsStatusChip status={overview.data.overallStatus} />
+              </div>
+              <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7 }}>
+                {overview.data.overallStatus === 'COMPLETE'
+                  ? 'Required setup work is complete. Optional and placeholder-only settings still remain available from this overview.'
+                  : 'Settings owns the detailed progress model. Use the next action or open any section card below to continue.'}
+              </p>
+              {overview.data.nextAction ? (
+                <Link href={overview.data.nextAction.href} style={navLinkStyle}>
+                  → {overview.data.nextAction.label}
+                </Link>
+              ) : null}
+            </section>
 
-        <div style={placeholderStyle}>
-          <strong>Settings configuration — coming in later phases.</strong> This route is correctly
-          SSR-gated for admin sessions and calls the workspace-setup-ack endpoint on first visit.
-          Workspace configuration content (SSO, invite policy, MFA rules) belongs to later product
-          phases once the auth module is fully locked.
-        </div>
+            <section style={{ display: 'grid', gap: '14px' }}>
+              <div style={{ display: 'grid', gap: '4px' }}>
+                <h2 style={sectionHeadingStyle}>Required sections</h2>
+                <p style={sectionCaptionStyle}>
+                  These sections gate overall setup completion in the current repo.
+                </p>
+              </div>
+              <div style={cardGridStyle}>
+                {overview.data.cards
+                  .filter((card) => card.isRequired)
+                  .map((card) => (
+                    <SettingsOverviewCard key={card.key} card={card} />
+                  ))}
+              </div>
+            </section>
+
+            <section style={{ display: 'grid', gap: '14px' }}>
+              <div style={{ display: 'grid', gap: '4px' }}>
+                <h2 style={sectionHeadingStyle}>Optional sections</h2>
+                <p style={sectionCaptionStyle}>
+                  Non-gating, navigation-only, and placeholder-only surfaces remain grouped here.
+                </p>
+              </div>
+              <div style={cardGridStyle}>
+                {overview.data.cards
+                  .filter((card) => !card.isRequired)
+                  .map((card) => (
+                    <SettingsOverviewCard key={card.key} card={card} />
+                  ))}
+              </div>
+            </section>
+          </>
+        ) : (
+          <section style={errorCalloutStyle}>
+            <h2 style={{ margin: 0, fontSize: '20px', lineHeight: 1.2 }}>
+              Workspace settings overview is unavailable
+            </h2>
+            <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7 }}>
+              The frontend could not load <code>GET /settings/overview</code>, so it is not
+              rendering a fallback or reusing auth scaffold truth.
+            </p>
+            <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7 }}>{overview.error.message}</p>
+          </section>
+        )}
       </div>
     </AuthenticatedShell>
   );

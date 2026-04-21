@@ -14,11 +14,11 @@ export type TenantAllowedSso = string[];
  *   distinguish "signup available" from "invite required" without inferring one
  *   rule from the other.
  *
- * Phase 9 (ADR 0003):
- * - setupCompletedAt: null = workspace has never been acknowledged by an admin
- *   visiting /admin/settings. The admin dashboard shows a setup banner.
- *   Once set (via POST /auth/workspace-setup-ack), the banner disappears for
- *   all admins in this workspace.
+ * Legacy scaffold note:
+ * - setupCompletedAt stores the old auth-phase acknowledgement timestamp used
+ *   by POST /auth/workspace-setup-ack.
+ * - The current admin pages no longer read this timestamp for live Settings
+ *   progress, but the backend bridge still preserves it for compatibility.
  */
 export type Tenant = {
   id: string;
@@ -34,7 +34,7 @@ export type Tenant = {
   allowedEmailDomains: TenantAllowedEmailDomains;
   allowedSso: TenantAllowedSso;
 
-  /** Phase 9: null until any admin visits /admin/settings. */
+  /** Legacy auth-phase acknowledgement timestamp used by the bridge only. */
   setupCompletedAt: Date | null;
 
   createdAt: Date;

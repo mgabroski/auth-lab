@@ -3,22 +3,19 @@
  *
  * WHY:
  * - Minimal but real authenticated landing route for workspace admins.
- * - Only renders when backend bootstrap truth resolves to a fully-authenticated ADMIN session.
- *
- * PHASE 9 UPDATE (ADR 0003):
- * - Renders WorkspaceSetupBanner when config.tenant.setupCompleted is false.
- *   Any admin can click the banner to visit /admin/settings and complete setup.
- *   Once any admin does so, setup_completed_at is set on the tenant and the
- *   banner disappears for everyone on the next page load.
- *   No redirect occurs — all admins always land here regardless of setup state.
+ * - Uses auth bootstrap only for session/role routing, then uses
+ *   `GET /settings/bootstrap` as the sole Settings bootstrap-safe truth.
+ * - Preserves the locked contract that `/admin` may show only a non-blocking
+ *   banner and a generic CTA into `/admin/settings`.
  */
-
+import React from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
 import { AuthenticatedShell } from '@/shared/auth/components/authenticated-shell';
 import { WorkspaceSetupBanner } from '@/shared/auth/components/workspace-setup-banner';
 import { ADMIN_INVITES_PATH, getRouteStateRedirectPath } from '@/shared/auth/redirects';
+import { loadSettingsBootstrap } from '@/shared/settings/loaders';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +24,16 @@ const navLinkStyle = {
   fontSize: '14px',
   fontWeight: 600,
   textDecoration: 'none',
+} as const;
+
+const errorCardStyle = {
+  display: 'grid',
+  gap: '8px',
+  padding: '16px 18px',
+  borderRadius: '16px',
+  border: '1px solid #fecaca',
+  backgroundColor: '#fef2f2',
+  color: '#991b1b',
 } as const;
 
 export default async function AdminPage() {
@@ -50,16 +57,28 @@ export default async function AdminPage() {
     redirect(getRouteStateRedirectPath(routeState));
   }
 
+  const settingsBootstrap = await loadSettingsBootstrap();
+
   return (
     <AuthenticatedShell
       eyebrow="Hubins admin workspace"
       title="Admin dashboard"
-      subtitle="Workspace admin landing. Manage invites, configure workspace settings, and monitor activity."
+      subtitle="Workspace admin landing. Manage invites, open Settings, and monitor the current workspace."
       me={routeState.me}
     >
       <div style={{ display: 'grid', gap: '16px' }}>
-        {/* Phase 9: workspace setup banner — shown until any admin visits /admin/settings */}
-        <WorkspaceSetupBanner setupCompleted={routeState.config.tenant.setupCompleted} />
+        {settingsBootstrap.ok ? (
+          <WorkspaceSetupBanner showSetupBanner={settingsBootstrap.data.showSetupBanner} />
+        ) : (
+          <div role="alert" style={errorCardStyle}>
+            <strong>Workspace settings status is unavailable.</strong>
+            <span>
+              The admin landing route did not receive a valid response from{' '}
+              <code>GET /settings/bootstrap</code>.
+            </span>
+            <span>{settingsBootstrap.error.message}</span>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gap: '10px' }}>
           <h2 style={{ margin: 0, fontSize: '22px', lineHeight: 1.2 }}>Admin landing ready</h2>
@@ -70,6 +89,9 @@ export default async function AdminPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          <Link href="/admin/settings" style={navLinkStyle}>
+            → Open workspace settings
+          </Link>
           <Link href={ADMIN_INVITES_PATH} style={navLinkStyle}>
             → Manage invites
           </Link>

@@ -4,18 +4,17 @@
  * frontend/src/shared/auth/components/workspace-setup-banner.tsx
  *
  * WHY:
- * - Phase 9 (ADR 0003): surfaces the workspace setup call to action on the
- *   admin dashboard without blocking normal admin usage.
- * - Any admin can dismiss it by visiting /admin/settings.
- * - Once dismissed (POST /auth/workspace-setup-ack is called), the banner
- *   disappears for all admins in the workspace because setup_completed_at
- *   is tenant-level state, not per-user state.
+ * - Renders the non-blocking admin-dashboard CTA once `/admin` starts reading
+ *   Settings-native bootstrap truth from `GET /settings/bootstrap`.
+ * - Keeps the banner generic: `/admin` may only signal that workspace setup
+ *   still needs attention and link to `/admin/settings`.
+ * - Avoids leaking detailed progress resolution into the landing page.
  *
  * RULES:
  * - Client component only — uses a Link for navigation.
- * - Receives setupCompleted as a prop derived from ConfigResponse.tenant.setupCompleted.
- * - Returns null when setupCompleted is true — renders nothing.
- * - Does not fetch or write any data itself; ack is called by /admin/settings SSR.
+ * - Receives `showSetupBanner` from the Settings bootstrap DTO.
+ * - Returns null when the backend says no banner should render.
+ * - Does not fetch or write any data itself.
  */
 
 import Link from 'next/link';
@@ -69,21 +68,21 @@ const ctaStyle: CSSProperties = {
 };
 
 type WorkspaceSetupBannerProps = {
-  setupCompleted: boolean;
+  showSetupBanner: boolean;
 };
 
-export function WorkspaceSetupBanner({ setupCompleted }: WorkspaceSetupBannerProps) {
-  if (setupCompleted) {
+export function WorkspaceSetupBanner({ showSetupBanner }: WorkspaceSetupBannerProps) {
+  if (!showSetupBanner) {
     return null;
   }
 
   return (
-    <div role="alert" aria-label="Workspace setup incomplete" style={bannerStyle}>
+    <div role="alert" aria-label="Workspace setup requires attention" style={bannerStyle}>
       <div style={textBlockStyle}>
-        <p style={titleStyle}>⚙ Workspace setup incomplete</p>
+        <p style={titleStyle}>⚙ Workspace setup requires attention</p>
         <p style={bodyStyle}>
-          Configure SSO, invite policy, and MFA requirements before inviting your team. Any admin
-          can complete this — it only needs to be done once.
+          Review required workspace settings and continue setup from the Settings area. Any admin
+          can open it; the banner stays until the required setup work is complete.
         </p>
       </div>
       <Link href={ADMIN_SETTINGS_PATH} style={ctaStyle}>
