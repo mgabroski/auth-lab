@@ -2,16 +2,17 @@
  * backend/src/modules/settings/settings.types.ts
  *
  * WHY:
- * - Centralises the foundational Settings persistence vocabulary introduced by
- *   Step 10 Phase 1.
- * - Gives migrations, low-level repos, and later state-engine work one shared
- *   source for setup statuses, live section keys, and bridge reason codes.
+ * - Centralises the Settings persistence vocabulary, read DTO contracts, and
+ *   stable section/classification constants used by the Step 10 Phase 2 state
+ *   engine and read surfaces.
+ * - Gives migrations, repos, services, and future write surfaces one shared
+ *   source for statuses, section keys, route ownership, and bootstrap-safe DTOs.
  *
  * RULES:
  * - Pure types/constants only.
- * - No DB access, no HTTP contracts, no UI labels.
- * - This file defines only the Phase 1 persistence vocabulary, not the full
- *   future Settings DTO surface.
+ * - No DB access, no HTTP framework types, no UI implementation details.
+ * - DTOs here are backend-owned contracts; frontend may render them but must
+ *   never derive authoritative completion truth from local state.
  */
 
 export const SETTINGS_SETUP_STATUSES = [
@@ -32,11 +33,42 @@ export const LIVE_SETTINGS_SECTION_KEYS = [
 
 export type SettingsSectionKey = (typeof LIVE_SETTINGS_SECTION_KEYS)[number];
 
+export const SETTINGS_REQUIRED_GATING_SECTION_KEYS = ['access', 'personal'] as const;
+
+export type SettingsRequiredGatingSectionKey =
+  (typeof SETTINGS_REQUIRED_GATING_SECTION_KEYS)[number];
+
+export const SETTINGS_LIVE_NON_GATING_SECTION_KEYS = ['account', 'integrations'] as const;
+
+export type SettingsLiveNonGatingSectionKey =
+  (typeof SETTINGS_LIVE_NON_GATING_SECTION_KEYS)[number];
+
+export const SETTINGS_OVERVIEW_CARD_KEYS = [
+  'access',
+  'account',
+  'modules',
+  'integrations',
+  'communications',
+  'workspaceExperience',
+] as const;
+
+export type SettingsOverviewCardKey = (typeof SETTINGS_OVERVIEW_CARD_KEYS)[number];
+
+export const SETTINGS_PLACEHOLDER_CARD_KEYS = ['communications', 'workspaceExperience'] as const;
+
+export type SettingsPlaceholderCardKey = (typeof SETTINGS_PLACEHOLDER_CARD_KEYS)[number];
+
 export const SETTINGS_REASON_CODES = {
   FOUNDATION_INITIALIZED: 'FOUNDATION_INITIALIZED',
   TENANT_BOOTSTRAP_FOUNDATION: 'TENANT_BOOTSTRAP_FOUNDATION',
   CP_PROVISIONING_FOUNDATION: 'CP_PROVISIONING_FOUNDATION',
   LEGACY_AUTH_ACK_BRIDGE: 'LEGACY_AUTH_ACK_BRIDGE',
+  CP_REQUIRED_TARGET_REMOVED: 'CP_REQUIRED_TARGET_REMOVED',
+  CP_OPTIONAL_TARGET_REMOVED: 'CP_OPTIONAL_TARGET_REMOVED',
+  CP_REQUIRED_TARGET_ADDED: 'CP_REQUIRED_TARGET_ADDED',
+  CP_REQUIRED_TARGET_CHANGED: 'CP_REQUIRED_TARGET_CHANGED',
+  CP_INTEGRATION_DEPENDENCY_CHANGED: 'CP_INTEGRATION_DEPENDENCY_CHANGED',
+  CP_REVISION_SYNC: 'CP_REVISION_SYNC',
 } as const;
 
 export type SettingsReasonCode = (typeof SETTINGS_REASON_CODES)[keyof typeof SETTINGS_REASON_CODES];
@@ -70,4 +102,144 @@ export type TenantSetupSectionStateRecord = {
   lastReviewedByUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type SettingsSectionClassification =
+  | 'REQUIRED_GATING'
+  | 'LIVE_NON_GATING'
+  | 'NAVIGATION_ONLY'
+  | 'PLACEHOLDER_ONLY'
+  | 'ABSENT';
+
+export type SettingsSectionRouteMeta = {
+  key: SettingsOverviewCardKey;
+  title: string;
+  description: string;
+  href: string | null;
+  classification: SettingsSectionClassification;
+  sectionKey: SettingsSectionKey | null;
+};
+
+export const SETTINGS_SECTION_ROUTES: Record<SettingsOverviewCardKey, SettingsSectionRouteMeta> = {
+  access: {
+    key: 'access',
+    title: 'Access & Security',
+    description: 'Review the platform-managed access envelope for this workspace.',
+    href: '/admin/settings/access',
+    classification: 'REQUIRED_GATING',
+    sectionKey: 'access',
+  },
+  account: {
+    key: 'account',
+    title: 'Account Settings',
+    description: 'Configure branding, organization structure, and company calendar values.',
+    href: '/admin/settings/account',
+    classification: 'LIVE_NON_GATING',
+    sectionKey: 'account',
+  },
+  modules: {
+    key: 'modules',
+    title: 'Modules',
+    description: 'Open the modules hub. Personal is the only live configurable child in v1.',
+    href: '/admin/settings/modules',
+    classification: 'NAVIGATION_ONLY',
+    sectionKey: null,
+  },
+  integrations: {
+    key: 'integrations',
+    title: 'Integrations',
+    description: 'View informational SSO integration readiness and deferred integration cards.',
+    href: '/admin/settings/integrations',
+    classification: 'LIVE_NON_GATING',
+    sectionKey: 'integrations',
+  },
+  communications: {
+    key: 'communications',
+    title: 'Communications',
+    description: 'Placeholder only in v1. Email templates and notification rules are not live yet.',
+    href: '/admin/settings/communications',
+    classification: 'PLACEHOLDER_ONLY',
+    sectionKey: null,
+  },
+  workspaceExperience: {
+    key: 'workspaceExperience',
+    title: 'Workspace Experience',
+    description: 'Placeholder only in v1. Workspace Experience configuration remains deferred.',
+    href: null,
+    classification: 'PLACEHOLDER_ONLY',
+    sectionKey: null,
+  },
+};
+
+export type SettingsNextAction = {
+  key: Extract<SettingsOverviewCardKey, 'access' | 'modules'>;
+  label: string;
+  href: string;
+};
+
+export type SettingsBootstrapDto = {
+  overallStatus: SettingsSetupStatus;
+  showSetupBanner: boolean;
+  nextAction: SettingsNextAction | null;
+};
+
+export type SettingsOverviewCardDto = {
+  key: SettingsOverviewCardKey;
+  title: string;
+  description: string;
+  href: string | null;
+  classification: SettingsSectionClassification;
+  status: SettingsSetupStatus | 'PLACEHOLDER';
+  warnings: string[];
+  isRequired: boolean;
+};
+
+export type SettingsOverviewDto = {
+  overallStatus: SettingsSetupStatus;
+  nextAction: SettingsNextAction | null;
+  cards: SettingsOverviewCardDto[];
+};
+
+export type SettingsBootstrapResponse = SettingsBootstrapDto;
+export type SettingsOverviewResponse = SettingsOverviewDto;
+
+export type SettingsStateBundle = {
+  aggregate: TenantSetupStateRecord;
+  sections: Record<SettingsSectionKey, TenantSetupSectionStateRecord>;
+};
+
+export type SettingsSectionTransitionInput = {
+  tenantId: string;
+  sectionKey: SettingsSectionKey;
+  nextStatus: SettingsSetupStatus;
+  appliedCpRevision: number;
+  reasonCode: SettingsReasonCode;
+  transitionAt: Date;
+  actorUserId?: string | null;
+  markReviewed?: boolean;
+  markSaved?: boolean;
+};
+
+export type SettingsAggregateTransitionInput = {
+  tenantId: string;
+  nextStatus: SettingsSetupStatus;
+  appliedCpRevision: number;
+  reasonCode: SettingsReasonCode;
+  transitionAt: Date;
+  actorUserId?: string | null;
+  markReviewed?: boolean;
+  markSaved?: boolean;
+};
+
+export type SettingsSectionRevisionSyncInput = {
+  tenantId: string;
+  sectionKey: SettingsSectionKey;
+  appliedCpRevision: number;
+  syncedAt: Date;
+};
+
+export type SettingsAggregateRevisionSyncInput = {
+  tenantId: string;
+  appliedCpRevision: number;
+  syncedAt: Date;
 };

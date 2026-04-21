@@ -34,6 +34,9 @@
  * - ControlPlaneModule wiring is now real for create/read/list, Step 2 saves, review/publish,
  *   status toggle, and producer-side handoff reads.
  * - CP module requires db + logger + auditRepo. No rate-limiter, no outbox, no session.
+ * - Settings module now ships Phase 2 backend-only state engine + read surfaces
+ *   and is wired here so routes and CP cascade orchestration share one module
+ *   boundary.
  */
 
 import type { AppConfig } from './config';
@@ -91,6 +94,9 @@ import type { AuditModule } from '../modules/audit/audit.module';
 import { createControlPlaneModule } from '../modules/control-plane/control-plane.module';
 import type { ControlPlaneModule } from '../modules/control-plane/control-plane.module';
 
+import { createSettingsModule } from '../modules/settings/settings.module';
+import type { SettingsModule } from '../modules/settings/settings.module';
+
 import { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
 import { GoogleSsoAdapter } from '../modules/auth/sso/google/google-sso.adapter';
 import { MicrosoftSsoAdapter } from '../modules/auth/sso/microsoft/microsoft-sso.adapter';
@@ -126,6 +132,7 @@ export type AppDeps = {
   auth: AuthModule;
   audit: AuditModule;
   controlPlane: ControlPlaneModule;
+  settings: SettingsModule;
 
   close: () => Promise<void>;
 };
@@ -444,6 +451,13 @@ export async function buildDeps(
   // No rate-limiter, no outbox, no session — CP is currently bounded internal no-auth only.
   const controlPlane = createControlPlaneModule({ db, logger, auditRepo });
 
+  const settings = createSettingsModule({
+    db,
+    config: {
+      sso: config.sso,
+    },
+  });
+
   return {
     db,
     cache: redis,
@@ -471,6 +485,7 @@ export async function buildDeps(
     auth,
     audit,
     controlPlane,
+    settings,
 
     close: async () => {
       await redis.close();

@@ -204,10 +204,9 @@ All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accou
     "mode": "PRODUCER_ONLY",
     "eligibility": "BLOCKED_UNPUBLISHED_ACCOUNT",
     "consumer": {
-      "settingsEnginePresent": false,
-      "cascadeStatus": "NOT_WIRED",
+      "settingsEnginePresent": true,
+      "cascadeStatus": "SYNC_ACTIVE",
       "blockingReasons": [
-        "The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.",
         "Account \"goodwill-ca\" is not provisioned to a tenant yet. Publish the account before any future Settings cascade can become eligible."
       ]
     },
@@ -302,17 +301,17 @@ All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accou
 
 Every full account detail now includes `settingsHandoff`.
 
-This is **not** a live Settings integration status. It is the canonical producer snapshot that the future Settings state engine will consume once that engine exists.
+This is **not** a UI-facing Settings status surface. It remains the canonical producer snapshot that the now-present backend Settings state engine consumes for synchronous in-process cascade and read composition.
 
 Current truthful behavior:
 
-- `mode` is always `PRODUCER_ONLY`
-- `consumer.settingsEnginePresent` is always `false`
-- `consumer.cascadeStatus` is always `NOT_WIRED`
-- `blockingReasons` explain why live cascade wiring is not active yet
+- `mode` remains `PRODUCER_ONLY` because the snapshot itself is still producer-shaped allowance/provisioning truth
+- `consumer.settingsEnginePresent` is now `true`
+- `consumer.cascadeStatus` is now `SYNC_ACTIVE`
+- `blockingReasons` are now used only for real current blockers such as unpublished accounts
 - `allowances` carries allowance truth only — not CP Step 2 progress/configured flags
 - unpublished accounts remain `BLOCKED_UNPUBLISHED_ACCOUNT`
-- published accounts become `READY_FOR_FUTURE_SETTINGS_CONSUMER`, but still remain producer-only until the real Settings state engine ships
+- published accounts become `READY_FOR_FUTURE_SETTINGS_CONSUMER` and are eligible for the synchronous backend Settings cascade
 
 There is no separate HTTP route for this contract in the current repo. It is included on the full account detail DTO and is also available through the internal `CpAccountsService` handoff method for future in-process Settings consumption.
 

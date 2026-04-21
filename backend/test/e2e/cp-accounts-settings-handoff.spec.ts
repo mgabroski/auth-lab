@@ -32,11 +32,10 @@ describe('cp accounts settings handoff integration boundary', () => {
       const created = readJson<CpAccountDetail>(createRes);
 
       expect(created.settingsHandoff.mode).toBe('PRODUCER_ONLY');
-      expect(created.settingsHandoff.consumer.settingsEnginePresent).toBe(false);
-      expect(created.settingsHandoff.consumer.cascadeStatus).toBe('NOT_WIRED');
+      expect(created.settingsHandoff.consumer.settingsEnginePresent).toBe(true);
+      expect(created.settingsHandoff.consumer.cascadeStatus).toBe('SYNC_ACTIVE');
       expect(created.settingsHandoff.eligibility).toBe('BLOCKED_UNPUBLISHED_ACCOUNT');
       expect(created.settingsHandoff.consumer.blockingReasons).toEqual([
-        'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
         `Account "${accountKey}" is not provisioned to a tenant yet. Publish the account before any future Settings cascade can become eligible.`,
       ]);
       expect(created.settingsHandoff.account.cpRevision).toBe(0);
@@ -229,13 +228,11 @@ describe('cp accounts settings handoff integration boundary', () => {
       const published = readJson<CpAccountReview>(publishRes);
       expect(published.account.cpRevision).toBe(4);
       expect(published.account.settingsHandoff.mode).toBe('PRODUCER_ONLY');
-      expect(published.account.settingsHandoff.consumer.cascadeStatus).toBe('NOT_WIRED');
+      expect(published.account.settingsHandoff.consumer.cascadeStatus).toBe('SYNC_ACTIVE');
       expect(published.account.settingsHandoff.eligibility).toBe(
         'READY_FOR_FUTURE_SETTINGS_CONSUMER',
       );
-      expect(published.account.settingsHandoff.consumer.blockingReasons).toEqual([
-        'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
-      ]);
+      expect(published.account.settingsHandoff.consumer.blockingReasons).toEqual([]);
       expect(published.account.settingsHandoff.provisioning).toMatchObject({
         isProvisioned: true,
         tenantKey: accountKey,
@@ -251,11 +248,9 @@ describe('cp accounts settings handoff integration boundary', () => {
       expect(internalHandoff.mode).toBe('PRODUCER_ONLY');
       expect(internalHandoff.eligibility).toBe('READY_FOR_FUTURE_SETTINGS_CONSUMER');
       expect(internalHandoff.consumer).toEqual({
-        settingsEnginePresent: false,
-        cascadeStatus: 'NOT_WIRED',
-        blockingReasons: [
-          'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
-        ],
+        settingsEnginePresent: true,
+        cascadeStatus: 'SYNC_ACTIVE',
+        blockingReasons: [],
       });
       expect(internalHandoff.account).toEqual({
         accountId: created.id,

@@ -2,17 +2,17 @@
  * backend/src/modules/control-plane/accounts/handoff/cp-settings-handoff.builder.ts
  *
  * WHY:
- * - Builds the canonical CP producer snapshot that a future Settings state
- *   engine will consume.
+ * - Builds the canonical CP producer snapshot consumed by Settings.
  * - Strips CP authoring-progress concerns and keeps only allowance truth,
- *   provisioning truth, and the honest cascade boundary.
- * - Makes the current stopping point explicit: the producer contract exists,
- *   but live synchronous Settings cascade wiring does not.
+ *   provisioning truth, and the honest consumer-status boundary.
+ * - Makes the current stopping point explicit: the snapshot is still producer-
+ *   shaped, while consumer state now reports whether synchronous cascade wiring
+ *   exists in this repo.
  *
  * RULES:
  * - Pure builder only.
  * - No DB access, no AppError, no logging.
- * - No fake success or fake Settings sync fields.
+ * - No fake success and no fake missing-engine messaging.
  */
 
 import type { CpAccountDetail, CpProvisioningResult } from '../cp-accounts.types';
@@ -27,17 +27,22 @@ function buildEligibility(provisioning: CpProvisioningResult): CpSettingsHandoff
     : 'BLOCKED_UNPUBLISHED_ACCOUNT';
 }
 
-function buildBlockingReasons(
-  account: Pick<Omit<CpAccountDetail, 'settingsHandoff'>, 'accountKey'>,
-  provisioning: CpProvisioningResult,
-): string[] {
-  const reasons = [
-    'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
-  ];
+function buildBlockingReasons(params: {
+  account: Pick<Omit<CpAccountDetail, 'settingsHandoff'>, 'accountKey'>;
+  provisioning: CpProvisioningResult;
+  settingsEnginePresent: boolean;
+}): string[] {
+  const reasons: string[] = [];
 
-  if (!provisioning.isProvisioned) {
+  if (!params.settingsEnginePresent) {
     reasons.push(
-      `Account "${account.accountKey}" is not provisioned to a tenant yet. Publish the account before any future Settings cascade can become eligible.`,
+      'The Settings state engine is not implemented in this repo yet. The Control Plane remains a producer-only source of allowance truth.',
+    );
+  }
+
+  if (!params.provisioning.isProvisioned) {
+    reasons.push(
+      `Account "${params.account.accountKey}" is not provisioned to a tenant yet. Publish the account before any future Settings cascade can become eligible.`,
     );
   }
 
@@ -47,8 +52,10 @@ function buildBlockingReasons(
 export function buildCpSettingsHandoffSnapshot(params: {
   account: Omit<CpAccountDetail, 'settingsHandoff'>;
   provisioning: CpProvisioningResult;
+  settingsEnginePresent?: boolean;
 }): CpSettingsHandoffSnapshot {
   const { account, provisioning } = params;
+  const settingsEnginePresent = params.settingsEnginePresent ?? true;
 
   return {
     contractVersion: 1,
@@ -56,9 +63,13 @@ export function buildCpSettingsHandoffSnapshot(params: {
     mode: 'PRODUCER_ONLY',
     eligibility: buildEligibility(provisioning),
     consumer: {
-      settingsEnginePresent: false,
-      cascadeStatus: 'NOT_WIRED',
-      blockingReasons: buildBlockingReasons(account, provisioning),
+      settingsEnginePresent,
+      cascadeStatus: settingsEnginePresent ? 'SYNC_ACTIVE' : 'NOT_WIRED',
+      blockingReasons: buildBlockingReasons({
+        account,
+        provisioning,
+        settingsEnginePresent,
+      }),
     },
     account: {
       accountId: account.id,

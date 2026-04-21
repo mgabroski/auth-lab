@@ -4,18 +4,17 @@
  * WHY:
  * - Owns the low-level persistence primitives for the Settings foundation
  *   schema.
- * - Keeps rollout-bridge writes and foundational row creation out of auth and
- *   Control Plane business logic.
- * - Gives later Settings services a clean, already-tested DAL surface to build
- *   on.
+ * - Keeps rollout-bridge writes, transition-safe state updates, and revision
+ *   alignment out of auth, Control Plane, and future tenant write logic.
+ * - Gives the Phase 2 state engine one typed DAL surface for aggregate and
+ *   section transitions without introducing DB-trigger logic.
  *
  * RULES:
  * - No AppError.
  * - No transactions started here.
  * - No read-time recomputation of setup truth.
- * - Writes are conservative: foundation creation inserts missing rows only,
- *   and the legacy-auth bridge only upgrades the specific NOT_STARTED states it
- *   is allowed to strengthen.
+ * - Writes are explicit: the caller decides whether a transition or a pure
+ *   cpRevision sync is warranted.
  */
 
 import { sql, type Selectable } from 'kysely';
@@ -25,9 +24,14 @@ import type { TenantSetupSectionState, TenantSetupState } from '../../../shared/
 import {
   LIVE_SETTINGS_SECTION_KEYS,
   SETTINGS_REASON_CODES,
+  type SettingsAggregateRevisionSyncInput,
+  type SettingsAggregateTransitionInput,
   type SettingsReasonCode,
   type SettingsSectionKey,
+  type SettingsSectionRevisionSyncInput,
+  type SettingsSectionTransitionInput,
   type SettingsSetupStatus,
+  type SettingsStateBundle,
   type TenantSetupSectionStateRecord,
   type TenantSetupStateRecord,
 } from '../settings.types';
@@ -76,6 +80,14 @@ function mapSectionRow(row: TenantSetupSectionStateRow): TenantSetupSectionState
     createdAt: asDate(row.created_at),
     updatedAt: asDate(row.updated_at),
   };
+}
+
+function shouldMarkSave(current: Date | null, requested: boolean | undefined): boolean {
+  return requested === true || current !== null;
+}
+
+function shouldMarkReview(current: Date | null, requested: boolean | undefined): boolean {
+  return requested === true || current !== null;
 }
 
 export class SettingsFoundationRepo {
@@ -182,6 +194,20 @@ export class SettingsFoundationRepo {
     return row ? mapAggregateRow(row) : undefined;
   }
 
+  async getSectionState(
+    tenantId: string,
+    sectionKey: SettingsSectionKey,
+  ): Promise<TenantSetupSectionStateRecord | undefined> {
+    const row = await this.db
+      .selectFrom('tenant_setup_section_state')
+      .selectAll()
+      .where('tenant_id', '=', tenantId)
+      .where('section_key', '=', sectionKey)
+      .executeTakeFirst();
+
+    return row ? mapSectionRow(row) : undefined;
+  }
+
   async listSectionStates(tenantId: string): Promise<TenantSetupSectionStateRecord[]> {
     const rows = await this.db
       .selectFrom('tenant_setup_section_state')
@@ -191,5 +217,152 @@ export class SettingsFoundationRepo {
       .execute();
 
     return rows.map((row) => mapSectionRow(row));
+  }
+
+  async getStateBundle(tenantId: string): Promise<SettingsStateBundle | undefined> {
+    const aggregate = await this.findAggregateState(tenantId);
+    if (!aggregate) {
+      return undefined;
+    }
+
+    const sections = await this.listSectionStates(tenantId);
+    const sectionMap = Object.fromEntries(
+      sections.map((section) => [section.sectionKey, section]),
+    ) as Record<SettingsSectionKey, TenantSetupSectionStateRecord>;
+
+    return {
+      aggregate,
+      sections: sectionMap,
+    };
+  }
+
+  async transitionSectionState(params: SettingsSectionTransitionInput): Promise<void> {
+    const current = await this.getSectionState(params.tenantId, params.sectionKey);
+    if (!current) return;
+
+    const nextLastSavedAt = shouldMarkSave(current.lastSavedAt, params.markSaved)
+      ? params.transitionAt
+      : current.lastSavedAt;
+    const nextLastSavedBy = shouldMarkSave(current.lastSavedAt, params.markSaved)
+      ? (params.actorUserId ?? current.lastSavedByUserId ?? null)
+      : current.lastSavedByUserId;
+    const nextLastReviewedAt = shouldMarkReview(current.lastReviewedAt, params.markReviewed)
+      ? params.transitionAt
+      : current.lastReviewedAt;
+    const nextLastReviewedBy = shouldMarkReview(current.lastReviewedAt, params.markReviewed)
+      ? (params.actorUserId ?? current.lastReviewedByUserId ?? null)
+      : current.lastReviewedByUserId;
+
+    const changed =
+      current.status !== params.nextStatus ||
+      current.appliedCpRevision !== params.appliedCpRevision ||
+      current.lastTransitionReasonCode !== params.reasonCode ||
+      current.lastTransitionAt.getTime() !== params.transitionAt.getTime() ||
+      (nextLastSavedAt?.getTime() ?? 0) !== (current.lastSavedAt?.getTime() ?? 0) ||
+      (nextLastReviewedAt?.getTime() ?? 0) !== (current.lastReviewedAt?.getTime() ?? 0) ||
+      nextLastSavedBy !== current.lastSavedByUserId ||
+      nextLastReviewedBy !== current.lastReviewedByUserId;
+
+    if (!changed) return;
+
+    await this.db
+      .updateTable('tenant_setup_section_state')
+      .set({
+        status: params.nextStatus,
+        version: sql<number>`version + 1`,
+        applied_cp_revision: params.appliedCpRevision,
+        last_transition_reason_code: params.reasonCode,
+        last_transition_at: params.transitionAt,
+        last_saved_at: nextLastSavedAt,
+        last_saved_by_user_id: nextLastSavedBy,
+        last_reviewed_at: nextLastReviewedAt,
+        last_reviewed_by_user_id: nextLastReviewedBy,
+        updated_at: params.transitionAt,
+      })
+      .where('tenant_id', '=', params.tenantId)
+      .where('section_key', '=', params.sectionKey)
+      .execute();
+  }
+
+  async transitionAggregateState(params: SettingsAggregateTransitionInput): Promise<void> {
+    const current = await this.findAggregateState(params.tenantId);
+    if (!current) return;
+
+    const nextLastSavedAt = shouldMarkSave(current.lastSavedAt, params.markSaved)
+      ? params.transitionAt
+      : current.lastSavedAt;
+    const nextLastSavedBy = shouldMarkSave(current.lastSavedAt, params.markSaved)
+      ? (params.actorUserId ?? current.lastSavedByUserId ?? null)
+      : current.lastSavedByUserId;
+    const nextLastReviewedAt = shouldMarkReview(current.lastReviewedAt, params.markReviewed)
+      ? params.transitionAt
+      : current.lastReviewedAt;
+    const nextLastReviewedBy = shouldMarkReview(current.lastReviewedAt, params.markReviewed)
+      ? (params.actorUserId ?? current.lastReviewedByUserId ?? null)
+      : current.lastReviewedByUserId;
+
+    const changed =
+      current.overallStatus !== params.nextStatus ||
+      current.appliedCpRevision !== params.appliedCpRevision ||
+      current.lastTransitionReasonCode !== params.reasonCode ||
+      current.lastTransitionAt.getTime() !== params.transitionAt.getTime() ||
+      (nextLastSavedAt?.getTime() ?? 0) !== (current.lastSavedAt?.getTime() ?? 0) ||
+      (nextLastReviewedAt?.getTime() ?? 0) !== (current.lastReviewedAt?.getTime() ?? 0) ||
+      nextLastSavedBy !== current.lastSavedByUserId ||
+      nextLastReviewedBy !== current.lastReviewedByUserId;
+
+    if (!changed) return;
+
+    await this.db
+      .updateTable('tenant_setup_state')
+      .set({
+        overall_status: params.nextStatus,
+        version: sql<number>`version + 1`,
+        applied_cp_revision: params.appliedCpRevision,
+        last_transition_reason_code: params.reasonCode,
+        last_transition_at: params.transitionAt,
+        last_saved_at: nextLastSavedAt,
+        last_saved_by_user_id: nextLastSavedBy,
+        last_reviewed_at: nextLastReviewedAt,
+        last_reviewed_by_user_id: nextLastReviewedBy,
+        updated_at: params.transitionAt,
+      })
+      .where('tenant_id', '=', params.tenantId)
+      .execute();
+  }
+
+  async syncSectionRevision(params: SettingsSectionRevisionSyncInput): Promise<void> {
+    const current = await this.getSectionState(params.tenantId, params.sectionKey);
+    if (!current || current.appliedCpRevision === params.appliedCpRevision) {
+      return;
+    }
+
+    await this.db
+      .updateTable('tenant_setup_section_state')
+      .set({
+        version: sql<number>`version + 1`,
+        applied_cp_revision: params.appliedCpRevision,
+        updated_at: params.syncedAt,
+      })
+      .where('tenant_id', '=', params.tenantId)
+      .where('section_key', '=', params.sectionKey)
+      .execute();
+  }
+
+  async syncAggregateRevision(params: SettingsAggregateRevisionSyncInput): Promise<void> {
+    const current = await this.findAggregateState(params.tenantId);
+    if (!current || current.appliedCpRevision === params.appliedCpRevision) {
+      return;
+    }
+
+    await this.db
+      .updateTable('tenant_setup_state')
+      .set({
+        version: sql<number>`version + 1`,
+        applied_cp_revision: params.appliedCpRevision,
+        updated_at: params.syncedAt,
+      })
+      .where('tenant_id', '=', params.tenantId)
+      .execute();
   }
 }

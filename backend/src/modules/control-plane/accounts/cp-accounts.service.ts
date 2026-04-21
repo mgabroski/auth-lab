@@ -92,6 +92,8 @@ import type {
 } from './cp-accounts.types';
 import type { CpSettingsHandoffSnapshot } from './handoff/cp-settings-handoff.types';
 import { SettingsFoundationRepo } from '../../settings/dal/settings-foundation.repo';
+import { SettingsCpCascadeService } from '../../settings/services/settings-cp-cascade.service';
+import { SettingsStateService } from '../../settings/services/settings-state.service';
 import { SETTINGS_REASON_CODES } from '../../settings/settings.types';
 
 const RESERVED_ACCOUNT_KEYS = new Set(['cp', 'api', 'admin', 'auth', 'www', 'app']);
@@ -119,6 +121,32 @@ export class CpAccountsService {
       requestId: context?.requestId ?? null,
       ip: context?.ip ?? null,
       userAgent: context?.userAgent ?? null,
+    });
+  }
+
+  private async applySettingsCascadeIfProvisioned(params: {
+    trx: DbExecutor;
+    previous: AccountSnapshot;
+    next: AccountSnapshot;
+  }): Promise<void> {
+    const tenantId = params.next.provisioningRow?.tenant_id ?? null;
+    if (!tenantId) {
+      return;
+    }
+
+    const previousHandoff = snapshotToAccountDetail(params.previous).settingsHandoff;
+    const nextHandoff = snapshotToAccountDetail(params.next).settingsHandoff;
+
+    const cascadeService = new SettingsCpCascadeService(
+      new SettingsFoundationRepo(params.trx),
+      new SettingsStateService(new SettingsFoundationRepo(params.trx)),
+    );
+
+    await cascadeService.applyCascade({
+      tenantId,
+      previous: previousHandoff,
+      next: nextHandoff,
+      transitionAt: new Date(),
     });
   }
 
@@ -411,6 +439,11 @@ export class CpAccountsService {
         });
 
         const updatedSnapshot = await loadAccountSnapshot(trx, accountKey);
+        await this.applySettingsCascadeIfProvisioned({
+          trx,
+          previous: snapshot,
+          next: updatedSnapshot,
+        });
         const audit = this.buildAuditWriter(trx, auditContext);
 
         await auditCpAccessSaved(audit, {
@@ -474,6 +507,11 @@ export class CpAccountsService {
         });
 
         const updatedSnapshot = await loadAccountSnapshot(trx, accountKey);
+        await this.applySettingsCascadeIfProvisioned({
+          trx,
+          previous: snapshot,
+          next: updatedSnapshot,
+        });
         const audit = this.buildAuditWriter(trx, auditContext);
 
         await auditCpAccountSettingsSaved(audit, {
@@ -541,6 +579,11 @@ export class CpAccountsService {
         });
 
         const updatedSnapshot = await loadAccountSnapshot(trx, accountKey);
+        await this.applySettingsCascadeIfProvisioned({
+          trx,
+          previous: snapshot,
+          next: updatedSnapshot,
+        });
         const audit = this.buildAuditWriter(trx, auditContext);
 
         await auditCpModuleSettingsSaved(audit, {
@@ -716,6 +759,11 @@ export class CpAccountsService {
         });
 
         const updatedSnapshot = await loadAccountSnapshot(trx, accountKey);
+        await this.applySettingsCascadeIfProvisioned({
+          trx,
+          previous: snapshot,
+          next: updatedSnapshot,
+        });
         const audit = this.buildAuditWriter(trx, auditContext);
 
         await auditCpPersonalSaved(audit, {
@@ -845,6 +893,11 @@ export class CpAccountsService {
         });
 
         const updatedSnapshot = await loadAccountSnapshot(trx, accountKey);
+        await this.applySettingsCascadeIfProvisioned({
+          trx,
+          previous: snapshot,
+          next: updatedSnapshot,
+        });
         const audit = this.buildAuditWriter(trx, auditContext);
 
         await auditCpIntegrationsSaved(audit, {

@@ -2,17 +2,18 @@
  * backend/src/modules/control-plane/accounts/handoff/cp-settings-handoff.types.ts
  *
  * WHY:
- * - Defines the canonical internal producer contract for the future CP →
- *   Settings handoff.
- * - Gives the future Settings state engine one allowance-only snapshot shape to
- *   consume without re-reading CP authoring progress semantics.
- * - Keeps CP allowance truth, provisioning truth, and cascade-boundary truth
- *   explicit while the Settings engine is still absent from this repo.
+ * - Defines the canonical internal producer snapshot exposed by CP account
+ *   detail/read surfaces.
+ * - Gives the live Settings module one stable allowance/provisioning snapshot
+ *   shape to consume without re-reading CP authoring-progress semantics.
+ * - Keeps the current repo state honest: the snapshot remains producer-shaped,
+ *   but it now reports whether the synchronous Settings consumer is present.
  *
  * RULES:
  * - Internal integration contract only. No HTTP, Zod, or AppError here.
  * - Carry allowance truth and provisioning truth only — not CP Step 2 progress.
- * - Stay honest about the current repo state: producer-only, no live cascade.
+ * - Keep the snapshot producer-shaped even after live cascade wiring; the
+ *   consumer state is reported separately.
  */
 
 import type { PersonalFamilyKey, PersonalMinimumRequired } from '../cp-accounts.catalog';
@@ -28,8 +29,8 @@ export type CpSettingsHandoffEligibility =
   | 'BLOCKED_UNPUBLISHED_ACCOUNT';
 
 export type CpSettingsHandoffConsumerState = {
-  settingsEnginePresent: false;
-  cascadeStatus: 'NOT_WIRED';
+  settingsEnginePresent: boolean;
+  cascadeStatus: 'NOT_WIRED' | 'SYNC_ACTIVE';
   blockingReasons: string[];
 };
 

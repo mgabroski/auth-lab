@@ -105,6 +105,7 @@ Use for:
 - real Microsoft SSO round-trip
 - non-production real SMTP/provider proof where applicable
 - browser validation against more realistic environment settings
+- backend validation of the new `/settings/bootstrap` and `/settings/overview` read surfaces when Phase 2 Settings work is under test
 
 Expected environment traits:
 
@@ -253,21 +254,22 @@ Run cases in this order unless a focused bug task explicitly needs a smaller sub
 
 Keep this matrix aligned with current shipped behavior.
 
-| Area             | Must be proven                                                                                                    | Environment |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- | ----------- |
-| Login            | member success, admin continuation, wrong password, unknown email                                                 | Local       |
-| Logout           | protected pages rejected after logout                                                                             | Local       |
-| Signup           | open-tenant signup works, invite-only signup blocked                                                              | Local       |
-| Verification     | verify, resend, invalid/expired handling                                                                          | Local       |
-| Password Reset   | send, reset, old-password invalidation, invalid/reused token                                                      | Local       |
-| MFA              | setup, verify, recovery, single-use recovery code                                                                 | Local       |
-| Invite Lifecycle | create, accept, cancel, resend, expired, already-used                                                             | Local       |
-| Access Control   | suspended, no-membership, role-aware landing                                                                      | Local       |
-| Setup Guidance   | workspace setup banner behavior where currently shipped                                                           | Local       |
-| Rate Limiting    | repeated bad login triggers lockout behavior                                                                      | Local       |
-| Google SSO       | live provider round-trip                                                                                          | Staging     |
-| Microsoft SSO    | live provider round-trip                                                                                          | Staging     |
-| Control Plane    | create, group saves, Personal save, review gating, publish, re-entry, status toggle, honest `cpRevision` behavior | Local       |
+| Area                       | Must be proven                                                                                                    | Environment |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------- |
+| Login                      | member success, admin continuation, wrong password, unknown email                                                 | Local       |
+| Logout                     | protected pages rejected after logout                                                                             | Local       |
+| Signup                     | open-tenant signup works, invite-only signup blocked                                                              | Local       |
+| Verification               | verify, resend, invalid/expired handling                                                                          | Local       |
+| Password Reset             | send, reset, old-password invalidation, invalid/reused token                                                      | Local       |
+| MFA                        | setup, verify, recovery, single-use recovery code                                                                 | Local       |
+| Invite Lifecycle           | create, accept, cancel, resend, expired, already-used                                                             | Local       |
+| Access Control             | suspended, no-membership, role-aware landing                                                                      | Local       |
+| Setup Guidance             | workspace setup banner behavior where currently shipped                                                           | Local       |
+| Rate Limiting              | repeated bad login triggers lockout behavior                                                                      | Local       |
+| Google SSO                 | live provider round-trip                                                                                          | Staging     |
+| Microsoft SSO              | live provider round-trip                                                                                          | Staging     |
+| Control Plane              | create, group saves, Personal save, review gating, publish, re-entry, status toggle, honest `cpRevision` behavior | Local       |
+| Settings (backend Phase 2) | `/settings/bootstrap`, `/settings/overview`, synchronous CP cascade, persisted aggregate/section state            | Local       |
 
 ---
 
@@ -305,7 +307,7 @@ For a clean CP execution pass, prove these checkpoints in order:
 - publish persists provisioning truth but does not increment `cpRevision` by itself
 - status toggles do not increment `cpRevision`
 - the review surface must explain blocking reasons when Activation Ready is not met
-- `settingsHandoff` may be present on full DTOs, but QA must not treat it as live Settings synchronization
+- `settingsHandoff` remains a producer-shaped CP snapshot; after Step 10 Phase 2 it now reports `settingsEnginePresent=true` and `cascadeStatus=SYNC_ACTIVE`, but QA must still treat it as an internal handoff/debug surface rather than a tenant UI feature
 
 ## Evidence Expectations
 

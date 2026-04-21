@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI, while live CP → Settings cascade wiring remains correctly blocked until the real Settings state engine exists.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the Step 10 Phase 2 backend Settings state engine foundation: real synchronous CP -> Settings cascade handling plus `GET /settings/bootstrap` and `GET /settings/overview` read surfaces. Frontend banner/overview consumption still remains on the earlier auth scaffold until later Settings phases wire the tenant UI to these new DTOs.
 
 This repo already has:
 
@@ -49,11 +49,12 @@ The locked Settings execution baseline for future repo work is now:
 
 What this means today:
 
-- the repo still ships the auth-phase workspace-setup scaffold (`/auth/config` + `/auth/workspace-setup-ack`) as the current banner/acknowledgement behavior
-- the repo does **not** yet ship `GET /settings/bootstrap` or the live Settings state engine; Step 10 Phase 1 foundation tables now exist, but Phase 2 read surfaces and state orchestration do not
-- the current CP `settingsHandoff` snapshot remains producer-only and honest; it is not a live cascade result
-- future Settings work must treat the auth scaffold as temporary rollout-bridge behavior, not as the permanent Settings bootstrap owner
-- no part of this baseline acceptance should be read as Phase 2+ Settings implementation already being shipped; the repo now holds only the foundational schema and rollout bridge groundwork
+- the repo still ships the auth-phase workspace-setup scaffold (`/auth/config` + `/auth/workspace-setup-ack`) as the current frontend banner/acknowledgement behavior
+- the repo now ships `GET /settings/bootstrap` and `GET /settings/overview` as the first real Settings-native read surfaces
+- the repo now ships the real Phase 2 backend state engine foundation: persisted aggregate/section truth, aggregate recompute service, and synchronous CP cascade handling
+- the current CP `settingsHandoff` snapshot remains producer-shaped, but it now reports that the Settings engine is present and synchronous cascade wiring is active
+- future Settings work must still treat the auth scaffold as temporary rollout-bridge behavior, not as the permanent Settings bootstrap owner, until `/admin` and `/admin/settings` are wired to the new Settings DTOs
+- no part of this baseline acceptance should be read as later Settings write surfaces or tenant child pages already being shipped; the repo now holds Phase 2 backend truth, not the full tenant Settings UI
 
 ---
 
@@ -168,11 +169,12 @@ The following foundations are treated as real in the repo now.
   - status changes do not increment `cpRevision` because they do not mutate CP allowance truth
 - **canonical producer-side Settings handoff snapshot now exists** on full CP account detail DTOs as `settingsHandoff`
 - **internal backend handoff contract now exists** through `CpAccountsService.getSettingsHandoff(accountKey)` for future in-process Settings consumption
-- **State A stopping boundary is explicit and honest**:
-  - `settingsHandoff.mode` is `PRODUCER_ONLY`
-  - `settingsHandoff.consumer.settingsEnginePresent` is `false`
-  - `settingsHandoff.consumer.cascadeStatus` is `NOT_WIRED`
-  - blocking reasons explain why live CP → Settings cascade is not active yet
+- **current producer-side Settings handoff snapshot remains explicit and honest**:
+  - `settingsHandoff.mode` remains `PRODUCER_ONLY` because the snapshot itself is still producer-shaped allowance/provisioning truth
+  - `settingsHandoff.consumer.settingsEnginePresent` is now `true`
+  - `settingsHandoff.consumer.cascadeStatus` is now `SYNC_ACTIVE`
+  - unpublished accounts still report blocking reasons explaining that a tenant must be provisioned before live Settings consumption is eligible
+  - published accounts no longer pretend the Settings engine is absent
 - producer-side handoff snapshot carries allowance truth and provisioning truth only; it does **not** mirror CP Step 2 progress/configured flags as fake Settings truth
 - CP backend remains bounded internal no-auth for the current non-public surface (local dev and CI only) — CP authentication is still deferred
 - CP route registration is now disabled by default and enabled only when `CP_NO_AUTH_ALLOWED=true`
@@ -245,7 +247,7 @@ The Control Plane now ships its current internal create/setup/review/publish/re-
 
 - CP authentication and operator RBAC
 - CP audit trail UI
-- CP → Settings cascade (blocked until Settings state engine exists)
+- later CP/Settings follow-up work such as explicit repair tooling and broader consumer wiring
 
 ### Settings expansion
 
@@ -254,10 +256,10 @@ Current shipped auth/settings surfaces must not be mistaken for full Settings co
 
 Current truthful boundary:
 
-- `/auth/config` + `/auth/workspace-setup-ack` still carry the shipped workspace-setup scaffold today
-- `GET /settings/bootstrap` is not shipped yet and remains future Settings-native truth
-- Step 10 Phase 1 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) now exist, but they are not yet consumed by live Settings read surfaces
-- CP `settingsHandoff` is producer-only and does not represent a live cascade result
+- `/auth/config` + `/auth/workspace-setup-ack` still carry the shipped workspace-setup scaffold in the frontend today
+- `GET /settings/bootstrap` and `GET /settings/overview` are now shipped as backend Settings-native truth surfaces
+- Step 10 Phase 1 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) are now consumed by live backend read surfaces and the synchronous CP cascade service
+- CP `settingsHandoff` remains producer-shaped but now honestly reports live Settings engine presence and active synchronous cascade wiring
 - Step 10 Phase 0 is now locked at the documentation/contract level; later Settings phases remain intentionally unimplemented
 
 ### Future modules and later-scope surfaces

@@ -162,7 +162,7 @@ If a publish attempt looks partially applied, verify the following together:
 - CP review/provisioning data shows whether the account is provisioned
 - the tenant key expected from the account key is not duplicated by a tenant created outside Control Plane
 
-The repo contract is that CP provisioning truth and tenant configuration truth stay separate. Step 10 Phase 1 now seeds foundation-only Settings rows automatically during tenant bootstrap and CP provisioning, but those rows are not a live state-engine result. Do not “fix” a publish issue by inventing or hand-editing manual Settings state.
+The repo contract is that CP provisioning truth and tenant configuration truth stay separate. Step 10 Phase 2 now ships the live backend state-engine foundation on top of the Phase 1 foundation rows: synchronous CP cascade handling plus `/settings/bootstrap` and `/settings/overview`. Do not “fix” a publish or cascade issue by inventing or hand-editing manual Settings state. Debug the real CP revision and persisted Settings rows instead.
 
 ### Topology note
 
@@ -177,6 +177,57 @@ If CP routes unexpectedly return 404:
 3. confirm `CP_NO_AUTH_ALLOWED=true` is present in the bounded local/CI environment you are testing
 4. in non-development CP frontend environments, a missing/false `CP_NO_AUTH_ALLOWED` must produce a 404 rather than a live CP surface
 5. if `NODE_ENV=production`, treat `CP_NO_AUTH_ALLOWED=true` as a startup-blocking misconfiguration, not as a recoverable runtime state
+
+## 1.3 Settings Phase 2 read-surface and cascade checks
+
+Use this section when validating the new backend Settings-native truth.
+
+### Bootstrap-safe read check
+
+With a fully authenticated admin session on a tenant host, call:
+
+```text
+GET /settings/bootstrap
+```
+
+Expected result:
+
+- returns persisted `overallStatus`
+- returns `showSetupBanner` without using frontend-derived truth
+- returns a minimal `nextAction` only when required/gating work remains
+
+### Overview read check
+
+With the same session, call:
+
+```text
+GET /settings/overview
+```
+
+Expected result:
+
+- Access appears as required/gating
+- Account and Integrations appear as live non-gating
+- Modules appears as navigation-only
+- Communications and Workspace Experience appear as placeholder-only
+- Permissions does not appear at all
+
+### CP cascade check
+
+When testing a CP-published tenant:
+
+1. publish or update the account through CP
+2. note the resulting `cpRevision`
+3. inspect `tenant_setup_state` and `tenant_setup_section_state` through automated proof or developer-assisted DB read
+4. confirm `applied_cp_revision` advanced to the new CP revision
+5. confirm only required affected boundaries move to `NEEDS_REVIEW`
+6. confirm non-gating Account changes do not regress aggregate completion
+
+### Important honesty rule
+
+The frontend still uses the auth-phase workspace setup scaffold until later Settings phases wire `/admin` and `/admin/settings` to the new DTOs. A working `/settings/bootstrap` response does not mean the frontend banner has already moved off the scaffold.
+
+---
 
 ## 2. Local bootstrap and invite proof
 

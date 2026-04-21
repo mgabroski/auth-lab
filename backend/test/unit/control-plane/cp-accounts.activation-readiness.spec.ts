@@ -91,8 +91,8 @@ function makeBaseAccount(): CpAccountDetail {
       mode: 'PRODUCER_ONLY',
       eligibility: 'BLOCKED_UNPUBLISHED_ACCOUNT',
       consumer: {
-        settingsEnginePresent: false,
-        cascadeStatus: 'NOT_WIRED',
+        settingsEnginePresent: true,
+        cascadeStatus: 'SYNC_ACTIVE',
         blockingReasons: [],
       },
       account: {
