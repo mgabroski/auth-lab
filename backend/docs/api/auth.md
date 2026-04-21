@@ -204,6 +204,7 @@ None.
     publicSignupEnabled: boolean;
     signupAllowed: boolean;
     allowedSso: ('google' | 'microsoft')[];
+    setupCompleted: boolean;
   };
 }
 ```
@@ -235,6 +236,7 @@ this endpoint returns the same unavailable shape:
     publicSignupEnabled: false;
     signupAllowed: false;
     allowedSso: [];
+    setupCompleted: false;
   }
 }
 ```
@@ -248,6 +250,18 @@ This endpoint must not expose tenant-sensitive settings such as:
 - `adminInviteRequired` (exposed only through the derived `signupAllowed`)
 - other internal tenant policy details not needed for public bootstrap
 
+### Current workspace-setup scaffold note
+
+`setupCompleted` is part of the current shipped auth/bootstrap contract because the repo already ships:
+
+- the admin dashboard workspace-setup banner
+- the SSR-gated `/admin/settings` placeholder route
+- the tenant-scoped `POST /auth/workspace-setup-ack` acknowledgement flow
+
+This is honest current behavior, but it is **temporary scaffolding**, not the final Settings bootstrap ownership model.
+The locked Settings implementation baseline moves Settings bootstrap semantics to a future `GET /settings/bootstrap` surface once the native Settings state engine exists.
+Until that rollout bridge is implemented, `/auth/config` remains the current shipped source for the banner's `setupCompleted` input only.
+
 ### Why it exists
 
 This endpoint is intended for frontend bootstrap before authentication, for example:
@@ -255,6 +269,7 @@ This endpoint is intended for frontend bootstrap before authentication, for exam
 - whether signup should be shown (`signupAllowed`)
 - which SSO providers should be shown (`allowedSso`)
 - whether the tenant is effectively available (`isActive`)
+- whether the current shipped admin banner scaffold should render (`setupCompleted`)
 
 ---
 

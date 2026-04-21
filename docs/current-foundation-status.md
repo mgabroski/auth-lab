@@ -39,6 +39,22 @@ This repo already has:
 This repo does not yet claim that the full Auth / Provisioning closure roadmap is complete.
 Roadmap closure still depends on the remaining real-environment, proof, QA, and production-readiness work tracked elsewhere.
 
+## Settings Implementation Baseline (Current)
+
+The locked Settings execution baseline for future repo work is now:
+
+- `Account-Settings-Master-Context-v9_2.md` for product and ownership truth
+- `Hubins-Settings-Step10-Roadmap-v4.docx` as the accepted implementation roadmap baseline
+- `docs/decision-log.md` ADR-0017 and ADR-0018 for the now-locked Phase 0 contracts
+
+What this means today:
+
+- the repo still ships the auth-phase workspace-setup scaffold (`/auth/config` + `/auth/workspace-setup-ack`) as the current banner/acknowledgement behavior
+- the repo does **not** yet ship `GET /settings/bootstrap`, persisted Settings state tables, or the live Settings state engine
+- the current CP `settingsHandoff` snapshot remains producer-only and honest; it is not a live cascade result
+- future Settings work must treat the auth scaffold as temporary rollout-bridge behavior, not as the permanent Settings bootstrap owner
+- no part of this baseline acceptance should be read as Phase 1+ Settings implementation already being shipped
+
 ---
 
 ## Canonical Current-Truth Documents
@@ -235,6 +251,13 @@ The Control Plane now ships its current internal create/setup/review/publish/re-
 
 The repo contains real `/admin/settings` groundwork and locked Settings design inputs, but the broader Settings implementation remains open.
 Current shipped auth/settings surfaces must not be mistaken for full Settings completion.
+
+Current truthful boundary:
+
+- `/auth/config` + `/auth/workspace-setup-ack` still carry the shipped workspace-setup scaffold today
+- `GET /settings/bootstrap` is not shipped yet and remains future Settings-native truth
+- CP `settingsHandoff` is producer-only and does not represent a live cascade result
+- Step 10 Phase 0 is now locked at the documentation/contract level; later Settings phases remain intentionally unimplemented
 
 ### Future modules and later-scope surfaces
 

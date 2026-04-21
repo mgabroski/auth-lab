@@ -68,6 +68,8 @@ Do not write ADRs for:
 | ADR-0014 | Control Plane Backend Lives Inside The Shared Backend; CP Provisioning And Tenant Configuration Truth Are Separate Tables   | LOCKED | CP / architecture             |
 | ADR-0015 | Control Plane Remains Producer-Only Until The Real Settings State Engine Exists; Future Handoff Uses One Canonical Snapshot | LOCKED | CP / Settings boundary        |
 | ADR-0016 | Control Plane Uses A Dedicated Host Surface Rather Than A Tenant-App Route Subtree                                          | LOCKED | CP / topology / security      |
+| ADR-0017 | CP → Settings Cascade Uses One Synchronous Revision-Based Contract Once The Settings Engine Exists                          | LOCKED | CP / Settings boundary        |
+| ADR-0018 | Settings Bootstrap Semantics Move Out Of Auth Bootstrap Through A Controlled Rollout Bridge                                 | LOCKED | auth / settings boundary      |
 
 ---
 
@@ -485,6 +487,7 @@ Without a locked producer-side contract, CP could drift into ad hoc handoff shap
 - `cpRevision` remains the tenant-scoped revision signal for meaningful CP allowance mutations.
 - Future Settings wiring must reuse the canonical handoff contract and must not invent a second cascade shape.
 - No queue, webhook, fire-and-forget bridge, or placeholder success flag may be introduced as a substitute for the future synchronous cascade.
+- When the Settings state engine is implemented, the live cascade must follow ADR-0017 and the bootstrap rollout must follow ADR-0018.
 
 ### Alternatives Considered
 
@@ -526,6 +529,108 @@ This also prevents namespace confusion between CP routing and tenant/account-key
 - Give CP its own backend service as part of this stage: rejected — unnecessary process split for the current repo scope.
 - Rely only on the direct Next.js dev server with no dedicated host story: rejected — weakens topology truth and makes proxy-path verification less honest.
 
+## ADR-0017 — CP → Settings Cascade Uses One Synchronous Revision-Based Contract Once The Settings Engine Exists
+
+### Status
+
+LOCKED
+
+### Decision
+
+When the real Settings state engine exists in this repository, any committed Control Plane mutation that changes tenant allowance truth must synchronously invoke the Settings cascade in the same transaction boundary.
+
+This future live cascade uses one tenant-scoped monotonic `cpRevision` integer as the revision signal:
+
+- one committed CP allowance mutation = one committed `cpRevision`
+- one revision may contain multiple changed targets or boundaries
+- replay/idempotency is evaluated at revision granularity, not event-key granularity
+
+There is no asynchronous primary path for the live cascade:
+
+- no queue
+- no webhook
+- no fire-and-forget background worker
+- no split-commit design where CP writes commit first and Settings catches up later
+
+If a revision has already been applied to the Settings side, replay is a no-op.
+If reconciliation is ever needed, it is an explicit repair path with a dry-run mode — not a scheduled background sync loop.
+
+### Why
+
+The locked Settings Step 10 roadmap requires the CP → Settings path to be:
+
+- synchronous
+- atomic
+- revision-based
+- replay-safe
+- honest about current and future boundaries
+
+Without this decision, future implementation work could drift into an eventually-consistent primary path, duplicate revision models, or false "cascade succeeded" states that the repo has already rejected.
+
+### Consequences
+
+- CP allowance mutations remain the producer of `cpRevision`
+- once the Settings engine exists, a qualifying CP mutation must not commit without the corresponding Settings cascade applying in the same transaction
+- the current producer-only `settingsHandoff` snapshot remains the honest pre-engine boundary and does not become a substitute for the future live cascade
+- reconciliation logic, when introduced later, must detect lagging revisions rather than inventing a second source of truth
+- tests and docs for future Settings phases must validate atomicity, revision behavior, replay safety, and conflict handling
+
+### Supersedes
+
+Any future design that makes the primary CP → Settings cascade asynchronous, split-commit, event-key driven, or silently eventually consistent.
+
+---
+
+## ADR-0018 — Settings Bootstrap Semantics Move Out Of Auth Bootstrap Through A Controlled Rollout Bridge
+
+### Status
+
+LOCKED
+
+### Decision
+
+Final ownership for Settings bootstrap semantics belongs to the Settings module, not the auth bootstrap surface.
+
+The future target contract is:
+
+- auth bootstrap owns session, identity, membership, and role truth only
+- `GET /settings/bootstrap` becomes the only source for Settings bootstrap semantics such as banner visibility, overall setup state, and next recommended action
+
+The current auth-phase workspace-setup scaffold remains the honest shipped behavior until native Settings state exists.
+That scaffold is temporary and must be retired through a controlled rollout bridge rather than left behind as a permanent second truth source.
+
+The rollout bridge is locked as follows:
+
+- if legacy workspace acknowledgement exists and native Settings rows do not, native Settings rows are created during backfill/bridge work
+- legacy acknowledgement may only strengthen the Access boundary where the current acknowledge semantics still match; it must not by itself promote the tenant to overall `COMPLETE`
+- all other live Settings sections default to `NOT_STARTED` unless real persisted section data justifies a stronger state
+- `/admin` may temporarily consume both auth and Settings surfaces during rollout, but auth must stop mirroring Settings semantics once the native bootstrap surface is live
+- after bridge completion, the legacy auth scaffold is removed from the Settings truth path
+
+### Why
+
+The current shipped repo needs a safe interim banner/acknowledgement behavior before the full Settings module exists.
+But the locked Settings roadmap also forbids permanent duplicate bootstrap truth and requires backend-owned, persisted, Settings-native state.
+
+Without a locked rollout bridge, future implementation work could either:
+
+- keep auth as a permanent owner of Settings semantics, or
+- perform an over-aggressive backfill that incorrectly marks tenants complete based only on the old acknowledgement timestamp
+
+Both outcomes would violate the locked Settings model.
+
+### Consequences
+
+- current `/auth/config` + `/auth/workspace-setup-ack` behavior is treated as temporary scaffolding, not the final Settings bootstrap contract
+- future Settings work must introduce `GET /settings/bootstrap` as the authoritative Settings bootstrap surface
+- rollout and backfill work must be explicit, auditable, and conservative
+- no tenant is backfilled to overall `COMPLETE` from legacy acknowledgement alone
+- once the bridge is complete, auth bootstrap docs and code must stop carrying Settings semantics
+
+### Supersedes
+
+Any future design that leaves auth as the permanent owner of Settings bootstrap semantics, keeps two bootstrap truth sources indefinitely, or treats legacy acknowledgement as sufficient proof of full Settings completion.
+
 ## Maintenance Rules
 
 ### 1. New entries must be real decisions
@@ -557,3 +662,5 @@ If you need current shipped truth, start with `docs/current-foundation-status.md
 If you need architecture law, use `ARCHITECTURE.md`.
 If you need security law, use `docs/security-model.md`.
 If you need a real decision that constrains multiple areas, use this file.
+
+---
