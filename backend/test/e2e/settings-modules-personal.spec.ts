@@ -82,7 +82,7 @@ function buildIntegrationsPayload(params?: {
   };
 }
 
-describe('settings phase 6 modules hub and personal foundation', () => {
+describe('settings modules hub and Personal field foundations', () => {
   it('returns a truthful modules hub with one live Personal card and placeholder-only future modules', async () => {
     const { app, deps, close, reset } = await buildTestApp();
     const accountKey = `settings-${randomUUID().slice(0, 8)}`;
@@ -416,7 +416,39 @@ describe('settings phase 6 modules hub and personal foundation', () => {
         reviewDecision: 'UNREVIEWED',
         canExclude: false,
       });
-      expect(personal.fieldConfiguration.isLiveInCurrentRepo).toBe(false);
+      expect(personal.fieldConfiguration.isLiveInCurrentRepo).toBe(true);
+      expect(personal.fieldConfiguration.hiddenVsExcluded.hidden).toContain('Hidden means');
+      expect(personal.fieldConfiguration.hiddenVsExcluded.excluded).toContain('Excluded means');
+      expect(personal.fieldConfiguration.conflictGuidance.version).toBe(personal.version);
+      expect(personal.fieldConfiguration.conflictGuidance.cpRevision).toBe(personal.cpRevision);
+      expect(personal.fieldConfiguration.families.map((family) => family.familyKey)).toEqual([
+        'identity',
+        'contact',
+        'identifiers',
+      ]);
+      expect(personal.fieldConfiguration.families[0]).toMatchObject({
+        familyKey: 'identity',
+        canExclude: false,
+      });
+      expect(personal.fieldConfiguration.families[0].fields[0]).toMatchObject({
+        fieldKey: 'person.first_name',
+        readiness: 'CP_DEFAULT_SELECTED',
+        requiredRule: 'LOCKED_REQUIRED',
+        canBeExcludedLater: false,
+      });
+      expect(personal.fieldConfiguration.families[0].fields[1]).toMatchObject({
+        fieldKey: 'person.middle_name',
+        readiness: 'AVAILABLE_TO_INCLUDE',
+        requiredRule: 'TENANT_CHOICE',
+        canBeExcludedLater: true,
+      });
+      expect(personal.fieldConfiguration.families[2].fields[0]).toMatchObject({
+        fieldKey: 'person.system_id',
+        presentationState: 'READ_ONLY_SYSTEM_MANAGED',
+        readiness: 'SYSTEM_MANAGED',
+        requiredRule: 'SYSTEM_MANAGED',
+        maskingRule: 'LOCKED_SYSTEM_MANAGED',
+      });
       expect(personal.sectionBuilder.isLiveInCurrentRepo).toBe(false);
 
       const disabledPersonalRes = await app.inject({

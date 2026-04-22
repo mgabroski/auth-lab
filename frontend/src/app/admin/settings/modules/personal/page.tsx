@@ -2,11 +2,11 @@
  * frontend/src/app/admin/settings/modules/personal/page.tsx
  *
  * WHY:
- * - Ships the real base Personal page for Phase 6.
+ * - Ships the real Personal field-configuration foundation page.
  * - Uses the backend-owned Personal foundation DTO instead of the old shell route.
- * - Keeps the current repo honest: this page now shows family-review
- *   foundations and future-phase framing without pretending the later Personal
- *   save flows already exist.
+ * - Keeps the current repo honest: this page now shows family review plus
+ *   field-rule foundations without pretending the later Personal save flows
+ *   already exist.
  */
 
 import React from 'react';
@@ -74,7 +74,7 @@ export default async function AdminSettingsPersonalPage() {
     <AuthenticatedShell
       eyebrow="Hubins admin workspace"
       title="Personal settings"
-      subtitle="Review the base Personal foundations. Family review is now visible; field configuration and the section builder remain later-phase work."
+      subtitle="Review the Personal foundations. Family review and field-rule guidance are now visible; the section builder and final save contract remain later-phase work."
       me={routeState.me}
     >
       <div style={{ display: 'grid', gap: '16px' }}>

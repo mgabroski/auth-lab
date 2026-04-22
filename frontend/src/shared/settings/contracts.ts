@@ -213,6 +213,68 @@ export type PersonalStepPanelResponse = {
   summary: string;
 };
 
+export type PersonalFieldConfigurationReadiness =
+  | 'CP_DEFAULT_SELECTED'
+  | 'AVAILABLE_TO_INCLUDE'
+  | 'SYSTEM_MANAGED';
+
+export type PersonalFieldRequiredRule = 'LOCKED_REQUIRED' | 'TENANT_CHOICE' | 'SYSTEM_MANAGED';
+
+export type PersonalFieldMaskingRule = 'TENANT_CHOICE_WHEN_INCLUDED' | 'LOCKED_SYSTEM_MANAGED';
+
+export type PersonalFieldPresentationState = 'CONFIGURABLE' | 'READ_ONLY_SYSTEM_MANAGED';
+
+export type PersonalFieldConfigurationItemResponse = {
+  familyKey: string;
+  fieldKey: string;
+  label: string;
+  notes: string;
+  minimumRequired: 'none' | 'required' | 'auto';
+  isSystemManaged: boolean;
+  presentationState: PersonalFieldPresentationState;
+  readiness: PersonalFieldConfigurationReadiness;
+  requiredRule: PersonalFieldRequiredRule;
+  maskingRule: PersonalFieldMaskingRule;
+  canBeExcludedLater: boolean;
+  canToggleRequiredLater: boolean;
+  canToggleMaskingLater: boolean;
+  warnings: string[];
+  blockers: string[];
+};
+
+export type PersonalFieldConfigurationFamilyResponse = {
+  familyKey: string;
+  label: string;
+  canExclude: boolean;
+  exclusionLockedReason: string | null;
+  visibleFieldCount: number;
+  defaultSelectedFieldCount: number;
+  minimumRequiredFieldCount: number;
+  systemManagedFieldCount: number;
+  notes: string[];
+  fields: PersonalFieldConfigurationItemResponse[];
+};
+
+export type PersonalFieldConfigurationResponse = {
+  key: 'fieldConfiguration';
+  title: string;
+  description: string;
+  summary: string;
+  status: 'CURRENT_FOUNDATION';
+  isLiveInCurrentRepo: true;
+  hiddenVsExcluded: {
+    hidden: string;
+    excluded: string;
+  };
+  conflictGuidance: {
+    version: number;
+    cpRevision: number;
+    summary: string;
+    notes: string[];
+  };
+  families: PersonalFieldConfigurationFamilyResponse[];
+};
+
 export type PersonalSettingsResponse = {
   sectionKey: 'personal';
   title: string;
@@ -230,7 +292,7 @@ export type PersonalSettingsResponse = {
     summary: string;
     families: PersonalFamilyReviewResponse[];
   };
-  fieldConfiguration: PersonalStepPanelResponse;
+  fieldConfiguration: PersonalFieldConfigurationResponse;
   sectionBuilder: PersonalStepPanelResponse;
 };
 
