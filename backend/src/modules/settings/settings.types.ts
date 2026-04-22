@@ -62,6 +62,14 @@ export const SETTINGS_ACCOUNT_CARD_KEYS = ['branding', 'orgStructure', 'calendar
 
 export type SettingsAccountCardKey = (typeof SETTINGS_ACCOUNT_CARD_KEYS)[number];
 
+export const SETTINGS_MODULE_CARD_KEYS = ['personal', 'documents', 'benefits', 'payments'] as const;
+
+export type SettingsModuleCardKey = (typeof SETTINGS_MODULE_CARD_KEYS)[number];
+
+export const PERSONAL_FAMILY_REVIEW_DECISIONS = ['UNREVIEWED'] as const;
+
+export type PersonalFamilyReviewDecision = (typeof PERSONAL_FAMILY_REVIEW_DECISIONS)[number];
+
 export const SETTINGS_REASON_CODES = {
   FOUNDATION_INITIALIZED: 'FOUNDATION_INITIALIZED',
   TENANT_BOOTSTRAP_FOUNDATION: 'TENANT_BOOTSTRAP_FOUNDATION',
@@ -322,6 +330,76 @@ export type AccountSettingsDto = {
   nextAction: SettingsNextAction | null;
 };
 
+export type ModulesHubModuleCardDto = {
+  key: SettingsModuleCardKey;
+  title: string;
+  description: string;
+  classification: 'LIVE' | 'PLACEHOLDER';
+  href: string | null;
+  status: SettingsSetupStatus | 'PLACEHOLDER';
+  warnings: string[];
+  ctaLabel: string | null;
+};
+
+export type ModulesHubDto = {
+  title: string;
+  description: string;
+  cards: ModulesHubModuleCardDto[];
+  visibleModuleKeys: SettingsModuleCardKey[];
+  nextAction: SettingsNextAction | null;
+};
+
+export type PersonalFieldAllowanceSummaryDto = {
+  totalAllowed: number;
+  defaultSelected: number;
+  minimumRequiredKeys: string[];
+  systemManagedKeys: string[];
+};
+
+export type PersonalFamilyReviewItemDto = {
+  familyKey: string;
+  label: string;
+  reviewDecision: PersonalFamilyReviewDecision;
+  reviewStatus: 'NOT_STARTED';
+  allowedFieldCount: number;
+  defaultSelectedFieldCount: number;
+  containsLockedRequiredFields: boolean;
+  canExclude: boolean;
+  requiredFieldKeys: string[];
+  systemManagedFieldKeys: string[];
+  notes: string[];
+};
+
+export type PersonalStepPanelDto = {
+  key: 'familyReview' | 'fieldConfiguration' | 'sectionBuilder';
+  title: string;
+  description: string;
+  status: 'NOT_STARTED' | 'CURRENT_FOUNDATION' | 'FUTURE_PHASE';
+  isLiveInCurrentRepo: boolean;
+  summary: string;
+};
+
+export type PersonalSettingsDto = {
+  sectionKey: 'personal';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  warnings: string[];
+  blockers: string[];
+  nextAction: SettingsNextAction | null;
+  moduleEnabled: boolean;
+  familyReview: {
+    title: string;
+    description: string;
+    summary: string;
+    families: PersonalFamilyReviewItemDto[];
+  };
+  fieldConfiguration: PersonalStepPanelDto;
+  sectionBuilder: PersonalStepPanelDto;
+};
+
 export type SettingsMutationSectionSummaryDto = {
   key: SettingsSectionKey;
   status: SettingsSetupStatus;
@@ -354,6 +432,8 @@ export type SettingsBootstrapResponse = SettingsBootstrapDto;
 export type SettingsOverviewResponse = SettingsOverviewDto;
 export type AccessSettingsResponse = AccessSettingsDto;
 export type AccountSettingsResponse = AccountSettingsDto;
+export type ModulesHubResponse = ModulesHubDto;
+export type PersonalSettingsResponse = PersonalSettingsDto;
 export type SettingsMutationResponse = SettingsMutationResultDto;
 
 export type SettingsStateBundle = {

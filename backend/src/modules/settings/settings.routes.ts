@@ -19,4 +19,6 @@ export function registerSettingsRoutes(app: FastifyInstance, controller: Setting
   app.put('/settings/account/branding', controller.saveAccountBranding.bind(controller));
   app.put('/settings/account/org-structure', controller.saveAccountOrgStructure.bind(controller));
   app.put('/settings/account/calendar', controller.saveAccountCalendar.bind(controller));
+  app.get('/settings/modules', controller.getModules.bind(controller));
+  app.get('/settings/modules/personal', controller.getPersonal.bind(controller));
 }

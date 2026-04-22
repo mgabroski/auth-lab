@@ -4,7 +4,8 @@
  * WHY:
  * - Top-level module boundary for the shipped Settings backend surface.
  * - Composes the real Settings-native state engine, CP cascade service,
- *   bootstrap/overview reads, Access read/write, and the live Account read/write surface.
+ *   bootstrap/overview reads, Access read/write, the live Account read/write
+ *   surface, and the Phase 6 Modules hub + Personal foundation reads.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -25,6 +26,9 @@ import { AccountSettingsReadService } from './services/account-settings-read.ser
 import { AccountSettingsService } from './services/account-settings.service';
 import { IntegrationsSettingsQueryService } from './services/integrations-settings-query.service';
 import { ModulesHubQueryService } from './services/modules-hub-query.service';
+import { ModulesHubReadService } from './services/modules-hub-read.service';
+import { PersonalSettingsQueryService } from './services/personal-settings-query.service';
+import { PersonalSettingsReadService } from './services/personal-settings-read.service';
 import { SettingsAuditService } from './services/settings-audit.service';
 import { SettingsBootstrapService } from './services/settings-bootstrap.service';
 import { SettingsCpCascadeService } from './services/settings-cp-cascade.service';
@@ -47,6 +51,7 @@ export function createSettingsModule(deps: {
   const accessQuery = new AccessSettingsQueryService();
   const accountQuery = new AccountSettingsQueryService();
   const modulesQuery = new ModulesHubQueryService();
+  const personalQuery = new PersonalSettingsQueryService();
   const integrationsQuery = new IntegrationsSettingsQueryService(readinessGateway);
   const auditService = new SettingsAuditService(deps.auditRepo);
   const bootstrapService = new SettingsBootstrapService(readRepo);
@@ -79,6 +84,8 @@ export function createSettingsModule(deps: {
     accountQuery,
     auditService,
   });
+  const modulesReadService = new ModulesHubReadService(readRepo, modulesQuery);
+  const personalReadService = new PersonalSettingsReadService(readRepo, personalQuery);
   const controller = new SettingsController(
     bootstrapService,
     overviewService,
@@ -86,6 +93,8 @@ export function createSettingsModule(deps: {
     accessService,
     accountReadService,
     accountService,
+    modulesReadService,
+    personalReadService,
   );
 
   return {
@@ -100,6 +109,8 @@ export function createSettingsModule(deps: {
     accessService,
     accountReadService,
     accountService,
+    modulesReadService,
+    personalReadService,
     registerRoutes(app: FastifyInstance) {
       registerSettingsRoutes(app, controller);
     },

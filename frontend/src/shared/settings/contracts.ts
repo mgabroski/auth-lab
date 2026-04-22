@@ -3,9 +3,9 @@
  *
  * WHY:
  * - Central frontend contract layer for Settings-native read and write DTOs.
- * - Keeps `/admin`, `/admin/settings`, `/admin/settings/access`, and
- *   `/admin/settings/account` grounded in backend-owned shapes instead of
- *   ad-hoc inline types.
+ * - Keeps `/admin`, `/admin/settings`, `/admin/settings/access`,
+ *   `/admin/settings/account`, `/admin/settings/modules`, and
+ *   `/admin/settings/modules/personal` grounded in backend-owned shapes.
  * - Makes it explicit that Settings bootstrap truth now lives outside auth
  *   bootstrap even while auth still owns session and role routing.
  *
@@ -36,6 +36,7 @@ export type SettingsOverviewCardKey =
   | 'workspaceExperience';
 
 export type SettingsAccountCardKey = 'branding' | 'orgStructure' | 'calendar';
+export type SettingsModuleCardKey = 'personal' | 'documents' | 'benefits' | 'payments';
 
 export type SettingsNextAction = {
   key: 'access' | 'modules';
@@ -168,6 +169,69 @@ export type AccountSettingsResponse = {
   cards: AccountSettingsCardResponse[];
   warnings: string[];
   nextAction: SettingsNextAction | null;
+};
+
+export type ModulesHubModuleCardResponse = {
+  key: SettingsModuleCardKey;
+  title: string;
+  description: string;
+  classification: 'LIVE' | 'PLACEHOLDER';
+  href: string | null;
+  status: SettingsSetupStatus | 'PLACEHOLDER';
+  warnings: string[];
+  ctaLabel: string | null;
+};
+
+export type ModulesHubResponse = {
+  title: string;
+  description: string;
+  cards: ModulesHubModuleCardResponse[];
+  visibleModuleKeys: SettingsModuleCardKey[];
+  nextAction: SettingsNextAction | null;
+};
+
+export type PersonalFamilyReviewResponse = {
+  familyKey: string;
+  label: string;
+  reviewDecision: 'UNREVIEWED';
+  reviewStatus: 'NOT_STARTED';
+  allowedFieldCount: number;
+  defaultSelectedFieldCount: number;
+  containsLockedRequiredFields: boolean;
+  canExclude: boolean;
+  requiredFieldKeys: string[];
+  systemManagedFieldKeys: string[];
+  notes: string[];
+};
+
+export type PersonalStepPanelResponse = {
+  key: 'familyReview' | 'fieldConfiguration' | 'sectionBuilder';
+  title: string;
+  description: string;
+  status: 'NOT_STARTED' | 'CURRENT_FOUNDATION' | 'FUTURE_PHASE';
+  isLiveInCurrentRepo: boolean;
+  summary: string;
+};
+
+export type PersonalSettingsResponse = {
+  sectionKey: 'personal';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  warnings: string[];
+  blockers: string[];
+  nextAction: SettingsNextAction | null;
+  moduleEnabled: boolean;
+  familyReview: {
+    title: string;
+    description: string;
+    summary: string;
+    families: PersonalFamilyReviewResponse[];
+  };
+  fieldConfiguration: PersonalStepPanelResponse;
+  sectionBuilder: PersonalStepPanelResponse;
 };
 
 export type SettingsMutationResultResponse = {

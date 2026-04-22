@@ -102,7 +102,7 @@ export class SettingsOverviewService {
         description: SETTINGS_SECTION_ROUTES.modules.description,
         href: SETTINGS_SECTION_ROUTES.modules.href,
         classification: SETTINGS_SECTION_ROUTES.modules.classification,
-        status: modulesModel.status,
+        status: state.sections.personal.status,
         warnings: modulesModel.personalEnabled
           ? []
           : ['Personal is currently disabled by Control Plane allowance truth.'],

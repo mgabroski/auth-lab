@@ -62,4 +62,8 @@ export const SettingsErrors = {
       `${accountCardLabel(cardKey)} changed after this page was loaded. Refresh and review the latest allowed fields before saving.`,
     );
   },
+
+  personalModuleUnavailable() {
+    return AppError.notFound('Personal settings is not available for this workspace.');
+  },
 } as const;

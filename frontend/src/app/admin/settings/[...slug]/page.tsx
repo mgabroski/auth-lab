@@ -3,18 +3,18 @@
  *
  * WHY:
  * - Keeps the locked v1 Settings route family honest after wiring the real
- *   overview page, without pretending that later section implementations are
- *   already interactive.
- * - Provides SSR-gated route shells for the remaining live v1 paths and the
- *   Communications placeholder route. Access now has a dedicated page.
- * - Preserves absent treatment for Permissions by returning 404.
+ *   overview page, the real Modules hub page, and the real Personal foundation page.
+ * - Provides SSR-gated route shells only for the remaining deferred live v1
+ *   path (`/integrations`) and the Communications placeholder route.
+ * - Preserves absent treatment for Permissions and unsupported child routes by
+ *   returning 404.
  *
  * RULES:
  * - Auth bootstrap still owns route gating.
  * - Settings overview remains the only read source used here.
  * - No write flows, fake save buttons, or section-specific completion logic.
- * - Access and Account are intentionally excluded because they now have
- *   dedicated real pages.
+ * - Access, Account, Modules, and Personal are intentionally excluded because
+ *   they now have dedicated real pages.
  */
 import React from 'react';
 import Link from 'next/link';
@@ -39,20 +39,6 @@ type SettingsRouteDefinition = {
 };
 
 const ROUTES: Record<string, SettingsRouteDefinition> = {
-  modules: {
-    slugPath: 'modules',
-    title: 'Modules',
-    overviewCardKey: 'modules',
-    description:
-      'This route acts as the modules hub shell. Personal remains the only live actionable child in v1, but the detailed modules UX is not yet interactive in the current repo.',
-  },
-  'modules/personal': {
-    slugPath: 'modules/personal',
-    title: 'Personal settings',
-    overviewCardKey: 'modules',
-    description:
-      'Personal is the only live actionable module child in v1. This route now resolves honestly, but the full family review, field configuration, and section-builder flow is still deferred.',
-  },
   integrations: {
     slugPath: 'integrations',
     title: 'Integrations',

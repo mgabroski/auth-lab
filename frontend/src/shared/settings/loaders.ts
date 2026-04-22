@@ -19,6 +19,8 @@ import { ApiHttpError, readApiError } from '@/shared/auth/api-errors';
 import type {
   AccessSettingsResponse,
   AccountSettingsResponse,
+  ModulesHubResponse,
+  PersonalSettingsResponse,
   SettingsBootstrapResponse,
   SettingsOverviewResponse,
 } from './contracts';
@@ -51,9 +53,23 @@ const SETTINGS_ACCOUNT_HEADERS = {
   'X-Settings-Account': '1',
 } as const;
 
+const SETTINGS_MODULES_HEADERS = {
+  'X-Settings-Modules': '1',
+} as const;
+
+const SETTINGS_PERSONAL_HEADERS = {
+  'X-Settings-Personal': '1',
+} as const;
+
 async function fetchSettingsJson<T>(params: {
-  path: '/settings/bootstrap' | '/settings/overview' | '/settings/access' | '/settings/account';
-  target: 'bootstrap' | 'overview' | 'access' | 'account';
+  path:
+    | '/settings/bootstrap'
+    | '/settings/overview'
+    | '/settings/access'
+    | '/settings/account'
+    | '/settings/modules'
+    | '/settings/modules/personal';
+  target: 'bootstrap' | 'overview' | 'access' | 'account' | 'modules' | 'personal';
   headers: Record<string, string>;
 }): Promise<T> {
   try {
@@ -174,6 +190,48 @@ export async function loadAccountSettings(): Promise<SettingsLoadResult<AccountS
     return {
       ok: false,
       error: error instanceof Error ? error : new Error('Unknown settings account error'),
+    };
+  }
+}
+
+export async function loadModulesHub(): Promise<SettingsLoadResult<ModulesHubResponse>> {
+  try {
+    const data = await fetchSettingsJson<ModulesHubResponse>({
+      path: '/settings/modules',
+      target: 'modules',
+      headers: SETTINGS_MODULES_HEADERS,
+    });
+
+    return {
+      ok: true,
+      data,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error('Unknown settings modules error'),
+    };
+  }
+}
+
+export async function loadPersonalSettings(): Promise<
+  SettingsLoadResult<PersonalSettingsResponse>
+> {
+  try {
+    const data = await fetchSettingsJson<PersonalSettingsResponse>({
+      path: '/settings/modules/personal',
+      target: 'personal',
+      headers: SETTINGS_PERSONAL_HEADERS,
+    });
+
+    return {
+      ok: true,
+      data,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error('Unknown settings personal error'),
     };
   }
 }

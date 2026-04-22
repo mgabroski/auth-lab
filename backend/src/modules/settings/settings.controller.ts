@@ -27,6 +27,8 @@ import { AccessSettingsReadService } from './services/access-settings-read.servi
 import { AccessSettingsService } from './services/access-settings.service';
 import { AccountSettingsReadService } from './services/account-settings-read.service';
 import { AccountSettingsService } from './services/account-settings.service';
+import { ModulesHubReadService } from './services/modules-hub-read.service';
+import { PersonalSettingsReadService } from './services/personal-settings-read.service';
 import type { SettingsAuditRequestContext } from './settings.audit';
 
 export class SettingsController {
@@ -37,6 +39,8 @@ export class SettingsController {
     private readonly accessService: AccessSettingsService,
     private readonly accountReadService: AccountSettingsReadService,
     private readonly accountService: AccountSettingsService,
+    private readonly modulesReadService: ModulesHubReadService,
+    private readonly personalReadService: PersonalSettingsReadService,
   ) {}
 
   private buildAuditContext(req: FastifyRequest): SettingsAuditRequestContext {
@@ -155,6 +159,28 @@ export class SettingsController {
     }
 
     const dto = await this.accountService.saveCalendar(auditContext, parsed.data);
+    return reply.status(200).send(dto);
+  }
+
+  async getModules(req: FastifyRequest, reply: FastifyReply) {
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
+
+    const dto = await this.modulesReadService.getModulesHub(auth.tenantId);
+    return reply.status(200).send(dto);
+  }
+
+  async getPersonal(req: FastifyRequest, reply: FastifyReply) {
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
+
+    const dto = await this.personalReadService.getPersonalSettings(auth.tenantId);
     return reply.status(200).send(dto);
   }
 }

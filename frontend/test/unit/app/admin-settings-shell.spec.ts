@@ -166,10 +166,10 @@ describe('SettingsRouteShellPage', () => {
     expect(html).toContain('This route is intentionally placeholder-only in the current repo.');
   });
 
-  it('treats dedicated Account routes as not found for the shell catch-all', async () => {
+  it('treats dedicated live section routes as not found for the shell catch-all', async () => {
     await expect(
       SettingsRouteShellPage({
-        params: Promise.resolve({ slug: ['account'] }),
+        params: Promise.resolve({ slug: ['modules'] }),
       }),
     ).rejects.toThrow('NOT_FOUND');
     expect(notFoundMock).toHaveBeenCalled();

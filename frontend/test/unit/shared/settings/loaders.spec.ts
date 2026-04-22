@@ -4,6 +4,8 @@ import { ApiHttpError } from '../../../../src/shared/auth/api-errors';
 import type {
   AccessSettingsResponse,
   AccountSettingsResponse,
+  ModulesHubResponse,
+  PersonalSettingsResponse,
   SettingsBootstrapResponse,
   SettingsOverviewResponse,
 } from '../../../../src/shared/settings/contracts';
@@ -31,6 +33,8 @@ vi.mock('@/shared/server/logger', () => ({
 import {
   loadAccessSettings,
   loadAccountSettings,
+  loadModulesHub,
+  loadPersonalSettings,
   loadSettingsBootstrap,
   loadSettingsOverview,
 } from '../../../../src/shared/settings/loaders';
@@ -164,6 +168,88 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
   };
 }
 
+function makeModules(overrides: Partial<ModulesHubResponse> = {}): ModulesHubResponse {
+  return {
+    title: 'Modules',
+    description: 'Navigation-only modules hub.',
+    cards: [
+      {
+        key: 'personal',
+        title: 'Personal',
+        description: 'Live module.',
+        classification: 'LIVE',
+        href: '/admin/settings/modules/personal',
+        status: 'IN_PROGRESS',
+        warnings: [],
+        ctaLabel: 'Continue setup',
+      },
+    ],
+    visibleModuleKeys: ['personal'],
+    nextAction: {
+      key: 'modules',
+      label: 'Continue Personal setup',
+      href: '/admin/settings/modules/personal',
+    },
+    ...overrides,
+  };
+}
+
+function makePersonal(overrides: Partial<PersonalSettingsResponse> = {}): PersonalSettingsResponse {
+  return {
+    sectionKey: 'personal',
+    title: 'Personal settings',
+    description: 'Personal foundation.',
+    status: 'NOT_STARTED',
+    version: 1,
+    cpRevision: 4,
+    warnings: [],
+    blockers: [],
+    nextAction: {
+      key: 'modules',
+      label: 'Continue Personal setup',
+      href: '/admin/settings/modules/personal',
+    },
+    moduleEnabled: true,
+    familyReview: {
+      title: 'Step 1 — Family review',
+      description: 'Family review foundation.',
+      summary: '2 allowed families are visible.',
+      families: [
+        {
+          familyKey: 'identity',
+          label: 'Identity',
+          reviewDecision: 'UNREVIEWED',
+          reviewStatus: 'NOT_STARTED',
+          allowedFieldCount: 2,
+          defaultSelectedFieldCount: 2,
+          containsLockedRequiredFields: true,
+          canExclude: false,
+          requiredFieldKeys: ['person.first_name', 'person.last_name'],
+          systemManagedFieldKeys: [],
+          notes: ['Contains fields that cannot be excluded in later phases.'],
+        },
+      ],
+    },
+    fieldConfiguration: {
+      key: 'fieldConfiguration',
+      title: 'Field Configuration',
+      description: 'Future phase.',
+      status: 'FUTURE_PHASE',
+      isLiveInCurrentRepo: false,
+      summary: 'Not live yet.',
+    },
+    sectionBuilder: {
+      key: 'sectionBuilder',
+      title: 'Section Builder',
+      description: 'Future phase.',
+      status: 'FUTURE_PHASE',
+      isLiveInCurrentRepo: false,
+      summary: 'Not live yet.',
+    },
+    ...overrides,
+  };
+}
+
 afterEach(() => {
   ssrFetchMock.mockReset();
   serverLoggerErrorMock.mockReset();
@@ -281,5 +367,43 @@ describe('settings loaders', () => {
 
     expect(result.data.sectionKey).toBe('access');
     expect(result.data.acknowledgeLabel).toBe('Acknowledge & Mark Reviewed');
+  });
+
+  it('loadModulesHub calls the real Modules endpoint with SSR headers', async () => {
+    ssrFetchMock.mockResolvedValueOnce(jsonResponse(makeModules()));
+
+    const result = await loadModulesHub();
+
+    expect(ssrFetchMock).toHaveBeenCalledWith('/settings/modules', {
+      headers: {
+        'X-Settings-Modules': '1',
+      },
+    });
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      throw new Error('Expected settings modules success');
+    }
+
+    expect(result.data.cards[0]?.key).toBe('personal');
+  });
+
+  it('loadPersonalSettings calls the real Personal endpoint with SSR headers', async () => {
+    ssrFetchMock.mockResolvedValueOnce(jsonResponse(makePersonal()));
+
+    const result = await loadPersonalSettings();
+
+    expect(ssrFetchMock).toHaveBeenCalledWith('/settings/modules/personal', {
+      headers: {
+        'X-Settings-Personal': '1',
+      },
+    });
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      throw new Error('Expected settings personal success');
+    }
+
+    expect(result.data.familyReview.families[0]?.familyKey).toBe('identity');
   });
 });
