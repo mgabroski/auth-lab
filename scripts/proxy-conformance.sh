@@ -38,6 +38,9 @@ set -euo pipefail
 PROXY_HOST="${PROXY_HOST:-localhost}"
 PROXY_PORT="${PROXY_PORT:-3000}"
 BASE_URL="http://${PROXY_HOST}:${PROXY_PORT}"
+CP_HOST="cp.lvh.me"
+CP_ENTRY_PATH="/accounts/create/basic-info"
+CP_ENTRY_URL="${BASE_URL}${CP_ENTRY_PATH}"
 
 TENANT="goodwill-ca"
 LOGIN_TENANT="goodwill-open"
@@ -66,6 +69,18 @@ canonical_json() {
   echo "$1" | jq -c '.' 2>/dev/null || echo ""
 }
 
+json_bool() {
+  local body="$1"
+  local path="$2"
+
+  echo "$body" | jq -r "
+    if ${path} == true then \"true\"
+    elif ${path} == false then \"false\"
+    else \"\"
+    end
+  " 2>/dev/null || echo ""
+}
+
 # Wait for proxy to be reachable before running tests
 wait_for_proxy() {
   echo "⏳ Waiting for proxy to be reachable at ${BASE_URL}..."
@@ -82,7 +97,7 @@ wait_for_proxy() {
 }
 
 wait_for_cp_app() {
-  echo "⏳ Waiting for CP app to be reachable through proxy at cp.lvh.me..."
+  echo "⏳ Waiting for CP app to be reachable through proxy at ${CP_HOST}${CP_ENTRY_PATH}..."
   local attempts=0
   local status
   local body_file
@@ -91,8 +106,8 @@ wait_for_cp_app() {
     attempts=$((attempts + 1))
     body_file="$(mktemp)"
     status=$(curl_silent -o "$body_file" -w "%{http_code}" \
-      -H "Host: cp.lvh.me" \
-      "${BASE_URL}/accounts/create/basic-info" 2>/dev/null || echo "000")
+      -H "Host: ${CP_HOST}" \
+      "${CP_ENTRY_URL}" 2>/dev/null || echo "000")
 
     if [ "$status" = "200" ] && grep -q "Basic Account Info" "$body_file"; then
       rm -f "$body_file"
@@ -382,12 +397,12 @@ if [ "$UNAVAILABLE_A_CODE" != "200" ]; then
 elif [ "$UNAVAILABLE_B_CODE" != "200" ]; then
   fail "Expected second unavailable tenant payload to return HTTP 200, got ${UNAVAILABLE_B_CODE}"
 else
-  A_IS_ACTIVE=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.isActive // empty' 2>/dev/null || echo "")
-  A_PUBLIC_SIGNUP=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.publicSignupEnabled // empty' 2>/dev/null || echo "")
-  A_SIGNUP_ALLOWED=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.signupAllowed // "false"' 2>/dev/null || echo "")
-  B_IS_ACTIVE=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.isActive // empty' 2>/dev/null || echo "")
-  B_PUBLIC_SIGNUP=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.publicSignupEnabled // empty' 2>/dev/null || echo "")
-  B_SIGNUP_ALLOWED=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.signupAllowed // "false"' 2>/dev/null || echo "")
+  A_IS_ACTIVE=$(json_bool "$UNAVAILABLE_A_BODY" ".tenant.isActive")
+  A_PUBLIC_SIGNUP=$(json_bool "$UNAVAILABLE_A_BODY" ".tenant.publicSignupEnabled")
+  A_SIGNUP_ALLOWED=$(json_bool "$UNAVAILABLE_A_BODY" ".tenant.signupAllowed")
+  B_IS_ACTIVE=$(json_bool "$UNAVAILABLE_B_BODY" ".tenant.isActive")
+  B_PUBLIC_SIGNUP=$(json_bool "$UNAVAILABLE_B_BODY" ".tenant.publicSignupEnabled")
+  B_SIGNUP_ALLOWED=$(json_bool "$UNAVAILABLE_B_BODY" ".tenant.signupAllowed")
 
   if [ -z "$UNAVAILABLE_A_CANONICAL" ] || [ -z "$UNAVAILABLE_B_CANONICAL" ]; then
     fail "Unavailable tenant response was not valid JSON"
@@ -410,7 +425,7 @@ fi
 
 echo ""
 echo "CP-01: Control Plane host reachability"
-log "cp.lvh.me must route to the CP app instead of the tenant app or backend"
+log "${CP_HOST} / must redirect to ${CP_ENTRY_PATH}; ${CP_ENTRY_PATH} must render the CP app"
 
 CP_ROOT_HEADERS="$(mktemp)"
 CP_ROOT_BODY="$(mktemp)"
@@ -419,25 +434,25 @@ CP_ROOT_CODE=$(curl_silent \
   -D "$CP_ROOT_HEADERS" \
   -o "$CP_ROOT_BODY" \
   -w "%{http_code}" \
-  -H "Host: cp.lvh.me" \
+  -H "Host: ${CP_HOST}" \
   "${BASE_URL}/" 2>/dev/null || echo "000")
 
 CP_ROOT_LOCATION=$(awk 'BEGIN{IGNORECASE=1} /^location:/ {print $2}' "$CP_ROOT_HEADERS" | tr -d '\r')
 
 if [ "$CP_ROOT_CODE" = "307" ] || [ "$CP_ROOT_CODE" = "308" ]; then
-  if [ "$CP_ROOT_LOCATION" = "/accounts/create/basic-info" ]; then
-    pass "CP host routed to the CP app root correctly (${CP_ROOT_CODE} → ${CP_ROOT_LOCATION})"
+  if [ "$CP_ROOT_LOCATION" = "$CP_ENTRY_PATH" ]; then
+    pass "CP root redirects to canonical create entry (${CP_ROOT_CODE} → ${CP_ROOT_LOCATION})"
   else
-    fail "cp.lvh.me root redirected to the wrong location (${CP_ROOT_CODE} → ${CP_ROOT_LOCATION:-<none>})"
+    fail "${CP_HOST} root redirected to the wrong location (${CP_ROOT_CODE} → ${CP_ROOT_LOCATION:-<none>}); expected ${CP_ENTRY_PATH}"
   fi
 elif [ "$CP_ROOT_CODE" = "200" ]; then
   if grep -q "Basic Account Info" "$CP_ROOT_BODY"; then
-    pass "CP host served CP create entry directly (HTTP 200)"
+    pass "CP root served canonical create entry directly (HTTP 200)"
   else
-    fail "cp.lvh.me returned HTTP 200 but did not look like the CP app entry"
+    fail "${CP_HOST} root returned HTTP 200 but did not look like the CP canonical create entry"
   fi
 else
-  fail "Expected cp.lvh.me root to reach the CP app, got HTTP ${CP_ROOT_CODE}"
+  fail "Expected ${CP_HOST} root to redirect to or serve ${CP_ENTRY_PATH}, got HTTP ${CP_ROOT_CODE}"
 fi
 
 rm -f "$CP_ROOT_HEADERS" "$CP_ROOT_BODY"
@@ -448,7 +463,7 @@ echo "CP-02: Control Plane same-origin /api routing"
 log "cp.lvh.me /api/* must route directly to the backend through the public proxy"
 
 CP_API_CODE=$(curl_silent -o /tmp/cp-api-health.txt -w "%{http_code}" \
-  -H "Host: cp.lvh.me" \
+  -H "Host: ${CP_HOST}" \
   "${BASE_URL}/api/health" 2>/dev/null || echo "000")
 
 if [ "$CP_API_CODE" = "200" ]; then

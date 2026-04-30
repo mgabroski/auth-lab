@@ -40,7 +40,9 @@ If a flow is not implemented, this runbook does not pretend it exists.
 
 - tenant health: `http://goodwill-ca.lvh.me:3000/api/health`
 - backend health: `http://localhost:3001/health`
-- CP app: `http://localhost:3002/accounts`
+- CP canonical proxy entry: `http://cp.lvh.me:3000/` → `/accounts/create/basic-info`
+- CP accounts list / re-entry: `http://cp.lvh.me:3000/accounts`
+- CP direct local UI iteration only: `http://localhost:3002`
 - Mailpit: `http://localhost:8025`
 
 ---
@@ -49,13 +51,15 @@ If a flow is not implemented, this runbook does not pretend it exists.
 
 Current real CP operator path:
 
-1. create draft account
-2. save required Step 2 groups
-3. save Personal CP sub-page when Personal is enabled
-4. review Activation Ready
-5. publish Active or Disabled
-6. re-enter later through accounts list
-7. toggle Active/Disabled after publish as needed
+1. open the canonical CP proxy entry: `http://cp.lvh.me:3000/`
+2. confirm it redirects to Step 1: `/accounts/create/basic-info`
+3. create draft account
+4. save required Step 2 groups
+5. save Personal CP sub-page when Personal is enabled
+6. review Activation Ready
+7. publish Active or Disabled
+8. re-enter later through `/accounts`
+9. toggle Active/Disabled after publish as needed
 
 Important current truth:
 

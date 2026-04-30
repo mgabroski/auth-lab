@@ -107,8 +107,9 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 ### Control Plane Surface
 
 - separate `cp/` Next.js application
-- root entry redirect into the create-account flow
-- accounts list route for practical QA/operator re-entry and edit/review navigation
+- canonical host entry: `http://cp.lvh.me:3000/` redirects to `/accounts/create/basic-info`
+- canonical create-flow Step 1 route: `/accounts/create/basic-info`
+- accounts list route `/accounts` remains the practical QA/operator re-entry and edit/review navigation surface
 - real three-step create flow:
   - Basic Account Info
   - Account Setup
@@ -206,8 +207,10 @@ Primary local tenant URLs:
 
 Control Plane:
 
-- preferred same-origin proof path: `http://cp.lvh.me:3000`
-- direct Next.js app (acceptable for local UI work): `http://localhost:3002`
+- canonical same-origin proof entry: `http://cp.lvh.me:3000/` → redirects to `/accounts/create/basic-info`
+- canonical create Step 1 route: `http://cp.lvh.me:3000/accounts/create/basic-info`
+- accounts list / re-entry route: `http://cp.lvh.me:3000/accounts`
+- direct Next.js app for local UI iteration only: `http://localhost:3002`
 
 Mailpit:
 

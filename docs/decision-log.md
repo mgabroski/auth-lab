@@ -509,6 +509,13 @@ The Control Plane is exposed as its own host surface and application package. It
 
 In local development, the preferred proof path is the proxy-routed CP host (`cp.lvh.me:3000`). The direct Next.js dev server (`localhost:3002`) may still be used for local UI iteration, but it does not replace the dedicated-host topology contract.
 
+The canonical CP route contract is:
+
+- `http://cp.lvh.me:3000/` is the official host entry.
+- `/` redirects to `/accounts/create/basic-info`.
+- `/accounts/create/basic-info` is the canonical create-flow Step 1 route.
+- `/accounts` is the accounts list and re-entry/edit surface, not the default host entry.
+
 ### Why
 
 The Control Plane serves a different audience, carries a different trust posture, and follows a different rollout sequence than the tenant-facing app. Keeping it on a dedicated host surface preserves a clean boundary for future CP authentication, avoids mixing operator routing with tenant routing, and keeps same-origin CP browser calls explicit.

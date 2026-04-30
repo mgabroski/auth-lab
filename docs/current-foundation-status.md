@@ -132,7 +132,7 @@ The following foundations are treated as real in the repo now.
 
 - a separate Control Plane Next.js app exists at `cp/`
 - the Control Plane is not part of the tenant frontend package
-- root Control Plane entry redirects into the create-account flow
+- root Control Plane entry (`/`) redirects to the canonical create Step 1 route (`/accounts/create/basic-info`)
 - **real backend module exists** at `backend/src/modules/control-plane/`
 - **real `cp_accounts` table** created by migration `0014_cp_accounts.ts`
 - **real CP Step 2 tables** created by migration `0015_cp_setup_groups.ts`
@@ -211,6 +211,15 @@ The following should be treated as locked unless reopened by an explicit archite
 - browser/backend topology is same-origin through the proxy
 - SSR and browser request paths must not be treated as interchangeable
 - auth, cookie, SSO, and forwarded-header behavior are boundary-sensitive and must be changed carefully
+
+### Control Plane route contract
+
+- canonical proxy proof host: `http://cp.lvh.me:3000`
+- canonical host entry: `/`
+- canonical host-entry behavior: redirect to `/accounts/create/basic-info`
+- canonical create Step 1 route: `/accounts/create/basic-info`
+- canonical accounts list / re-entry route: `/accounts`
+- direct `http://localhost:3002` is acceptable for local CP UI iteration only; it is not the topology proof path
 
 ### Control Plane boundary rules
 

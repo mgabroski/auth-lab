@@ -12,7 +12,10 @@ function withAccountKey(basePath: string, accountKey?: string): string {
   return accountKey ? `${basePath}?accountKey=${encodeURIComponent(accountKey)}` : basePath;
 }
 
-// WHY:
+// CANONICAL CP ROUTE CONTRACT:
+// - The CP host root `/` redirects to `getCreateFlowEntryPath()`.
+// - The canonical create entry is `/accounts/create/basic-info`.
+// - The accounts list `/accounts` is the operator re-entry/edit surface, not the default host entry.
 // - Create flow routes do not own the account key in the path yet, so they carry it
 //   as a query param while the draft moves through Step 2 and review.
 // - Edit flow routes are re-entry routes for an existing published/draft account and
