@@ -3,11 +3,12 @@
  * Please do not edit it manually.
  */
 
-import type { ColumnType } from "kysely";
+import type { ColumnType } from 'kysely';
 
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> =
+  T extends ColumnType<infer S, infer I, infer U>
+    ? ColumnType<S, I | undefined, U>
+    : ColumnType<T, T | undefined, T>;
 
 export type Json = JsonValue;
 
@@ -247,6 +248,31 @@ export interface TenantAccountSettings {
   updated_at: Generated<Timestamp>;
 }
 
+export interface TenantFieldConfig {
+  applied_cp_revision: Generated<number>;
+  created_at: Generated<Timestamp>;
+  family_key: string;
+  field_key: string;
+  included: Generated<boolean>;
+  last_saved_at: Timestamp | null;
+  last_saved_by_user_id: string | null;
+  masked: Generated<boolean>;
+  required: Generated<boolean>;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface TenantPersonalFamilyState {
+  applied_cp_revision: Generated<number>;
+  created_at: Generated<Timestamp>;
+  family_key: string;
+  last_saved_at: Timestamp | null;
+  last_saved_by_user_id: string | null;
+  review_decision: string;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface Tenants {
   admin_invite_required: Generated<boolean>;
   allowed_email_domains: Generated<Json>;
@@ -259,6 +285,26 @@ export interface Tenants {
   name: string;
   public_signup_enabled: Generated<boolean>;
   setup_completed_at: Timestamp | null;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface TenantSectionFields {
+  created_at: Generated<Timestamp>;
+  field_key: string;
+  section_id: string;
+  sort_order: Generated<number>;
+  tenant_id: string;
+}
+
+export interface TenantSections {
+  applied_cp_revision: Generated<number>;
+  created_at: Generated<Timestamp>;
+  last_saved_at: Timestamp | null;
+  last_saved_by_user_id: string | null;
+  section_id: string;
+  section_name: string;
+  sort_order: Generated<number>;
+  tenant_id: string;
   updated_at: Generated<Timestamp>;
 }
 
@@ -321,6 +367,10 @@ export interface DB {
   outbox_messages: OutboxMessages;
   password_reset_tokens: PasswordResetTokens;
   tenant_account_settings: TenantAccountSettings;
+  tenant_field_config: TenantFieldConfig;
+  tenant_personal_family_state: TenantPersonalFamilyState;
+  tenant_section_fields: TenantSectionFields;
+  tenant_sections: TenantSections;
   tenant_setup_section_state: TenantSetupSectionState;
   tenant_setup_state: TenantSetupState;
   tenants: Tenants;

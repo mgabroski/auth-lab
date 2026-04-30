@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { SavePersonalSettingsRequest } from '@/shared/settings/contracts';
+
 const { apiFetchMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
 }));
@@ -10,9 +12,11 @@ vi.mock('@/shared/api-client', () => ({
 
 import {
   acknowledgeAccessSettings,
+  fetchPersonalSettingsBrowser,
   saveAccountBranding,
   saveAccountCalendar,
   saveAccountOrgStructure,
+  savePersonalSettings,
 } from '../../../../src/shared/settings/browser-api';
 
 function jsonResponse(body: unknown, init?: ResponseInit): Response {
@@ -24,6 +28,42 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
       ...(init?.headers ?? {}),
     },
   });
+}
+
+function makeSavePersonalSettingsRequest(
+  overrides: Partial<SavePersonalSettingsRequest> = {},
+): SavePersonalSettingsRequest {
+  return {
+    expectedVersion: overrides.expectedVersion ?? 2,
+    expectedCpRevision: overrides.expectedCpRevision ?? 5,
+    families: overrides.families ?? [
+      {
+        familyKey: 'identity',
+        reviewDecision: 'IN_USE',
+      },
+    ],
+    fields: overrides.fields ?? [
+      {
+        fieldKey: 'person.first_name',
+        included: true,
+        required: true,
+        masked: false,
+      },
+    ],
+    sections: overrides.sections ?? [
+      {
+        sectionId: 'identity',
+        name: 'Identity',
+        order: 0,
+        fields: [
+          {
+            fieldKey: 'person.first_name',
+            order: 0,
+          },
+        ],
+      },
+    ],
+  };
 }
 
 afterEach(() => {
@@ -230,6 +270,37 @@ describe('settings browser api', () => {
           observedDates: ['2026-01-01'],
         },
       }),
+    });
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('personal browser helpers', () => {
+  it('gets the Personal DTO from the same-origin settings endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(jsonResponse({ title: 'Personal settings' }));
+
+    const result = await fetchPersonalSettingsBrowser();
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/settings/modules/personal', { method: 'GET' });
+    expect(result.ok).toBe(true);
+  });
+
+  it('puts the full-replacement Personal payload to the same-origin settings endpoint', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        section: { key: 'personal', status: 'COMPLETE', version: 3, cpRevision: 5 },
+        aggregate: { status: 'COMPLETE', version: 5, cpRevision: 5, nextAction: null },
+        warnings: [],
+      }),
+    );
+
+    const payload = makeSavePersonalSettingsRequest();
+
+    const result = await savePersonalSettings(payload);
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/settings/modules/personal', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
     });
     expect(result.ok).toBe(true);
   });

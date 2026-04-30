@@ -21,4 +21,5 @@ export function registerSettingsRoutes(app: FastifyInstance, controller: Setting
   app.put('/settings/account/calendar', controller.saveAccountCalendar.bind(controller));
   app.get('/settings/modules', controller.getModules.bind(controller));
   app.get('/settings/modules/personal', controller.getPersonal.bind(controller));
+  app.put('/settings/modules/personal', controller.savePersonal.bind(controller));
 }

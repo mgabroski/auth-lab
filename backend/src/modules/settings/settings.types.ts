@@ -66,9 +66,19 @@ export const SETTINGS_MODULE_CARD_KEYS = ['personal', 'documents', 'benefits', '
 
 export type SettingsModuleCardKey = (typeof SETTINGS_MODULE_CARD_KEYS)[number];
 
-export const PERSONAL_FAMILY_REVIEW_DECISIONS = ['UNREVIEWED'] as const;
-
+export const PERSONAL_FAMILY_REVIEW_DECISIONS = ['IN_USE', 'EXCLUDED'] as const;
 export type PersonalFamilyReviewDecision = (typeof PERSONAL_FAMILY_REVIEW_DECISIONS)[number];
+
+export const PERSONAL_FAMILY_REVIEW_STATUSES = ['LOCKED_IN_USE', 'REQUIRES_SAVE', 'SAVED'] as const;
+export type PersonalFamilyReviewStatus = (typeof PERSONAL_FAMILY_REVIEW_STATUSES)[number];
+
+export const PERSONAL_PANEL_STATUSES = [
+  'NOT_STARTED',
+  'IN_PROGRESS',
+  'COMPLETE',
+  'NEEDS_REVIEW',
+] as const;
+export type PersonalPanelStatus = (typeof PERSONAL_PANEL_STATUSES)[number];
 
 export const SETTINGS_REASON_CODES = {
   FOUNDATION_INITIALIZED: 'FOUNDATION_INITIALIZED',
@@ -79,6 +89,7 @@ export const SETTINGS_REASON_CODES = {
   ACCOUNT_BRANDING_SAVED: 'ACCOUNT_BRANDING_SAVED',
   ACCOUNT_ORG_STRUCTURE_SAVED: 'ACCOUNT_ORG_STRUCTURE_SAVED',
   ACCOUNT_CALENDAR_SAVED: 'ACCOUNT_CALENDAR_SAVED',
+  PERSONAL_CONFIGURATION_SAVED: 'PERSONAL_CONFIGURATION_SAVED',
   CP_REQUIRED_TARGET_REMOVED: 'CP_REQUIRED_TARGET_REMOVED',
   CP_OPTIONAL_TARGET_REMOVED: 'CP_OPTIONAL_TARGET_REMOVED',
   CP_REQUIRED_TARGET_ADDED: 'CP_REQUIRED_TARGET_ADDED',
@@ -349,46 +360,25 @@ export type ModulesHubDto = {
   nextAction: SettingsNextAction | null;
 };
 
-export type PersonalFieldAllowanceSummaryDto = {
-  totalAllowed: number;
-  defaultSelected: number;
-  minimumRequiredKeys: string[];
-  systemManagedKeys: string[];
-};
-
 export type PersonalFamilyReviewItemDto = {
   familyKey: string;
   label: string;
   reviewDecision: PersonalFamilyReviewDecision;
-  reviewStatus: 'NOT_STARTED';
-  allowedFieldCount: number;
-  defaultSelectedFieldCount: number;
-  containsLockedRequiredFields: boolean;
+  reviewStatus: PersonalFamilyReviewStatus;
+  isAllowed: true;
   canExclude: boolean;
+  lockedReason: string | null;
+  allowedFieldCount: number;
+  includedFieldCount: number;
   requiredFieldKeys: string[];
-  systemManagedFieldKeys: string[];
   notes: string[];
+  warnings: string[];
+  blockers: string[];
 };
 
-export type PersonalStepPanelDto = {
-  key: 'familyReview' | 'fieldConfiguration' | 'sectionBuilder';
-  title: string;
-  description: string;
-  status: 'NOT_STARTED' | 'CURRENT_FOUNDATION' | 'FUTURE_PHASE';
-  isLiveInCurrentRepo: boolean;
-  summary: string;
-};
-
-export type PersonalFieldConfigurationReadiness =
-  | 'CP_DEFAULT_SELECTED'
-  | 'AVAILABLE_TO_INCLUDE'
-  | 'SYSTEM_MANAGED';
-
+export type PersonalFieldIncludeRule = 'LOCKED_INCLUDED' | 'TENANT_CHOICE';
 export type PersonalFieldRequiredRule = 'LOCKED_REQUIRED' | 'TENANT_CHOICE' | 'SYSTEM_MANAGED';
-
-export type PersonalFieldMaskingRule = 'TENANT_CHOICE_WHEN_INCLUDED' | 'LOCKED_SYSTEM_MANAGED';
-
-export type PersonalFieldPresentationState = 'CONFIGURABLE' | 'READ_ONLY_SYSTEM_MANAGED';
+export type PersonalFieldMaskingRule = 'TENANT_CHOICE' | 'SYSTEM_MANAGED';
 
 export type PersonalFieldConfigurationItemDto = {
   familyKey: string;
@@ -397,13 +387,15 @@ export type PersonalFieldConfigurationItemDto = {
   notes: string;
   minimumRequired: 'none' | 'required' | 'auto';
   isSystemManaged: boolean;
-  presentationState: PersonalFieldPresentationState;
-  readiness: PersonalFieldConfigurationReadiness;
+  included: boolean;
+  required: boolean;
+  masked: boolean;
+  includeRule: PersonalFieldIncludeRule;
   requiredRule: PersonalFieldRequiredRule;
   maskingRule: PersonalFieldMaskingRule;
-  canBeExcludedLater: boolean;
-  canToggleRequiredLater: boolean;
-  canToggleMaskingLater: boolean;
+  canToggleInclude: boolean;
+  canToggleRequired: boolean;
+  canToggleMasking: boolean;
   warnings: string[];
   blockers: string[];
 };
@@ -411,10 +403,11 @@ export type PersonalFieldConfigurationItemDto = {
 export type PersonalFieldConfigurationFamilyDto = {
   familyKey: string;
   label: string;
+  reviewDecision: PersonalFamilyReviewDecision;
   canExclude: boolean;
   exclusionLockedReason: string | null;
   visibleFieldCount: number;
-  defaultSelectedFieldCount: number;
+  includedFieldCount: number;
   minimumRequiredFieldCount: number;
   systemManagedFieldCount: number;
   notes: string[];
@@ -426,19 +419,51 @@ export type PersonalFieldConfigurationDto = {
   title: string;
   description: string;
   summary: string;
-  status: 'CURRENT_FOUNDATION';
-  isLiveInCurrentRepo: true;
+  status: PersonalPanelStatus;
   hiddenVsExcluded: {
     hidden: string;
     excluded: string;
   };
-  conflictGuidance: {
-    version: number;
-    cpRevision: number;
-    summary: string;
-    notes: string[];
-  };
   families: PersonalFieldConfigurationFamilyDto[];
+};
+
+export type PersonalSectionFieldDto = {
+  fieldKey: string;
+  familyKey: string;
+  label: string;
+  order: number;
+};
+
+export type PersonalSectionDto = {
+  sectionId: string;
+  name: string;
+  order: number;
+  fieldCount: number;
+  fields: PersonalSectionFieldDto[];
+};
+
+export type PersonalSectionBuilderDto = {
+  key: 'sectionBuilder';
+  title: string;
+  description: string;
+  summary: string;
+  status: PersonalPanelStatus;
+  sections: PersonalSectionDto[];
+  emptySectionSaveBlocked: true;
+  removeOnlyWhenEmpty: true;
+};
+
+export type PersonalProgressSummaryDto = {
+  reviewedFamiliesCount: number;
+  totalAllowedFamilies: number;
+  requiredFieldsReady: boolean;
+  sectionAssignmentsReady: boolean;
+  blockers: string[];
+};
+
+export type PersonalConflictGuidanceDto = {
+  summary: string;
+  notes: string[];
 };
 
 export type PersonalSettingsDto = {
@@ -451,15 +476,20 @@ export type PersonalSettingsDto = {
   warnings: string[];
   blockers: string[];
   nextAction: SettingsNextAction | null;
-  moduleEnabled: boolean;
+  progress: PersonalProgressSummaryDto;
   familyReview: {
+    key: 'familyReview';
     title: string;
     description: string;
     summary: string;
+    status: PersonalPanelStatus;
     families: PersonalFamilyReviewItemDto[];
   };
   fieldConfiguration: PersonalFieldConfigurationDto;
-  sectionBuilder: PersonalStepPanelDto;
+  sectionBuilder: PersonalSectionBuilderDto;
+  conflictGuidance: PersonalConflictGuidanceDto;
+  saveActionLabel: 'Save Personal Configuration';
+  stickySaveLabel: 'Save Personal Configuration';
 };
 
 export type SettingsMutationSectionSummaryDto = {

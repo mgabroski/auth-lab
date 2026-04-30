@@ -2,13 +2,19 @@
  * frontend/src/shared/settings/browser-api.ts
  *
  * WHY:
- * - Centralizes browser-side Settings writes around the locked same-origin `/api/*` rule.
- * - Gives the live Settings write surfaces thin browser helpers instead of hand-written fetch logic.
+ * - Centralizes browser-side Settings reads and writes around the locked
+ *   same-origin `/api/*` rule.
+ * - Gives the live Settings write surfaces thin browser helpers instead of
+ *   hand-written fetch logic.
  */
 
 import { apiFetch } from '@/shared/api-client';
 import { readApiError, type ApiHttpError } from '@/shared/auth/api-errors';
-import type { SettingsMutationResultResponse } from './contracts';
+import type {
+  PersonalSettingsResponse,
+  SavePersonalSettingsRequest,
+  SettingsMutationResultResponse,
+} from './contracts';
 
 export type BrowserSettingsSuccess<T> = {
   ok: true;
@@ -93,6 +99,23 @@ export function saveAccountCalendar(input: {
   };
 }): Promise<BrowserSettingsResult<SettingsMutationResultResponse>> {
   return requestJson<SettingsMutationResultResponse>('/settings/account/calendar', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+export function fetchPersonalSettingsBrowser(): Promise<
+  BrowserSettingsResult<PersonalSettingsResponse>
+> {
+  return requestJson<PersonalSettingsResponse>('/settings/modules/personal', {
+    method: 'GET',
+  });
+}
+
+export function savePersonalSettings(
+  input: SavePersonalSettingsRequest,
+): Promise<BrowserSettingsResult<SettingsMutationResultResponse>> {
+  return requestJson<SettingsMutationResultResponse>('/settings/modules/personal', {
     method: 'PUT',
     body: JSON.stringify(input),
   });

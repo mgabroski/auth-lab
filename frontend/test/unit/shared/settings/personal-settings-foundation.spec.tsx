@@ -14,7 +14,7 @@ function makePersonal(overrides: Partial<PersonalSettingsResponse> = {}): Person
   return {
     sectionKey: 'personal',
     title: 'Personal settings',
-    description: 'Personal field-rule foundations.',
+    description: 'Configure Personal for your workspace.',
     status: 'IN_PROGRESS',
     version: 2,
     cpRevision: 4,
@@ -25,57 +25,61 @@ function makePersonal(overrides: Partial<PersonalSettingsResponse> = {}): Person
       label: 'Continue Personal setup',
       href: '/admin/settings/modules/personal',
     },
-    moduleEnabled: true,
+    progress: {
+      reviewedFamiliesCount: 1,
+      totalAllowedFamilies: 1,
+      requiredFieldsReady: true,
+      sectionAssignmentsReady: true,
+      blockers: [],
+    },
     familyReview: {
-      title: 'Step 1 — Family review',
+      key: 'familyReview',
+      title: 'Family Review',
       description: 'Review allowed families.',
-      summary: '2 allowed families are visible.',
+      summary: '1 of 1 allowed families have been saved.',
+      status: 'IN_PROGRESS',
       families: [
         {
           familyKey: 'identity',
           label: 'Identity',
-          reviewDecision: 'UNREVIEWED',
-          reviewStatus: 'NOT_STARTED',
-          allowedFieldCount: 2,
-          defaultSelectedFieldCount: 1,
-          containsLockedRequiredFields: true,
+          reviewDecision: 'IN_USE',
+          reviewStatus: 'SAVED',
+          isAllowed: true,
           canExclude: false,
+          lockedReason:
+            'This family contains required-floor or system-managed fields and must stay in use.',
+          allowedFieldCount: 2,
+          includedFieldCount: 2,
           requiredFieldKeys: ['person.first_name'],
-          systemManagedFieldKeys: [],
-          notes: ['Contains fields that cannot be excluded under the locked Personal rules.'],
+          notes: ['This family remains locked in use under the workspace baseline.'],
+          warnings: [],
+          blockers: [],
         },
       ],
     },
     fieldConfiguration: {
       key: 'fieldConfiguration',
       title: 'Field Configuration',
-      description: 'Review the real field-rule foundation.',
-      summary: '2 CP-allowed fields are grouped by family.',
-      status: 'CURRENT_FOUNDATION',
-      isLiveInCurrentRepo: true,
+      description: 'Configure field behavior.',
+      summary: 'Required-floor fields are currently configured.',
+      status: 'IN_PROGRESS',
       hiddenVsExcluded: {
-        hidden: 'Hidden means the field is not allowed by Control Plane.',
-        excluded: 'Excluded means the field is CP-allowed but tenant-disabled later.',
-      },
-      conflictGuidance: {
-        version: 2,
-        cpRevision: 4,
-        summary: 'Use the current section version and CP revision as the future conflict baseline.',
-        notes: [
-          'No Personal mutation route is shipped in this phase, so there is no fake save success path.',
-        ],
+        hidden: 'Hidden means not CP-allowed and never shown in the tenant UI.',
+        excluded: 'Excluded means CP-allowed but tenant-chosen not in use.',
       },
       families: [
         {
           familyKey: 'identity',
           label: 'Identity',
+          reviewDecision: 'IN_USE',
           canExclude: false,
-          exclusionLockedReason: 'Contains minimum-required fields that cannot be excluded.',
+          exclusionLockedReason:
+            'This family contains required-floor or system-managed fields and must stay in use.',
           visibleFieldCount: 2,
-          defaultSelectedFieldCount: 1,
+          includedFieldCount: 2,
           minimumRequiredFieldCount: 1,
           systemManagedFieldCount: 0,
-          notes: ['Contains fields that cannot be excluded under the locked Personal rules.'],
+          notes: ['This family remains locked in use under the workspace baseline.'],
           fields: [
             {
               familyKey: 'identity',
@@ -84,15 +88,17 @@ function makePersonal(overrides: Partial<PersonalSettingsResponse> = {}): Person
               notes: 'Required baseline field.',
               minimumRequired: 'required',
               isSystemManaged: false,
-              presentationState: 'CONFIGURABLE',
-              readiness: 'CP_DEFAULT_SELECTED',
+              included: true,
+              required: true,
+              masked: false,
+              includeRule: 'LOCKED_INCLUDED',
               requiredRule: 'LOCKED_REQUIRED',
-              maskingRule: 'TENANT_CHOICE_WHEN_INCLUDED',
-              canBeExcludedLater: false,
-              canToggleRequiredLater: false,
-              canToggleMaskingLater: true,
+              maskingRule: 'TENANT_CHOICE',
+              canToggleInclude: false,
+              canToggleRequired: false,
+              canToggleMasking: true,
               warnings: [],
-              blockers: ['Required-floor field. It cannot be made optional or excluded.'],
+              blockers: [],
             },
             {
               familyKey: 'identity',
@@ -101,14 +107,16 @@ function makePersonal(overrides: Partial<PersonalSettingsResponse> = {}): Person
               notes: 'Optional identity field.',
               minimumRequired: 'none',
               isSystemManaged: false,
-              presentationState: 'CONFIGURABLE',
-              readiness: 'AVAILABLE_TO_INCLUDE',
+              included: true,
+              required: false,
+              masked: false,
+              includeRule: 'TENANT_CHOICE',
               requiredRule: 'TENANT_CHOICE',
-              maskingRule: 'TENANT_CHOICE_WHEN_INCLUDED',
-              canBeExcludedLater: true,
-              canToggleRequiredLater: true,
-              canToggleMaskingLater: true,
-              warnings: ['This field is CP-allowed but not currently default-selected.'],
+              maskingRule: 'TENANT_CHOICE',
+              canToggleInclude: true,
+              canToggleRequired: true,
+              canToggleMasking: true,
+              warnings: ['Unsaved draft decision. Save Personal Configuration to persist it.'],
               blockers: [],
             },
           ],
@@ -118,28 +126,53 @@ function makePersonal(overrides: Partial<PersonalSettingsResponse> = {}): Person
     sectionBuilder: {
       key: 'sectionBuilder',
       title: 'Section Builder',
-      description: 'Later phase.',
-      status: 'FUTURE_PHASE',
-      isLiveInCurrentRepo: false,
-      summary: 'Not live yet.',
+      description: 'Organize included fields into simple sections.',
+      summary: '1 section is ready for review and save.',
+      status: 'IN_PROGRESS',
+      emptySectionSaveBlocked: true,
+      removeOnlyWhenEmpty: true,
+      sections: [
+        {
+          sectionId: 'generated-identity',
+          name: 'Identity',
+          order: 0,
+          fieldCount: 2,
+          fields: [
+            { fieldKey: 'person.first_name', familyKey: 'identity', label: 'First Name', order: 0 },
+            {
+              fieldKey: 'person.middle_name',
+              familyKey: 'identity',
+              label: 'Middle Name',
+              order: 1,
+            },
+          ],
+        },
+      ],
     },
+    conflictGuidance: {
+      summary:
+        'If a Personal save returns a conflict, keep your local draft, refetch the latest server DTO, and decide how to reconcile before saving again.',
+      notes: ['There is no silent auto-merge or silent retry for Personal.'],
+    },
+    saveActionLabel: 'Save Personal Configuration',
+    stickySaveLabel: 'Save Personal Configuration',
     ...overrides,
   };
 }
 
 describe('PersonalSettingsFoundation', () => {
-  it('renders the field-configuration foundation and explicit hidden vs excluded guidance', () => {
+  it('renders the final Personal builder with save guidance and section builder content', () => {
     const html = renderToStaticMarkup(<PersonalSettingsFoundation data={makePersonal()} />);
 
+    expect(html).toContain('Family Review');
     expect(html).toContain('Field Configuration');
-    expect(html).toContain('Hidden');
-    expect(html).toContain('Excluded');
-    expect(html).toContain('Conflict groundwork');
-    expect(html).toContain('Expected version 2');
-    expect(html).toContain('Expected CP revision 4');
+    expect(html).toContain('Section Builder');
+    expect(html).toContain('Save Personal Configuration');
     expect(html).toContain('First Name');
-    expect(html).toContain('Required (locked)');
-    expect(html).toContain('Available to include later');
-    expect(html).toContain('Family must stay visible');
+    expect(html).toContain('Middle Name');
+    expect(html).toContain('Identity');
+    expect(html).toContain('Included');
+    expect(html).toContain('Masked');
+    expect(html).toContain('Platform changes require your review');
   });
 });

@@ -190,39 +190,29 @@ export type ModulesHubResponse = {
   nextAction: SettingsNextAction | null;
 };
 
+export type PersonalFamilyReviewDecision = 'IN_USE' | 'EXCLUDED';
+export type PersonalFamilyReviewStatus = 'LOCKED_IN_USE' | 'REQUIRES_SAVE' | 'SAVED';
+export type PersonalPanelStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETE' | 'NEEDS_REVIEW';
+
 export type PersonalFamilyReviewResponse = {
   familyKey: string;
   label: string;
-  reviewDecision: 'UNREVIEWED';
-  reviewStatus: 'NOT_STARTED';
-  allowedFieldCount: number;
-  defaultSelectedFieldCount: number;
-  containsLockedRequiredFields: boolean;
+  reviewDecision: PersonalFamilyReviewDecision;
+  reviewStatus: PersonalFamilyReviewStatus;
+  isAllowed: true;
   canExclude: boolean;
+  lockedReason: string | null;
+  allowedFieldCount: number;
+  includedFieldCount: number;
   requiredFieldKeys: string[];
-  systemManagedFieldKeys: string[];
   notes: string[];
+  warnings: string[];
+  blockers: string[];
 };
 
-export type PersonalStepPanelResponse = {
-  key: 'familyReview' | 'fieldConfiguration' | 'sectionBuilder';
-  title: string;
-  description: string;
-  status: 'NOT_STARTED' | 'CURRENT_FOUNDATION' | 'FUTURE_PHASE';
-  isLiveInCurrentRepo: boolean;
-  summary: string;
-};
-
-export type PersonalFieldConfigurationReadiness =
-  | 'CP_DEFAULT_SELECTED'
-  | 'AVAILABLE_TO_INCLUDE'
-  | 'SYSTEM_MANAGED';
-
+export type PersonalFieldIncludeRule = 'LOCKED_INCLUDED' | 'TENANT_CHOICE';
 export type PersonalFieldRequiredRule = 'LOCKED_REQUIRED' | 'TENANT_CHOICE' | 'SYSTEM_MANAGED';
-
-export type PersonalFieldMaskingRule = 'TENANT_CHOICE_WHEN_INCLUDED' | 'LOCKED_SYSTEM_MANAGED';
-
-export type PersonalFieldPresentationState = 'CONFIGURABLE' | 'READ_ONLY_SYSTEM_MANAGED';
+export type PersonalFieldMaskingRule = 'TENANT_CHOICE' | 'SYSTEM_MANAGED';
 
 export type PersonalFieldConfigurationItemResponse = {
   familyKey: string;
@@ -231,13 +221,15 @@ export type PersonalFieldConfigurationItemResponse = {
   notes: string;
   minimumRequired: 'none' | 'required' | 'auto';
   isSystemManaged: boolean;
-  presentationState: PersonalFieldPresentationState;
-  readiness: PersonalFieldConfigurationReadiness;
+  included: boolean;
+  required: boolean;
+  masked: boolean;
+  includeRule: PersonalFieldIncludeRule;
   requiredRule: PersonalFieldRequiredRule;
   maskingRule: PersonalFieldMaskingRule;
-  canBeExcludedLater: boolean;
-  canToggleRequiredLater: boolean;
-  canToggleMaskingLater: boolean;
+  canToggleInclude: boolean;
+  canToggleRequired: boolean;
+  canToggleMasking: boolean;
   warnings: string[];
   blockers: string[];
 };
@@ -245,10 +237,11 @@ export type PersonalFieldConfigurationItemResponse = {
 export type PersonalFieldConfigurationFamilyResponse = {
   familyKey: string;
   label: string;
+  reviewDecision: PersonalFamilyReviewDecision;
   canExclude: boolean;
   exclusionLockedReason: string | null;
   visibleFieldCount: number;
-  defaultSelectedFieldCount: number;
+  includedFieldCount: number;
   minimumRequiredFieldCount: number;
   systemManagedFieldCount: number;
   notes: string[];
@@ -260,19 +253,51 @@ export type PersonalFieldConfigurationResponse = {
   title: string;
   description: string;
   summary: string;
-  status: 'CURRENT_FOUNDATION';
-  isLiveInCurrentRepo: true;
+  status: PersonalPanelStatus;
   hiddenVsExcluded: {
     hidden: string;
     excluded: string;
   };
-  conflictGuidance: {
-    version: number;
-    cpRevision: number;
-    summary: string;
-    notes: string[];
-  };
   families: PersonalFieldConfigurationFamilyResponse[];
+};
+
+export type PersonalSectionFieldResponse = {
+  fieldKey: string;
+  familyKey: string;
+  label: string;
+  order: number;
+};
+
+export type PersonalSectionResponse = {
+  sectionId: string;
+  name: string;
+  order: number;
+  fieldCount: number;
+  fields: PersonalSectionFieldResponse[];
+};
+
+export type PersonalSectionBuilderResponse = {
+  key: 'sectionBuilder';
+  title: string;
+  description: string;
+  summary: string;
+  status: PersonalPanelStatus;
+  sections: PersonalSectionResponse[];
+  emptySectionSaveBlocked: true;
+  removeOnlyWhenEmpty: true;
+};
+
+export type PersonalProgressSummaryResponse = {
+  reviewedFamiliesCount: number;
+  totalAllowedFamilies: number;
+  requiredFieldsReady: boolean;
+  sectionAssignmentsReady: boolean;
+  blockers: string[];
+};
+
+export type PersonalConflictGuidanceResponse = {
+  summary: string;
+  notes: string[];
 };
 
 export type PersonalSettingsResponse = {
@@ -285,15 +310,44 @@ export type PersonalSettingsResponse = {
   warnings: string[];
   blockers: string[];
   nextAction: SettingsNextAction | null;
-  moduleEnabled: boolean;
+  progress: PersonalProgressSummaryResponse;
   familyReview: {
+    key: 'familyReview';
     title: string;
     description: string;
     summary: string;
+    status: PersonalPanelStatus;
     families: PersonalFamilyReviewResponse[];
   };
   fieldConfiguration: PersonalFieldConfigurationResponse;
-  sectionBuilder: PersonalStepPanelResponse;
+  sectionBuilder: PersonalSectionBuilderResponse;
+  conflictGuidance: PersonalConflictGuidanceResponse;
+  saveActionLabel: 'Save Personal Configuration';
+  stickySaveLabel: 'Save Personal Configuration';
+};
+
+export type SavePersonalSettingsRequest = {
+  expectedVersion: number;
+  expectedCpRevision: number;
+  families: Array<{
+    familyKey: string;
+    reviewDecision: PersonalFamilyReviewDecision;
+  }>;
+  fields: Array<{
+    fieldKey: string;
+    included: boolean;
+    required: boolean;
+    masked: boolean;
+  }>;
+  sections: Array<{
+    sectionId: string;
+    name: string;
+    order: number;
+    fields: Array<{
+      fieldKey: string;
+      order: number;
+    }>;
+  }>;
 };
 
 export type SettingsMutationResultResponse = {

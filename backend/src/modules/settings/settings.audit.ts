@@ -133,3 +133,47 @@ export function auditAccountCardSaveFailed(
     expectedCpRevision: data.expectedCpRevision,
   });
 }
+
+export function auditPersonalSaved(
+  writer: AuditWriter,
+  data: {
+    tenantId: string;
+    sectionVersion: number;
+    cpRevision: number;
+    status: string;
+    aggregateStatus: string;
+    reviewedFamiliesCount: number;
+    includedFieldCount: number;
+    sectionCount: number;
+  },
+): Promise<void> {
+  return writer.append('settings.personal.saved', {
+    tenantId: data.tenantId,
+    sectionVersion: data.sectionVersion,
+    cpRevision: data.cpRevision,
+    status: data.status,
+    aggregateStatus: data.aggregateStatus,
+    reviewedFamiliesCount: data.reviewedFamiliesCount,
+    includedFieldCount: data.includedFieldCount,
+    sectionCount: data.sectionCount,
+  });
+}
+
+export function auditPersonalSaveFailed(
+  writer: AuditWriter,
+  data: {
+    tenantId: string;
+    errorCode: string;
+    message: string;
+    expectedVersion: number;
+    expectedCpRevision: number;
+  },
+): Promise<void> {
+  return writer.append('settings.personal.save.failed', {
+    tenantId: data.tenantId,
+    errorCode: data.errorCode,
+    message: data.message,
+    expectedVersion: data.expectedVersion,
+    expectedCpRevision: data.expectedCpRevision,
+  });
+}

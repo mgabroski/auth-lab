@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Keeps the locked v1 Settings route family honest after wiring the real
- *   overview page, the real Modules hub page, and the real Personal foundation page.
+ *   overview page, the real Modules hub page, and the final Personal builder page.
  * - Provides SSR-gated route shells only for the remaining deferred live v1
  *   path (`/integrations`) and the Communications placeholder route.
  * - Preserves absent treatment for Permissions and unsupported child routes by

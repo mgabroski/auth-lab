@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { PersonalSettingsQueryService } from '../../../src/modules/settings/services/personal-settings-query.service';
 import type { CpSettingsHandoffSnapshot } from '../../../src/modules/control-plane/accounts/handoff/cp-settings-handoff.types';
+import type { TenantPersonalSettingsRecord } from '../../../src/modules/settings/dal/personal-settings.repo';
 
 function buildHandoff(overrides?: Partial<CpSettingsHandoffSnapshot>): CpSettingsHandoffSnapshot {
   const base: CpSettingsHandoffSnapshot = {
@@ -105,43 +106,33 @@ function buildHandoff(overrides?: Partial<CpSettingsHandoffSnapshot>): CpSetting
   return {
     ...base,
     ...overrides,
-    consumer: {
-      ...base.consumer,
-      ...(overrides?.consumer ?? {}),
-    },
-    account: {
-      ...base.account,
-      ...(overrides?.account ?? {}),
-    },
-    provisioning: {
-      ...base.provisioning,
-      ...(overrides?.provisioning ?? {}),
-    },
-    allowances: {
-      ...base.allowances,
-      ...(overrides?.allowances ?? {}),
-    },
+    consumer: { ...base.consumer, ...(overrides?.consumer ?? {}) },
+    account: { ...base.account, ...(overrides?.account ?? {}) },
+    provisioning: { ...base.provisioning, ...(overrides?.provisioning ?? {}) },
+    allowances: { ...base.allowances, ...(overrides?.allowances ?? {}) },
+  };
+}
+
+function emptySaved(): TenantPersonalSettingsRecord {
+  return {
+    families: [],
+    fields: [],
+    sections: [],
+    sectionFields: [],
   };
 }
 
 describe('PersonalSettingsQueryService', () => {
-  it('renders only CP-allowed families and hides non-allowed fields', () => {
+  it('renders only CP-allowed families and fields and generates backend default sections', () => {
     const service = new PersonalSettingsQueryService();
 
     const result = service.build({
       sectionStatus: 'NOT_STARTED',
-      version: 3,
-      cpRevision: 7,
       cpHandoff: buildHandoff(),
+      saved: emptySaved(),
     });
 
-    expect(result.moduleEnabled).toBe(true);
-    expect(result.families.map((family) => family.familyKey)).toEqual([
-      'identity',
-      'contact',
-      'identifiers',
-    ]);
-    expect(result.fieldConfiguration.families.map((family) => family.familyKey)).toEqual([
+    expect(result.familyReview.families.map((family) => family.familyKey)).toEqual([
       'identity',
       'contact',
       'identifiers',
@@ -151,16 +142,20 @@ describe('PersonalSettingsQueryService', () => {
         family.fields.map((field) => field.fieldKey),
       ),
     ).toEqual(['person.first_name', 'person.middle_name', 'person.work_email', 'person.system_id']);
+    expect(result.sectionBuilder.sections.map((section) => section.name)).toEqual([
+      'Identity',
+      'Contact',
+      'Identifiers',
+    ]);
   });
 
-  it('locks required-floor and system-managed fields in the field-configuration model', () => {
+  it('locks required-floor and system-managed fields and treats unsaved defaults as in-progress', () => {
     const service = new PersonalSettingsQueryService();
 
     const result = service.build({
-      sectionStatus: 'NOT_STARTED',
-      version: 5,
-      cpRevision: 9,
+      sectionStatus: 'IN_PROGRESS',
       cpHandoff: buildHandoff(),
+      saved: emptySaved(),
     });
 
     const identityFamily = result.fieldConfiguration.families.find(
@@ -181,53 +176,88 @@ describe('PersonalSettingsQueryService', () => {
 
     expect(identityFamily?.canExclude).toBe(false);
     expect(firstName).toMatchObject({
-      readiness: 'CP_DEFAULT_SELECTED',
+      includeRule: 'LOCKED_INCLUDED',
       requiredRule: 'LOCKED_REQUIRED',
-      canBeExcludedLater: false,
-      canToggleRequiredLater: false,
-      canToggleMaskingLater: true,
+      included: true,
+      required: true,
     });
     expect(middleName).toMatchObject({
-      readiness: 'AVAILABLE_TO_INCLUDE',
+      includeRule: 'TENANT_CHOICE',
       requiredRule: 'TENANT_CHOICE',
-      canBeExcludedLater: true,
-      canToggleRequiredLater: true,
-      canToggleMaskingLater: true,
     });
-    expect(identifiersFamily?.canExclude).toBe(false);
     expect(systemId).toMatchObject({
-      presentationState: 'READ_ONLY_SYSTEM_MANAGED',
-      readiness: 'SYSTEM_MANAGED',
+      includeRule: 'LOCKED_INCLUDED',
       requiredRule: 'SYSTEM_MANAGED',
-      maskingRule: 'LOCKED_SYSTEM_MANAGED',
-      canBeExcludedLater: false,
-      canToggleRequiredLater: false,
-      canToggleMaskingLater: false,
+      maskingRule: 'SYSTEM_MANAGED',
+      included: true,
+      required: true,
     });
   });
 
-  it('carries review warnings and explicit conflict groundwork metadata', () => {
+  it('surfaces saved family review and section assignment blockers honestly', () => {
     const service = new PersonalSettingsQueryService();
 
     const result = service.build({
       sectionStatus: 'NEEDS_REVIEW',
-      version: 11,
-      cpRevision: 13,
       cpHandoff: buildHandoff(),
+      saved: {
+        families: [
+          {
+            tenantId: 'tenant-1',
+            familyKey: 'identity',
+            reviewDecision: 'IN_USE',
+            appliedCpRevision: 7,
+            lastSavedAt: new Date('2026-04-22T00:00:00.000Z'),
+            lastSavedByUserId: 'user-1',
+            createdAt: new Date('2026-04-22T00:00:00.000Z'),
+            updatedAt: new Date('2026-04-22T00:00:00.000Z'),
+          },
+        ],
+        fields: [
+          {
+            tenantId: 'tenant-1',
+            fieldKey: 'person.first_name',
+            familyKey: 'identity',
+            included: true,
+            required: true,
+            masked: false,
+            appliedCpRevision: 7,
+            lastSavedAt: new Date('2026-04-22T00:00:00.000Z'),
+            lastSavedByUserId: 'user-1',
+            createdAt: new Date('2026-04-22T00:00:00.000Z'),
+            updatedAt: new Date('2026-04-22T00:00:00.000Z'),
+          },
+        ],
+        sections: [
+          {
+            tenantId: 'tenant-1',
+            sectionId: 'custom-1',
+            sectionName: 'Custom',
+            sortOrder: 0,
+            appliedCpRevision: 7,
+            lastSavedAt: new Date('2026-04-22T00:00:00.000Z'),
+            lastSavedByUserId: 'user-1',
+            createdAt: new Date('2026-04-22T00:00:00.000Z'),
+            updatedAt: new Date('2026-04-22T00:00:00.000Z'),
+          },
+        ],
+        sectionFields: [
+          {
+            tenantId: 'tenant-1',
+            sectionId: 'custom-1',
+            fieldKey: 'person.first_name',
+            sortOrder: 0,
+            createdAt: new Date('2026-04-22T00:00:00.000Z'),
+          },
+        ],
+      },
     });
 
     expect(result.warnings).toContain(
       'Platform changes require your review before Personal can return to Complete.',
     );
-    expect(result.fieldConfiguration.conflictGuidance).toEqual({
-      version: 11,
-      cpRevision: 13,
-      summary:
-        'Use the current section version and CP revision as the future conflict baseline. Later Personal saves must preserve draft state on 409 and must not silently retry or discard.',
-      notes: [
-        'No Personal mutation route is shipped in this phase, so there is no fake save success path.',
-        'If CP changes before the later save contract ships, the next read reflects the latest allowed universe immediately.',
-      ],
-    });
+    expect(result.progress.reviewedFamiliesCount).toBe(1);
+    expect(result.progress.blockers).toContain('Required-floor fields still need configuration.');
+    expect(result.conflictGuidance.summary).toContain('keep your local draft');
   });
 });

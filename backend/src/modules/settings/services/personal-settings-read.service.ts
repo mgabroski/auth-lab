@@ -3,12 +3,12 @@
  *
  * WHY:
  * - Owns the Personal read DTO behind `GET /settings/modules/personal`.
- * - Keeps the current repo honest: this route now exposes family review plus
- *   field-configuration rule foundations, while the later save contract and
- *   section builder remain intentionally deferred.
+ * - Returns the final v1 Personal builder surface grounded in backend-owned
+ *   Personal configuration truth.
  */
 
 import { SettingsErrors } from '../settings.errors';
+import { PersonalSettingsRepo } from '../dal/personal-settings.repo';
 import { SettingsReadRepo } from '../dal/settings-read.repo';
 import type { PersonalSettingsDto } from '../settings.types';
 import { deriveSettingsNextAction } from './settings-next-action';
@@ -17,35 +17,37 @@ import { PersonalSettingsQueryService } from './personal-settings-query.service'
 export class PersonalSettingsReadService {
   constructor(
     private readonly readRepo: SettingsReadRepo,
+    private readonly personalRepo: PersonalSettingsRepo,
     private readonly personalQuery: PersonalSettingsQueryService,
   ) {}
 
   async getPersonalSettings(tenantId: string): Promise<PersonalSettingsDto> {
-    const [state, cpHandoff] = await Promise.all([
+    const [state, cpHandoff, saved] = await Promise.all([
       this.readRepo.getStateBundle(tenantId),
       this.readRepo.getCpHandoffByTenantId(tenantId),
+      this.personalRepo.getByTenantId(tenantId),
     ]);
 
     if (!state) {
       throw new Error(`Settings foundation rows not found for tenant ${tenantId}`);
     }
 
-    const personal = this.personalQuery.build({
-      sectionStatus: state.sections.personal.status,
-      version: state.sections.personal.version,
-      cpRevision: state.sections.personal.appliedCpRevision,
-      cpHandoff,
-    });
-
-    if (!personal.moduleEnabled) {
+    const moduleEnabled = cpHandoff?.allowances.modules.modules.personal ?? true;
+    if (!moduleEnabled) {
       throw SettingsErrors.personalModuleUnavailable();
     }
+
+    const personal = this.personalQuery.build({
+      sectionStatus: state.sections.personal.status,
+      cpHandoff,
+      saved,
+    });
 
     return {
       sectionKey: 'personal',
       title: 'Personal settings',
       description:
-        'Personal is a guided builder inside one page. This route now exposes family review plus field-rule foundations while keeping the final save contract and section builder out of scope for the current repo state.',
+        'Review allowed Personal families, configure field behavior, and confirm how included fields are grouped into simple sections. Save Personal Configuration is the one authoritative action for this page.',
       status: state.sections.personal.status,
       version: state.sections.personal.version,
       cpRevision: state.sections.personal.appliedCpRevision,
@@ -57,19 +59,13 @@ export class PersonalSettingsReadService {
         personalStatus: state.sections.personal.status,
         personalRequired: true,
       }),
-      moduleEnabled: true,
-      familyReview: {
-        title: 'Step 1 — Family review',
-        description:
-          'Review each CP-allowed Personal family. The current repo keeps family review read-only, but it now shows the real exclusion boundaries that later tenant decisions must respect.',
-        summary:
-          personal.families.length === 0
-            ? 'No allowed families are currently available.'
-            : `${personal.families.length} allowed families are visible and aligned with the current Control Plane allowance truth.`,
-        families: personal.families,
-      },
+      progress: personal.progress,
+      familyReview: personal.familyReview,
       fieldConfiguration: personal.fieldConfiguration,
       sectionBuilder: personal.sectionBuilder,
+      conflictGuidance: personal.conflictGuidance,
+      saveActionLabel: 'Save Personal Configuration',
+      stickySaveLabel: 'Save Personal Configuration',
     };
   }
 }

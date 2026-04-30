@@ -5,7 +5,8 @@
  * - Top-level module boundary for the shipped Settings backend surface.
  * - Composes the real Settings-native state engine, CP cascade service,
  *   bootstrap/overview reads, Access read/write, the live Account read/write
- *   surface, and the Phase 6 Modules hub + Personal foundation reads.
+ *   surface, the Modules hub read surface, and the final v1 Personal builder
+ *   read/write services.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -15,6 +16,7 @@ import type { AuditRepo } from '../../shared/audit/audit.repo';
 import { SettingsFoundationRepo } from './dal/settings-foundation.repo';
 import { SettingsReadRepo } from './dal/settings-read.repo';
 import { AccountSettingsRepo } from './dal/account-settings.repo';
+import { PersonalSettingsRepo } from './dal/personal-settings.repo';
 import { SsoProviderReadinessGateway } from './gateways/sso-provider-readiness.gateway';
 import { SettingsController } from './settings.controller';
 import { registerSettingsRoutes } from './settings.routes';
@@ -29,6 +31,7 @@ import { ModulesHubQueryService } from './services/modules-hub-query.service';
 import { ModulesHubReadService } from './services/modules-hub-read.service';
 import { PersonalSettingsQueryService } from './services/personal-settings-query.service';
 import { PersonalSettingsReadService } from './services/personal-settings-read.service';
+import { PersonalSettingsService } from './services/personal-settings.service';
 import { SettingsAuditService } from './services/settings-audit.service';
 import { SettingsBootstrapService } from './services/settings-bootstrap.service';
 import { SettingsCpCascadeService } from './services/settings-cp-cascade.service';
@@ -45,8 +48,14 @@ export function createSettingsModule(deps: {
   const foundationRepo = new SettingsFoundationRepo(deps.db);
   const readRepo = new SettingsReadRepo(deps.db);
   const accountRepo = new AccountSettingsRepo(deps.db);
+  const personalRepo = new PersonalSettingsRepo(deps.db);
   const stateService = new SettingsStateService(foundationRepo);
-  const cascadeService = new SettingsCpCascadeService(foundationRepo, accountRepo, stateService);
+  const cascadeService = new SettingsCpCascadeService(
+    foundationRepo,
+    accountRepo,
+    personalRepo,
+    stateService,
+  );
   const readinessGateway = new SsoProviderReadinessGateway({ sso: deps.config.sso });
   const accessQuery = new AccessSettingsQueryService();
   const accountQuery = new AccountSettingsQueryService();
@@ -85,7 +94,21 @@ export function createSettingsModule(deps: {
     auditService,
   });
   const modulesReadService = new ModulesHubReadService(readRepo, modulesQuery);
-  const personalReadService = new PersonalSettingsReadService(readRepo, personalQuery);
+  const personalReadService = new PersonalSettingsReadService(
+    readRepo,
+    personalRepo,
+    personalQuery,
+  );
+  const personalService = new PersonalSettingsService({
+    db: deps.db,
+    auditRepo: deps.auditRepo,
+    readRepo,
+    foundationRepo,
+    personalRepo,
+    stateService,
+    personalQuery,
+    auditService,
+  });
   const controller = new SettingsController(
     bootstrapService,
     overviewService,
@@ -95,6 +118,7 @@ export function createSettingsModule(deps: {
     accountService,
     modulesReadService,
     personalReadService,
+    personalService,
   );
 
   return {
@@ -111,6 +135,7 @@ export function createSettingsModule(deps: {
     accountService,
     modulesReadService,
     personalReadService,
+    personalService,
     registerRoutes(app: FastifyInstance) {
       registerSettingsRoutes(app, controller);
     },

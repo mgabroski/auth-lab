@@ -49,7 +49,6 @@ export function InviteRegisterForm({ token, returnTo }: InviteRegisterFormProps)
     }
   }, [token]);
 
-
   const loginHref = returnTo
     ? `${AUTH_LOGIN_PATH}?returnTo=${encodeURIComponent(returnTo)}`
     : AUTH_LOGIN_PATH;
@@ -70,7 +69,6 @@ export function InviteRegisterForm({ token, returnTo }: InviteRegisterFormProps)
       setPending(false);
       return;
     }
-
 
     router.replace(
       getPostAuthRedirectPath(result.data.nextAction, result.data.membership.role, returnTo),

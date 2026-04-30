@@ -14,6 +14,8 @@ import {
   auditAccessAcknowledgeFailed,
   auditAccountCardSaved,
   auditAccountCardSaveFailed,
+  auditPersonalSaved,
+  auditPersonalSaveFailed,
   type SettingsAuditRequestContext,
 } from '../settings.audit';
 import type { SettingsAccountCardKey } from '../settings.types';
@@ -103,6 +105,37 @@ export class SettingsAuditService {
     await auditAccountCardSaveFailed(writer, {
       tenantId: params.context.tenantId,
       cardKey: params.cardKey,
+      errorCode: params.errorCode,
+      message: params.message,
+      expectedVersion: params.expectedVersion,
+      expectedCpRevision: params.expectedCpRevision,
+    });
+  }
+
+  async recordPersonalSaved(params: {
+    writer: AuditWriter;
+    tenantId: string;
+    sectionVersion: number;
+    cpRevision: number;
+    status: string;
+    aggregateStatus: string;
+    reviewedFamiliesCount: number;
+    includedFieldCount: number;
+    sectionCount: number;
+  }): Promise<void> {
+    await auditPersonalSaved(params.writer, params);
+  }
+
+  async recordPersonalSaveFailed(params: {
+    context: SettingsAuditRequestContext;
+    errorCode: string;
+    message: string;
+    expectedVersion: number;
+    expectedCpRevision: number;
+  }): Promise<void> {
+    const writer = this.buildWriter(params.context);
+    await auditPersonalSaveFailed(writer, {
+      tenantId: params.context.tenantId,
       errorCode: params.errorCode,
       message: params.message,
       expectedVersion: params.expectedVersion,

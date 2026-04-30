@@ -2,11 +2,9 @@
  * frontend/src/app/admin/settings/modules/personal/page.tsx
  *
  * WHY:
- * - Ships the real Personal field-configuration foundation page.
- * - Uses the backend-owned Personal foundation DTO instead of the old shell route.
- * - Keeps the current repo honest: this page now shows family review plus
- *   field-rule foundations without pretending the later Personal save flows
- *   already exist.
+ * - Ships the final v1 Personal builder page.
+ * - Uses the backend-owned Personal DTO and keeps the save contract explicit:
+ *   one route, one coherent page, one authoritative save action.
  */
 
 import React from 'react';
@@ -74,7 +72,7 @@ export default async function AdminSettingsPersonalPage() {
     <AuthenticatedShell
       eyebrow="Hubins admin workspace"
       title="Personal settings"
-      subtitle="Review the Personal foundations. Family review and field-rule guidance are now visible; the section builder and final save contract remain later-phase work."
+      subtitle="Review families, configure field behavior, and confirm simple sections. Save Personal Configuration is the one authoritative action for this page."
       me={routeState.me}
     >
       <div style={{ display: 'grid', gap: '16px' }}>

@@ -33,6 +33,7 @@ export type PersonalCompletionInput = {
   hasSavedConfiguration: boolean;
   hasReviewedAllowedFamily: boolean;
   missingRequiredFieldKeys: string[];
+  hasValidSectionAssignments: boolean;
 };
 
 export type SsoReadinessSnapshotStatus = 'READY' | 'SNAPSHOT_UNAVAILABLE';
@@ -85,7 +86,8 @@ export const PersonalCompletionEvaluator = {
     if (
       input.hasSavedConfiguration &&
       input.hasReviewedAllowedFamily &&
-      input.missingRequiredFieldKeys.length === 0
+      input.missingRequiredFieldKeys.length === 0 &&
+      input.hasValidSectionAssignments
     ) {
       return 'COMPLETE';
     }

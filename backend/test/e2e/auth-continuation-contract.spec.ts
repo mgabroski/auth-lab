@@ -10,6 +10,7 @@ import { buildTestApp } from '../helpers/build-test-app';
 type AcceptInviteResponse = {
   status: 'ACCEPTED';
   nextAction: 'SET_PASSWORD' | 'SIGN_IN' | 'MFA_SETUP_REQUIRED';
+  email: string;
 };
 
 function readJson<T>(res: { json: () => unknown }): T {
@@ -134,6 +135,7 @@ describe('Continuation-flow contracts', () => {
       expect(body).toEqual({
         status: 'ACCEPTED',
         nextAction: 'SET_PASSWORD',
+        email,
       });
     } finally {
       await close();
@@ -175,6 +177,7 @@ describe('Continuation-flow contracts', () => {
       expect(body).toEqual({
         status: 'ACCEPTED',
         nextAction: 'SIGN_IN',
+        email,
       });
     } finally {
       await close();
@@ -217,6 +220,7 @@ describe('Continuation-flow contracts', () => {
       expect(body).toEqual({
         status: 'ACCEPTED',
         nextAction: 'MFA_SETUP_REQUIRED',
+        email,
       });
     } finally {
       await close();
@@ -259,6 +263,7 @@ describe('Continuation-flow contracts', () => {
       expect(body).toEqual({
         status: 'ACCEPTED',
         nextAction: 'SIGN_IN',
+        email,
       });
     } finally {
       await close();

@@ -92,6 +92,7 @@ import type {
 } from './cp-accounts.types';
 import type { CpSettingsHandoffSnapshot } from './handoff/cp-settings-handoff.types';
 import { AccountSettingsRepo } from '../../settings/dal/account-settings.repo';
+import { PersonalSettingsRepo } from '../../settings/dal/personal-settings.repo';
 import { SettingsFoundationRepo } from '../../settings/dal/settings-foundation.repo';
 import { SettingsCpCascadeService } from '../../settings/services/settings-cp-cascade.service';
 import { SettingsStateService } from '../../settings/services/settings-state.service';
@@ -138,10 +139,13 @@ export class CpAccountsService {
     const previousHandoff = snapshotToAccountDetail(params.previous).settingsHandoff;
     const nextHandoff = snapshotToAccountDetail(params.next).settingsHandoff;
 
+    const foundationRepo = new SettingsFoundationRepo(params.trx);
+
     const cascadeService = new SettingsCpCascadeService(
-      new SettingsFoundationRepo(params.trx),
+      foundationRepo,
       new AccountSettingsRepo(params.trx),
-      new SettingsStateService(new SettingsFoundationRepo(params.trx)),
+      new PersonalSettingsRepo(params.trx),
+      new SettingsStateService(foundationRepo),
     );
 
     await cascadeService.applyCascade({

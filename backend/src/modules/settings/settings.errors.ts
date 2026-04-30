@@ -66,4 +66,22 @@ export const SettingsErrors = {
   personalModuleUnavailable() {
     return AppError.notFound('Personal settings is not available for this workspace.');
   },
+
+  personalSectionVersionConflict() {
+    return AppError.conflict(
+      'Personal settings changed while you were editing them. Refresh the page and review the latest Personal configuration before saving again.',
+    );
+  },
+
+  personalSectionCpRevisionConflict() {
+    return AppError.conflict(
+      'Personal settings changed after this page was loaded. Refresh and review the latest allowed Personal scope before saving again.',
+    );
+  },
+
+  personalSaveValidationFailed(blockers: string[]) {
+    return AppError.validationError('Personal configuration could not be saved.', {
+      blockers,
+    });
+  },
 } as const;

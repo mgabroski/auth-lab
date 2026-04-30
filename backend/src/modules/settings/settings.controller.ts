@@ -20,6 +20,7 @@ import {
   saveAccountBrandingSchema,
   saveAccountCalendarSchema,
   saveAccountOrgStructureSchema,
+  savePersonalSettingsSchema,
 } from './settings.schemas';
 import { SettingsBootstrapService } from './services/settings-bootstrap.service';
 import { SettingsOverviewService } from './services/settings-overview.service';
@@ -29,6 +30,7 @@ import { AccountSettingsReadService } from './services/account-settings-read.ser
 import { AccountSettingsService } from './services/account-settings.service';
 import { ModulesHubReadService } from './services/modules-hub-read.service';
 import { PersonalSettingsReadService } from './services/personal-settings-read.service';
+import { PersonalSettingsService } from './services/personal-settings.service';
 import type { SettingsAuditRequestContext } from './settings.audit';
 
 export class SettingsController {
@@ -41,6 +43,7 @@ export class SettingsController {
     private readonly accountService: AccountSettingsService,
     private readonly modulesReadService: ModulesHubReadService,
     private readonly personalReadService: PersonalSettingsReadService,
+    private readonly personalService: PersonalSettingsService,
   ) {}
 
   private buildAuditContext(req: FastifyRequest): SettingsAuditRequestContext {
@@ -181,6 +184,20 @@ export class SettingsController {
     });
 
     const dto = await this.personalReadService.getPersonalSettings(auth.tenantId);
+    return reply.status(200).send(dto);
+  }
+
+  async savePersonal(req: FastifyRequest, reply: FastifyReply) {
+    const auditContext = this.buildAuditContext(req);
+    const parsed = savePersonalSettingsSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const dto = await this.personalService.savePersonalConfiguration(auditContext, parsed.data);
     return reply.status(200).send(dto);
   }
 }

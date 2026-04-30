@@ -19,15 +19,50 @@
 import type { DbExecutor } from '../../../shared/db/db';
 import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
 import { AccountSettingsRepo } from '../dal/account-settings.repo';
+import { PersonalSettingsRepo } from '../dal/personal-settings.repo';
 import { SettingsFoundationRepo } from '../dal/settings-foundation.repo';
 import { SETTINGS_REASON_CODES } from '../settings.types';
 import { NeedsReviewCascadeEvaluator } from './settings-evaluators';
 import { SettingsStateService } from './settings-state.service';
 
+function allowedPersonalFamilies(snapshot: CpSettingsHandoffSnapshot): string[] {
+  return snapshot.allowances.personal.families
+    .filter((family) => family.isAllowed)
+    .map((family) => family.familyKey);
+}
+
+function allowedPersonalFields(snapshot: CpSettingsHandoffSnapshot): string[] {
+  return snapshot.allowances.personal.fields
+    .filter((field) => field.isAllowed)
+    .map((field) => field.fieldKey);
+}
+
+function hasAnyPersonalAllowanceRemoval(params: {
+  previous: CpSettingsHandoffSnapshot;
+  next: CpSettingsHandoffSnapshot;
+}): boolean {
+  if (
+    params.previous.allowances.modules.modules.personal &&
+    !params.next.allowances.modules.modules.personal
+  ) {
+    return true;
+  }
+
+  const nextAllowedFamilies = new Set(allowedPersonalFamilies(params.next));
+  const nextAllowedFields = new Set(allowedPersonalFields(params.next));
+
+  return (
+    allowedPersonalFamilies(params.previous).some(
+      (familyKey) => !nextAllowedFamilies.has(familyKey),
+    ) || allowedPersonalFields(params.previous).some((fieldKey) => !nextAllowedFields.has(fieldKey))
+  );
+}
+
 export class SettingsCpCascadeService {
   constructor(
     private readonly foundationRepo: SettingsFoundationRepo,
     private readonly accountRepo: AccountSettingsRepo,
+    private readonly personalRepo: PersonalSettingsRepo,
     private readonly stateService: SettingsStateService,
   ) {}
 
@@ -36,6 +71,7 @@ export class SettingsCpCascadeService {
     return new SettingsCpCascadeService(
       foundationRepo,
       this.accountRepo.withDb(db),
+      this.personalRepo.withDb(db),
       this.stateService.withDb(db),
     );
   }
@@ -111,6 +147,22 @@ export class SettingsCpCascadeService {
       appliedCpRevision: targetRevision,
       syncedAt: transitionAt,
     });
+
+    if (hasAnyPersonalAllowanceRemoval({ previous: params.previous, next: params.next })) {
+      await this.personalRepo.pruneToCurrentAllowance({
+        tenantId: params.tenantId,
+        appliedCpRevision: targetRevision,
+        syncedAt: transitionAt,
+        allowedFamilyKeys: allowedPersonalFamilies(params.next),
+        allowedFieldKeys: allowedPersonalFields(params.next),
+      });
+    } else {
+      await this.personalRepo.syncAppliedCpRevision({
+        tenantId: params.tenantId,
+        appliedCpRevision: targetRevision,
+        syncedAt: transitionAt,
+      });
+    }
 
     const aggregateReasonCode =
       needsReview.impactedSections[0]?.reasonCode ?? SETTINGS_REASON_CODES.CP_REVISION_SYNC;

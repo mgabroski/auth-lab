@@ -50,6 +50,7 @@ This pack covers QA execution for the current shipped Auth + User Provisioning s
 - admin invite management
 - role-aware landing
 - Settings-native workspace setup banner and overview behavior in the current shipped slice
+- the shipped Personal builder at `/admin/settings/modules/personal`, including full-replacement save and conflict surfacing
 - rate limiting
 - access-control denial cases
 - Google SSO staging proof
@@ -68,7 +69,7 @@ Out of scope here:
 - SAML
 - HRIS module UX
 - device/session management UX beyond current shipped flows
-- broader Settings write implementation beyond the currently shipped `/admin`, `/admin/settings`, `/admin/settings/access`, and `/admin/settings/account` slice
+- broader Settings write implementation beyond the currently shipped `/admin`, `/admin/settings`, `/admin/settings/access`, `/admin/settings/account`, and `/admin/settings/modules/personal` slice
 - CP authentication, operator RBAC, or audit UI work that is not shipped in this repo
 - future modules not yet shipped in the repo
 - performance/load testing unless explicitly added later
@@ -105,7 +106,7 @@ Use for:
 - real Microsoft SSO round-trip
 - non-production real SMTP/provider proof where applicable
 - browser validation against more realistic environment settings
-- browser and backend validation of the shipped Settings bootstrap/overview/account/access slice, including `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/access/acknowledge`, and the real Account per-card routes
+- browser and backend validation of the shipped Settings bootstrap/overview/account/access/personal slice, including `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/access/acknowledge`, the real Account per-card routes, `GET /settings/modules/personal`, and `PUT /settings/modules/personal`
 
 Expected environment traits:
 
@@ -224,7 +225,7 @@ Run cases in this order unless a focused bug task explicitly needs a smaller sub
 
 - role-aware landing
 - rate limiting
-- workspace setup banner behavior, `/admin/settings` overview consumption, real `/admin/settings/access` acknowledge behavior, and real `/admin/settings/account` per-card save behavior
+- workspace setup banner behavior, `/admin/settings` overview consumption, real `/admin/settings/access` acknowledge behavior, real `/admin/settings/account` per-card save behavior, and the real Personal builder save/conflict flow
 - suspended account denial
 - no-membership denial
 - cross-workspace isolation if included in current proof scope
@@ -254,22 +255,22 @@ Run cases in this order unless a focused bug task explicitly needs a smaller sub
 
 Keep this matrix aligned with current shipped behavior.
 
-| Area             | Must be proven                                                                                                                                                                                                                                                                                                    | Environment |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Login            | member success, admin continuation, wrong password, unknown email                                                                                                                                                                                                                                                 | Local       |
-| Logout           | protected pages rejected after logout                                                                                                                                                                                                                                                                             | Local       |
-| Signup           | open-tenant signup works, invite-only signup blocked                                                                                                                                                                                                                                                              | Local       |
-| Verification     | verify, resend, invalid/expired handling                                                                                                                                                                                                                                                                          | Local       |
-| Password Reset   | send, reset, old-password invalidation, invalid/reused token                                                                                                                                                                                                                                                      | Local       |
-| MFA              | setup, verify, recovery, single-use recovery code                                                                                                                                                                                                                                                                 | Local       |
-| Invite Lifecycle | create, accept, cancel, resend, expired, already-used                                                                                                                                                                                                                                                             | Local       |
-| Access Control   | suspended, no-membership, role-aware landing                                                                                                                                                                                                                                                                      | Local       |
-| Setup Guidance   | Settings-native workspace setup banner, `/admin/settings` overview, real `/admin/settings/access` acknowledge flow, real `/admin/settings/account` card saves, real `/admin/settings/modules` hub, real `/admin/settings/modules/personal` foundation page, Communications placeholder route, Permissions absence | Local       |
-| Rate Limiting    | repeated bad login triggers lockout behavior                                                                                                                                                                                                                                                                      | Local       |
-| Google SSO       | live provider round-trip                                                                                                                                                                                                                                                                                          | Staging     |
-| Microsoft SSO    | live provider round-trip                                                                                                                                                                                                                                                                                          | Staging     |
-| Control Plane    | create, group saves, Personal save, review gating, publish, re-entry, status toggle, honest `cpRevision` behavior                                                                                                                                                                                                 | Local       |
-| Settings closure | `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/access/acknowledge`, `/settings/account`, the three Account card save routes, `/settings/modules`, `/settings/modules/personal`, synchronous CP cascade, persisted aggregate/section state, and honest route treatment                | Local       |
+| Area             | Must be proven                                                                                                                                                                                                                                                                                                                           | Environment |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| Login            | member success, admin continuation, wrong password, unknown email                                                                                                                                                                                                                                                                        | Local       |
+| Logout           | protected pages rejected after logout                                                                                                                                                                                                                                                                                                    | Local       |
+| Signup           | open-tenant signup works, invite-only signup blocked                                                                                                                                                                                                                                                                                     | Local       |
+| Verification     | verify, resend, invalid/expired handling                                                                                                                                                                                                                                                                                                 | Local       |
+| Password Reset   | send, reset, old-password invalidation, invalid/reused token                                                                                                                                                                                                                                                                             | Local       |
+| MFA              | setup, verify, recovery, single-use recovery code                                                                                                                                                                                                                                                                                        | Local       |
+| Invite Lifecycle | create, accept, cancel, resend, expired, already-used                                                                                                                                                                                                                                                                                    | Local       |
+| Access Control   | suspended, no-membership, role-aware landing                                                                                                                                                                                                                                                                                             | Local       |
+| Setup Guidance   | Settings-native workspace setup banner, `/admin/settings` overview, real `/admin/settings/access` acknowledge flow, real `/admin/settings/account` card saves, real `/admin/settings/modules` hub, real `/admin/settings/modules/personal` builder page, Communications placeholder route, Permissions absence                           | Local       |
+| Rate Limiting    | repeated bad login triggers lockout behavior                                                                                                                                                                                                                                                                                             | Local       |
+| Google SSO       | live provider round-trip                                                                                                                                                                                                                                                                                                                 | Staging     |
+| Microsoft SSO    | live provider round-trip                                                                                                                                                                                                                                                                                                                 | Staging     |
+| Control Plane    | create, group saves, Personal save, review gating, publish, re-entry, status toggle, honest `cpRevision` behavior                                                                                                                                                                                                                        | Local       |
+| Settings closure | `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/access/acknowledge`, `/settings/account`, the three Account card save routes, `/settings/modules`, `GET /settings/modules/personal`, `PUT /settings/modules/personal`, synchronous CP cascade, persisted aggregate/section state, and honest route treatment | Local       |
 
 ---
 
