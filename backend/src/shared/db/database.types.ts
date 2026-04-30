@@ -3,12 +3,11 @@
  * Please do not edit it manually.
  */
 
-import type { ColumnType } from 'kysely';
+import type { ColumnType } from "kysely";
 
-export type Generated<T> =
-  T extends ColumnType<infer S, infer I, infer U>
-    ? ColumnType<S, I | undefined, U>
-    : ColumnType<T, T | undefined, T>;
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 
 export type Json = JsonValue;
 
@@ -220,21 +219,6 @@ export interface PasswordResetTokens {
   user_id: string;
 }
 
-export interface Tenants {
-  admin_invite_required: Generated<boolean>;
-  allowed_email_domains: Generated<Json>;
-  allowed_sso: Generated<string[]>;
-  created_at: Generated<Timestamp>;
-  id: Generated<string>;
-  is_active: Generated<boolean>;
-  key: string;
-  member_mfa_required: Generated<boolean>;
-  name: string;
-  public_signup_enabled: Generated<boolean>;
-  setup_completed_at: Timestamp | null;
-  updated_at: Generated<Timestamp>;
-}
-
 export interface TenantAccountSettings {
   branding_applied_cp_revision: Generated<number>;
   branding_font_color: string | null;
@@ -260,6 +244,21 @@ export interface TenantAccountSettings {
   org_structure_status: Generated<string>;
   org_structure_version: Generated<number>;
   tenant_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface Tenants {
+  admin_invite_required: Generated<boolean>;
+  allowed_email_domains: Generated<Json>;
+  allowed_sso: Generated<string[]>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  is_active: Generated<boolean>;
+  key: string;
+  member_mfa_required: Generated<boolean>;
+  name: string;
+  public_signup_enabled: Generated<boolean>;
+  setup_completed_at: Timestamp | null;
   updated_at: Generated<Timestamp>;
 }
 

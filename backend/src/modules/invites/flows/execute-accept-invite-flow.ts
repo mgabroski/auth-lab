@@ -52,6 +52,7 @@ export type AcceptInviteFlowParams = {
 export type AcceptInviteFlowResult = {
   status: 'ACCEPTED';
   nextAction: 'SET_PASSWORD' | 'SIGN_IN' | 'MFA_SETUP_REQUIRED';
+  email: string;
 };
 
 type FailureCtx = {
@@ -167,7 +168,7 @@ export async function executeAcceptInviteFlow(
       // ── Success audit — inside tx (ER-38) ────────────────────────────
       await auditInviteAccepted(finalAudit, invite);
 
-      return { status: 'ACCEPTED' as const, nextAction };
+      return { status: 'ACCEPTED' as const, nextAction, email: invite.email };
     });
   } catch (err) {
     // ── Failure audit — bare auditRepo, outside tx (ER-39) ───────────

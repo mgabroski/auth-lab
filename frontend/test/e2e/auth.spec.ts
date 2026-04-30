@@ -879,7 +879,7 @@ test.describe('auth smoke', () => {
 
       // ── F. Fill and submit the register form ───────────────────────────────
       await freshPage.getByLabel('Full name').fill('Invited Browser User');
-      await freshPage.getByLabel('Email').fill(inviteRecipientEmail);
+      await expect(freshPage.getByLabel('Email')).toHaveValue(inviteRecipientEmail);
       await freshPage.getByLabel('Password').fill('Password123!');
 
       const registerResponsePromise = freshPage.waitForResponse(

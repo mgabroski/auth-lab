@@ -99,6 +99,7 @@ Validation notes:
 {
   status: 'ACCEPTED';
   nextAction: 'SET_PASSWORD' | 'SIGN_IN' | 'MFA_SETUP_REQUIRED';
+  email: string;
 }
 ```
 

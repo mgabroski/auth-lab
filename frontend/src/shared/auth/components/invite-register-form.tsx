@@ -11,10 +11,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { loadInviteEmail } from '@/shared/auth/invite-email-cache';
 import { registerWithInvite } from '@/shared/auth/browser-api';
 import { AUTH_LOGIN_PATH, getPostAuthRedirectPath } from '@/shared/auth/redirects';
 import { AuthErrorBanner } from './auth-error-banner';
+
 import {
   AuthLinkGroup,
   AuthNote,
@@ -36,6 +38,17 @@ export function InviteRegisterForm({ token, returnTo }: InviteRegisterFormProps)
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [emailPrefilled, setEmailPrefilled] = useState(false);
+
+  useEffect(() => {
+    const invitedEmail = loadInviteEmail(token);
+
+    if (invitedEmail) {
+      setEmail(invitedEmail);
+      setEmailPrefilled(true);
+    }
+  }, [token]);
+
 
   const loginHref = returnTo
     ? `${AUTH_LOGIN_PATH}?returnTo=${encodeURIComponent(returnTo)}`
@@ -57,6 +70,7 @@ export function InviteRegisterForm({ token, returnTo }: InviteRegisterFormProps)
       setPending(false);
       return;
     }
+
 
     router.replace(
       getPostAuthRedirectPath(result.data.nextAction, result.data.membership.role, returnTo),
@@ -106,6 +120,7 @@ export function InviteRegisterForm({ token, returnTo }: InviteRegisterFormProps)
             autoComplete="email"
             inputMode="email"
             value={email}
+            readOnly={emailPrefilled}
             disabled={pending}
             onChange={(event: ChangeEvent<HTMLInputElement>) => setEmail(event.target.value)}
             placeholder="you@company.com"

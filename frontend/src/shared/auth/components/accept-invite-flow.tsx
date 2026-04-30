@@ -17,6 +17,7 @@ import { isApiHttpError } from '@/shared/auth/api-errors';
 import { AuthErrorBanner } from './auth-error-banner';
 import { AuthSuccessBanner } from './auth-success-banner';
 import { AuthLinkGroup, AuthNote, FormStack, SecondaryButton } from './auth-form-ui';
+import { saveInviteEmail } from '@/shared/auth/invite-email-cache';
 
 type AcceptInviteFlowProps = {
   token: string | null;
@@ -123,6 +124,7 @@ export function AcceptInviteFlow({
 
     switch (result.data.nextAction) {
       case 'SET_PASSWORD':
+        saveInviteEmail(token, result.data.email);
         setSuccessMessage('Invitation accepted. Redirecting you to finish account setup…');
         router.replace(registerHref);
         router.refresh();

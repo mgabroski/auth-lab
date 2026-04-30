@@ -122,6 +122,7 @@ export type AcceptInviteRequest = {
 export type AcceptInviteResponse = {
   status: 'ACCEPTED';
   nextAction: InviteAcceptNextAction;
+  email: string;
 };
 
 export type RegisterRequest = {
