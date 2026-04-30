@@ -158,8 +158,10 @@ jobs:
             exit 1
           fi
 
-      - name: Ensure operability smoke script is executable
-        run: chmod +x ./scripts/operability-smoke.sh
+      - name: Ensure smoke scripts are executable
+        run: |
+          chmod +x ./scripts/proxy-conformance.sh
+          chmod +x ./scripts/operability-smoke.sh
 
       - name: Run proxy conformance tests (PT-01..PT-08 + CP host smoke)
         run: ./scripts/proxy-conformance.sh

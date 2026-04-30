@@ -12,6 +12,7 @@ condition = "AND"
 regexTarget = "match"
 regexes = ['''N0uFFqX7KeFnhghnTMaeBdLKsn\+W2Q9WJE1D2Aqdf14=''']
 paths = [
+    '''^\.github/workflows/cp\.yml$''',
     '''^\.github/workflows/frontend\.yml$''',
     '''^\.github/workflows/proxy-conformance\.yml$''',
     '''^backend/\.env\.example$''',
@@ -24,6 +25,7 @@ condition = "AND"
 regexTarget = "match"
 regexes = ['''ygcc6Pr65aoBSF469cwcsVj\+ARz1Pb2voHHHtt3bbCQ=''']
 paths = [
+    '''^\.github/workflows/cp\.yml$''',
     '''^\.github/workflows/frontend\.yml$''',
     '''^\.github/workflows/proxy-conformance\.yml$''',
     '''^backend/\.env\.example$''',
@@ -37,6 +39,7 @@ regexTarget = "match"
 regexes = ['''g\+0YvJfzVdIgM\+eoUUQ5UW3JKuGktJbtA6mvi3DcZDQ=''']
 paths = [
     '''^\.github/workflows/backend-tests\.yml$''',
+    '''^\.github/workflows/cp\.yml$''',
     '''^\.github/workflows/frontend\.yml$''',
     '''^\.github/workflows/proxy-conformance\.yml$''',
     '''^backend/\.env\.example$''',
@@ -49,6 +52,7 @@ condition = "AND"
 regexTarget = "match"
 regexes = ['''pjVKt5jeXMDX5YJkbDc1dDFW4ztqO1iRyHiAHi/9TjM=''']
 paths = [
+    '''^\.github/workflows/cp\.yml$''',
     '''^\.github/workflows/frontend\.yml$''',
     '''^\.github/workflows/proxy-conformance\.yml$''',
     '''^backend/\.env\.example$''',

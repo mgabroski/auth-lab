@@ -26,8 +26,7 @@ import type { TokenHasher } from '../../security/token-hasher';
 import type { OutboxRepo } from '../../outbox/outbox.repo';
 import type { OutboxEncryption } from '../../outbox/outbox-encryption';
 import { logger } from '../../logger/logger';
-import { SettingsFoundationRepo } from '../../../modules/settings/dal/settings-foundation.repo';
-import { SETTINGS_REASON_CODES } from '../../../modules/settings/settings.types';
+import { ensureBootstrapSettingsFoundationRows } from '../../settings/settings-foundation-bootstrap';
 
 export type BootstrapTenantOptions = {
   tenantKey: string;
@@ -218,10 +217,10 @@ export async function runTenantBootstrap(opts: {
     logInfo,
   );
 
-  await new SettingsFoundationRepo(db).ensureFoundationRows({
+  await ensureBootstrapSettingsFoundationRows({
+    db,
     tenantId: tenant.id,
     appliedCpRevision: 0,
-    creationReasonCode: SETTINGS_REASON_CODES.TENANT_BOOTSTRAP_FOUNDATION,
   });
 
   await ensureBootstrapAdminInvite({

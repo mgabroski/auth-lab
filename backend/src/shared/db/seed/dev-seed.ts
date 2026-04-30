@@ -22,8 +22,7 @@ import type { DbExecutor } from '../db';
 import type { TokenHasher } from '../../security/token-hasher';
 import type { PasswordHasher } from '../../security/password-hasher';
 import { logger } from '../../logger/logger';
-import { SettingsFoundationRepo } from '../../../modules/settings/dal/settings-foundation.repo';
-import { SETTINGS_REASON_CODES } from '../../../modules/settings/settings.types';
+import { ensureBootstrapSettingsFoundationRows } from '../../settings/settings-foundation-bootstrap';
 import type { OutboxRepo } from '../../outbox/outbox.repo';
 import type { OutboxEncryption } from '../../outbox/outbox-encryption';
 import { runTenantBootstrap } from './bootstrap-tenant';
@@ -265,10 +264,10 @@ export async function runDevSeed(opts: {
     memberMfaRequired: false,
   });
 
-  await new SettingsFoundationRepo(db).ensureFoundationRows({
+  await ensureBootstrapSettingsFoundationRows({
+    db,
     tenantId: publicSignupTenant.id,
     appliedCpRevision: 0,
-    creationReasonCode: SETTINGS_REASON_CODES.TENANT_BOOTSTRAP_FOUNDATION,
   });
 
   await ensureMemberPersona({

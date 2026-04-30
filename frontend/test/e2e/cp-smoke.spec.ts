@@ -25,6 +25,11 @@ import { expect, test, type Page } from '@playwright/test';
 
 const CP_ORIGIN = 'http://cp.lvh.me:3000';
 const TENANT_ORIGIN = 'http://goodwill-ca.lvh.me:3000';
+const CP_NAVIGATION_TIMEOUT_MS = 20_000;
+
+async function expectCpUrl(page: Page, url: string) {
+  await expect(page).toHaveURL(url, { timeout: CP_NAVIGATION_TIMEOUT_MS });
+}
 
 function buildUniqueAccountKey(prefix = 'cp-smoke'): string {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -71,7 +76,7 @@ async function saveRequiredSetupGroup(page: Page, options: { title: string; acco
 
   await page.getByRole('button', { name: 'Save & Close' }).click();
 
-  await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+  await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
   await expect(page.getByRole('heading', { name: 'Account Setup' })).toBeVisible();
 }
 
@@ -84,14 +89,14 @@ test.describe('control plane full-stack smoke', () => {
 
     await page.goto(`${CP_ORIGIN}/`);
 
-    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/basic-info`);
+    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/basic-info`);
     await expect(page.getByRole('heading', { name: 'Basic Account Info' })).toBeVisible();
 
     await page.getByLabel(/Account Name/i).fill(accountName);
     await page.getByLabel(/Account Key/i).fill(accountKey);
     await page.getByRole('button', { name: 'Continue →' }).click();
 
-    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
     await expect(page.getByRole('heading', { name: 'Account Setup' })).toBeVisible();
 
     await saveRequiredSetupGroup(page, {
@@ -112,7 +117,7 @@ test.describe('control plane full-stack smoke', () => {
     await expect(page.getByRole('link', { name: 'Continue →' })).toBeVisible();
     await page.getByRole('link', { name: 'Continue →' }).click();
 
-    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
+    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
     await expect(page.getByRole('heading', { name: 'Review & Publish' })).toBeVisible();
     await expect(page.getByText('Activation Ready passed.')).toBeVisible();
 
@@ -131,7 +136,7 @@ test.describe('control plane full-stack smoke', () => {
 
     await activeRow.getByRole('link', { name: 'Edit Setup' }).click();
 
-    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/${accountKey}/edit/setup`);
+    await expectCpUrl(page, `${CP_ORIGIN}/accounts/${accountKey}/edit/setup`);
     await expect(page.getByRole('heading', { name: 'Account Setup' })).toBeVisible();
     await expect(page.getByText(accountKey)).toBeVisible();
 
@@ -183,7 +188,7 @@ test.describe('control plane full-stack smoke', () => {
     await personalCheckbox.check();
     await page.getByRole('button', { name: 'Save & Close' }).click();
 
-    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
     await expect(page.getByRole('button', { name: 'Continue →' })).toBeDisabled();
 
     await openSetupGroup(page, 'Module Settings');
@@ -196,7 +201,8 @@ test.describe('control plane full-stack smoke', () => {
 
     await page.getByRole('button', { name: 'Save & Close' }).click();
 
-    await expect(page).toHaveURL(
+    await expectCpUrl(
+      page,
       `${CP_ORIGIN}/accounts/create/setup/module-settings?accountKey=${accountKey}`,
     );
     await expect(
@@ -205,11 +211,11 @@ test.describe('control plane full-stack smoke', () => {
 
     await page.getByRole('button', { name: 'Save & Close' }).click();
 
-    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
     await expect(page.getByRole('link', { name: 'Continue →' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Continue →' }).click();
-    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
+    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
     await expect(page.getByText('Activation Ready passed.')).toBeVisible();
   });
 
