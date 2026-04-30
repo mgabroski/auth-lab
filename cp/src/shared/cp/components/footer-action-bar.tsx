@@ -84,9 +84,9 @@ export function FooterActionBar({ actions }: FooterActionBarProps) {
           <button
             key={action.label}
             type="button"
-            aria-label={action.ariaLabel}
             disabled={action.disabled}
             onClick={action.onClick}
+            aria-label={action.ariaLabel}
             style={style}
           >
             {action.label}

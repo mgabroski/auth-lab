@@ -32,9 +32,30 @@ ensure_env_file() {
   echo "✅ Created $target_file from $example_file"
 }
 
+
+ensure_env_value() {
+  local target_file="$1"
+  local key="$2"
+  local value="$3"
+
+  if grep -q "^${key}=" "$target_file"; then
+    return 0
+  fi
+
+  {
+    echo ""
+    echo "# Added by yarn dev to keep local Control Plane routing deterministic."
+    echo "${key}=${value}"
+  } >> "$target_file"
+
+  echo "✅ Added ${key}=${value} to ${target_file}"
+}
+
 ensure_compose_env() {
   echo "🧩 Ensuring Docker stack env file exists..."
   ensure_env_file "$COMPOSE_ENV_FILE" "$ROOT_DIR/infra/.env.stack.example" "Infra"
+  ensure_env_value "$COMPOSE_ENV_FILE" "CP_ENABLED" "true"
+  ensure_env_value "$COMPOSE_ENV_FILE" "CP_AUTH_MODE" "none"
 }
 
 cleanup_host_services_once() {
@@ -98,6 +119,8 @@ yarn install
 
 echo "🧩 Ensuring backend env file exists..."
 ensure_env_file "$ROOT_DIR/backend/.env" "$ROOT_DIR/backend/.env.example" "Backend"
+ensure_env_value "$ROOT_DIR/backend/.env" "CP_ENABLED" "true"
+ensure_env_value "$ROOT_DIR/backend/.env" "CP_AUTH_MODE" "none"
 
 echo "🧩 Ensuring frontend env file exists..."
 ensure_env_file "$ROOT_DIR/frontend/.env.local" "$ROOT_DIR/frontend/.env.example" "Frontend"
@@ -112,19 +135,21 @@ echo "🧹 Ensuring host-run services are not already running..."
 stop_default_host_services
 
 echo "🚀 Starting backend + frontend + cp (host-run mode)..."
-start_host_service backend yarn workspace @auth-lab/backend dev
+start_host_service backend env CP_ENABLED=true CP_AUTH_MODE=none yarn workspace @auth-lab/backend dev
 start_host_service frontend yarn workspace frontend dev
-start_host_service cp yarn workspace cp dev
+start_host_service cp env INTERNAL_API_URL=http://localhost:3001 yarn workspace cp dev
 
 echo "   Tenant app:    http://goodwill-ca.lvh.me:3000"
 echo "   Backend URL:   http://localhost:3001"
 echo "   Control Plane: http://localhost:3002"
+echo "   CP API shim:   http://localhost:3002/api/cp/accounts"
 echo "   Mailpit UI:    http://localhost:8025"
 echo "   Local OIDC:    http://localhost:9998"
 echo ""
 echo "ℹ️  Use goodwill-ca.lvh.me:3000 in the browser for tenant-aware behaviour."
 echo "   Plain localhost:3000 does not include a tenant subdomain."
 echo "   Control Plane is a separate internal app and currently runs on localhost:3002."
+echo "   yarn dev starts backend with CP_ENABLED=true and CP_AUTH_MODE=none for local CP work."
 echo ""
 
 if ! wait_for_host_services; then

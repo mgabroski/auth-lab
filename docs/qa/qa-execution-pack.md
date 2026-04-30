@@ -278,10 +278,8 @@ Keep this matrix aligned with current shipped behavior.
 
 Use the proxy-routed CP host for the honest browser proof path:
 
-- canonical CP proxy entry: `http://cp.lvh.me:3000/`
-- expected redirect from root: `/accounts/create/basic-info`
-- canonical create Step 1 route: `http://cp.lvh.me:3000/accounts/create/basic-info`
-- accounts list / re-entry route: `http://cp.lvh.me:3000/accounts`
-- direct local CP app route `http://localhost:3002` is allowed for manual UI iteration only and does not replace proxy/topology proof.
+- Full-stack/proxy proof: `http://cp.lvh.me:3000`
+- Host-run local UI iteration: `http://localhost:3002`
+- Host-run CP API shim: `http://localhost:3002/api/*` forwards to `http://localhost:3001/*`
 
-The Control Plane smoke test must use the canonical CP proxy host. It must not call CP through the tenant host and must not treat `/accounts` as the default app entry. `/accounts` is the re-entry/list surface after accounts exist.
+QA must use the proxy-routed CP host for topology proof and Playwright full-stack smoke. Host-run `localhost:3002` is acceptable for local manual UI iteration only and depends on the backend being started with `CP_ENABLED=true` and `CP_AUTH_MODE=none`.

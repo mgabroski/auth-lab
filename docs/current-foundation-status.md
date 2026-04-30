@@ -132,7 +132,7 @@ The following foundations are treated as real in the repo now.
 
 - a separate Control Plane Next.js app exists at `cp/`
 - the Control Plane is not part of the tenant frontend package
-- root Control Plane entry (`/`) redirects to the canonical create Step 1 route (`/accounts/create/basic-info`)
+- root Control Plane entry redirects into the create-account flow
 - **real backend module exists** at `backend/src/modules/control-plane/`
 - **real `cp_accounts` table** created by migration `0014_cp_accounts.ts`
 - **real CP Step 2 tables** created by migration `0015_cp_setup_groups.ts`
@@ -178,9 +178,12 @@ The following foundations are treated as real in the repo now.
   - unpublished accounts still report blocking reasons explaining that a tenant must be provisioned before live Settings consumption is eligible
   - published accounts no longer pretend the Settings engine is absent
 - producer-side handoff snapshot carries allowance truth and provisioning truth only; it does **not** mirror CP Step 2 progress/configured flags as fake Settings truth
-- CP backend remains bounded internal no-auth for the current non-public surface (local dev and CI only) — CP authentication is still deferred
-- CP route registration is now disabled by default and enabled only when `CP_NO_AUTH_ALLOWED=true`
-- tenant hosts reject `/api/cp/*`, backend CP routes return generic 404s on non-CP hosts, and the CP frontend returns 404 when `CP_NO_AUTH_ALLOWED` is not enabled for the current environment
+- CP backend route existence and CP no-auth policy are now separate concerns:
+  - `CP_ENABLED=true` registers the backend `/cp/*` route surface
+  - `CP_AUTH_MODE=none` allows the current local/CI no-auth bridge while dedicated CP auth is deferred
+  - `CP_NO_AUTH_ALLOWED` remains only as a deprecated compatibility alias
+- production must never run CP with `CP_AUTH_MODE=none`; a real CP auth mode is required before production CP exposure
+- tenant hosts reject `/api/cp/*`, backend CP routes return generic 404s on non-CP hosts, and host-run CP `/api/*` requests proxy through the CP Next.js route shim to the backend
 - the locked 3-step CP flow (Basic Account Info → Account Setup → Review & Publish) remains unchanged
 - the 4 locked setup groups remain unchanged
 - `cpRevision` starts at 0 on account creation and increments only on meaningful Step 2 allowance mutations; publish and status-only changes do not increment it because they do not change allowance truth
@@ -211,15 +214,6 @@ The following should be treated as locked unless reopened by an explicit archite
 - browser/backend topology is same-origin through the proxy
 - SSR and browser request paths must not be treated as interchangeable
 - auth, cookie, SSO, and forwarded-header behavior are boundary-sensitive and must be changed carefully
-
-### Control Plane route contract
-
-- canonical proxy proof host: `http://cp.lvh.me:3000`
-- canonical host entry: `/`
-- canonical host-entry behavior: redirect to `/accounts/create/basic-info`
-- canonical create Step 1 route: `/accounts/create/basic-info`
-- canonical accounts list / re-entry route: `/accounts`
-- direct `http://localhost:3002` is acceptable for local CP UI iteration only; it is not the topology proof path
 
 ### Control Plane boundary rules
 

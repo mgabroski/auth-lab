@@ -40,26 +40,36 @@ If a flow is not implemented, this runbook does not pretend it exists.
 
 - tenant health: `http://goodwill-ca.lvh.me:3000/api/health`
 - backend health: `http://localhost:3001/health`
-- CP canonical proxy entry: `http://cp.lvh.me:3000/` → `/accounts/create/basic-info`
-- CP accounts list / re-entry: `http://cp.lvh.me:3000/accounts`
-- CP direct local UI iteration only: `http://localhost:3002`
+- CP app, host-run: `http://localhost:3002/accounts`
+- CP app, proxy topology proof: `http://cp.lvh.me:3000/accounts`
+- CP host-run API shim: `http://localhost:3002/api/cp/accounts`
 - Mailpit: `http://localhost:8025`
 
 ---
 
 ## 2. Control Plane operational notes
 
+### Control Plane env contract
+
+The Control Plane is a permanent internal product surface. Its no-auth access is not permanent.
+
+- `CP_ENABLED=true` registers backend `/cp/*` routes.
+- `CP_AUTH_MODE=none` is only for local development and CI while dedicated CP auth is deferred.
+- `CP_AUTH_MODE=session` is the future production direction and currently fails closed until CP auth ships.
+- `CP_NO_AUTH_ALLOWED` is deprecated compatibility only; do not add it to new env files.
+- `yarn dev` injects `CP_ENABLED=true` and `CP_AUTH_MODE=none` for host-run local development so stale `backend/.env` files do not silently disable CP routes.
+
+If `http://localhost:3002/api/cp/accounts` returns `404`, verify that the backend process was started with `CP_ENABLED=true`. If it returns `401`, CP routes exist but are running in a non-no-auth mode.
+
 Current real CP operator path:
 
-1. open the canonical CP proxy entry: `http://cp.lvh.me:3000/`
-2. confirm it redirects to Step 1: `/accounts/create/basic-info`
-3. create draft account
-4. save required Step 2 groups
-5. save Personal CP sub-page when Personal is enabled
-6. review Activation Ready
-7. publish Active or Disabled
-8. re-enter later through `/accounts`
-9. toggle Active/Disabled after publish as needed
+1. create draft account
+2. save required Step 2 groups
+3. save Personal CP sub-page when Personal is enabled
+4. review Activation Ready
+5. publish Active or Disabled
+6. re-enter later through accounts list
+7. toggle Active/Disabled after publish as needed
 
 Important current truth:
 

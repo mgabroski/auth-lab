@@ -107,9 +107,8 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 ### Control Plane Surface
 
 - separate `cp/` Next.js application
-- canonical host entry: `http://cp.lvh.me:3000/` redirects to `/accounts/create/basic-info`
-- canonical create-flow Step 1 route: `/accounts/create/basic-info`
-- accounts list route `/accounts` remains the practical QA/operator re-entry and edit/review navigation surface
+- root entry redirect into the create-account flow
+- accounts list route for practical QA/operator re-entry and edit/review navigation
 - real three-step create flow:
   - Basic Account Info
   - Account Setup
@@ -207,10 +206,16 @@ Primary local tenant URLs:
 
 Control Plane:
 
-- canonical same-origin proof entry: `http://cp.lvh.me:3000/` → redirects to `/accounts/create/basic-info`
-- canonical create Step 1 route: `http://cp.lvh.me:3000/accounts/create/basic-info`
-- accounts list / re-entry route: `http://cp.lvh.me:3000/accounts`
-- direct Next.js app for local UI iteration only: `http://localhost:3002`
+- canonical proxy/topology proof path: `http://cp.lvh.me:3000`
+- direct host-run app for local UI iteration: `http://localhost:3002`
+- host-run CP API shim: `http://localhost:3002/api/*` → `http://localhost:3001/*`
+
+Control Plane backend configuration:
+
+- `CP_ENABLED=true` registers the backend `/cp/*` route surface.
+- `CP_AUTH_MODE=none` is allowed only for local development and CI while dedicated CP auth is deferred.
+- Production must never use `CP_AUTH_MODE=none`; production CP requires a real CP auth mode before exposure.
+- `CP_NO_AUTH_ALLOWED` is a deprecated compatibility alias and should not be used in new env files.
 
 Mailpit:
 

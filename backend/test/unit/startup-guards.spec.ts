@@ -85,6 +85,8 @@ function makeConfig(overrides: MakeConfigOverrides = {}): AppConfig {
     email: { provider: 'noop', smtp: null },
     sentryDsn: undefined,
     controlPlane: {
+      enabled: false,
+      authMode: 'session',
       noAuthAllowed: false,
       ...controlPlaneOverrides,
     },
@@ -216,18 +218,18 @@ describe('assertControlPlaneNoAuthDisabledInProduction', () => {
   it('throws when CP no-auth is enabled in production', () => {
     const config = makeConfig({
       nodeEnv: 'production',
-      controlPlane: { noAuthAllowed: true },
+      controlPlane: { enabled: true, authMode: 'none', noAuthAllowed: true },
     });
 
     expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).toThrow(
-      /CP_NO_AUTH_ALLOWED/i,
+      /CP_AUTH_MODE=none/i,
     );
   });
 
   it('does not throw when CP no-auth is enabled in development', () => {
     const config = makeConfig({
       nodeEnv: 'development',
-      controlPlane: { noAuthAllowed: true },
+      controlPlane: { enabled: true, authMode: 'none', noAuthAllowed: true },
     });
 
     expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).not.toThrow();
@@ -236,7 +238,7 @@ describe('assertControlPlaneNoAuthDisabledInProduction', () => {
   it('does not throw when CP no-auth is enabled in test', () => {
     const config = makeConfig({
       nodeEnv: 'test',
-      controlPlane: { noAuthAllowed: true },
+      controlPlane: { enabled: true, authMode: 'none', noAuthAllowed: true },
     });
 
     expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).not.toThrow();
@@ -244,6 +246,15 @@ describe('assertControlPlaneNoAuthDisabledInProduction', () => {
 
   it('does not throw in production when CP no-auth is disabled', () => {
     const config = makeConfig({ nodeEnv: 'production' });
+    expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).not.toThrow();
+  });
+
+  it('does not throw in production when CP routes are enabled behind a non-no-auth mode', () => {
+    const config = makeConfig({
+      nodeEnv: 'production',
+      controlPlane: { enabled: true, authMode: 'session', noAuthAllowed: false },
+    });
+
     expect(() => assertControlPlaneNoAuthDisabledInProduction(config)).not.toThrow();
   });
 });

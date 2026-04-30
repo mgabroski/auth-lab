@@ -2,7 +2,9 @@
  * backend/src/modules/control-plane/accounts/cp-accounts.boundary.ts
  *
  * WHY:
- * - Keeps the current no-auth CP surface bounded to its dedicated host(s).
+ * - Keeps the CP backend route surface bounded to its dedicated host(s).
+ * - Separates route existence (CP_ENABLED) from the temporary no-auth policy
+ *   (CP_AUTH_MODE=none) so a missing dev flag does not masquerade as missing routes.
  * - Prevents tenant-host /api/cp/* traffic from reaching backend CP routes if a
  *   proxy or frontend shim drifts open.
  * - Preserves the locked rule that CP remains a separate internal app surface.
@@ -12,6 +14,8 @@
  *   error. This avoids turning tenant hosts into an oracle for hidden CP routes.
  * - Direct local host-run iteration is still allowed on localhost/127.0.0.1 so
  *   engineers can work against the backend without the full proxy topology.
+ * - CP_AUTH_MODE=none is a local/CI-only bridge while real CP auth is deferred.
+ * - CP_AUTH_MODE=session is fail-closed until the dedicated CP auth model ships.
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -35,17 +39,17 @@ export function buildCpBoundaryPreHandler(config: AppConfig) {
     _reply: FastifyReply,
     done: (err?: Error) => void,
   ) {
-    if (!config.controlPlane.noAuthAllowed) {
-      done(AppError.notFound());
-      return;
-    }
-
     const effectiveHost = req.requestContext?.host ?? null;
     if (!isAllowedControlPlaneHost(effectiveHost)) {
       done(AppError.notFound());
       return;
     }
 
-    done();
+    if (config.controlPlane.authMode === 'none') {
+      done();
+      return;
+    }
+
+    done(AppError.unauthorized('Control Plane authentication is not enabled yet.'));
   };
 }

@@ -77,6 +77,8 @@ export async function buildTestApp(overrides: Partial<AppConfig> = {}) {
     sentryDsn: undefined,
 
     controlPlane: {
+      enabled: true,
+      authMode: 'none',
       noAuthAllowed: true,
     },
 

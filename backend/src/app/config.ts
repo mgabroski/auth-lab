@@ -55,6 +55,16 @@ const OutboxEncVersionSchema = z
   .regex(/^v[0-9]+$/, 'Must be like v1, v2')
   .default('v1');
 
+const EnvBooleanSchema = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') return true;
+  if (normalized === 'false' || normalized === '0') return false;
+
+  return value;
+}, z.boolean());
+
 const ConfigSchema = z.object({
   NODE_ENV: NodeEnvSchema,
   PORT: z.coerce.number().default(3000),
@@ -131,8 +141,13 @@ const ConfigSchema = z.object({
   // X10 — Sentry (optional; omitting disables Sentry entirely)
   SENTRY_DSN: z.string().url().optional(),
 
-  // Control Plane no-auth exposure guard
-  CP_NO_AUTH_ALLOWED: z.coerce.boolean().default(false),
+  // Control Plane exposure/auth mode
+  // CP_ENABLED controls whether the backend CP route surface is registered.
+  // CP_AUTH_MODE controls the auth policy applied to those routes.
+  // CP_NO_AUTH_ALLOWED is a deprecated compatibility alias for CP_AUTH_MODE=none.
+  CP_ENABLED: EnvBooleanSchema.optional(),
+  CP_AUTH_MODE: z.enum(['none', 'session']).optional(),
+  CP_NO_AUTH_ALLOWED: EnvBooleanSchema.optional(),
 
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),
@@ -211,6 +226,8 @@ export type AppConfig = {
   sentryDsn: string | undefined;
 
   controlPlane: {
+    enabled: boolean;
+    authMode: 'none' | 'session';
     noAuthAllowed: boolean;
   };
 
@@ -250,6 +267,16 @@ function buildSmtpConfig(parsed: z.infer<typeof ConfigSchema>): SmtpConfig | nul
 
 export function buildConfig(): AppConfig {
   const parsed = ConfigSchema.parse(process.env);
+
+  const legacyNoAuthAllowed = parsed.CP_NO_AUTH_ALLOWED === true;
+  const controlPlaneEnabled = parsed.CP_ENABLED ?? legacyNoAuthAllowed;
+  const controlPlaneAuthMode = parsed.CP_AUTH_MODE ?? (legacyNoAuthAllowed ? 'none' : 'session');
+
+  if (parsed.NODE_ENV === 'production' && controlPlaneEnabled && controlPlaneAuthMode === 'none') {
+    throw new Error(
+      'Config: CP_AUTH_MODE=none is forbidden in production. Configure real CP auth before enabling Control Plane routes.',
+    );
+  }
 
   const encKeysByVersion: Record<string, string> = {
     v1: parsed.OUTBOX_ENC_KEY_V1,
@@ -316,7 +343,9 @@ export function buildConfig(): AppConfig {
     sentryDsn: parsed.SENTRY_DSN,
 
     controlPlane: {
-      noAuthAllowed: parsed.CP_NO_AUTH_ALLOWED,
+      enabled: controlPlaneEnabled,
+      authMode: controlPlaneAuthMode,
+      noAuthAllowed: controlPlaneAuthMode === 'none',
     },
 
     seed: {

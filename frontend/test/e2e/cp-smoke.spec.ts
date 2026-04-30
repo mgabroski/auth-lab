@@ -25,46 +25,32 @@ import { expect, test, type Page } from '@playwright/test';
 
 const CP_ORIGIN = 'http://cp.lvh.me:3000';
 const TENANT_ORIGIN = 'http://goodwill-ca.lvh.me:3000';
-const CP_NAVIGATION_TIMEOUT_MS = 20_000;
-
-async function expectCpUrl(page: Page, url: string) {
-  await expect(page).toHaveURL(url, { timeout: CP_NAVIGATION_TIMEOUT_MS });
-}
-
-function exactTextPattern(value: string): RegExp {
-  return new RegExp(`^${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
-}
-
-async function expectMainHeading(page: Page, title: string) {
-  await expect(page.locator('h1').filter({ hasText: exactTextPattern(title) })).toBeVisible();
-}
 
 function buildUniqueAccountKey(prefix = 'cp-smoke'): string {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return `${prefix}-${suffix}`;
 }
 
+const SETUP_GROUP_TEST_IDS: Record<string, string> = {
+  'Access, Identity & Security': 'cp-setup-group-card-access-identity-security',
+  'Account Settings': 'cp-setup-group-card-account-settings',
+  'Module Settings': 'cp-setup-group-card-module-settings',
+  'Integrations & Marketplace': 'cp-setup-group-card-integrations-marketplace',
+};
+
+async function expectPageHeading(page: Page, title: string) {
+  await expect(page.locator('h1').filter({ hasText: new RegExp(`^${title}$`) })).toBeVisible();
+}
+
 async function openSetupGroup(page: Page, title: string) {
-  const slugByTitle: Record<string, string> = {
-    'Access, Identity & Security': 'access-identity-security',
-    'Account Settings': 'account-settings',
-    'Module Settings': 'module-settings',
-    'Integrations & Marketplace': 'integrations-marketplace',
-  };
+  const testId = SETUP_GROUP_TEST_IDS[title];
+  if (!testId) throw new Error(`Unknown setup group title: ${title}`);
 
-  const slug = slugByTitle[title];
-  if (!slug) {
-    throw new Error(`Unknown setup group title: ${title}`);
-  }
+  const groupCard = page.getByTestId(testId);
 
-  const groupCard = page.getByTestId(`cp-setup-group-card-${slug}`);
-
-  await expect(groupCard).toBeVisible();
   await expect(groupCard).toContainText(title);
-  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
   await groupCard
-    .getByRole('link', { name: new RegExp(`^(Configure|Review) ${escapedTitle} group$`) })
+    .getByRole('link', { name: new RegExp(`^(Configure|Review) ${title} group$`, 'i') })
     .click();
 }
 
@@ -72,7 +58,7 @@ async function saveRequiredSetupGroup(page: Page, options: { title: string; acco
   const { title, accountKey } = options;
 
   await openSetupGroup(page, title);
-  await expectMainHeading(page, title);
+  await expectPageHeading(page, title);
 
   if (title === 'Access, Identity & Security') {
     const passwordCheckbox = page
@@ -101,8 +87,8 @@ async function saveRequiredSetupGroup(page: Page, options: { title: string; acco
 
   await page.getByRole('button', { name: 'Save & Close' }).click();
 
-  await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
-  await expectMainHeading(page, 'Account Setup');
+  await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+  await expectPageHeading(page, 'Account Setup');
 }
 
 test.describe('control plane full-stack smoke', () => {
@@ -112,17 +98,17 @@ test.describe('control plane full-stack smoke', () => {
     const accountName = `CP Smoke ${Date.now()}`;
     const accountKey = buildUniqueAccountKey();
 
-    await page.goto(CP_ORIGIN);
+    await page.goto(`${CP_ORIGIN}/`);
 
-    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/basic-info`);
-    await expectMainHeading(page, 'Basic Account Info');
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/basic-info`);
+    await expectPageHeading(page, 'Basic Account Info');
 
     await page.getByLabel(/Account Name/i).fill(accountName);
     await page.getByLabel(/Account Key/i).fill(accountKey);
     await page.getByRole('button', { name: 'Continue →' }).click();
 
-    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
-    await expectMainHeading(page, 'Account Setup');
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+    await expectPageHeading(page, 'Account Setup');
 
     await saveRequiredSetupGroup(page, {
       title: 'Access, Identity & Security',
@@ -142,8 +128,8 @@ test.describe('control plane full-stack smoke', () => {
     await expect(page.getByRole('link', { name: 'Continue →' })).toBeVisible();
     await page.getByRole('link', { name: 'Continue →' }).click();
 
-    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
-    await expectMainHeading(page, 'Review & Publish');
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
+    await expectPageHeading(page, 'Review & Publish');
     await expect(page.getByText('Activation Ready passed.')).toBeVisible();
 
     await page.getByRole('button', { name: 'Publish account' }).click();
@@ -152,7 +138,7 @@ test.describe('control plane full-stack smoke', () => {
     await expect(page.getByText(`http://${accountKey}.lvh.me:3000`)).toBeVisible();
 
     await page.goto(`${CP_ORIGIN}/accounts`);
-    await expectMainHeading(page, 'Accounts');
+    await expectPageHeading(page, 'Accounts');
 
     const activeRow = page.locator('tr').filter({ hasText: accountKey });
 
@@ -161,8 +147,8 @@ test.describe('control plane full-stack smoke', () => {
 
     await activeRow.getByRole('link', { name: 'Edit Setup' }).click();
 
-    await expectCpUrl(page, `${CP_ORIGIN}/accounts/${accountKey}/edit/setup`);
-    await expectMainHeading(page, 'Account Setup');
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/${accountKey}/edit/setup`);
+    await expectPageHeading(page, 'Account Setup');
     await expect(page.getByText(accountKey)).toBeVisible();
 
     await page.goto(`${CP_ORIGIN}/accounts`);
@@ -202,7 +188,7 @@ test.describe('control plane full-stack smoke', () => {
     });
 
     await openSetupGroup(page, 'Module Settings');
-    await expectMainHeading(page, 'Module Settings');
+    await expectPageHeading(page, 'Module Settings');
 
     const personalCheckbox = page
       .locator('label')
@@ -213,19 +199,18 @@ test.describe('control plane full-stack smoke', () => {
     await personalCheckbox.check();
     await page.getByRole('button', { name: 'Save & Close' }).click();
 
-    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
     await expect(page.getByRole('button', { name: 'Continue →' })).toBeDisabled();
 
     await openSetupGroup(page, 'Module Settings');
     await page.getByRole('link', { name: 'Open Personal CP sub-page →' }).click();
 
-    await expectMainHeading(page, 'Personal CP field configuration');
+    await expectPageHeading(page, 'Personal CP field configuration');
     await expect(page.getByText('Personal save state')).toBeVisible();
 
     await page.getByRole('button', { name: 'Save & Close' }).click();
 
-    await expectCpUrl(
-      page,
+    await expect(page).toHaveURL(
       `${CP_ORIGIN}/accounts/create/setup/module-settings?accountKey=${accountKey}`,
     );
     await expect(
@@ -234,11 +219,11 @@ test.describe('control plane full-stack smoke', () => {
 
     await page.getByRole('button', { name: 'Save & Close' }).click();
 
-    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/setup?accountKey=${accountKey}`);
     await expect(page.getByRole('link', { name: 'Continue →' })).toBeVisible();
 
     await page.getByRole('link', { name: 'Continue →' }).click();
-    await expectCpUrl(page, `${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
+    await expect(page).toHaveURL(`${CP_ORIGIN}/accounts/create/review?accountKey=${accountKey}`);
     await expect(page.getByText('Activation Ready passed.')).toBeVisible();
   });
 

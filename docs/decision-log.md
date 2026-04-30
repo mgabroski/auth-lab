@@ -509,13 +509,6 @@ The Control Plane is exposed as its own host surface and application package. It
 
 In local development, the preferred proof path is the proxy-routed CP host (`cp.lvh.me:3000`). The direct Next.js dev server (`localhost:3002`) may still be used for local UI iteration, but it does not replace the dedicated-host topology contract.
 
-The canonical CP route contract is:
-
-- `http://cp.lvh.me:3000/` is the official host entry.
-- `/` redirects to `/accounts/create/basic-info`.
-- `/accounts/create/basic-info` is the canonical create-flow Step 1 route.
-- `/accounts` is the accounts list and re-entry/edit surface, not the default host entry.
-
 ### Why
 
 The Control Plane serves a different audience, carries a different trust posture, and follows a different rollout sequence than the tenant-facing app. Keeping it on a dedicated host surface preserves a clean boundary for future CP authentication, avoids mixing operator routing with tenant routing, and keeps same-origin CP browser calls explicit.
@@ -637,6 +630,42 @@ Both outcomes would violate the locked Settings model.
 ### Supersedes
 
 Any future design that leaves auth as the permanent owner of Settings bootstrap semantics, keeps two bootstrap truth sources indefinitely, or treats legacy acknowledgement as sufficient proof of full Settings completion.
+
+## ADR-014 — Control Plane route existence is separate from no-auth access
+
+LOCKED
+
+### Decision
+
+Control Plane is a permanent internal application surface in this repo. Its backend `/cp/*` route surface is controlled by `CP_ENABLED`, while its access policy is controlled separately by `CP_AUTH_MODE`.
+
+The current allowed local/CI bridge is:
+
+- `CP_ENABLED=true`
+- `CP_AUTH_MODE=none`
+
+`CP_AUTH_MODE=none` is allowed only for bounded local development and CI while dedicated CP authentication is deferred. Production must never run with `CP_AUTH_MODE=none`.
+
+`CP_NO_AUTH_ALLOWED` is retained only as a deprecated compatibility alias for older local env files and must not be used in new environment templates.
+
+### Why
+
+The previous `CP_NO_AUTH_ALLOWED` flag overloaded two different concerns: whether CP routes existed at all, and whether those routes skipped authentication. That made stale local env files look like missing routes, because `/cp/*` was not registered and host-run CP requests returned 404.
+
+Separating route registration from auth policy keeps CP as a first-class synchronized application surface while still keeping unauthenticated CP access explicitly temporary and non-production.
+
+### Consequences
+
+- backend route registration uses `CP_ENABLED`
+- local/CI no-auth access uses `CP_AUTH_MODE=none`
+- production startup fails if CP is enabled with `CP_AUTH_MODE=none`
+- host-run `localhost:3002/api/*` remains a CP Next.js shim to the backend and requires backend CP routes to be enabled
+- tenant hosts still receive generic 404s for `/api/cp/*`
+- real production CP requires a dedicated CP auth mode before exposure
+
+### Supersedes
+
+Any interpretation that CP itself is temporary, or that no-auth access controls whether CP routes exist.
 
 ## Maintenance Rules
 
