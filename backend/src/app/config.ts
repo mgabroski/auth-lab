@@ -55,15 +55,26 @@ const OutboxEncVersionSchema = z
   .regex(/^v[0-9]+$/, 'Must be like v1, v2')
   .default('v1');
 
-const EnvBooleanSchema = z.preprocess((value) => {
-  if (typeof value !== 'string') return value;
+const emptyStringToUndefined = (value: unknown): unknown => {
+  if (typeof value === 'string' && value.trim() === '') return undefined;
+  return value;
+};
 
-  const normalized = value.trim().toLowerCase();
+const EnvBooleanSchema = z.preprocess((value) => {
+  const nonEmptyValue = emptyStringToUndefined(value);
+  if (typeof nonEmptyValue !== 'string') return nonEmptyValue;
+
+  const normalized = nonEmptyValue.trim().toLowerCase();
   if (normalized === 'true' || normalized === '1') return true;
   if (normalized === 'false' || normalized === '0') return false;
 
-  return value;
-}, z.boolean());
+  return nonEmptyValue;
+}, z.boolean().optional());
+
+const CpAuthModeSchema = z.preprocess(
+  emptyStringToUndefined,
+  z.enum(['none', 'session']).optional(),
+);
 
 const ConfigSchema = z.object({
   NODE_ENV: NodeEnvSchema,
@@ -145,9 +156,9 @@ const ConfigSchema = z.object({
   // CP_ENABLED controls whether the backend CP route surface is registered.
   // CP_AUTH_MODE controls the auth policy applied to those routes.
   // CP_NO_AUTH_ALLOWED is a deprecated compatibility alias for CP_AUTH_MODE=none.
-  CP_ENABLED: EnvBooleanSchema.optional(),
-  CP_AUTH_MODE: z.enum(['none', 'session']).optional(),
-  CP_NO_AUTH_ALLOWED: EnvBooleanSchema.optional(),
+  CP_ENABLED: EnvBooleanSchema,
+  CP_AUTH_MODE: CpAuthModeSchema,
+  CP_NO_AUTH_ALLOWED: EnvBooleanSchema,
 
   // DEV seed bootstrap (idempotent)
   SEED_ON_START: z.coerce.boolean().default(false),

@@ -156,6 +156,9 @@ jobs:
           # Frontend container runtime / build
           FRONTEND_INTERNAL_API_URL=http://backend:3001
           CP_INTERNAL_API_URL=http://backend:3001
+          CP_ENABLED=true
+          CP_AUTH_MODE=none
+          CP_NO_AUTH_ALLOWED=true
           NEXT_PUBLIC_ENV=development
           ENVEOF
 

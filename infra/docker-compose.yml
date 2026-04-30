@@ -69,8 +69,8 @@ services:
     environment:
       NODE_ENV: production
       INTERNAL_API_URL: ${CP_INTERNAL_API_URL}
-      CP_ENABLED: ${CP_ENABLED}
-      CP_AUTH_MODE: ${CP_AUTH_MODE}
+      CP_ENABLED: ${CP_ENABLED:-true}
+      CP_AUTH_MODE: ${CP_AUTH_MODE:-none}
     networks: [hubins_net]
     depends_on:
       backend:
@@ -95,8 +95,8 @@ services:
       MFA_HMAC_KEY_BASE64: ${MFA_HMAC_KEY_BASE64}
       SSO_STATE_ENCRYPTION_KEY: ${SSO_STATE_ENCRYPTION_KEY}
       SSO_REDIRECT_BASE_URL: ${SSO_REDIRECT_BASE_URL}
-      CP_ENABLED: ${CP_ENABLED}
-      CP_AUTH_MODE: ${CP_AUTH_MODE}
+      CP_ENABLED: ${CP_ENABLED:-true}
+      CP_AUTH_MODE: ${CP_AUTH_MODE:-none}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID}
