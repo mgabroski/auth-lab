@@ -93,41 +93,53 @@ type SetupGroupGridProps = {
 export function SetupGroupGrid({ progress, getGroupHref }: SetupGroupGridProps) {
   return (
     <div style={infoGridStyle}>
-      {progress.groups.map((group, index) => (
-        <article key={group.slug} style={infoCardStyle}>
-          <div style={headerRowStyle}>
-            <span style={groupNumberStyle}>Group {index + 1}</span>
-            <span style={stateBadgeStyle(group.configured)}>
-              {group.configured ? 'Configured' : 'Needs save'}
-            </span>
-          </div>
+      {progress.groups.map((group, index) => {
+        const actionLabel = group.configured
+          ? `Review ${group.title} group`
+          : `Configure ${group.title} group`;
 
-          <div style={{ display: 'grid', gap: '6px' }}>
-            <p style={labelStyle}>Setup group</p>
-            <p style={valueStyle}>{group.title}</p>
-          </div>
+        return (
+          <article
+            key={group.slug}
+            data-testid={`cp-setup-group-card-${group.slug}`}
+            style={infoCardStyle}
+          >
+            <div style={headerRowStyle}>
+              <span style={groupNumberStyle}>Group {index + 1}</span>
+              <span style={stateBadgeStyle(group.configured)}>
+                {group.configured ? 'Configured' : 'Needs save'}
+              </span>
+            </div>
 
-          <div style={metaRowStyle}>
-            <span style={metaBadgeStyle('neutral')}>
-              {group.isRequired ? 'Required' : 'Optional'}
-            </span>
-            <span style={metaBadgeStyle('blue')}>Step 2 group</span>
-          </div>
+            <div style={{ display: 'grid', gap: '6px' }}>
+              <p style={labelStyle}>Setup group</p>
+              <p style={valueStyle}>{group.title}</p>
+            </div>
 
-          <div style={summaryBoxStyle(group.configured)}>
-            <p style={summaryTitleStyle}>{group.configured ? 'Current state' : 'Action needed'}</p>
-            <p style={summaryTextStyle}>
-              {group.configured
-                ? 'This group has been explicitly saved and now contributes real CP allowance truth.'
-                : 'Open the group, make the required decisions, and save before continuing.'}
-            </p>
-          </div>
+            <div style={metaRowStyle}>
+              <span style={metaBadgeStyle('neutral')}>
+                {group.isRequired ? 'Required' : 'Optional'}
+              </span>
+              <span style={metaBadgeStyle('blue')}>Step 2 group</span>
+            </div>
 
-          <Link href={getGroupHref(group.slug)} style={linkStyle}>
-            {group.configured ? 'Review group →' : 'Configure group →'}
-          </Link>
-        </article>
-      ))}
+            <div style={summaryBoxStyle(group.configured)}>
+              <p style={summaryTitleStyle}>
+                {group.configured ? 'Current state' : 'Action needed'}
+              </p>
+              <p style={summaryTextStyle}>
+                {group.configured
+                  ? 'This group has been explicitly saved and now contributes real CP allowance truth.'
+                  : 'Open the group, make the required decisions, and save before continuing.'}
+              </p>
+            </div>
+
+            <Link href={getGroupHref(group.slug)} aria-label={actionLabel} style={linkStyle}>
+              {group.configured ? 'Review group →' : 'Configure group →'}
+            </Link>
+          </article>
+        );
+      })}
     </div>
   );
 }

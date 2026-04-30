@@ -40,6 +40,7 @@ export type StepDefinition = {
 
 export type FooterAction = {
   label: string;
+  ariaLabel?: string;
   href?: string;
   variant?: 'ghost' | 'secondary' | 'primary';
   disabled?: boolean;

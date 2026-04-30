@@ -69,7 +69,12 @@ export function FooterActionBar({ actions }: FooterActionBarProps) {
 
         if (action.href && !action.disabled) {
           return (
-            <Link key={`${action.label}-${action.href}`} href={action.href} style={style}>
+            <Link
+              key={`${action.label}-${action.href}`}
+              href={action.href}
+              aria-label={action.ariaLabel}
+              style={style}
+            >
               {action.label}
             </Link>
           );
@@ -79,6 +84,7 @@ export function FooterActionBar({ actions }: FooterActionBarProps) {
           <button
             key={action.label}
             type="button"
+            aria-label={action.ariaLabel}
             disabled={action.disabled}
             onClick={action.onClick}
             style={style}

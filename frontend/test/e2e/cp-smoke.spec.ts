@@ -45,19 +45,27 @@ function buildUniqueAccountKey(prefix = 'cp-smoke'): string {
 }
 
 async function openSetupGroup(page: Page, title: string) {
-  // WHY:
-  // - Setup group cards contain the title plus status/help text, so an anchored
-  //   hasText regexp on the whole <article> is too strict and returns no card.
-  // - Match the exact title as a child text node, then require the real group CTA
-  //   so summary/status cards cannot be selected by accident.
-  const groupCard = page
-    .locator('article')
-    .filter({ has: page.getByRole('link', { name: /^(configure group →|review group →)$/i }) })
-    .filter({ has: page.getByText(title, { exact: true }) })
-    .first();
+  const slugByTitle: Record<string, string> = {
+    'Access, Identity & Security': 'access-identity-security',
+    'Account Settings': 'account-settings',
+    'Module Settings': 'module-settings',
+    'Integrations & Marketplace': 'integrations-marketplace',
+  };
+
+  const slug = slugByTitle[title];
+  if (!slug) {
+    throw new Error(`Unknown setup group title: ${title}`);
+  }
+
+  const groupCard = page.getByTestId(`cp-setup-group-card-${slug}`);
 
   await expect(groupCard).toBeVisible();
-  await groupCard.getByRole('link', { name: /^(configure group →|review group →)$/i }).click();
+  await expect(groupCard).toContainText(title);
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  await groupCard
+    .getByRole('link', { name: new RegExp(`^(Configure|Review) ${escapedTitle} group$`) })
+    .click();
 }
 
 async function saveRequiredSetupGroup(page: Page, options: { title: string; accountKey: string }) {
@@ -138,7 +146,7 @@ test.describe('control plane full-stack smoke', () => {
     await expectMainHeading(page, 'Review & Publish');
     await expect(page.getByText('Activation Ready passed.')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Publish' }).click();
+    await page.getByRole('button', { name: 'Publish account' }).click();
 
     await expect(page.getByText('Provisioned: Active')).toBeVisible();
     await expect(page.getByText(`http://${accountKey}.lvh.me:3000`)).toBeVisible();

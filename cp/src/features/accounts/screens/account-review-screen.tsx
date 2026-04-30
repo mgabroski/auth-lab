@@ -226,6 +226,10 @@ export function AccountReviewScreen({
         : isEditMode || review.provisioning.isProvisioned
           ? 'Save Changes'
           : 'Publish',
+      ariaLabel:
+        isEditMode || review.provisioning.isProvisioned
+          ? 'Save account changes'
+          : 'Publish account',
       variant: 'primary',
       disabled: publishDisabled,
       onClick: () => {
@@ -331,6 +335,7 @@ export function AccountReviewScreen({
             <div
               role="button"
               tabIndex={0}
+              aria-label="Select Active tenant status"
               aria-disabled={activeBlocked}
               style={statusCardStyle(targetStatus === 'Active', activeBlocked)}
               onClick={() => {
@@ -360,6 +365,7 @@ export function AccountReviewScreen({
             <div
               role="button"
               tabIndex={0}
+              aria-label="Select Disabled tenant status"
               style={statusCardStyle(targetStatus === 'Disabled', false)}
               onClick={() => setTargetStatus('Disabled')}
               onKeyDown={(e) => {
