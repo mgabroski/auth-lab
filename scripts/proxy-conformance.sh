@@ -40,7 +40,8 @@ PROXY_PORT="${PROXY_PORT:-3000}"
 BASE_URL="http://${PROXY_HOST}:${PROXY_PORT}"
 
 TENANT="goodwill-ca"
-OTHER_TENANT="acme"
+LOGIN_TENANT="goodwill-open"
+OTHER_TENANT="goodwill-ca"
 
 VERBOSE="${1:-}"
 PASS=0
@@ -78,6 +79,36 @@ wait_for_proxy() {
     sleep 2
   done
   echo "✅ Proxy is reachable."
+}
+
+wait_for_cp_app() {
+  echo "⏳ Waiting for CP app to be reachable through proxy at cp.lvh.me..."
+  local attempts=0
+  local status
+  local body_file
+
+  while true; do
+    attempts=$((attempts + 1))
+    body_file="$(mktemp)"
+    status=$(curl_silent -o "$body_file" -w "%{http_code}" \
+      -H "Host: cp.lvh.me" \
+      "${BASE_URL}/accounts/create/basic-info" 2>/dev/null || echo "000")
+
+    if [ "$status" = "200" ] && grep -q "Basic Account Info" "$body_file"; then
+      rm -f "$body_file"
+      echo "✅ CP app is reachable through proxy."
+      return 0
+    fi
+
+    rm -f "$body_file"
+
+    if [ $attempts -ge 120 ]; then
+      echo "❌ CP app did not become reachable through proxy after 120 attempts."
+      return 1
+    fi
+
+    sleep 3
+  done
 }
 
 # ─── Tests ────────────────────────────────────────────────────────────────────
@@ -285,16 +316,21 @@ fi
 # ── PT-07: Cross-tenant isolation ────────────────────────────────────────────
 echo ""
 echo "PT-07: Cross-tenant isolation"
-log "Session from goodwill-ca must not authenticate on ${OTHER_TENANT}.lvh.me"
+log "Session from ${LOGIN_TENANT}.lvh.me must not authenticate on ${OTHER_TENANT}.lvh.me"
 
 COOKIE_JAR="$(mktemp)"
 
-# Login on tenant A
+# WHY:
+# - goodwill-ca is invite-only in the seed and does not have member@example.com as
+#   a ready password-login member. goodwill-open does.
+# - The topology invariant is independent of which active tenant establishes the
+#   session: a session created for tenant A must be rejected when replayed on
+#   tenant B.
 LOGIN_CODE=$(curl_silent -o /tmp/pt07-login.json -w "%{http_code}" \
   -c "$COOKIE_JAR" \
-  -H "Host: ${TENANT}.lvh.me" \
+  -H "Host: ${LOGIN_TENANT}.lvh.me" \
   -H "Content-Type: application/json" \
-  -d '{"email":"member@example.com","password":"password123"}' \
+  -d '{"email":"member@example.com","password":"Password123!"}' \
   "${BASE_URL}/api/auth/login" 2>/dev/null || echo "000")
 
 if [ "$LOGIN_CODE" != "200" ]; then
@@ -302,7 +338,7 @@ if [ "$LOGIN_CODE" != "200" ]; then
 else
   ME_A_CODE=$(curl_silent -o /tmp/pt07-me-a.json -w "%{http_code}" \
     -b "$COOKIE_JAR" \
-    -H "Host: ${TENANT}.lvh.me" \
+    -H "Host: ${LOGIN_TENANT}.lvh.me" \
     "${BASE_URL}/api/auth/me" 2>/dev/null || echo "000")
 
   ME_B_CODE=$(curl_silent -o /tmp/pt07-me-b.json -w "%{http_code}" \
@@ -319,46 +355,57 @@ fi
 
 rm -f "$COOKIE_JAR" /tmp/pt07-login.json /tmp/pt07-me-a.json /tmp/pt07-me-b.json
 
-# ── PT-08: Inactive tenant anti-enumeration ──────────────────────────────────
+# ── PT-08: Unavailable tenant anti-enumeration ───────────────────────────────
 echo ""
-echo "PT-08: Inactive tenant anti-enumeration"
-log "Unknown tenant must return same locked unavailable shape as inactive tenant"
+echo "PT-08: Unavailable tenant anti-enumeration"
+log "Unavailable tenant hosts must return the locked unavailable /auth/config shape"
 
-INACTIVE_RESPONSE=$(curl_silent -w "\n%{http_code}" \
+UNAVAILABLE_A_RESPONSE=$(curl_silent -w "\n%{http_code}" \
   -H "Host: inactive.lvh.me" \
   "${BASE_URL}/api/auth/config")
 
-INACTIVE_CODE=$(echo "$INACTIVE_RESPONSE" | tail -1)
-INACTIVE_BODY=$(echo "$INACTIVE_RESPONSE" | head -n -1)
+UNAVAILABLE_A_CODE=$(echo "$UNAVAILABLE_A_RESPONSE" | tail -1)
+UNAVAILABLE_A_BODY=$(echo "$UNAVAILABLE_A_RESPONSE" | head -n -1)
 
-UNKNOWN_RESPONSE=$(curl_silent -w "\n%{http_code}" \
+UNAVAILABLE_B_RESPONSE=$(curl_silent -w "\n%{http_code}" \
   -H "Host: does-not-exist.lvh.me" \
   "${BASE_URL}/api/auth/config")
 
-UNKNOWN_CODE=$(echo "$UNKNOWN_RESPONSE" | tail -1)
-UNKNOWN_BODY=$(echo "$UNKNOWN_RESPONSE" | head -n -1)
+UNAVAILABLE_B_CODE=$(echo "$UNAVAILABLE_B_RESPONSE" | tail -1)
+UNAVAILABLE_B_BODY=$(echo "$UNAVAILABLE_B_RESPONSE" | head -n -1)
 
-if [ "$INACTIVE_CODE" = "200" ]; then
-  INACTIVE_CAN_LOGIN=$(echo "$INACTIVE_BODY" | jq -r '.tenant.canLogin // empty' 2>/dev/null || echo "")
-  if [ "$INACTIVE_CAN_LOGIN" != "false" ]; then
-    fail "Inactive tenant config did not report canLogin=false"
-  fi
+UNAVAILABLE_A_CANONICAL=$(canonical_json "$UNAVAILABLE_A_BODY")
+UNAVAILABLE_B_CANONICAL=$(canonical_json "$UNAVAILABLE_B_BODY")
+
+if [ "$UNAVAILABLE_A_CODE" != "200" ]; then
+  fail "Expected first unavailable tenant payload to return HTTP 200, got ${UNAVAILABLE_A_CODE}"
+elif [ "$UNAVAILABLE_B_CODE" != "200" ]; then
+  fail "Expected second unavailable tenant payload to return HTTP 200, got ${UNAVAILABLE_B_CODE}"
 else
-  fail "Expected 200 with inactive payload, got ${INACTIVE_CODE}"
-fi
+  A_IS_ACTIVE=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.isActive // empty' 2>/dev/null || echo "")
+  A_SIGNUP_ALLOWED=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.signupAllowed // empty' 2>/dev/null || echo "")
+  B_IS_ACTIVE=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.isActive // empty' 2>/dev/null || echo "")
+  B_SIGNUP_ALLOWED=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.signupAllowed // empty' 2>/dev/null || echo "")
 
-if [ "$UNKNOWN_CODE" = "200" ]; then
-  UNKNOWN_CAN_LOGIN=$(echo "$UNKNOWN_BODY" | jq -r '.tenant.canLogin // empty' 2>/dev/null || echo "")
-  if [ "$UNKNOWN_CAN_LOGIN" != "false" ]; then
-    fail "Unknown tenant config did not report canLogin=false"
+  if [ "$A_IS_ACTIVE" != "false" ] || [ "$A_SIGNUP_ALLOWED" != "false" ]; then
+    fail "First unavailable tenant did not report isActive=false and signupAllowed=false"
+  elif [ "$B_IS_ACTIVE" != "false" ] || [ "$B_SIGNUP_ALLOWED" != "false" ]; then
+    fail "Second unavailable tenant did not report isActive=false and signupAllowed=false"
+  elif [ -z "$UNAVAILABLE_A_CANONICAL" ] || [ -z "$UNAVAILABLE_B_CANONICAL" ]; then
+    fail "Unavailable tenant response was not valid JSON"
+  elif [ "$UNAVAILABLE_A_CANONICAL" != "$UNAVAILABLE_B_CANONICAL" ]; then
+    fail "Unavailable tenant payloads were not byte-equivalent after canonical JSON normalization"
   else
-    pass "Inactive and unknown tenants both return locked unavailable config shape"
+    pass "Unavailable tenant hosts return the same locked unavailable config shape"
   fi
-else
-  fail "Expected 200 with unavailable payload, got ${UNKNOWN_CODE}"
 fi
 
 # ── CP-01: Control Plane host reachability ───────────────────────────────────
+echo ""
+if ! wait_for_cp_app; then
+  fail "CP app did not become reachable through cp.lvh.me before CP proxy checks"
+fi
+
 echo ""
 echo "CP-01: Control Plane host reachability"
 log "cp.lvh.me must route to the CP app instead of the tenant app or backend"

@@ -5,8 +5,9 @@
 # - Eliminates CORS, simplifies cookie scoping, mirrors production topology.
 # - Caddy used for dev; nginx used for prod (proxy conformance tests ensure parity).
 #
-# TENANT APP RULES (*.lvh.me:3000):
+# TENANT APP RULES (*.lvh.me:3000 except cp.lvh.me):
 # - /api/*   → backend:3001, strip /api prefix (backend registers routes without /api)
+# - /api/cp/* → 404 on tenant hosts (tenant surface must not expose CP APIs)
 # - /_next/* → frontend:3000, NO prefix strip
 # - /*       → frontend:3000
 # - Host header forwarded EXACTLY as received (tenant resolution depends on this)
@@ -27,8 +28,9 @@
 # - Caddy defaults hostname-based site addresses to HTTPS, even on custom ports.
 # - auto_https off disables automatic certificate management and redirects,
 #   but it does NOT change a hostname site address from HTTPS to HTTP.
-# - Site blocks therefore use an explicit http:// scheme so port 3000 is
-#   plaintext HTTP in local dev (sid cookie is NOT Secure in dev; __Host- not used).
+# - This file therefore uses one explicit plaintext :3000 site and host matchers
+#   inside it. This also avoids ambiguity between cp.lvh.me and *.lvh.me virtual
+#   hosts on the same listener.
 # - PT-05 must exercise the real published-port path (runner/browser -> localhost:3000 -> Caddy).
 # - For that proof, Caddy must trust loopback + Docker-private source ranges so
 #   synthetic X-Forwarded-For values from the local runner/CI can be parsed as
@@ -55,16 +57,14 @@
   }
 }
 
-# ── Control Plane (internal operator tool) ───────────────────────────────────
-#
-# WHY separate host block:
-# - CP is a separate app with a different audience and future security model.
-# - Isolating it on cp.lvh.me prevents any accidental route overlap with tenant traffic.
-# - In dev, cp.lvh.me:3000 is the CP entry point; localhost:3002 also works directly.
-http://cp.lvh.me:3000 {
-  @api path /api/*
+http://:3000 {
+  # ── Control Plane: API routes → backend (strip /api prefix) ────────────────
+  @cpApi {
+    host cp.lvh.me
+    path /api/*
+  }
 
-  handle @api {
+  handle @cpApi {
     uri strip_prefix /api
     reverse_proxy backend:3001 {
       header_up Host {host}
@@ -73,36 +73,43 @@ http://cp.lvh.me:3000 {
     }
   }
 
-  @nextAssets path /_next/*
+  # ── Control Plane: Next.js assets → CP app ────────────────────────────────
+  @cpNextAssets {
+    host cp.lvh.me
+    path /_next/*
+  }
 
-  handle @nextAssets {
+  handle @cpNextAssets {
     reverse_proxy cp:3002 {
       header_up Host {host}
       header_up X-Forwarded-Host {host}
     }
   }
 
-  handle {
+  # ── Control Plane: all remaining CP routes → CP app ───────────────────────
+  @cpHost host cp.lvh.me
+
+  handle @cpHost {
     reverse_proxy cp:3002 {
       header_up Host {host}
       header_up X-Forwarded-Host {host}
     }
   }
-}
 
-# ── Tenant app (all other subdomains) ────────────────────────────────────────
-http://*.lvh.me:3000 {
-  # ── Tenant hosts must never expose CP backend routes ───────────────────
-  @tenantCpApi path /api/cp/*
+  # ── Tenant hosts must never expose CP backend routes ──────────────────────
+  @tenantCpApi {
+    not host cp.lvh.me
+    path /api/cp/*
+  }
 
   handle @tenantCpApi {
     respond 404
   }
 
-  # ── API routes → backend (strip /api prefix) ──────────────────────────
-  @api path /api/*
+  # ── Tenant API routes → backend (strip /api prefix) ───────────────────────
+  @tenantApi path /api/*
 
-  handle @api {
+  handle @tenantApi {
     uri strip_prefix /api
     reverse_proxy backend:3001 {
       header_up Host {host}
@@ -117,17 +124,17 @@ http://*.lvh.me:3000 {
     }
   }
 
-  # ── Next.js assets → frontend ──────────────────────────────────────────
-  @nextAssets path /_next/*
+  # ── Tenant Next.js assets → tenant frontend ───────────────────────────────
+  @tenantNextAssets path /_next/*
 
-  handle @nextAssets {
+  handle @tenantNextAssets {
     reverse_proxy frontend:3000 {
       header_up Host {host}
       header_up X-Forwarded-Host {host}
     }
   }
 
-  # ── All other routes → Next.js frontend ───────────────────────────────
+  # ── All other tenant routes → tenant frontend ─────────────────────────────
   handle {
     reverse_proxy frontend:3000 {
       header_up Host {host}
