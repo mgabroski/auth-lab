@@ -383,16 +383,18 @@ elif [ "$UNAVAILABLE_B_CODE" != "200" ]; then
   fail "Expected second unavailable tenant payload to return HTTP 200, got ${UNAVAILABLE_B_CODE}"
 else
   A_IS_ACTIVE=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.isActive // empty' 2>/dev/null || echo "")
-  A_SIGNUP_ALLOWED=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.signupAllowed // empty' 2>/dev/null || echo "")
+  A_PUBLIC_SIGNUP=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.publicSignupEnabled // empty' 2>/dev/null || echo "")
+  A_SIGNUP_ALLOWED=$(echo "$UNAVAILABLE_A_BODY" | jq -r '.tenant.signupAllowed // "false"' 2>/dev/null || echo "")
   B_IS_ACTIVE=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.isActive // empty' 2>/dev/null || echo "")
-  B_SIGNUP_ALLOWED=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.signupAllowed // empty' 2>/dev/null || echo "")
+  B_PUBLIC_SIGNUP=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.publicSignupEnabled // empty' 2>/dev/null || echo "")
+  B_SIGNUP_ALLOWED=$(echo "$UNAVAILABLE_B_BODY" | jq -r '.tenant.signupAllowed // "false"' 2>/dev/null || echo "")
 
-  if [ "$A_IS_ACTIVE" != "false" ] || [ "$A_SIGNUP_ALLOWED" != "false" ]; then
-    fail "First unavailable tenant did not report isActive=false and signupAllowed=false"
-  elif [ "$B_IS_ACTIVE" != "false" ] || [ "$B_SIGNUP_ALLOWED" != "false" ]; then
-    fail "Second unavailable tenant did not report isActive=false and signupAllowed=false"
-  elif [ -z "$UNAVAILABLE_A_CANONICAL" ] || [ -z "$UNAVAILABLE_B_CANONICAL" ]; then
+  if [ -z "$UNAVAILABLE_A_CANONICAL" ] || [ -z "$UNAVAILABLE_B_CANONICAL" ]; then
     fail "Unavailable tenant response was not valid JSON"
+  elif [ "$A_IS_ACTIVE" != "false" ] || [ "$A_PUBLIC_SIGNUP" != "false" ] || [ "$A_SIGNUP_ALLOWED" != "false" ]; then
+    fail "First unavailable tenant did not report inactive/no-signup config shape: ${UNAVAILABLE_A_CANONICAL}"
+  elif [ "$B_IS_ACTIVE" != "false" ] || [ "$B_PUBLIC_SIGNUP" != "false" ] || [ "$B_SIGNUP_ALLOWED" != "false" ]; then
+    fail "Second unavailable tenant did not report inactive/no-signup config shape: ${UNAVAILABLE_B_CANONICAL}"
   elif [ "$UNAVAILABLE_A_CANONICAL" != "$UNAVAILABLE_B_CANONICAL" ]; then
     fail "Unavailable tenant payloads were not byte-equivalent after canonical JSON normalization"
   else

@@ -66,6 +66,7 @@ services:
         # in non-development environments. Use the same Docker-internal backend
         # URL at build time and at runtime to keep the SSR contract honest.
         INTERNAL_API_URL: ${CP_INTERNAL_API_URL}
+        CP_NO_AUTH_ALLOWED: ${CP_NO_AUTH_ALLOWED}
     environment:
       NODE_ENV: production
       INTERNAL_API_URL: ${CP_INTERNAL_API_URL}

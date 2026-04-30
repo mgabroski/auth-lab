@@ -44,7 +44,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # The actual runtime value is still injected by docker-compose.yml, but the build
 # must use the same internal backend URL so the startup contract stays truthful.
 ARG INTERNAL_API_URL=http://backend:3001
+ARG CP_NO_AUTH_ALLOWED=false
 ENV INTERNAL_API_URL=${INTERNAL_API_URL}
+ENV CP_NO_AUTH_ALLOWED=${CP_NO_AUTH_ALLOWED}
 
 WORKDIR /repo/cp
 RUN yarn build
@@ -55,6 +57,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV CP_NO_AUTH_ALLOWED=false
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
