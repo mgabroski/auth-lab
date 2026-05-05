@@ -17,6 +17,7 @@ Current live routes in this repo:
 - `GET /settings/modules`
 - `GET /settings/modules/personal`
 - `PUT /settings/modules/personal`
+- `GET /settings/integrations`
 
 This is the real Settings-native tenant surface used by:
 
@@ -26,6 +27,7 @@ This is the real Settings-native tenant surface used by:
 - `/admin/settings/account`
 - `/admin/settings/modules`
 - `/admin/settings/modules/personal`
+- `/admin/settings/integrations`
 
 It establishes:
 
@@ -36,6 +38,7 @@ It establishes:
 - the real Modules hub read surface
 - the final v1 Personal builder read surface
 - the canonical Personal full-replacement save contract
+- the real v1 Integrations informational read surface
 
 It does **not** mean the full long-range Settings roadmap is complete.
 
@@ -358,6 +361,63 @@ Reports:
 This is the read-side guidance for the Personal conflict contract.
 The frontend must preserve the local draft on `409`, refetch the latest DTO, and let the admin reconcile explicitly.
 
+### `GET /settings/integrations`
+
+Returns the v1 Integrations informational DTO.
+
+Current truthful behavior:
+
+- Google SSO Integration and Microsoft SSO Integration are the only live informational integration surfaces in v1.
+- SSO status is derived from CP allowance truth, Access login-method dependency truth, and cached auth/runtime readiness truth.
+- Settings GET routes do not make live outbound provider calls.
+- Missing, stale, or invalid readiness snapshots are surfaced as `BLOCKED` with warnings instead of invented readiness.
+- ADP, Hint, iStream, and Stripe are returned as deferred tenant-configuration cards.
+- Marketplace is placeholder-only and intentionally not rendered as a tenant configuration card.
+- No tenant credential entry, provider connection flow, mapping editor, import rules UI, sync execution flow, or fake connected status is exposed.
+
+Response shape:
+
+- `sectionKey = "integrations"`
+- `title`
+- `description`
+- `status`
+- `version`
+- `cpRevision`
+- `ssoIntegrations[]`
+- `deferredIntegrations[]`
+- `marketplace`
+- `warnings[]`
+- `nextAction`
+
+Each SSO integration reports:
+
+- `integrationKey`
+- `providerKey`
+- `displayStatus = HIDDEN | READY | NOT_IN_USE | BLOCKED`
+- `visible`
+- `cpAllowed`
+- `loginMethodEnabled`
+- `runtimeReadiness`
+- `warnings[]`
+- `resolutionHint`
+- `accessDependency`
+- `tenantConfigurationAvailable = false`
+- `credentialEntryAvailable = false`
+- `connectionFlowAvailable = false`
+
+Each deferred integration reports:
+
+- `integrationKey`
+- `category = HRIS | PAYMENTS`
+- `treatment = DEFERRED`
+- `reason`
+- `capabilities[]`
+- `tenantConfigurationAvailable = false`
+- `credentialEntryAvailable = false`
+- `connectionFlowAvailable = false`
+- `syncEngineAvailable = false`
+- `mappingEditorAvailable = false`
+
 ---
 
 ## Write routes
@@ -482,6 +542,9 @@ If Personal is not allowed for the tenant, `GET /settings/modules/personal` and 
 The following remain intentionally unimplemented in the current repo state:
 
 - tenant-facing Integrations write routes
+- Integrations credential-entry routes
+- Integrations provider connection/recovery routes
+- Integrations sync or mapping routes
 - Permissions routes
 - Communications write routes
 - Workspace Experience routes

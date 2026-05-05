@@ -4,8 +4,9 @@
  * WHY:
  * - Central frontend contract layer for Settings-native read and write DTOs.
  * - Keeps `/admin`, `/admin/settings`, `/admin/settings/access`,
- *   `/admin/settings/account`, `/admin/settings/modules`, and
- *   `/admin/settings/modules/personal` grounded in backend-owned shapes.
+ *   `/admin/settings/account`, `/admin/settings/modules`,
+ *   `/admin/settings/modules/personal`, and `/admin/settings/integrations`
+ *   grounded in backend-owned shapes.
  * - Makes it explicit that Settings bootstrap truth now lives outside auth
  *   bootstrap even while auth still owns session and role routing.
  *
@@ -324,6 +325,82 @@ export type PersonalSettingsResponse = {
   conflictGuidance: PersonalConflictGuidanceResponse;
   saveActionLabel: 'Save Personal Configuration';
   stickySaveLabel: 'Save Personal Configuration';
+};
+
+export type IntegrationSsoProviderKey = 'google' | 'microsoft';
+export type IntegrationDisplayStatus = 'HIDDEN' | 'READY' | 'NOT_IN_USE' | 'BLOCKED';
+export type IntegrationReadinessStatus = 'READY' | 'SNAPSHOT_UNAVAILABLE' | 'STALE' | 'INVALID';
+
+export type IntegrationSsoCardResponse = {
+  integrationKey: 'integration.sso.google' | 'integration.sso.microsoft';
+  providerKey: IntegrationSsoProviderKey;
+  title: string;
+  description: string;
+  displayStatus: IntegrationDisplayStatus;
+  statusLabel: string;
+  visible: boolean;
+  cpAllowed: boolean;
+  loginMethodEnabled: boolean;
+  tenantConfigurationAvailable: false;
+  credentialEntryAvailable: false;
+  connectionFlowAvailable: false;
+  runtimeReadiness: {
+    status: IntegrationReadinessStatus;
+    checkedAt: string;
+    detail: string | null;
+  };
+  warnings: string[];
+  blockers: string[];
+  resolutionHint: string | null;
+  accessDependency: {
+    loginMethodKey: 'auth.login.google' | 'auth.login.microsoft';
+    enabled: boolean;
+    description: string;
+  };
+};
+
+export type DeferredIntegrationCardResponse = {
+  integrationKey:
+    | 'integration.adp'
+    | 'integration.hint'
+    | 'integration.istream'
+    | 'integration.stripe';
+  title: string;
+  category: 'HRIS' | 'PAYMENTS';
+  treatment: 'DEFERRED';
+  description: string;
+  reason: string;
+  tenantConfigurationAvailable: false;
+  credentialEntryAvailable: false;
+  connectionFlowAvailable: false;
+  syncEngineAvailable: false;
+  mappingEditorAvailable: false;
+  capabilities: Array<{
+    capabilityKey: string;
+    label: string;
+    deferred: true;
+  }>;
+};
+
+export type MarketplaceIntegrationResponse = {
+  integrationKey: 'integration.marketplace';
+  treatment: 'PLACEHOLDER_ONLY';
+  visible: false;
+  reason: string;
+};
+
+export type IntegrationsSettingsResponse = {
+  sectionKey: 'integrations';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  ssoIntegrations: IntegrationSsoCardResponse[];
+  deferredIntegrations: DeferredIntegrationCardResponse[];
+  marketplace: MarketplaceIntegrationResponse;
+  warnings: string[];
+  nextAction: SettingsNextAction | null;
 };
 
 export type SavePersonalSettingsRequest = {

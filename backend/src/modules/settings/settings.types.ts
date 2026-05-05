@@ -492,6 +492,84 @@ export type PersonalSettingsDto = {
   stickySaveLabel: 'Save Personal Configuration';
 };
 
+export type IntegrationSsoProviderKey = 'google' | 'microsoft';
+
+export type IntegrationDisplayStatus = 'HIDDEN' | 'READY' | 'NOT_IN_USE' | 'BLOCKED';
+
+export type IntegrationReadinessStatus = 'READY' | 'SNAPSHOT_UNAVAILABLE' | 'STALE' | 'INVALID';
+
+export type IntegrationSsoCardDto = {
+  integrationKey: 'integration.sso.google' | 'integration.sso.microsoft';
+  providerKey: IntegrationSsoProviderKey;
+  title: string;
+  description: string;
+  displayStatus: IntegrationDisplayStatus;
+  statusLabel: string;
+  visible: boolean;
+  cpAllowed: boolean;
+  loginMethodEnabled: boolean;
+  tenantConfigurationAvailable: false;
+  credentialEntryAvailable: false;
+  connectionFlowAvailable: false;
+  runtimeReadiness: {
+    status: IntegrationReadinessStatus;
+    checkedAt: string;
+    detail: string | null;
+  };
+  warnings: string[];
+  blockers: string[];
+  resolutionHint: string | null;
+  accessDependency: {
+    loginMethodKey: 'auth.login.google' | 'auth.login.microsoft';
+    enabled: boolean;
+    description: string;
+  };
+};
+
+export type DeferredIntegrationCardDto = {
+  integrationKey:
+    | 'integration.adp'
+    | 'integration.hint'
+    | 'integration.istream'
+    | 'integration.stripe';
+  title: string;
+  category: 'HRIS' | 'PAYMENTS';
+  treatment: 'DEFERRED';
+  description: string;
+  reason: string;
+  tenantConfigurationAvailable: false;
+  credentialEntryAvailable: false;
+  connectionFlowAvailable: false;
+  syncEngineAvailable: false;
+  mappingEditorAvailable: false;
+  capabilities: Array<{
+    capabilityKey: string;
+    label: string;
+    deferred: true;
+  }>;
+};
+
+export type MarketplaceIntegrationDto = {
+  integrationKey: 'integration.marketplace';
+  treatment: 'PLACEHOLDER_ONLY';
+  visible: false;
+  reason: string;
+};
+
+export type IntegrationsSettingsDto = {
+  sectionKey: 'integrations';
+  title: string;
+  description: string;
+  status: SettingsSetupStatus;
+  version: number;
+  cpRevision: number;
+  ssoIntegrations: IntegrationSsoCardDto[];
+  deferredIntegrations: DeferredIntegrationCardDto[];
+  marketplace: MarketplaceIntegrationDto;
+  warnings: string[];
+  nextAction: SettingsNextAction | null;
+};
+
 export type SettingsMutationSectionSummaryDto = {
   key: SettingsSectionKey;
   status: SettingsSetupStatus;
@@ -526,6 +604,7 @@ export type AccessSettingsResponse = AccessSettingsDto;
 export type AccountSettingsResponse = AccountSettingsDto;
 export type ModulesHubResponse = ModulesHubDto;
 export type PersonalSettingsResponse = PersonalSettingsDto;
+export type IntegrationsSettingsResponse = IntegrationsSettingsDto;
 export type SettingsMutationResponse = SettingsMutationResultDto;
 
 export type SettingsStateBundle = {

@@ -20,6 +20,8 @@ import {
   SETTINGS_REASON_CODES,
   type SettingsReasonCode,
   type SettingsSectionKey,
+  type IntegrationDisplayStatus,
+  type IntegrationReadinessStatus,
   type SettingsSetupStatus,
   type SettingsStateBundle,
 } from '../settings.types';
@@ -36,7 +38,7 @@ export type PersonalCompletionInput = {
   hasValidSectionAssignments: boolean;
 };
 
-export type SsoReadinessSnapshotStatus = 'READY' | 'SNAPSHOT_UNAVAILABLE';
+export type SsoReadinessSnapshotStatus = IntegrationReadinessStatus;
 
 export type SsoReadinessSnapshot = {
   providerKey: 'google' | 'microsoft';
@@ -45,12 +47,14 @@ export type SsoReadinessSnapshot = {
   detail: string | null;
 };
 
-export type IntegrationDisplayStatus = 'HIDDEN' | 'READY' | 'NOT_IN_USE' | 'BLOCKED';
-
 export type IntegrationStatusEvaluation = {
   integrationKey: 'integration.sso.google' | 'integration.sso.microsoft';
   displayStatus: IntegrationDisplayStatus;
+  isAllowed: boolean;
+  loginMethodEnabled: boolean;
+  readinessSnapshot: SsoReadinessSnapshot;
   warnings: string[];
+  blockers: string[];
 };
 
 export type IntegrationStatusEvaluatorInput = {
@@ -146,7 +150,11 @@ export const IntegrationStatusEvaluator = {
       return {
         integrationKey: input.integrationKey,
         displayStatus: 'HIDDEN',
+        isAllowed: false,
+        loginMethodEnabled: input.loginMethodEnabled,
+        readinessSnapshot: input.readinessSnapshot,
         warnings: [],
+        blockers: [],
       };
     }
 
@@ -154,7 +162,11 @@ export const IntegrationStatusEvaluator = {
       return {
         integrationKey: input.integrationKey,
         displayStatus: 'NOT_IN_USE',
+        isAllowed: true,
+        loginMethodEnabled: false,
+        readinessSnapshot: input.readinessSnapshot,
         warnings: [],
+        blockers: [],
       };
     }
 
@@ -162,7 +174,11 @@ export const IntegrationStatusEvaluator = {
       return {
         integrationKey: input.integrationKey,
         displayStatus: 'READY',
+        isAllowed: true,
+        loginMethodEnabled: true,
+        readinessSnapshot: input.readinessSnapshot,
         warnings: [],
+        blockers: [],
       };
     }
 
@@ -172,9 +188,13 @@ export const IntegrationStatusEvaluator = {
     return {
       integrationKey: input.integrationKey,
       displayStatus: 'BLOCKED',
+      isAllowed: true,
+      loginMethodEnabled: true,
+      readinessSnapshot: input.readinessSnapshot,
       warnings: [
         `${providerLabel} SSO runtime readiness is unavailable from the cached auth/runtime snapshot. Settings GET routes do not make live provider calls.`,
       ],
+      blockers: [],
     };
   },
 };

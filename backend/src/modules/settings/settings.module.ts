@@ -5,8 +5,8 @@
  * - Top-level module boundary for the shipped Settings backend surface.
  * - Composes the real Settings-native state engine, CP cascade service,
  *   bootstrap/overview reads, Access read/write, the live Account read/write
- *   surface, the Modules hub read surface, and the final v1 Personal builder
- *   read/write services.
+ *   surface, the Modules hub, the final v1 Personal builder, and the
+ *   Integrations informational read service.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -27,6 +27,7 @@ import { AccountSettingsQueryService } from './services/account-settings-query.s
 import { AccountSettingsReadService } from './services/account-settings-read.service';
 import { AccountSettingsService } from './services/account-settings.service';
 import { IntegrationsSettingsQueryService } from './services/integrations-settings-query.service';
+import { IntegrationsSettingsReadService } from './services/integrations-settings-read.service';
 import { ModulesHubQueryService } from './services/modules-hub-query.service';
 import { ModulesHubReadService } from './services/modules-hub-read.service';
 import { PersonalSettingsQueryService } from './services/personal-settings-query.service';
@@ -99,6 +100,7 @@ export function createSettingsModule(deps: {
     personalRepo,
     personalQuery,
   );
+  const integrationsReadService = new IntegrationsSettingsReadService(readRepo, integrationsQuery);
   const personalService = new PersonalSettingsService({
     db: deps.db,
     auditRepo: deps.auditRepo,
@@ -119,6 +121,7 @@ export function createSettingsModule(deps: {
     modulesReadService,
     personalReadService,
     personalService,
+    integrationsReadService,
   );
 
   return {
@@ -136,6 +139,7 @@ export function createSettingsModule(deps: {
     modulesReadService,
     personalReadService,
     personalService,
+    integrationsReadService,
     registerRoutes(app: FastifyInstance) {
       registerSettingsRoutes(app, controller);
     },

@@ -230,6 +230,81 @@ describe('settings evaluators', () => {
     expect(result.warnings).toHaveLength(1);
   });
 
+  it('derives hidden, not-in-use, and ready SSO statuses without local auth semantics', () => {
+    const baseSnapshot = {
+      providerKey: 'google' as const,
+      status: 'READY' as const,
+      asOf: new Date('2026-04-21T00:00:00.000Z'),
+      detail: null,
+    };
+
+    expect(
+      IntegrationStatusEvaluator.evaluate({
+        integrationKey: 'integration.sso.google',
+        isAllowed: false,
+        loginMethodEnabled: true,
+        readinessSnapshot: baseSnapshot,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        displayStatus: 'HIDDEN',
+        isAllowed: false,
+        loginMethodEnabled: true,
+        warnings: [],
+      }),
+    );
+
+    expect(
+      IntegrationStatusEvaluator.evaluate({
+        integrationKey: 'integration.sso.google',
+        isAllowed: true,
+        loginMethodEnabled: false,
+        readinessSnapshot: baseSnapshot,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        displayStatus: 'NOT_IN_USE',
+        isAllowed: true,
+        loginMethodEnabled: false,
+        warnings: [],
+      }),
+    );
+
+    expect(
+      IntegrationStatusEvaluator.evaluate({
+        integrationKey: 'integration.sso.google',
+        isAllowed: true,
+        loginMethodEnabled: true,
+        readinessSnapshot: baseSnapshot,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        displayStatus: 'READY',
+        isAllowed: true,
+        loginMethodEnabled: true,
+        warnings: [],
+      }),
+    );
+  });
+
+  it('treats stale readiness snapshots as blocked degraded truth', () => {
+    const result = IntegrationStatusEvaluator.evaluate({
+      integrationKey: 'integration.sso.microsoft',
+      isAllowed: true,
+      loginMethodEnabled: true,
+      readinessSnapshot: {
+        providerKey: 'microsoft',
+        status: 'STALE',
+        asOf: new Date('2026-04-21T00:00:00.000Z'),
+        detail: 'Snapshot is 120000ms old; maximum accepted age is 60000ms.',
+      },
+    });
+
+    expect(result.displayStatus).toBe('BLOCKED');
+    expect(result.readinessSnapshot.status).toBe('STALE');
+    expect(result.warnings.join(' ')).toContain('runtime readiness is unavailable');
+  });
+
   it('marks Personal for review when a required field is removed by CP', () => {
     const previous = buildHandoff();
     const next = buildHandoff({

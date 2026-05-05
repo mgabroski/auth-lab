@@ -4,6 +4,7 @@ import { ApiHttpError } from '../../../../src/shared/auth/api-errors';
 import type {
   AccessSettingsResponse,
   AccountSettingsResponse,
+  IntegrationsSettingsResponse,
   ModulesHubResponse,
   PersonalSettingsResponse,
   SettingsBootstrapResponse,
@@ -33,6 +34,7 @@ vi.mock('@/shared/server/logger', () => ({
 import {
   loadAccessSettings,
   loadAccountSettings,
+  loadIntegrationsSettings,
   loadModulesHub,
   loadPersonalSettings,
   loadSettingsBootstrap,
@@ -343,6 +345,73 @@ function makePersonal(overrides: Partial<PersonalSettingsResponse> = {}): Person
     ...overrides,
   };
 }
+function makeIntegrations(
+  overrides: Partial<IntegrationsSettingsResponse> = {},
+): IntegrationsSettingsResponse {
+  return {
+    sectionKey: 'integrations',
+    title: 'Integrations',
+    description: 'View truthful SSO integration readiness and deferred integrations.',
+    status: 'NOT_STARTED',
+    version: 1,
+    cpRevision: 4,
+    ssoIntegrations: [
+      {
+        integrationKey: 'integration.sso.google',
+        providerKey: 'google',
+        title: 'Google SSO Integration',
+        description: 'Informational status for Google SSO.',
+        displayStatus: 'BLOCKED',
+        statusLabel: 'Blocked',
+        visible: true,
+        cpAllowed: true,
+        loginMethodEnabled: true,
+        tenantConfigurationAvailable: false,
+        credentialEntryAvailable: false,
+        connectionFlowAvailable: false,
+        runtimeReadiness: {
+          status: 'SNAPSHOT_UNAVAILABLE',
+          checkedAt: '2026-04-21T00:00:00.000Z',
+          detail: 'snapshot missing',
+        },
+        warnings: ['Runtime readiness unavailable.'],
+        blockers: [],
+        resolutionHint: 'Review auth/runtime readiness configuration.',
+        accessDependency: {
+          loginMethodKey: 'auth.login.google',
+          enabled: true,
+          description: 'Google login is enabled in Access & Security.',
+        },
+      },
+    ],
+    deferredIntegrations: [
+      {
+        integrationKey: 'integration.adp',
+        title: 'ADP',
+        category: 'HRIS',
+        treatment: 'DEFERRED',
+        description: 'ADP HRIS import and sync is deferred in v1.',
+        reason: 'Available after platform configuration is complete.',
+        tenantConfigurationAvailable: false,
+        credentialEntryAvailable: false,
+        connectionFlowAvailable: false,
+        syncEngineAvailable: false,
+        mappingEditorAvailable: false,
+        capabilities: [],
+      },
+    ],
+    marketplace: {
+      integrationKey: 'integration.marketplace',
+      treatment: 'PLACEHOLDER_ONLY',
+      visible: false,
+      reason: 'Marketplace is placeholder-only in v1.',
+    },
+    warnings: ['Runtime readiness unavailable.'],
+    nextAction: null,
+    ...overrides,
+  };
+}
+
 afterEach(() => {
   ssrFetchMock.mockReset();
   serverLoggerErrorMock.mockReset();
@@ -479,6 +548,27 @@ describe('settings loaders', () => {
     }
 
     expect(result.data.cards[0]?.key).toBe('personal');
+  });
+
+  it('loadIntegrationsSettings calls the real Integrations endpoint with SSR headers', async () => {
+    ssrFetchMock.mockResolvedValueOnce(jsonResponse(makeIntegrations()));
+
+    const result = await loadIntegrationsSettings();
+
+    expect(ssrFetchMock).toHaveBeenCalledWith('/settings/integrations', {
+      headers: {
+        'X-Settings-Integrations': '1',
+      },
+    });
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      throw new Error('Expected settings integrations success');
+    }
+
+    expect(result.data.sectionKey).toBe('integrations');
+    expect(result.data.ssoIntegrations[0]?.displayStatus).toBe('BLOCKED');
+    expect(result.data.deferredIntegrations[0]?.treatment).toBe('DEFERRED');
   });
 
   it('loadPersonalSettings calls the real Personal endpoint with SSR headers', async () => {

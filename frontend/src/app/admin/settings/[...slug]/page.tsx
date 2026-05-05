@@ -3,9 +3,8 @@
  *
  * WHY:
  * - Keeps the locked v1 Settings route family honest after wiring the real
- *   overview page, the real Modules hub page, and the final Personal builder page.
- * - Provides SSR-gated route shells only for the remaining deferred live v1
- *   path (`/integrations`) and the Communications placeholder route.
+ *   overview page, Modules hub, Personal builder, and Integrations page.
+ * - Provides the SSR-gated shell only for the Communications placeholder route.
  * - Preserves absent treatment for Permissions and unsupported child routes by
  *   returning 404.
  *
@@ -13,8 +12,8 @@
  * - Auth bootstrap still owns route gating.
  * - Settings overview remains the only read source used here.
  * - No write flows, fake save buttons, or section-specific completion logic.
- * - Access, Account, Modules, and Personal are intentionally excluded because
- *   they now have dedicated real pages.
+ * - Access, Account, Modules, Personal, and Integrations are intentionally
+ *   excluded because they now have dedicated real pages.
  */
 import React from 'react';
 import Link from 'next/link';
@@ -39,13 +38,6 @@ type SettingsRouteDefinition = {
 };
 
 const ROUTES: Record<string, SettingsRouteDefinition> = {
-  integrations: {
-    slugPath: 'integrations',
-    title: 'Integrations',
-    overviewCardKey: 'integrations',
-    description:
-      'This route is the current shell for informational SSO readiness and deferred integrations. The detailed cards are not yet interactive in the current repo.',
-  },
   communications: {
     slugPath: 'communications',
     title: 'Communications',
@@ -181,9 +173,7 @@ export default async function SettingsRouteShellPage({ params }: SettingsRouteSh
             </ul>
           ) : null}
           <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.7, color: '#64748b' }}>
-            {route.placeholderOnly
-              ? 'This route is intentionally placeholder-only in the current repo.'
-              : 'This route now resolves honestly, but its detailed interactive implementation belongs to later Settings work.'}
+            This route is intentionally placeholder-only in the current repo.
           </p>
         </section>
       </div>

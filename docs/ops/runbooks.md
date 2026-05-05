@@ -94,6 +94,27 @@ Important current truth:
 - `GET /settings/modules`
 - `GET /settings/modules/personal`
 - `PUT /settings/modules/personal`
+- `GET /settings/integrations`
+
+### Integrations readiness note
+
+`GET /settings/integrations` is read-only and informational in v1.
+
+Operational expectations:
+
+- Settings reads must not make live outbound calls to Google, Microsoft, Stripe, HRIS providers, or marketplace systems.
+- Google and Microsoft SSO readiness is based on cached auth/runtime readiness truth only.
+- If the readiness snapshot is missing, stale, or invalid, the Settings page must show a degraded `BLOCKED` state with a warning.
+- Do not treat a degraded Integrations card as proof that provider credentials are wrong by itself. First confirm whether the cached auth/runtime readiness snapshot exists and is fresh.
+- HRIS providers and Stripe are deferred tenant-configuration cards; there is no tenant credential recovery or sync runbook for them in v1.
+
+Operator triage for degraded SSO readiness:
+
+1. Confirm the tenant CP setup allows the relevant SSO integration.
+2. Confirm Access & Security has the matching login method enabled when the provider is expected to be in use.
+3. Confirm auth/runtime SSO configuration is present in the active environment.
+4. Refresh the Settings page and verify whether the cached readiness snapshot becomes fresh.
+5. If the card remains degraded while real SSO login is expected to work, treat it as an auth/runtime readiness snapshot bug, not as a tenant Settings write issue.
 
 ### Personal save request-size note
 
@@ -163,6 +184,7 @@ If tenant runtime does not match recent CP allowance changes:
 The current repo still does **not** ship:
 
 - tenant-facing Integrations write flows
+- Integrations tenant credential entry, mapping editor, import rules UI, sync execution, or provider recovery flows
 - Communications configuration
 - Workspace Experience configuration
 - Permissions configuration

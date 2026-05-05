@@ -31,6 +31,7 @@ import { AccountSettingsService } from './services/account-settings.service';
 import { ModulesHubReadService } from './services/modules-hub-read.service';
 import { PersonalSettingsReadService } from './services/personal-settings-read.service';
 import { PersonalSettingsService } from './services/personal-settings.service';
+import { IntegrationsSettingsReadService } from './services/integrations-settings-read.service';
 import type { SettingsAuditRequestContext } from './settings.audit';
 
 export class SettingsController {
@@ -44,6 +45,7 @@ export class SettingsController {
     private readonly modulesReadService: ModulesHubReadService,
     private readonly personalReadService: PersonalSettingsReadService,
     private readonly personalService: PersonalSettingsService,
+    private readonly integrationsReadService: IntegrationsSettingsReadService,
   ) {}
 
   private buildAuditContext(req: FastifyRequest): SettingsAuditRequestContext {
@@ -184,6 +186,17 @@ export class SettingsController {
     });
 
     const dto = await this.personalReadService.getPersonalSettings(auth.tenantId);
+    return reply.status(200).send(dto);
+  }
+
+  async getIntegrations(req: FastifyRequest, reply: FastifyReply) {
+    const auth = requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
+
+    const dto = await this.integrationsReadService.getIntegrationsSettings(auth.tenantId);
     return reply.status(200).send(dto);
   }
 

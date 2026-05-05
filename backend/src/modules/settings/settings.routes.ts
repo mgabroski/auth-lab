@@ -22,4 +22,5 @@ export function registerSettingsRoutes(app: FastifyInstance, controller: Setting
   app.get('/settings/modules', controller.getModules.bind(controller));
   app.get('/settings/modules/personal', controller.getPersonal.bind(controller));
   app.put('/settings/modules/personal', controller.savePersonal.bind(controller));
+  app.get('/settings/integrations', controller.getIntegrations.bind(controller));
 }

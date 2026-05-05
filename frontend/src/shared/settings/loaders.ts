@@ -19,6 +19,7 @@ import { ApiHttpError, readApiError } from '@/shared/auth/api-errors';
 import type {
   AccessSettingsResponse,
   AccountSettingsResponse,
+  IntegrationsSettingsResponse,
   ModulesHubResponse,
   PersonalSettingsResponse,
   SettingsBootstrapResponse,
@@ -61,6 +62,10 @@ const SETTINGS_PERSONAL_HEADERS = {
   'X-Settings-Personal': '1',
 } as const;
 
+const SETTINGS_INTEGRATIONS_HEADERS = {
+  'X-Settings-Integrations': '1',
+} as const;
+
 async function fetchSettingsJson<T>(params: {
   path:
     | '/settings/bootstrap'
@@ -68,8 +73,9 @@ async function fetchSettingsJson<T>(params: {
     | '/settings/access'
     | '/settings/account'
     | '/settings/modules'
-    | '/settings/modules/personal';
-  target: 'bootstrap' | 'overview' | 'access' | 'account' | 'modules' | 'personal';
+    | '/settings/modules/personal'
+    | '/settings/integrations';
+  target: 'bootstrap' | 'overview' | 'access' | 'account' | 'modules' | 'personal' | 'integrations';
   headers: Record<string, string>;
 }): Promise<T> {
   try {
@@ -232,6 +238,28 @@ export async function loadPersonalSettings(): Promise<
     return {
       ok: false,
       error: error instanceof Error ? error : new Error('Unknown settings personal error'),
+    };
+  }
+}
+
+export async function loadIntegrationsSettings(): Promise<
+  SettingsLoadResult<IntegrationsSettingsResponse>
+> {
+  try {
+    const data = await fetchSettingsJson<IntegrationsSettingsResponse>({
+      path: '/settings/integrations',
+      target: 'integrations',
+      headers: SETTINGS_INTEGRATIONS_HEADERS,
+    });
+
+    return {
+      ok: true,
+      data,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error('Unknown settings integrations error'),
     };
   }
 }

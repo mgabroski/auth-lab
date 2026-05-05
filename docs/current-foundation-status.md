@@ -268,9 +268,9 @@ Current truthful boundary:
 - `/admin/settings/account` now resolves to the real Account Settings page backed by `GET /settings/account` plus the explicit per-card write routes for Branding, Organization Structure, and Company Calendar
 - `/admin/settings/modules` now resolves to the real navigation-only Modules hub backed by `GET /settings/modules`
 - `/admin/settings/modules/personal` now resolves to the real Personal builder page backed by `GET /settings/modules/personal` and `PUT /settings/modules/personal`
-- `/admin/settings/integrations` still resolves as an honest SSR-gated shell; `/admin/settings/communications` remains placeholder-only; Permissions remains absent
+- `/admin/settings/integrations` now resolves to the real v1 informational Integrations page backed by `GET /settings/integrations`; Google/Microsoft SSO show truthful readiness states, HRIS/Stripe stay deferred, Marketplace stays placeholder-only, `/admin/settings/communications` remains placeholder-only, and Permissions remains absent
 - CP `settingsHandoff` remains producer-shaped but now honestly reports live Settings engine presence and active synchronous cascade wiring
-- later Settings write phases beyond Access + Account + Personal remain intentionally unimplemented
+- later Settings write phases beyond Access + Account + Personal remain intentionally unimplemented; Integrations has no write route, no tenant credential entry, and no provider connection or recovery flow in v1
 
 ### Future modules and later-scope surfaces
 

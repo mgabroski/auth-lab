@@ -2,56 +2,76 @@
  * backend/src/modules/settings/gateways/sso-provider-readiness.gateway.ts
  *
  * WHY:
- * - Provides the Phase 2 runtime-readiness gateway used by the Integrations
- *   read model without making live outbound provider calls on Settings GET
- *   routes.
- * - Gives the repo one honest place to encode the current limitation: the full
- *   auth/runtime readiness snapshot refresher is not implemented yet, so
- *   Settings must surface cached/unavailable readiness rather than faking
- *   provider connectivity.
+ * - Provides the runtime-readiness gateway used by the Integrations read model
+ *   without making live outbound provider calls on Settings GET routes.
+ * - Encodes the current repo limitation honestly: external-provider readiness is
+ *   not backed by a reusable auth/runtime snapshot refresher yet, so Settings
+ *   reports unavailable/stale snapshot truth instead of pretending providers are
+ *   connected.
  *
  * RULES:
  * - No network calls.
  * - Cache-only / config-only truth.
- * - If the runtime snapshot is unavailable, return an explicit unavailable
- *   snapshot instead of guessing READY.
+ * - If runtime readiness is unavailable or stale, return explicit degraded
+ *   truth that downstream evaluators can fail closed with.
  */
 
 import type { AppConfig } from '../../../app/config';
 import type { SsoReadinessSnapshot } from '../services/settings-evaluators';
 
+type SsoProviderKey = 'google' | 'microsoft';
+
+type SsoProviderReadinessGatewayOpts = {
+  ttlMs?: number;
+  now?: () => Date;
+  initialSnapshots?: Partial<Record<SsoProviderKey, SsoReadinessSnapshot>>;
+};
+
 export class SsoProviderReadinessGateway {
   private readonly ttlMs: number;
 
-  private readonly cache = new Map<'google' | 'microsoft', SsoReadinessSnapshot>();
-
-  constructor(
-    private readonly config: Pick<AppConfig, 'sso'>,
-    opts?: {
-      ttlMs?: number;
-      now?: () => Date;
-    },
-  ) {
-    this.ttlMs = opts?.ttlMs ?? 60_000;
-    this.now = opts?.now ?? (() => new Date());
-  }
+  private readonly cache = new Map<SsoProviderKey, SsoReadinessSnapshot>();
 
   private readonly now: () => Date;
 
-  getSnapshot(providerKey: 'google' | 'microsoft'): SsoReadinessSnapshot {
+  constructor(
+    private readonly config: Pick<AppConfig, 'sso'>,
+    opts?: SsoProviderReadinessGatewayOpts,
+  ) {
+    this.ttlMs = opts?.ttlMs ?? 60_000;
+    this.now = opts?.now ?? (() => new Date());
+
+    for (const providerKey of ['google', 'microsoft'] as const) {
+      const snapshot = opts?.initialSnapshots?.[providerKey];
+      if (snapshot) {
+        this.cache.set(providerKey, snapshot);
+      }
+    }
+  }
+
+  getSnapshot(providerKey: SsoProviderKey): SsoReadinessSnapshot {
     const current = this.cache.get(providerKey);
     const now = this.now();
 
-    if (current && now.getTime() - current.asOf.getTime() <= this.ttlMs) {
-      return current;
+    if (current) {
+      const ageMs = now.getTime() - current.asOf.getTime();
+      if (ageMs <= this.ttlMs) {
+        return current;
+      }
+
+      return {
+        ...current,
+        status: 'STALE',
+        detail: `${providerLabel(providerKey)} SSO runtime readiness snapshot is stale. Last snapshot age is ${ageMs}ms, beyond the ${this.ttlMs}ms freshness window.`,
+      };
     }
 
-    const next = this.buildSnapshot(providerKey, now);
+    const next = this.buildBootstrapSnapshot(providerKey, now);
     this.cache.set(providerKey, next);
     return next;
   }
 
-  private buildSnapshot(providerKey: 'google' | 'microsoft', asOf: Date): SsoReadinessSnapshot {
+  private buildBootstrapSnapshot(providerKey: SsoProviderKey, asOf: Date): SsoReadinessSnapshot {
     if (this.config.sso.localOidc) {
       return {
         providerKey,
@@ -69,4 +89,8 @@ export class SsoProviderReadinessGateway {
         'Auth/runtime readiness snapshot refresh is not yet implemented for external providers in this repo. Settings GET routes must fail closed instead of probing providers live.',
     };
   }
+}
+
+function providerLabel(providerKey: SsoProviderKey): string {
+  return providerKey === 'google' ? 'Google' : 'Microsoft';
 }

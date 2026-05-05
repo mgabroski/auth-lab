@@ -169,7 +169,7 @@ describe('SettingsRouteShellPage', () => {
   it('treats dedicated live section routes as not found for the shell catch-all', async () => {
     await expect(
       SettingsRouteShellPage({
-        params: Promise.resolve({ slug: ['modules'] }),
+        params: Promise.resolve({ slug: ['integrations'] }),
       }),
     ).rejects.toThrow('NOT_FOUND');
     expect(notFoundMock).toHaveBeenCalled();
