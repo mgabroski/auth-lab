@@ -70,7 +70,7 @@ export type SettingsOverviewResponse = {
 };
 
 export type PlaceholderPageResponse = {
-  key: 'communications' | 'workspaceExperience';
+  key: 'communications';
   title: string;
   status: 'PLACEHOLDER';
   treatment: 'PLACEHOLDER_ROUTE_ONLY';

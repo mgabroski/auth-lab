@@ -6,7 +6,7 @@
  *   schema.
  * - Keeps rollout-bridge writes, transition-safe state updates, and revision
  *   alignment out of auth, Control Plane, and future tenant write logic.
- * - Gives the Settings state engine one typed DAL surface for aggregate and
+ * - Gives the Phase 2 state engine one typed DAL surface for aggregate and
  *   section transitions without introducing DB-trigger logic.
  *
  * RULES:
@@ -240,10 +240,6 @@ export class SettingsFoundationRepo {
     const current = await this.getSectionState(params.tenantId, params.sectionKey);
     if (!current) return false;
 
-    if (params.expectedVersion !== undefined && current.version !== params.expectedVersion) {
-      return false;
-    }
-
     const nextLastSavedAt = shouldMarkSave(current.lastSavedAt, params.markSaved)
       ? params.transitionAt
       : current.lastSavedAt;
@@ -289,16 +285,12 @@ export class SettingsFoundationRepo {
     const result = await (params.expectedVersion === undefined
       ? query.executeTakeFirst()
       : query.where('version', '=', params.expectedVersion).executeTakeFirst());
-    return Number(result.numUpdatedRows) > 0;
+    return Number(result.numUpdatedRows ?? 0) === 1;
   }
 
-  async transitionAggregateState(params: SettingsAggregateTransitionInput): Promise<boolean> {
+  async transitionAggregateState(params: SettingsAggregateTransitionInput): Promise<void> {
     const current = await this.findAggregateState(params.tenantId);
-    if (!current) return false;
-
-    if (params.expectedVersion !== undefined && current.version !== params.expectedVersion) {
-      return false;
-    }
+    if (!current) return;
 
     const nextLastSavedAt = shouldMarkSave(current.lastSavedAt, params.markSaved)
       ? params.transitionAt
@@ -323,9 +315,9 @@ export class SettingsFoundationRepo {
       nextLastSavedBy !== current.lastSavedByUserId ||
       nextLastReviewedBy !== current.lastReviewedByUserId;
 
-    if (!changed) return true;
+    if (!changed) return;
 
-    const query = this.db
+    await this.db
       .updateTable('tenant_setup_state')
       .set({
         overall_status: params.nextStatus,
@@ -339,12 +331,8 @@ export class SettingsFoundationRepo {
         last_reviewed_by_user_id: nextLastReviewedBy,
         updated_at: params.transitionAt,
       })
-      .where('tenant_id', '=', params.tenantId);
-
-    const result = await (params.expectedVersion === undefined
-      ? query.executeTakeFirst()
-      : query.where('version', '=', params.expectedVersion).executeTakeFirst());
-    return Number(result.numUpdatedRows) > 0;
+      .where('tenant_id', '=', params.tenantId)
+      .execute();
   }
 
   async syncSectionRevision(params: SettingsSectionRevisionSyncInput): Promise<void> {

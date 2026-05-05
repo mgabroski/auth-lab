@@ -1,130 +1,101 @@
 # Settings Lock Certification Checklist
 
-**Status:** Support checklist for final Settings signoff  
-**Scope:** Shipped tenant-facing Settings v1 only  
-**Authority:** This file does not replace `docs/current-foundation-status.md`, `backend/docs/api/settings.md`, `docs/ops/runbooks.md`, or `docs/qa/qa-execution-pack.md`. It exists to collect final signoff evidence without creating a second source of truth.
+## Status
+
+**Status:** Evidence gate — must be filled during the final lock review.
+
+This document is the repo-local checklist for certifying the shipped Settings module. It does not replace CI, QA execution, API docs, or runbooks. It defines the minimum evidence that must be attached to the final review before Settings can be called locked.
+
+A reviewer may not mark Settings locked from code inspection, green CI, or chat summary alone.
 
 ---
 
-## 1. Purpose
+## 1. Scope Under Certification
 
-Use this checklist before treating the shipped Settings v1 surface as locked.
+This checklist covers only the shipped Settings v1 slice:
 
-The checklist is intentionally evidence-based. A reviewer may not mark Settings locked from code inspection, green CI, or chat summary alone. Each gate below must be backed by command output, screenshots, trace artifacts, or linked review notes.
+- `/admin` bootstrap banner consumption
+- `/admin/settings` overview
+- `/admin/settings/access`
+- `/admin/settings/account`
+- `/admin/settings/modules`
+- `/admin/settings/modules/personal`
+- `/admin/settings/integrations`
+- `/admin/settings/communications`
+- Workspace Experience overview-card-only treatment
+- Permissions absent treatment
+- CP -> Settings cascade
+- Settings mutation conflicts and audit behavior
+- tenant isolation and same-origin/proxy boundaries relevant to Settings
 
----
-
-## 2. Source bundle for certification
-
-Load these files before review:
-
-1. `AGENTS.md`
-2. `docs/current-foundation-status.md`
-3. `ARCHITECTURE.md`
-4. `docs/security-model.md`
-5. `backend/docs/api/settings.md`
-6. `docs/ops/runbooks.md`
-7. `docs/qa/qa-execution-pack.md`
-8. relevant Settings backend, frontend, and test files
-
-Do not use older roadmap notes, prompt outputs, or external chat summaries as shipped truth when they conflict with the current repo.
+It does not certify future live Communications, Workspace Experience, Permissions, HRIS, Stripe, Documents, Benefits, Payments, Marketplace, or CP authentication surfaces.
 
 ---
 
-## 3. Mandatory lock gates
+## 2. Required Command Evidence
 
-| Gate                           | Required evidence                      | Pass criteria                                                                                                                                                          |
-| ------------------------------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend-owned setup truth      | Backend Settings proof output          | `/admin` and `/admin/settings` consume `/settings/*` truth; auth scaffold route is retired and cannot mutate setup state.                                              |
-| Required section behavior      | Backend + browser proof                | Access and Personal are required/gating when Personal is enabled; Account and Integrations never fake-complete required setup.                                         |
-| Personal full-replacement save | Backend + browser proof                | Generated defaults can be explicitly saved; required-floor/system-managed fields cannot be removed; invalid section assignments fail closed.                           |
-| Conflict safety                | `settings-concurrency.spec.ts` output  | Concurrent Account and Personal saves produce exactly one success and one conflict with no last-write-wins overwrite.                                                  |
-| CP cascade truth               | `settings-cp-cascade.spec.ts` output   | Required CP changes create Needs Review; optional Personal removals do not; replay is idempotent.                                                                      |
-| Placeholder/absent discipline  | Backend + browser proof                | Communications is placeholder-only, Workspace Experience has no route, and Permissions has no card/route/API.                                                          |
-| Integrations honesty           | Backend proof + UI screenshot          | Google/Microsoft SSO readiness is cache-based and degraded when unavailable/stale; HRIS/Stripe remain deferred; no fake Connected state or credential entry exists.    |
-| Audit correctness              | Backend proof or reviewed audit output | Success audits are transactional, failure audits survive rollback, and Settings audit metadata includes source, target, before/after, version, and cpRevision context. |
-| Topology and tenant boundary   | Playwright + proxy proof               | Same-tenant Settings access succeeds; cross-tenant access fails; browser uses same-origin `/api/*`; proxy conformance remains green.                                   |
-| Documentation truth            | Reviewer check                         | README, AGENTS, API docs, QA pack, runbooks, and current status describe the same shipped surface and route treatment.                                                 |
+Paste or attach command output for each required proof item.
 
-A single failed mandatory gate blocks lock.
+| Gate                         | Command                                                                                                                                                                                                                                                                                                                                        | Evidence location | Result |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ------ |
+| Backend Settings proof       | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-concurrency.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts` | TODO              | TODO   |
+| Frontend Settings unit proof | `yarn workspace frontend test:unit -- admin-settings`                                                                                                                                                                                                                                                                                          | TODO              | TODO   |
+| Browser Settings proof       | `yarn workspace frontend test:e2e test/e2e/settings.spec.ts`                                                                                                                                                                                                                                                                                   | TODO              | TODO   |
+| CP full-stack smoke          | `yarn workspace frontend test:e2e:cp`                                                                                                                                                                                                                                                                                                          | TODO              | TODO   |
+| Proxy conformance            | `./scripts/proxy-conformance.sh`                                                                                                                                                                                                                                                                                                               | TODO              | TODO   |
+| Full repo verification       | `./scripts/verify.sh` or current CI equivalent                                                                                                                                                                                                                                                                                                 | TODO              | TODO   |
 
 ---
 
-## 4. Required commands
+## 3. Required Browser / Manual Evidence
 
-Run these from the repo root.
+Attach screenshots or trace artifacts for:
 
-```bash
-yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-concurrency.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts
-```
-
-```bash
-yarn workspace frontend test:unit -- admin-settings
-```
-
-```bash
-yarn workspace frontend test:e2e test/e2e/settings.spec.ts
-```
-
-When full-stack proxy proof is in scope:
-
-```bash
-yarn workspace frontend test:e2e:cp
-./scripts/proxy-conformance.sh
-```
-
-Before final repository signoff, run the full repo gate:
-
-```bash
-yarn verify
-```
+| Evidence                                                  | Required artifact                            | Location | Result |
+| --------------------------------------------------------- | -------------------------------------------- | -------- | ------ |
+| `/admin` banner reads Settings bootstrap truth            | screenshot with URL bar                      | TODO     | TODO   |
+| Settings overview required/optional grouping              | screenshot with URL bar                      | TODO     | TODO   |
+| Access acknowledge flow                                   | screenshot before and after acknowledge      | TODO     | TODO   |
+| Personal default-save flow                                | screenshot before save and completion result | TODO     | TODO   |
+| Account non-gating save                                   | screenshot or API trace                      | TODO     | TODO   |
+| Integrations degraded readiness / no fake connected state | screenshot with URL bar                      | TODO     | TODO   |
+| Communications placeholder route                          | screenshot with URL bar                      | TODO     | TODO   |
+| Workspace Experience no route / overview-only card        | screenshot or Playwright trace               | TODO     | TODO   |
+| Permissions absence / 404                                 | screenshot or Playwright trace               | TODO     | TODO   |
+| Cross-tenant Settings isolation                           | Playwright trace or backend output           | TODO     | TODO   |
 
 ---
 
-## 5. Manual evidence required
+## 4. Lock Criteria
 
-Attach or link the following evidence to the final review or PR:
+Settings may be marked locked only when all of these are true:
 
-- `/admin` banner screenshot before Settings completion
-- `/admin/settings` overview screenshot showing required Access and Modules/Personal work
-- Access acknowledgement success screenshot
-- Personal save screenshot with generated defaults accepted unchanged
-- `/admin` screenshot after required setup is complete and the banner is gone
-- Communications placeholder screenshot
-- Workspace Experience route absence proof
-- Permissions route absence proof
-- Integrations screenshot showing informational/deferred states and no credential entry
-- backend proof command output
-- browser proof output or Playwright trace path
-- proxy conformance output when run
+- backend Settings proof suite passes
+- frontend Settings unit proof passes
+- browser Settings proof passes
+- CP/proxy proof passes where topology is in scope
+- mutation conflict behavior is proven for Account and Personal
+- failure audits are proven for Settings write failures
+- CP required/optional cascade behavior is proven
+- placeholder/absent route treatment is proven
+- tenant isolation is proven
+- docs and runbooks match the shipped route/API surface
+- all quality exceptions are either closed or explicitly acceptable for v1 lock
 
 ---
 
-## 6. Lock decision template
+## 5. Open Quality Exceptions Reviewed
 
-Copy this into the final review comment.
+| ID      | Summary                                                                                                     | Accepted for v1 lock? | Reviewer |
+| ------- | ----------------------------------------------------------------------------------------------------------- | --------------------- | -------- |
+| QE-0001 | Settings SSO runtime readiness refresher deferred; Integrations fails closed and remains informational-only | TODO                  | TODO     |
 
-```md
-## Settings v1 Lock Decision
+---
 
-- Decision: LOCKED | NOT LOCKED
-- Reviewer / owner:
-- Date:
-- Repo commit:
-- Backend Settings proof: PASS | FAIL | NOT RUN
-- Frontend unit proof: PASS | FAIL | NOT RUN
-- Browser Settings proof: PASS | FAIL | NOT RUN
-- Proxy / topology proof: PASS | FAIL | NOT RUN | NOT IN SCOPE
-- Documentation truth check: PASS | FAIL
-- Open quality exceptions: NONE | LIST
+## 6. Final Signoff
 
-### Residual risks
-
-List only risks that do not weaken mandatory lock gates.
-
-### Required remediation if NOT LOCKED
-
-List concrete blockers only.
-```
-
-Do not mark Settings locked if any mandatory gate is failed, unrun without an explicit owner-approved reason, or contradicted by current repo evidence.
+- **Reviewer:** TODO
+- **Date:** TODO
+- **Final decision:** TODO
+- **Residual accepted risks:** TODO
+- **Linked PR / CI run:** TODO

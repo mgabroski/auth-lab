@@ -303,19 +303,39 @@ describe('settings proof and QA closure', () => {
         email: `isolation-admin-${randomUUID().slice(0, 8)}@example.com`,
       });
 
-      const ownTenantRes = await app.inject({
+      for (const url of ['/settings/bootstrap', '/settings/overview', '/settings/access']) {
+        const ownTenantRes = await app.inject({
+          method: 'GET',
+          url,
+          headers: { host: hostForTenant(tenantA.tenantKey), cookie: adminA.cookie },
+        });
+        expect(ownTenantRes.statusCode, `same-tenant ${url}`).toBe(200);
+
+        const crossTenantRes = await app.inject({
+          method: 'GET',
+          url,
+          headers: { host: hostForTenant(tenantB.tenantKey), cookie: adminA.cookie },
+        });
+        expect(crossTenantRes.statusCode, `cross-tenant ${url}`).toBe(401);
+      }
+
+      const accessARes = await app.inject({
         method: 'GET',
-        url: '/settings/bootstrap',
+        url: '/settings/access',
         headers: { host: hostForTenant(tenantA.tenantKey), cookie: adminA.cookie },
       });
-      expect(ownTenantRes.statusCode).toBe(200);
+      const accessA = readJson<{ version: number; cpRevision: number }>(accessARes);
 
-      const crossTenantRes = await app.inject({
-        method: 'GET',
-        url: '/settings/bootstrap',
+      const crossTenantMutationRes = await app.inject({
+        method: 'POST',
+        url: '/settings/access/acknowledge',
         headers: { host: hostForTenant(tenantB.tenantKey), cookie: adminA.cookie },
+        payload: {
+          expectedVersion: accessA.version,
+          expectedCpRevision: accessA.cpRevision,
+        },
       });
-      expect(crossTenantRes.statusCode).toBe(401);
+      expect(crossTenantMutationRes.statusCode, 'cross-tenant Access mutation').toBe(401);
     } finally {
       await close();
     }

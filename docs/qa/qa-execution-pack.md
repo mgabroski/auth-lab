@@ -306,15 +306,13 @@ Steps:
 
 1. Open `/admin/settings/modules/personal`.
 2. Confirm Family Review, Field Configuration, and Section Builder are present.
-3. Do not make an artificial draft change when the backend-generated defaults are acceptable.
-4. Confirm `Save Personal Configuration` is available for an unsaved or Needs Review Personal section.
-5. Click `Save Personal Configuration`.
-6. Return to `/admin`.
+3. Make a real draft change if the button is disabled, for example rename the first section.
+4. Click `Save Personal Configuration`.
+5. Return to `/admin`.
 
 Expected results:
 
 - Save uses the single Personal full-replacement contract.
-- Personal can be saved as an explicit review even when generated defaults are unchanged.
 - Personal becomes Complete when current required-floor and section assignment rules are satisfied.
 - If Access is already complete, overall setup becomes Complete.
 - `/admin` banner disappears.
@@ -505,75 +503,17 @@ Evidence:
 
 ---
 
-### SET-12 — Concurrent Settings save proof
-
-| Field         | Value                                                             |
-| ------------- | ----------------------------------------------------------------- |
-| Environment   | Backend Settings proof suite                                      |
-| Persona       | developer/test runner                                             |
-| Fixture       | CP-published tenant with authenticated admin                      |
-| Preconditions | `settings-concurrency.spec.ts` runs against a clean test database |
-
-Steps:
-
-1. Start two Account Branding saves using the same `expectedVersion` and different values.
-2. Start two Personal full-replacement saves using the same section `expectedVersion` and different section names.
-3. Re-read the saved Account and Personal DTOs after each concurrent pair.
-
-Expected results:
-
-- Exactly one Account request succeeds and exactly one returns `409 CONFLICT`.
-- The final Branding values match the successful request only.
-- Exactly one Personal request succeeds and exactly one returns `409 CONFLICT`.
-- The final Personal section state and section name match the successful request only.
-- No silent retry, silent overwrite, or last-write-wins behavior is accepted.
-
-Evidence:
-
-- automated test output from `settings-concurrency.spec.ts`
-
----
-
-### SET-13 — Personal default-review browser proof
-
-| Field         | Value                                                |
-| ------------- | ---------------------------------------------------- |
-| Environment   | Local host-run browser proof                         |
-| Persona       | authenticated admin                                  |
-| Fixture       | clean seeded GoodWill Open state                     |
-| Preconditions | admin has reached `/admin/settings/modules/personal` |
-
-Steps:
-
-1. Open `/admin/settings/modules/personal`.
-2. Do not rename sections or make artificial field changes.
-3. Click `Save Personal Configuration` using the generated default draft.
-
-Expected results:
-
-- The save button is enabled even when the generated defaults are unchanged.
-- The save succeeds.
-- The page shows `Personal configuration saved`.
-- Returning to `/admin` removes the setup banner after Access has also been acknowledged.
-
-Evidence:
-
-- Playwright output from `frontend/test/e2e/settings.spec.ts`
-- screenshot or trace of the Personal page save without manual edits when manual QA repeats the case
-
----
-
 ## Automated Proof Commands
 
 Run these from the repo root unless noted.
 
-| Proof                        | Command                                                                                                                                                                                                                                                                                                                                        | What it proves                                                                                                                                                 |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend Settings proof suite | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-concurrency.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts` | migration/backfill and retired-scaffold removal, required/optional CP cascade, conflicts, placeholder/absent behavior, account non-gating, personal completion |
-| Frontend Settings unit proof | `yarn workspace frontend test:unit -- admin-settings`                                                                                                                                                                                                                                                                                          | SSR page loaders and component rendering contract for Settings pages                                                                                           |
-| Browser Settings proof       | `yarn workspace frontend test:e2e test/e2e/settings.spec.ts`                                                                                                                                                                                                                                                                                   | real browser admin journey through `/admin`, Settings overview, Access acknowledge, Personal save, placeholders, and tenant isolation                          |
-| CP full-stack proof          | `yarn workspace frontend test:e2e:cp`                                                                                                                                                                                                                                                                                                          | CP host create/publish/re-entry/status and tenant-host boundary in full-stack mode                                                                             |
-| Proxy conformance            | `./scripts/proxy-conformance.sh`                                                                                                                                                                                                                                                                                                               | Host preservation, `/api` stripping, cookie continuity, X-Forwarded headers, tenant isolation                                                                  |
+| Proof                        | Command                                                                                                                                                                                                                                                                                                                                        | What it proves                                                                                                                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend Settings proof suite | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-concurrency.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts` | migration/backfill and retired-scaffold removal, required/optional CP cascade, account/personal concurrency, conflicts, placeholder/absent behavior, account non-gating, personal completion |
+| Frontend Settings unit proof | `yarn workspace frontend test:unit -- admin-settings`                                                                                                                                                                                                                                                                                          | SSR page loaders and component rendering contract for Settings pages                                                                                                                         |
+| Browser Settings proof       | `yarn workspace frontend test:e2e test/e2e/settings.spec.ts`                                                                                                                                                                                                                                                                                   | real browser admin journey through `/admin`, Settings overview, Access acknowledge, Personal save, placeholders, and tenant isolation                                                        |
+| CP full-stack proof          | `yarn workspace frontend test:e2e:cp`                                                                                                                                                                                                                                                                                                          | CP host create/publish/re-entry/status and tenant-host boundary in full-stack mode                                                                                                           |
+| Proxy conformance            | `./scripts/proxy-conformance.sh`                                                                                                                                                                                                                                                                                                               | Host preservation, `/api` stripping, cookie continuity, X-Forwarded headers, tenant isolation                                                                                                |
 
 The browser Settings proof should start from a clean seeded local state. Run `yarn reset-db` and restart `yarn dev` before it when the admin MFA state is dirty.
 
@@ -639,6 +579,7 @@ QA signoff for the shipped Settings proof slice requires all of the following:
 - Communications placeholder and Permissions absent behavior passed
 - cross-tenant isolation proof passed
 - docs/runbooks checked against actual commands
+- `docs/qa/settings-lock-certification.md` filled with real command output/screenshots/traces before final lock
 - all open bugs triaged with severity
 
 CI green alone is not enough. Evidence and this execution pack must also be current.

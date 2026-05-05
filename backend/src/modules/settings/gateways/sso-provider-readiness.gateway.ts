@@ -4,13 +4,15 @@
  * WHY:
  * - Provides the runtime-readiness gateway used by the Integrations read model
  *   without making live outbound provider calls on Settings GET routes.
- * - Reads only cached auth/runtime readiness snapshots and reports degraded
- *   truth when no fresh snapshot exists, so Settings never pretends providers
- *   are connected and never calls providers from GET routes.
+ * - Encodes the current repo limitation honestly: external-provider readiness is
+ *   not backed by a reusable auth/runtime snapshot refresher yet, so Settings
+ *   reports unavailable/stale snapshot truth instead of pretending providers are
+ *   connected. The deferred production refresher is tracked in
+ *   docs/quality-exceptions.md (QE-0001).
  *
  * RULES:
  * - No network calls.
- * - Cache-only runtime readiness truth.
+ * - Cache-only / config-only truth.
  * - If runtime readiness is unavailable or stale, return explicit degraded
  *   truth that downstream evaluators can fail closed with.
  */
@@ -48,12 +50,15 @@ export class SsoProviderReadinessGateway {
     }
   }
 
+  /**
+   * Injection point for the future auth/runtime readiness refresher.
+   *
+   * Settings deliberately does not call providers live. Until the production
+   * refresher is implemented, this method is used by tests and local runtime
+   * wiring only; missing snapshots fail closed as SNAPSHOT_UNAVAILABLE.
+   */
   upsertRuntimeSnapshot(snapshot: SsoReadinessSnapshot): void {
     this.cache.set(snapshot.providerKey, snapshot);
-  }
-
-  clearRuntimeSnapshot(providerKey: SsoProviderKey): void {
-    this.cache.delete(providerKey);
   }
 
   getSnapshot(providerKey: SsoProviderKey): SsoReadinessSnapshot {
@@ -93,7 +98,7 @@ export class SsoProviderReadinessGateway {
       status: 'SNAPSHOT_UNAVAILABLE',
       asOf,
       detail:
-        'No fresh auth/runtime readiness snapshot is available for this provider. Settings GET routes fail closed instead of probing providers live.',
+        'Auth/runtime readiness snapshot refresh is not yet implemented for external providers in this repo. Settings GET routes must fail closed instead of probing providers live.',
     };
   }
 }

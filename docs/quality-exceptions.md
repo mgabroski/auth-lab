@@ -4,7 +4,7 @@
 **Purpose:** Authoritative repo-visible register for deferred quality targets, refused Track A signoff records, explicit time-bounded process exceptions, and closures
 **Authority Source:** `docs/quality-bar.md`
 **Owner Role:** Lead Architect or Designated Quality Owner
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-05-05
 
 ---
 
@@ -143,3 +143,46 @@ Use this section only when closing the record.
 - **Closed By PR:** #PR-NUMBER
 - **Resolution Summary:** <one short paragraph>
 ```
+
+## QE-0001 — Settings SSO Runtime Readiness Refresher Deferred
+
+- **Status:** Open
+- **Type:** Deferred Quality Target
+- **Opened:** 2026-05-05
+- **Opened By PR:** pending
+- **Owner:** Auth / Runtime Readiness Owner
+- **Target Resolution Date:** 2026-06-15
+- **Area:** Settings Integrations / Auth runtime readiness
+- **Related PR:** pending
+- **Authority Reference:** `docs/quality-bar.md`
+- **Linked Docs / ADRs:** `docs/ops/runbooks.md`, `backend/src/modules/settings/gateways/sso-provider-readiness.gateway.ts`
+
+### Summary
+
+The shipped Settings Integrations page is intentionally cache-only and never calls Google or Microsoft providers from Settings GET routes. The gateway exposes a runtime snapshot injection point, but this repo does not yet ship the production auth/runtime refresher that periodically populates external-provider SSO readiness snapshots.
+
+### Why This Is Allowed
+
+This is allowed as a deferred quality target because Settings v1 is informational-only for Integrations, exposes no tenant credential entry, and fails closed when a snapshot is missing or stale. The missing refresher does not widen access, fake a connected state, or allow tenant configuration drift. It only means external-provider SSO readiness may display degraded truth until the auth/runtime refresher is implemented.
+
+### Mandatory Gate Impact
+
+No mandatory gate weakened.
+
+### User / System / Delivery Impact
+
+For non-local runtimes without a populated SSO readiness snapshot, Google/Microsoft SSO cards can show `BLOCKED` degraded readiness even when credentials may exist elsewhere. Operators must treat that as an auth/runtime readiness-snapshot gap, not as a tenant Settings write issue.
+
+### Required Remediation
+
+Implement an auth/runtime readiness refresher that owns provider checks, writes fresh Google/Microsoft SSO readiness snapshots into the Settings gateway/cache boundary, and proves freshness/staleness behavior with tests. Settings GET routes must remain network-call-free.
+
+### Notes
+
+This exception must be closed before claiming production-grade live-provider readiness from the Settings Integrations page. It does not block v1 Settings lock because v1 Integrations is informational-only and fail-closed.
+
+### Closure
+
+- **Closed:** N/A
+- **Closed By PR:** N/A
+- **Resolution Summary:** N/A

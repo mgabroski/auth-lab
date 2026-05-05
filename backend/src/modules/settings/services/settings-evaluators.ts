@@ -6,7 +6,7 @@
  * - Keeps transition rules explicit and testable outside of controller/service
  *   orchestration.
  * - Centralises the locked v1 classification model so future write surfaces do
- *   not drift from shipped Settings law.
+ *   not drift from the roadmap.
  *
  * RULES:
  * - Pure functions only.
@@ -220,51 +220,6 @@ function isRequiredPersonalFieldRemoval(params: {
   });
 }
 
-function isRequiredPersonalFieldAddition(params: {
-  previous: CpSettingsHandoffSnapshot;
-  next: CpSettingsHandoffSnapshot;
-}): boolean {
-  const previousAllowedFields = new Set(
-    params.previous.allowances.personal.fields
-      .filter((field) => field.isAllowed)
-      .map((field) => field.fieldKey),
-  );
-
-  return params.next.allowances.personal.fields.some(
-    (field) =>
-      field.isAllowed &&
-      (field.minimumRequired === 'required' || field.isSystemManaged) &&
-      !previousAllowedFields.has(field.fieldKey),
-  );
-}
-
-function isRequiredPersonalFieldRuleChange(params: {
-  previous: CpSettingsHandoffSnapshot;
-  next: CpSettingsHandoffSnapshot;
-}): boolean {
-  const previousAllowedFields = new Map(
-    params.previous.allowances.personal.fields
-      .filter((field) => field.isAllowed)
-      .map((field) => [field.fieldKey, field]),
-  );
-
-  return params.next.allowances.personal.fields.some((field) => {
-    if (!field.isAllowed) {
-      return false;
-    }
-
-    const previous = previousAllowedFields.get(field.fieldKey);
-    if (!previous) {
-      return false;
-    }
-
-    return (
-      previous.minimumRequired !== field.minimumRequired ||
-      previous.isSystemManaged !== field.isSystemManaged
-    );
-  });
-}
-
 function isOptionalPersonalRemoval(params: {
   previous: CpSettingsHandoffSnapshot;
   next: CpSettingsHandoffSnapshot;
@@ -306,6 +261,10 @@ function integrationDependencyChanged(
     (integration) => integration.integrationKey === 'integration.sso.microsoft',
   )?.isAllowed;
 
+  // Only an integration allowance change that affects an already-active login
+  // method can create required Access review work. If the login method was not
+  // active, the integration change is not part of the tenant's current Access
+  // posture and must not force a review cycle.
   return (
     (previous.allowances.access.loginMethods.google && previousGoogle !== nextGoogle) ||
     (previous.allowances.access.loginMethods.microsoft && previousMicrosoft !== nextMicrosoft)
@@ -320,34 +279,7 @@ function personalRequiredBoundaryChanged(
     return true;
   }
 
-  return (
-    isRequiredPersonalFieldRemoval({ previous, next }) ||
-    isRequiredPersonalFieldAddition({ previous, next }) ||
-    isRequiredPersonalFieldRuleChange({ previous, next })
-  );
-}
-
-function personalRequiredBoundaryReasonCode(
-  previous: CpSettingsHandoffSnapshot,
-  next: CpSettingsHandoffSnapshot,
-): SettingsReasonCode {
-  if (previous.allowances.modules.modules.personal && !next.allowances.modules.modules.personal) {
-    return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_REMOVED;
-  }
-
-  if (!previous.allowances.modules.modules.personal && next.allowances.modules.modules.personal) {
-    return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_ADDED;
-  }
-
-  if (isRequiredPersonalFieldAddition({ previous, next })) {
-    return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_ADDED;
-  }
-
-  if (isRequiredPersonalFieldRemoval({ previous, next })) {
-    return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_REMOVED;
-  }
-
-  return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_CHANGED;
+  return isRequiredPersonalFieldRemoval({ previous, next });
 }
 
 export const NeedsReviewCascadeEvaluator = {
@@ -370,9 +302,21 @@ export const NeedsReviewCascadeEvaluator = {
     }
 
     if (personalRequiredBoundaryChanged(params.previous, params.next)) {
+      const personalModuleRemoved =
+        params.previous.allowances.modules.modules.personal &&
+        !params.next.allowances.modules.modules.personal;
+
+      const requiredPersonalFieldRemoved = isRequiredPersonalFieldRemoval({
+        previous: params.previous,
+        next: params.next,
+      });
+
       impactedSections.push({
         sectionKey: 'personal',
-        reasonCode: personalRequiredBoundaryReasonCode(params.previous, params.next),
+        reasonCode:
+          personalModuleRemoved || requiredPersonalFieldRemoved
+            ? SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_REMOVED
+            : SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_CHANGED,
       });
     }
 

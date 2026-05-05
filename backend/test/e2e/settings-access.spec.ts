@@ -548,6 +548,25 @@ describe('settings access phase 4 surface', () => {
       expect(readJson<ErrorResponseBody>(staleCpRevisionRes).error.message).toBe(
         'Access settings changed after this page was loaded. Refresh and review the latest platform-managed access rules before acknowledging.',
       );
+
+      const failureAudits = await deps.db
+        .selectFrom('audit_events')
+        .select(['action', 'metadata'])
+        .where('action', '=', 'settings.access.acknowledge.failed')
+        .orderBy('created_at asc')
+        .execute();
+
+      expect(failureAudits).toHaveLength(2);
+      const failureMessages = failureAudits.map((audit) => {
+        const metadata = audit.metadata as Record<string, unknown>;
+        return String(metadata.message);
+      });
+      expect(failureMessages).toEqual(
+        expect.arrayContaining([
+          'Access settings changed while you were reviewing them. Refresh the page and try again.',
+          'Access settings changed after this page was loaded. Refresh and review the latest platform-managed access rules before acknowledging.',
+        ]),
+      );
     } finally {
       await close();
     }

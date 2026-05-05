@@ -11,6 +11,8 @@
  *   completion event, and per-card versioning/conflict handling is explicit.
  */
 
+import { sql } from 'kysely';
+
 import type { AuditRepo } from '../../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../../shared/db/db';
 import { AppError } from '../../../shared/http/errors';
@@ -39,6 +41,12 @@ import { AccountSettingsQueryService } from './account-settings-query.service';
 import { SettingsAuditService } from './settings-audit.service';
 import { deriveSettingsNextAction } from './settings-next-action';
 import type { SettingsAuditRequestContext } from '../settings.audit';
+
+async function lockTenantAccountSettings(db: DbExecutor, tenantId: string): Promise<void> {
+  await sql`
+    select pg_advisory_xact_lock(hashtext('settings_account'), hashtext(${tenantId}))
+  `.execute(db);
+}
 
 function getFailureAuditMetadata(error: unknown): { errorCode: string; message: string } {
   if (error instanceof AppError) {
@@ -119,6 +127,8 @@ export class AccountSettingsService {
         const stateService = this.deps.stateService.withDb(trx);
         const auditService = this.deps.auditService.withAuditRepo(this.deps.auditRepo.withDb(trx));
 
+        await lockTenantAccountSettings(trx, params.auth.tenantId);
+
         const [state, cpHandoff] = await Promise.all([
           readRepo.getStateBundle(params.auth.tenantId),
           readRepo.getCpHandoffByTenantId(params.auth.tenantId),
@@ -148,6 +158,12 @@ export class AccountSettingsService {
 
         const currentVersion = params.currentVersion(account);
         const currentCpRevision = params.currentCpRevision(account);
+        const beforeCardSummary =
+          params.cardKey === 'branding'
+            ? account.branding
+            : params.cardKey === 'orgStructure'
+              ? account.orgStructure
+              : account.calendar;
 
         if (params.input.expectedVersion !== currentVersion) {
           throw params.conflictFactory();
@@ -163,7 +179,7 @@ export class AccountSettingsService {
         const savedAt = new Date();
         const sanitizedValues = params.sanitize(allowance);
 
-        const saved = await params.save(accountRepo, {
+        const cardSaved = await params.save(accountRepo, {
           tenantId: params.auth.tenantId,
           expectedVersion: currentVersion,
           appliedCpRevision: currentCpRevision,
@@ -172,7 +188,7 @@ export class AccountSettingsService {
           values: sanitizedValues,
         });
 
-        if (!saved) {
+        if (!cardSaved) {
           throw params.conflictFactory();
         }
 
@@ -188,7 +204,7 @@ export class AccountSettingsService {
           calendarStatus: refreshedAccount.calendar.status,
         });
 
-        await foundationRepo.transitionSectionState({
+        const transitioned = await foundationRepo.transitionSectionState({
           tenantId: params.auth.tenantId,
           sectionKey: 'account',
           nextStatus: sectionStatus,
@@ -197,7 +213,12 @@ export class AccountSettingsService {
           transitionAt: savedAt,
           actorUserId: params.auth.userId,
           markSaved: true,
+          expectedVersion: state.sections.account.version,
         });
+
+        if (!transitioned) {
+          throw SettingsErrors.accountCardVersionConflict(params.cardKey);
+        }
 
         const personalRequired = cpHandoff?.allowances.modules.modules.personal ?? true;
         const recomputed = await stateService.recomputeAggregate({
@@ -223,24 +244,17 @@ export class AccountSettingsService {
               ? refreshedAccount.orgStructure
               : refreshedAccount.calendar;
 
-        const beforeCardSummary =
-          params.cardKey === 'branding'
-            ? account.branding
-            : params.cardKey === 'orgStructure'
-              ? account.orgStructure
-              : account.calendar;
-
         const writer = auditService.buildWriter(params.auth);
         await auditService.recordAccountCardSaved({
           writer,
           tenantId: params.auth.tenantId,
           cardKey: params.cardKey,
-          source: 'AccountSettingsService.saveCard',
+          source: `AccountSettingsService.${params.cardKey}.save`,
           before: {
             card: {
               status: beforeCardSummary.status,
-              version: currentVersion,
-              cpRevision: currentCpRevision,
+              version: beforeCardSummary.version,
+              cpRevision: beforeCardSummary.appliedCpRevision,
             },
             section: {
               status: state.sections.account.status,

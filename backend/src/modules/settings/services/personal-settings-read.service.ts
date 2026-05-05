@@ -57,7 +57,7 @@ export class PersonalSettingsReadService {
         overallStatus: state.aggregate.overallStatus,
         accessStatus: state.sections.access.status,
         personalStatus: state.sections.personal.status,
-        personalRequired: true,
+        personalRequired: moduleEnabled,
       }),
       progress: personal.progress,
       familyReview: personal.familyReview,

@@ -70,6 +70,7 @@ Do not write ADRs for:
 | ADR-0016 | Control Plane Uses A Dedicated Host Surface Rather Than A Tenant-App Route Subtree                                          | LOCKED | CP / topology / security      |
 | ADR-0017 | CP → Settings Cascade Uses One Synchronous Revision-Based Contract Once The Settings Engine Exists                          | LOCKED | CP / Settings boundary        |
 | ADR-0018 | Settings Bootstrap Semantics Move Out Of Auth Bootstrap Through A Controlled Rollout Bridge                                 | LOCKED | auth / settings boundary      |
+| ADR-0019 | Settings Readiness Gate Retires Auth-Owned Setup Acknowledgement                                                            | LOCKED | auth / settings boundary      |
 
 ---
 

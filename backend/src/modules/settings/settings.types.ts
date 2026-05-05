@@ -636,6 +636,12 @@ export type SettingsSectionTransitionInput = {
   actorUserId?: string | null;
   markReviewed?: boolean;
   markSaved?: boolean;
+  /**
+   * Optional optimistic-concurrency guard for write services that already loaded
+   * a section row and must prove nobody advanced it before the transition write.
+   * Cascade/revision-sync callers intentionally omit this when they are the CP
+   * revision owner for the current transaction.
+   */
   expectedVersion?: number;
 };
 
@@ -648,7 +654,6 @@ export type SettingsAggregateTransitionInput = {
   actorUserId?: string | null;
   markReviewed?: boolean;
   markSaved?: boolean;
-  expectedVersion?: number;
 };
 
 export type SettingsSectionRevisionSyncInput = {

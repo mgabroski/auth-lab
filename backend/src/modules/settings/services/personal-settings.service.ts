@@ -357,11 +357,12 @@ export class PersonalSettingsService {
           throw SettingsErrors.personalSectionVersionConflict();
         }
 
+        const personalRequired = cpHandoff?.allowances.modules.modules.personal ?? true;
         const recomputed = await stateService.recomputeAggregate({
           tenantId: auth.tenantId,
           appliedCpRevision: currentSection.appliedCpRevision,
           transitionAt: savedAt,
-          personalRequired: true,
+          personalRequired,
           actorUserId: auth.userId,
           reasonCode: SETTINGS_REASON_CODES.PERSONAL_CONFIGURATION_SAVED,
         });
@@ -405,7 +406,7 @@ export class PersonalSettingsService {
               overallStatus: recomputed.aggregate.overallStatus,
               accessStatus: recomputed.sections.access.status,
               personalStatus: recomputed.sections.personal.status,
-              personalRequired: true,
+              personalRequired,
             }),
           },
           warnings: readModel.warnings,
