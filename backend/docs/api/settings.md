@@ -18,6 +18,7 @@ Current live routes in this repo:
 - `GET /settings/modules/personal`
 - `PUT /settings/modules/personal`
 - `GET /settings/integrations`
+- `GET /settings/communications`
 
 This is the real Settings-native tenant surface used by:
 
@@ -28,6 +29,7 @@ This is the real Settings-native tenant surface used by:
 - `/admin/settings/modules`
 - `/admin/settings/modules/personal`
 - `/admin/settings/integrations`
+- `/admin/settings/communications`
 
 It establishes:
 
@@ -39,6 +41,7 @@ It establishes:
 - the final v1 Personal builder read surface
 - the canonical Personal full-replacement save contract
 - the real v1 Integrations informational read surface
+- the minimal Communications placeholder read route
 
 It does **not** mean the full long-range Settings roadmap is complete.
 
@@ -361,6 +364,29 @@ Reports:
 This is the read-side guidance for the Personal conflict contract.
 The frontend must preserve the local draft on `409`, refetch the latest DTO, and let the admin reconcile explicitly.
 
+### `GET /settings/communications`
+
+Returns the minimal v1 Communications placeholder page DTO.
+
+Current truthful behavior:
+
+- Communications has an overview card and this read route only.
+- The route has no setup, save, publish, template-library, notification-rule, or tenant-configuration behavior.
+- The DTO explicitly reports that live configuration and mutation endpoints are unavailable.
+- This route does not read or mutate setup state, version, `cpRevision`, or audit state.
+
+Response shape:
+
+- `key = "communications"`
+- `title`
+- `status = "PLACEHOLDER"`
+- `treatment = "PLACEHOLDER_ROUTE_ONLY"`
+- `description`
+- `liveConfigurationAvailable = false`
+- `mutationEndpointsAvailable = false`
+- `notes[]`
+- `backHref`
+
 ### `GET /settings/integrations`
 
 Returns the v1 Integrations informational DTO.
@@ -547,7 +573,10 @@ The following remain intentionally unimplemented in the current repo state:
 - Integrations sync or mapping routes
 - Permissions routes
 - Communications write routes
+- Communications template-library routes
+- Communications notification-rule routes
 - Workspace Experience routes
+- Workspace Experience write or child routes
 - any giant all-settings publish route
 
 Their absence is intentional and must stay aligned with the locked roadmap.

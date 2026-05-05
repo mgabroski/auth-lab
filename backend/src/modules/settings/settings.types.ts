@@ -227,6 +227,18 @@ export type SettingsOverviewDto = {
   cards: SettingsOverviewCardDto[];
 };
 
+export type PlaceholderPageDto = {
+  key: SettingsPlaceholderCardKey;
+  title: string;
+  status: 'PLACEHOLDER';
+  treatment: 'PLACEHOLDER_ROUTE_ONLY';
+  description: string;
+  liveConfigurationAvailable: false;
+  mutationEndpointsAvailable: false;
+  notes: string[];
+  backHref: string;
+};
+
 export type AccessSettingsRowStatus = 'READY' | 'WARNING' | 'BLOCKED';
 
 export type AccessSettingsRowDto = {
@@ -600,6 +612,7 @@ export type SettingsMutationResultDto = {
 
 export type SettingsBootstrapResponse = SettingsBootstrapDto;
 export type SettingsOverviewResponse = SettingsOverviewDto;
+export type PlaceholderPageResponse = PlaceholderPageDto;
 export type AccessSettingsResponse = AccessSettingsDto;
 export type AccountSettingsResponse = AccountSettingsDto;
 export type ModulesHubResponse = ModulesHubDto;

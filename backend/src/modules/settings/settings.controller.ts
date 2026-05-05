@@ -32,6 +32,7 @@ import { ModulesHubReadService } from './services/modules-hub-read.service';
 import { PersonalSettingsReadService } from './services/personal-settings-read.service';
 import { PersonalSettingsService } from './services/personal-settings.service';
 import { IntegrationsSettingsReadService } from './services/integrations-settings-read.service';
+import { CommunicationsPlaceholderReadService } from './services/communications-placeholder-read.service';
 import type { SettingsAuditRequestContext } from './settings.audit';
 
 export class SettingsController {
@@ -46,6 +47,7 @@ export class SettingsController {
     private readonly personalReadService: PersonalSettingsReadService,
     private readonly personalService: PersonalSettingsService,
     private readonly integrationsReadService: IntegrationsSettingsReadService,
+    private readonly communicationsReadService: CommunicationsPlaceholderReadService,
   ) {}
 
   private buildAuditContext(req: FastifyRequest): SettingsAuditRequestContext {
@@ -197,6 +199,17 @@ export class SettingsController {
     });
 
     const dto = await this.integrationsReadService.getIntegrationsSettings(auth.tenantId);
+    return reply.status(200).send(dto);
+  }
+
+  async getCommunications(req: FastifyRequest, reply: FastifyReply) {
+    requireSession(req, {
+      role: 'ADMIN',
+      requireMfa: true,
+      requireEmailVerified: true,
+    });
+
+    const dto = this.communicationsReadService.getCommunicationsPlaceholder();
     return reply.status(200).send(dto);
   }
 

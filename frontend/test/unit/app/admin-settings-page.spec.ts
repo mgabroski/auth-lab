@@ -124,6 +124,16 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         warnings: [],
         isRequired: false,
       },
+      {
+        key: 'workspaceExperience',
+        title: 'Workspace Experience',
+        description: 'Placeholder card only.',
+        href: null,
+        classification: 'PLACEHOLDER_ONLY',
+        status: 'PLACEHOLDER',
+        warnings: [],
+        isRequired: false,
+      },
     ],
     ...overrides,
   };
@@ -153,6 +163,7 @@ describe('AdminSettingsPage', () => {
     expect(html).toContain('Optional sections');
     expect(html).toContain('access:Access &amp; Security');
     expect(html).toContain('communications:Communications');
+    expect(html).toContain('workspaceExperience:Workspace Experience');
     expect(html).not.toContain('Permissions');
   });
 

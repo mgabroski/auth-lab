@@ -5,15 +5,16 @@
  * - Keeps the locked v1 Settings route family honest after wiring the real
  *   overview page, Modules hub, Personal builder, and Integrations page.
  * - Provides the SSR-gated shell only for the Communications placeholder route.
- * - Preserves absent treatment for Permissions and unsupported child routes by
- *   returning 404.
+ * - Preserves absent treatment for Permissions, Workspace Experience, and
+ *   unsupported child routes by returning 404.
  *
  * RULES:
  * - Auth bootstrap still owns route gating.
- * - Settings overview remains the only read source used here.
+ * - Communications reads its minimal placeholder DTO from Settings, not local
+ *   frontend copy or overview-derived fallback truth.
  * - No write flows, fake save buttons, or section-specific completion logic.
  * - Access, Account, Modules, Personal, and Integrations are intentionally
- *   excluded because they now have dedicated real pages.
+ *   excluded because they have dedicated real pages.
  */
 import React from 'react';
 import Link from 'next/link';
@@ -26,25 +27,19 @@ import {
   getRouteStateRedirectPath,
 } from '@/shared/auth/redirects';
 import { SettingsStatusChip } from '@/shared/settings/components/settings-status-chip';
-import type { SettingsOverviewCardKey } from '@/shared/settings/contracts';
-import { loadSettingsOverview } from '@/shared/settings/loaders';
+import { loadCommunicationsPlaceholder } from '@/shared/settings/loaders';
 
 type SettingsRouteDefinition = {
   slugPath: string;
   title: string;
-  overviewCardKey: SettingsOverviewCardKey;
-  description: string;
-  placeholderOnly?: boolean;
+  loader: typeof loadCommunicationsPlaceholder;
 };
 
 const ROUTES: Record<string, SettingsRouteDefinition> = {
   communications: {
     slugPath: 'communications',
     title: 'Communications',
-    overviewCardKey: 'communications',
-    description:
-      'Communications lets you manage email templates and notification rules for your workspace. This area is coming soon.',
-    placeholderOnly: true,
+    loader: loadCommunicationsPlaceholder,
   },
 };
 
@@ -63,6 +58,20 @@ const shellCardStyle = {
   border: '1px solid rgba(148, 163, 184, 0.2)',
   backgroundColor: '#ffffff',
   boxShadow: '0 18px 40px -28px rgba(15, 23, 42, 0.35)',
+} as const;
+
+const mutedTextStyle = {
+  margin: 0,
+  fontSize: '14px',
+  lineHeight: 1.7,
+  color: '#475569',
+} as const;
+
+const errorTextStyle = {
+  margin: 0,
+  fontSize: '14px',
+  lineHeight: 1.7,
+  color: '#991b1b',
 } as const;
 
 type SettingsRouteShellPageProps = {
@@ -99,40 +108,34 @@ export default async function SettingsRouteShellPage({ params }: SettingsRouteSh
     redirect(getRouteStateRedirectPath(routeState));
   }
 
-  const overview = await loadSettingsOverview();
+  const placeholder = await route.loader();
 
-  if (!overview.ok) {
+  if (!placeholder.ok) {
     return (
       <AuthenticatedShell
         eyebrow="Hubins admin workspace"
         title={route.title}
-        subtitle="Settings overview data could not be loaded for this route."
+        subtitle="The Settings placeholder DTO could not be loaded for this route."
         me={routeState.me}
       >
         <div style={shellCardStyle}>
-          <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7, color: '#991b1b' }}>
-            <code>GET /settings/overview</code> failed, so this route is not inventing a local
-            fallback.
+          <p style={errorTextStyle}>
+            <code>GET /settings/{route.slugPath}</code> failed, so this route is not inventing a
+            local fallback.
           </p>
-          <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7, color: '#991b1b' }}>
-            {overview.error.message}
-          </p>
+          <p style={errorTextStyle}>{placeholder.error.message}</p>
         </div>
       </AuthenticatedShell>
     );
   }
 
-  const card = overview.data.cards.find((candidate) => candidate.key === route.overviewCardKey);
-
-  if (!card) {
-    notFound();
-  }
+  const data = placeholder.data;
 
   return (
     <AuthenticatedShell
       eyebrow="Hubins admin workspace"
-      title={route.title}
-      subtitle={card.description}
+      title={data.title}
+      subtitle={data.description}
       me={routeState.me}
     >
       <div style={{ display: 'grid', gap: '16px' }}>
@@ -148,32 +151,29 @@ export default async function SettingsRouteShellPage({ params }: SettingsRouteSh
         <section style={shellCardStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: '20px', lineHeight: 1.2, color: '#0f172a' }}>
-              {route.title}
+              {data.title}
             </h2>
-            <SettingsStatusChip status={card.status} />
+            <SettingsStatusChip status={data.status} />
           </div>
-          <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7, color: '#475569' }}>
-            {route.description}
-          </p>
-          {card.warnings.length > 0 ? (
-            <ul
-              style={{
-                margin: 0,
-                paddingLeft: '18px',
-                display: 'grid',
-                gap: '6px',
-                color: '#9a3412',
-                fontSize: '13px',
-                lineHeight: 1.6,
-              }}
-            >
-              {card.warnings.map((warning) => (
-                <li key={warning}>{warning}</li>
-              ))}
-            </ul>
-          ) : null}
+          <p style={mutedTextStyle}>{data.description}</p>
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: '18px',
+              display: 'grid',
+              gap: '6px',
+              color: '#475569',
+              fontSize: '13px',
+              lineHeight: 1.6,
+            }}
+          >
+            {data.notes.map((note) => (
+              <li key={note}>{note}</li>
+            ))}
+          </ul>
           <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.7, color: '#64748b' }}>
-            This route is intentionally placeholder-only in the current repo.
+            Live configuration available: {data.liveConfigurationAvailable ? 'yes' : 'no'} ·
+            Mutation endpoints available: {data.mutationEndpointsAvailable ? 'yes' : 'no'}
           </p>
         </section>
       </div>

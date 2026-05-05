@@ -3,20 +3,19 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ConfigResponse, MeResponse } from '../../../src/shared/auth/contracts';
-import type { SettingsOverviewResponse } from '../../../src/shared/settings/contracts';
+import type { PlaceholderPageResponse } from '../../../src/shared/settings/contracts';
 
-const { loadAuthBootstrapMock, loadSettingsOverviewMock, redirectMock, notFoundMock } = vi.hoisted(
-  () => ({
+const { loadAuthBootstrapMock, loadCommunicationsPlaceholderMock, redirectMock, notFoundMock } =
+  vi.hoisted(() => ({
     loadAuthBootstrapMock: vi.fn(),
-    loadSettingsOverviewMock: vi.fn(),
+    loadCommunicationsPlaceholderMock: vi.fn(),
     redirectMock: vi.fn((path: string) => {
       throw new Error(`REDIRECT:${path}`);
     }),
     notFoundMock: vi.fn(() => {
       throw new Error('NOT_FOUND');
     }),
-  }),
-);
+  }));
 
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
@@ -33,7 +32,7 @@ vi.mock('@/shared/auth/bootstrap.server', () => ({
 }));
 
 vi.mock('@/shared/settings/loaders', () => ({
-  loadSettingsOverview: loadSettingsOverviewMock,
+  loadCommunicationsPlaceholder: loadCommunicationsPlaceholderMock,
 }));
 
 vi.mock('@/shared/auth/components/authenticated-shell', () => ({
@@ -86,62 +85,30 @@ function makeMe(overrides: Partial<MeResponse> = {}): MeResponse {
   };
 }
 
-function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): SettingsOverviewResponse {
+function makePlaceholder(
+  overrides: Partial<PlaceholderPageResponse> = {},
+): PlaceholderPageResponse {
   return {
-    overallStatus: 'IN_PROGRESS',
-    nextAction: {
-      key: 'access',
-      label: 'Review Access & Security',
-      href: '/admin/settings/access',
-    },
-    cards: [
-      {
-        key: 'access',
-        title: 'Access & Security',
-        description: 'Required section.',
-        href: '/admin/settings/access',
-        classification: 'REQUIRED_GATING',
-        status: 'IN_PROGRESS',
-        warnings: [],
-        isRequired: true,
-      },
-      {
-        key: 'account',
-        title: 'Account Settings',
-        description: 'Live non-gating section.',
-        href: '/admin/settings/account',
-        classification: 'LIVE_NON_GATING',
-        status: 'NOT_STARTED',
-        warnings: [],
-        isRequired: false,
-      },
-      {
-        key: 'communications',
-        title: 'Communications',
-        description: 'Placeholder only.',
-        href: '/admin/settings/communications',
-        classification: 'PLACEHOLDER_ONLY',
-        status: 'PLACEHOLDER',
-        warnings: [],
-        isRequired: false,
-      },
-      {
-        key: 'modules',
-        title: 'Modules',
-        description: 'Navigation hub.',
-        href: '/admin/settings/modules',
-        classification: 'NAVIGATION_ONLY',
-        status: 'NOT_STARTED',
-        warnings: [],
-        isRequired: false,
-      },
+    key: 'communications',
+    title: 'Communications',
+    status: 'PLACEHOLDER',
+    treatment: 'PLACEHOLDER_ROUTE_ONLY',
+    description:
+      'Communications is intentionally placeholder-only in v1. There is no tenant configuration surface on this page.',
+    liveConfigurationAvailable: false,
+    mutationEndpointsAvailable: false,
+    notes: [
+      'Email templates are not configurable in v1.',
+      'Notification rules are not configurable in v1.',
+      'No setup action is required here for workspace completion.',
     ],
+    backHref: '/admin/settings',
     ...overrides,
   };
 }
 
 describe('SettingsRouteShellPage', () => {
-  it('renders the communications placeholder route without inventing a live configuration surface', async () => {
+  it('renders the communications placeholder route from the Settings placeholder DTO', async () => {
     loadAuthBootstrapMock.mockResolvedValue({
       ok: true,
       routeState: {
@@ -151,9 +118,9 @@ describe('SettingsRouteShellPage', () => {
       },
       me: makeMe(),
     });
-    loadSettingsOverviewMock.mockResolvedValue({
+    loadCommunicationsPlaceholderMock.mockResolvedValue({
       ok: true,
-      data: makeOverview(),
+      data: makePlaceholder(),
     });
 
     const html = renderToStaticMarkup(
@@ -163,7 +130,36 @@ describe('SettingsRouteShellPage', () => {
     );
 
     expect(html).toContain('Communications');
-    expect(html).toContain('This route is intentionally placeholder-only in the current repo.');
+    expect(html).toContain('Email templates are not configurable in v1.');
+    expect(html).toContain('Notification rules are not configurable in v1.');
+    expect(html).toContain('Live configuration available: no');
+    expect(html).toContain('Mutation endpoints available: no');
+  });
+
+  it('renders an explicit placeholder-load error instead of inventing fallback copy', async () => {
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_ADMIN',
+        config: makeConfig(),
+        me: makeMe(),
+      },
+      me: makeMe(),
+    });
+    loadCommunicationsPlaceholderMock.mockResolvedValue({
+      ok: false,
+      error: new Error('settings communications failed'),
+    });
+
+    const html = renderToStaticMarkup(
+      await SettingsRouteShellPage({
+        params: Promise.resolve({ slug: ['communications'] }),
+      }),
+    );
+
+    expect(html).toContain('GET /settings/communications');
+    expect(html).toContain('not inventing a local fallback');
+    expect(html).toContain('settings communications failed');
   });
 
   it('treats dedicated live section routes as not found for the shell catch-all', async () => {
@@ -175,10 +171,28 @@ describe('SettingsRouteShellPage', () => {
     expect(notFoundMock).toHaveBeenCalled();
   });
 
-  it('treats absent or unsupported routes as not found', async () => {
+  it('treats absent Permissions as not found', async () => {
     await expect(
       SettingsRouteShellPage({
         params: Promise.resolve({ slug: ['permissions'] }),
+      }),
+    ).rejects.toThrow('NOT_FOUND');
+    expect(notFoundMock).toHaveBeenCalled();
+  });
+
+  it('treats Workspace Experience as overview-card-only with no route', async () => {
+    await expect(
+      SettingsRouteShellPage({
+        params: Promise.resolve({ slug: ['workspace-experience'] }),
+      }),
+    ).rejects.toThrow('NOT_FOUND');
+    expect(notFoundMock).toHaveBeenCalled();
+  });
+
+  it('treats Communications child routes as not found', async () => {
+    await expect(
+      SettingsRouteShellPage({
+        params: Promise.resolve({ slug: ['communications', 'email-templates'] }),
       }),
     ).rejects.toThrow('NOT_FOUND');
     expect(notFoundMock).toHaveBeenCalled();

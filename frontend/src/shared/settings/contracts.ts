@@ -68,6 +68,18 @@ export type SettingsOverviewResponse = {
   cards: SettingsOverviewCardResponse[];
 };
 
+export type PlaceholderPageResponse = {
+  key: 'communications' | 'workspaceExperience';
+  title: string;
+  status: 'PLACEHOLDER';
+  treatment: 'PLACEHOLDER_ROUTE_ONLY';
+  description: string;
+  liveConfigurationAvailable: false;
+  mutationEndpointsAvailable: false;
+  notes: string[];
+  backHref: string;
+};
+
 export type AccessSettingsRowStatus = 'READY' | 'WARNING' | 'BLOCKED';
 
 export type AccessSettingsRowResponse = {

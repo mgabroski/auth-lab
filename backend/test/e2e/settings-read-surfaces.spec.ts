@@ -10,6 +10,7 @@ import type {
   SettingsOverviewCardDto,
   SettingsOverviewCardKey,
   SettingsOverviewResponse,
+  PlaceholderPageResponse,
 } from '../../src/modules/settings/settings.types';
 
 function hostForTenant(tenantKey: string): string {
@@ -310,6 +311,83 @@ describe('settings phase 2 read surfaces', () => {
         status: 'PLACEHOLDER',
         href: null,
       });
+    } finally {
+      await close();
+    }
+  });
+
+  it('serves only the Communications placeholder read route and keeps Workspace Experience plus Permissions route-absent', async () => {
+    const { app, deps, close, reset } = await buildTestApp();
+
+    try {
+      await reset();
+
+      const tenant = await deps.db
+        .insertInto('tenants')
+        .values({
+          key: `settings-${randomUUID().slice(0, 8)}`,
+          name: 'Settings Placeholder Tenant',
+          is_active: true,
+          public_signup_enabled: false,
+          admin_invite_required: false,
+          member_mfa_required: false,
+          allowed_email_domains: [],
+          allowed_sso: [],
+          setup_completed_at: null,
+        })
+        .returning(['id', 'key'])
+        .executeTakeFirstOrThrow();
+
+      const admin = await createAdminSession({
+        app,
+        deps,
+        tenantId: tenant.id,
+        tenantKey: tenant.key,
+        email: `admin-${randomUUID().slice(0, 8)}@example.com`,
+        password: 'Password123!',
+      });
+
+      const authHeaders = {
+        host: hostForTenant(tenant.key),
+        cookie: admin.cookie,
+      };
+
+      const communicationsRes = await app.inject({
+        method: 'GET',
+        url: '/settings/communications',
+        headers: authHeaders,
+      });
+
+      expect(communicationsRes.statusCode).toBe(200);
+      const placeholder = readJson<PlaceholderPageResponse>(communicationsRes);
+      expect(placeholder).toMatchObject({
+        key: 'communications',
+        status: 'PLACEHOLDER',
+        treatment: 'PLACEHOLDER_ROUTE_ONLY',
+        liveConfigurationAvailable: false,
+        mutationEndpointsAvailable: false,
+        backHref: '/admin/settings',
+      });
+      expect(placeholder.notes.join(' ')).toContain('Email templates are not configurable in v1.');
+      expect(placeholder.notes.join(' ')).toContain(
+        'Notification rules are not configurable in v1.',
+      );
+
+      for (const candidate of [
+        { method: 'POST', url: '/settings/communications' },
+        { method: 'PUT', url: '/settings/communications' },
+        { method: 'GET', url: '/settings/workspace-experience' },
+        { method: 'POST', url: '/settings/workspace-experience' },
+        { method: 'GET', url: '/settings/permissions' },
+        { method: 'POST', url: '/settings/permissions' },
+      ] as const) {
+        const res = await app.inject({
+          method: candidate.method,
+          url: candidate.url,
+          headers: authHeaders,
+        });
+        expect(res.statusCode).toBe(404);
+      }
     } finally {
       await close();
     }

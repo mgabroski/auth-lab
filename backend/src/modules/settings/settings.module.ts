@@ -6,7 +6,8 @@
  * - Composes the real Settings-native state engine, CP cascade service,
  *   bootstrap/overview reads, Access read/write, the live Account read/write
  *   surface, the Modules hub, the final v1 Personal builder, and the
- *   Integrations informational read service.
+ *   Integrations informational read service, plus the minimal Communications
+ *   placeholder read service.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -28,6 +29,7 @@ import { AccountSettingsReadService } from './services/account-settings-read.ser
 import { AccountSettingsService } from './services/account-settings.service';
 import { IntegrationsSettingsQueryService } from './services/integrations-settings-query.service';
 import { IntegrationsSettingsReadService } from './services/integrations-settings-read.service';
+import { CommunicationsPlaceholderReadService } from './services/communications-placeholder-read.service';
 import { ModulesHubQueryService } from './services/modules-hub-query.service';
 import { ModulesHubReadService } from './services/modules-hub-read.service';
 import { PersonalSettingsQueryService } from './services/personal-settings-query.service';
@@ -101,6 +103,7 @@ export function createSettingsModule(deps: {
     personalQuery,
   );
   const integrationsReadService = new IntegrationsSettingsReadService(readRepo, integrationsQuery);
+  const communicationsReadService = new CommunicationsPlaceholderReadService();
   const personalService = new PersonalSettingsService({
     db: deps.db,
     auditRepo: deps.auditRepo,
@@ -122,6 +125,7 @@ export function createSettingsModule(deps: {
     personalReadService,
     personalService,
     integrationsReadService,
+    communicationsReadService,
   );
 
   return {
@@ -140,6 +144,7 @@ export function createSettingsModule(deps: {
     personalReadService,
     personalService,
     integrationsReadService,
+    communicationsReadService,
     registerRoutes(app: FastifyInstance) {
       registerSettingsRoutes(app, controller);
     },

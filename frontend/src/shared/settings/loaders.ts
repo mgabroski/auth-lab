@@ -22,6 +22,7 @@ import type {
   IntegrationsSettingsResponse,
   ModulesHubResponse,
   PersonalSettingsResponse,
+  PlaceholderPageResponse,
   SettingsBootstrapResponse,
   SettingsOverviewResponse,
 } from './contracts';
@@ -66,6 +67,10 @@ const SETTINGS_INTEGRATIONS_HEADERS = {
   'X-Settings-Integrations': '1',
 } as const;
 
+const SETTINGS_COMMUNICATIONS_HEADERS = {
+  'X-Settings-Communications': '1',
+} as const;
+
 async function fetchSettingsJson<T>(params: {
   path:
     | '/settings/bootstrap'
@@ -74,8 +79,17 @@ async function fetchSettingsJson<T>(params: {
     | '/settings/account'
     | '/settings/modules'
     | '/settings/modules/personal'
-    | '/settings/integrations';
-  target: 'bootstrap' | 'overview' | 'access' | 'account' | 'modules' | 'personal' | 'integrations';
+    | '/settings/integrations'
+    | '/settings/communications';
+  target:
+    | 'bootstrap'
+    | 'overview'
+    | 'access'
+    | 'account'
+    | 'modules'
+    | 'personal'
+    | 'integrations'
+    | 'communications';
   headers: Record<string, string>;
 }): Promise<T> {
   try {
@@ -260,6 +274,28 @@ export async function loadIntegrationsSettings(): Promise<
     return {
       ok: false,
       error: error instanceof Error ? error : new Error('Unknown settings integrations error'),
+    };
+  }
+}
+
+export async function loadCommunicationsPlaceholder(): Promise<
+  SettingsLoadResult<PlaceholderPageResponse>
+> {
+  try {
+    const data = await fetchSettingsJson<PlaceholderPageResponse>({
+      path: '/settings/communications',
+      target: 'communications',
+      headers: SETTINGS_COMMUNICATIONS_HEADERS,
+    });
+
+    return {
+      ok: true,
+      data,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error('Unknown settings communications error'),
     };
   }
 }

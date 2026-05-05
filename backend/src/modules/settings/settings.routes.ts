@@ -4,7 +4,8 @@
  * WHY:
  * - Declares the currently shipped Settings HTTP surface.
  * - Keeps the live Settings-native reads and explicit write boundaries
- *   discoverable while deferred sections remain intentionally absent.
+ *   discoverable while Communications remains a read-only placeholder and
+ *   Workspace Experience plus Permissions remain route-absent.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -23,4 +24,5 @@ export function registerSettingsRoutes(app: FastifyInstance, controller: Setting
   app.get('/settings/modules/personal', controller.getPersonal.bind(controller));
   app.put('/settings/modules/personal', controller.savePersonal.bind(controller));
   app.get('/settings/integrations', controller.getIntegrations.bind(controller));
+  app.get('/settings/communications', controller.getCommunications.bind(controller));
 }

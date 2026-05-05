@@ -7,6 +7,7 @@ import type {
   IntegrationsSettingsResponse,
   ModulesHubResponse,
   PersonalSettingsResponse,
+  PlaceholderPageResponse,
   SettingsBootstrapResponse,
   SettingsOverviewResponse,
 } from '../../../../src/shared/settings/contracts';
@@ -34,6 +35,7 @@ vi.mock('@/shared/server/logger', () => ({
 import {
   loadAccessSettings,
   loadAccountSettings,
+  loadCommunicationsPlaceholder,
   loadIntegrationsSettings,
   loadModulesHub,
   loadPersonalSettings,
@@ -345,6 +347,26 @@ function makePersonal(overrides: Partial<PersonalSettingsResponse> = {}): Person
     ...overrides,
   };
 }
+function makePlaceholder(
+  overrides: Partial<PlaceholderPageResponse> = {},
+): PlaceholderPageResponse {
+  return {
+    key: 'communications',
+    title: 'Communications',
+    status: 'PLACEHOLDER',
+    treatment: 'PLACEHOLDER_ROUTE_ONLY',
+    description: 'Communications is intentionally placeholder-only in v1.',
+    liveConfigurationAvailable: false,
+    mutationEndpointsAvailable: false,
+    notes: [
+      'Email templates are not configurable in v1.',
+      'Notification rules are not configurable in v1.',
+    ],
+    backHref: '/admin/settings',
+    ...overrides,
+  };
+}
+
 function makeIntegrations(
   overrides: Partial<IntegrationsSettingsResponse> = {},
 ): IntegrationsSettingsResponse {
@@ -569,6 +591,27 @@ describe('settings loaders', () => {
     expect(result.data.sectionKey).toBe('integrations');
     expect(result.data.ssoIntegrations[0]?.displayStatus).toBe('BLOCKED');
     expect(result.data.deferredIntegrations[0]?.treatment).toBe('DEFERRED');
+  });
+
+  it('loadCommunicationsPlaceholder calls the minimal Communications placeholder endpoint with SSR headers', async () => {
+    ssrFetchMock.mockResolvedValueOnce(jsonResponse(makePlaceholder()));
+
+    const result = await loadCommunicationsPlaceholder();
+
+    expect(ssrFetchMock).toHaveBeenCalledWith('/settings/communications', {
+      headers: {
+        'X-Settings-Communications': '1',
+      },
+    });
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      throw new Error('Expected settings communications success');
+    }
+
+    expect(result.data.key).toBe('communications');
+    expect(result.data.liveConfigurationAvailable).toBe(false);
+    expect(result.data.mutationEndpointsAvailable).toBe(false);
   });
 
   it('loadPersonalSettings calls the real Personal endpoint with SSR headers', async () => {
