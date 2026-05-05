@@ -3,17 +3,17 @@
  *
  * WHY:
  * - Workspace setup state belongs to the tenant, not to individual users (ADR 0003).
- * - When setup_completed_at IS NULL, the admin dashboard shows a non-blocking
- *   banner prompting any admin to configure the workspace.
- * - When any admin visits /admin/settings, POST /auth/workspace-setup-ack sets
- *   setup_completed_at = now(). The banner disappears for all admins immediately.
+ * - This column was the auth-phase workspace setup acknowledgement scaffold.
+ * - The active Settings UI no longer reads it for banner or completion truth;
+ *   `/admin` now uses `GET /settings/bootstrap`.
+ * - The column is retained for conservative legacy backfill compatibility and
+ *   `/auth/config` response compatibility only.
  *
  * RULES:
- * - Nullable: existing tenants have NULL after migration — every existing admin
- *   will see the banner once on their next login, which is acceptable.
- * - Non-blocking: the banner is informational only. NULL never prevents any
- *   admin action or user login.
- * - One row per tenant: this is tenant-level state, not per-user or per-membership.
+ * - Nullable: existing tenants may have NULL.
+ * - Non-blocking: NULL never prevents any admin action or user login.
+ * - One row per tenant: this is tenant-level historical data, not per-user or
+ *   per-membership data.
  */
 
 import type { Kysely } from 'kysely';

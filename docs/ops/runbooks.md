@@ -95,6 +95,7 @@ Important current truth:
 - `GET /settings/modules/personal`
 - `PUT /settings/modules/personal`
 - `GET /settings/integrations`
+- `GET /settings/communications`
 
 ### Integrations readiness note
 
@@ -216,7 +217,7 @@ Wait until the frontend, backend, CP app, Mailpit, and local helper services are
 Backend Settings proof:
 
 ```bash
-yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts
+yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts
 ```
 
 Browser Settings proof against the local tenant origin:
@@ -248,18 +249,25 @@ The backend proof suite uses `backend/test/helpers/settings-fixtures.ts` to buil
 
 Do not replace these fixtures with ad hoc SQL unless the test is specifically about migration/backfill mechanics. SQL-only setup hides the CP-to-Settings cascade and gives false confidence.
 
-### Backfill proof expectations
+### Backfill and retired-scaffold proof expectations
 
-Legacy scaffold backfill is conservative by design.
+Legacy scaffold backfill is conservative by design and is limited to migration/backfill behavior. The active auth acknowledgement route has been retired and must not act as a Settings writer.
 
-Expected behavior:
+Expected backfill behavior:
 
 - native Settings state rows are created
-- legacy Access acknowledgement may initialize Access as `COMPLETE`
+- legacy Access acknowledgement may initialize Access as `COMPLETE` only during the explicit bridge/backfill path
 - aggregate setup must not become `COMPLETE` from legacy acknowledgement alone
 - other live sections remain `NOT_STARTED` unless real native configuration supports a stronger state
 
-If a legacy tenant becomes overall `COMPLETE` from scaffold acknowledgement alone, treat that as a P1 false-readiness bug.
+Expected active-route behavior:
+
+- `POST /auth/workspace-setup-ack` returns normal route-miss behavior
+- the retired route does not update `tenants.setup_completed_at`
+- the retired route does not update `tenant_setup_state` or `tenant_setup_section_state`
+- `/admin` and `/admin/settings` continue to use `/settings/*` truth only
+
+If a legacy tenant becomes overall `COMPLETE` from scaffold acknowledgement alone, treat that as a P1 false-readiness bug. If the retired auth acknowledgement route can still mutate setup state, treat that as a P0 competing-truth regression.
 
 ### CP cascade proof expectations
 

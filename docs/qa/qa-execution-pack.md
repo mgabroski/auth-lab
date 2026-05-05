@@ -58,6 +58,7 @@ This pack covers QA execution for the current shipped repo slice:
 - version conflict and CP revision conflict proof
 - CP required-vs-optional Settings cascade proof
 - migration/backfill proof for legacy scaffold to native Settings rows
+- retired auth scaffold removal proof so auth cannot mutate Settings setup truth
 - tenant-safe SSR/proxy/cookie behavior where current local topology supports it
 
 ---
@@ -439,20 +440,22 @@ Evidence:
 
 ---
 
-### SET-10 — Migration/backfill tenant behaves correctly
+### SET-10 — Migration/backfill and retired auth scaffold behave correctly
 
-| Field         | Value                                                                     |
-| ------------- | ------------------------------------------------------------------------- |
-| Environment   | Backend migration/backfill proof                                          |
-| Persona       | developer/test runner                                                     |
-| Fixture       | legacy scaffold tenant with `setup_completed_at`, no native Settings rows |
-| Preconditions | migration/backfill path runs                                              |
+| Field         | Value                                                                           |
+| ------------- | ------------------------------------------------------------------------------- |
+| Environment   | Backend migration/backfill and readiness-gate proof                             |
+| Persona       | developer/test runner                                                           |
+| Fixture       | legacy scaffold tenant with `setup_completed_at`, plus a native Settings tenant |
+| Preconditions | migration/backfill path and Settings readiness tests run                        |
 
 Steps:
 
 1. Create or load a tenant with legacy acknowledgement data and no native Settings state rows.
 2. Run the migration/backfill path.
 3. Inspect native Settings state rows.
+4. Against a tenant that already has native Settings rows, call the retired auth acknowledgement route.
+5. Re-read the native aggregate and Access section rows.
 
 Expected results:
 
@@ -460,10 +463,13 @@ Expected results:
 - Access can be backfilled to Complete only if legacy acknowledgement semantics still satisfy the current Access acknowledgement rule.
 - Overall setup is not backfilled to Complete from legacy acknowledgement alone.
 - Other live sections remain Not Started unless real persisted config supports a stronger state.
+- The retired auth acknowledgement route returns normal route-miss behavior.
+- The retired route does not mutate `tenants.setup_completed_at`, `tenant_setup_state`, or `tenant_setup_section_state`.
+- Current `/admin` and `/admin/settings` behavior remains driven by `/settings/*` DTOs only.
 
 Evidence:
 
-- automated test output from `settings-foundation.spec.ts`
+- automated test output from `settings-foundation.spec.ts` and `settings-readiness-gate.spec.ts`
 
 ---
 
@@ -501,13 +507,13 @@ Evidence:
 
 Run these from the repo root unless noted.
 
-| Proof                        | Command                                                                                                                                                                                                                                                                           | What it proves                                                                                                                        |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend Settings proof suite | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts` | migration/backfill, required/optional CP cascade, conflicts, placeholder/absent behavior, account non-gating, personal completion     |
-| Frontend Settings unit proof | `yarn workspace frontend test:unit -- admin-settings`                                                                                                                                                                                                                             | SSR page loaders and component rendering contract for Settings pages                                                                  |
-| Browser Settings proof       | `yarn workspace frontend test:e2e test/e2e/settings.spec.ts`                                                                                                                                                                                                                      | real browser admin journey through `/admin`, Settings overview, Access acknowledge, Personal save, placeholders, and tenant isolation |
-| CP full-stack proof          | `yarn workspace frontend test:e2e:cp`                                                                                                                                                                                                                                             | CP host create/publish/re-entry/status and tenant-host boundary in full-stack mode                                                    |
-| Proxy conformance            | `./scripts/proxy-conformance.sh`                                                                                                                                                                                                                                                  | Host preservation, `/api` stripping, cookie continuity, X-Forwarded headers, tenant isolation                                         |
+| Proof                        | Command                                                                                                                                                                                                                                                                                                           | What it proves                                                                                                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend Settings proof suite | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts` | migration/backfill and retired-scaffold removal, required/optional CP cascade, conflicts, placeholder/absent behavior, account non-gating, personal completion |
+| Frontend Settings unit proof | `yarn workspace frontend test:unit -- admin-settings`                                                                                                                                                                                                                                                             | SSR page loaders and component rendering contract for Settings pages                                                                                           |
+| Browser Settings proof       | `yarn workspace frontend test:e2e test/e2e/settings.spec.ts`                                                                                                                                                                                                                                                      | real browser admin journey through `/admin`, Settings overview, Access acknowledge, Personal save, placeholders, and tenant isolation                          |
+| CP full-stack proof          | `yarn workspace frontend test:e2e:cp`                                                                                                                                                                                                                                                                             | CP host create/publish/re-entry/status and tenant-host boundary in full-stack mode                                                                             |
+| Proxy conformance            | `./scripts/proxy-conformance.sh`                                                                                                                                                                                                                                                                                  | Host preservation, `/api` stripping, cookie continuity, X-Forwarded headers, tenant isolation                                                                  |
 
 The browser Settings proof should start from a clean seeded local state. Run `yarn reset-db` and restart `yarn dev` before it when the admin MFA state is dirty.
 

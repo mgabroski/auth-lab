@@ -593,7 +593,7 @@ test.describe('auth smoke', () => {
     ).toBe(401);
   });
 
-  // ── Phase 9 smoke tests ───────────────────────────────────────────────────
+  // ── Workspace settings route smoke tests ─────────────────────────────────
   //
   // Proves the workspace setup banner contract (ADR 0003):
   // - /admin/settings route exists and is reachable (not 404)
@@ -602,14 +602,11 @@ test.describe('auth smoke', () => {
   // - NONE + ADMIN routes to /admin (role-aware routing fix)
   // - members are redirected away from /admin (role gate enforced)
   //
-  // The full workspace-setup-ack flow (banner → settings → ack → banner gone)
-  // requires a fully authenticated admin session (MFA verified), which needs a
-  // real authenticator app. That is Phase 5 territory. These tests prove the
-  // route surfaces and role-routing contracts that are prerequisite to that proof.
+  // The active Settings banner lifecycle is now verified through the Settings
+  // proof suite. Auth smoke tests keep route existence and role-routing coverage
+  // only; auth no longer owns a workspace setup acknowledgement mutation.
 
-  test('phase-9: /admin/settings route exists and redirects unauthenticated access', async ({
-    page,
-  }) => {
+  test('/admin/settings route exists and redirects unauthenticated access', async ({ page }) => {
     // Route must exist (not 404). Unauthenticated access must redirect to login.
     await page.goto(`${OPEN_ORIGIN}/admin/settings`);
 
@@ -627,9 +624,7 @@ test.describe('auth smoke', () => {
     ).toBe(true);
   });
 
-  test('phase-9: /admin/settings responds with a page (not 404) for any request', async ({
-    request,
-  }) => {
+  test('/admin/settings responds with a page (not 404) for any request', async ({ request }) => {
     // Even without a session, Next.js must handle the route and return a
     // renderable response (200 with redirect HTML, or a 3xx). Never 404.
     const response = await request.get(`${OPEN_ORIGIN}/admin/settings`, {
@@ -674,7 +669,7 @@ test.describe('auth smoke', () => {
   test('phase-9: admin login continues to /auth/mfa/setup (MFA_SETUP_REQUIRED continuation unchanged)', async ({
     page,
   }) => {
-    // Proves the auth continuation chain is unaffected by Phase 9 changes.
+    // Proves the auth continuation chain remains unaffected by workspace settings route coverage.
     // Admin with no MFA still continues to /auth/mfa/setup — not /admin/settings.
     // Setup banner lives on /admin; it does not intercept the auth flow.
     await page.goto(`${OPEN_ORIGIN}/auth/login`);

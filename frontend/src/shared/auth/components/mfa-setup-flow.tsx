@@ -97,7 +97,7 @@ const recoveryCodeListStyle: CSSProperties = {
 
 type MfaSetupFlowProps = {
   userEmail: string;
-  /** Phase 9: required to route NONE + ADMIN → /admin correctly after setup. */
+  /** Required to route NONE + ADMIN → /admin correctly after setup. */
   role: MembershipRole;
 };
 
@@ -152,7 +152,7 @@ export function MfaSetupFlow({ userEmail, role }: MfaSetupFlowProps) {
       }
 
       setSuccessMessage('MFA setup completed. Redirecting to your workspace…');
-      // Phase 9: role prop is supplied by the SSR page so NONE + ADMIN → /admin.
+      // The SSR page supplies role so NONE + ADMIN → /admin.
       router.replace(getPostAuthRedirectPath(result.data.nextAction, role, null));
     } catch (caughtError) {
       setError(caughtError);

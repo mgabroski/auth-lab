@@ -621,11 +621,11 @@ Both outcomes would violate the locked Settings model.
 
 ### Consequences
 
-- current `/auth/config` + `/auth/workspace-setup-ack` behavior is treated as temporary scaffolding, not the final Settings bootstrap contract
-- future Settings work must introduce `GET /settings/bootstrap` as the authoritative Settings bootstrap surface
-- rollout and backfill work must be explicit, auditable, and conservative
+- the auth-phase workspace setup acknowledgement flow was temporary scaffolding, not the final Settings bootstrap contract
+- Settings work introduced `GET /settings/bootstrap` as the authoritative Settings bootstrap surface
+- rollout and backfill work is explicit, auditable, and conservative
 - no tenant is backfilled to overall `COMPLETE` from legacy acknowledgement alone
-- once the bridge is complete, auth bootstrap docs and code must stop carrying Settings semantics
+- after bridge completion, auth bootstrap docs and code stop carrying live Settings semantics; `setupCompleted` remains only as compatibility metadata
 
 ### Supersedes
 
@@ -666,6 +666,41 @@ Separating route registration from auth policy keeps CP as a first-class synchro
 ### Supersedes
 
 Any interpretation that CP itself is temporary, or that no-auth access controls whether CP routes exist.
+
+## ADR-0019 — Settings Readiness Gate Retires Auth-Owned Setup Acknowledgement
+
+### Status
+
+LOCKED
+
+### Decision
+
+The active repo no longer exposes auth-owned workspace setup acknowledgement as a Settings writer. The historical auth-phase acknowledgement route is retired from the live API surface, and Settings setup truth is owned by Settings-native persisted state.
+
+Current authoritative setup consumers are:
+
+- `/admin` reads `GET /settings/bootstrap` for banner visibility, aggregate status, and next recommended action
+- `/admin/settings` reads `GET /settings/overview` for section cards, detailed status, and route treatment
+- Settings section pages read and mutate only `/settings/*` APIs
+- Control Plane allowance changes invoke the synchronous Settings cascade once a tenant is provisioned
+
+`ConfigResponse.tenant.setupCompleted` and `tenants.setup_completed_at` remain as retired compatibility/backfill artifacts only. They must not be used by new Settings consumers for banner visibility, setup status, Needs Review state, or section progress.
+
+### Why
+
+The Settings v1 readiness gate requires one authoritative Settings bootstrap truth and no competing auth-phase Settings truth. Leaving an auth acknowledgement mutation active would allow a non-Settings route to mutate setup state outside the Settings state engine, bypassing section-level save semantics, audit expectations, and CP revision conflict handling.
+
+### Consequences
+
+- the retired auth acknowledgement route returns normal route-miss behavior and must not mutate `tenants.setup_completed_at` or Settings state
+- Settings bootstrap and overview remain backend-authoritative and persisted
+- legacy setup timestamps may still be used by migrations/backfill logic, but not by active Settings page consumers
+- API docs, QA docs, runbooks, and readiness tests must describe the retired endpoint as compatibility history, not current behavior
+- any future attempt to reintroduce auth-owned setup acknowledgement requires a new ADR because it would create a second Settings truth path
+
+### Supersedes
+
+Any interpretation of ADR-0003 or ADR-0018 that treats auth bootstrap or an auth acknowledgement route as current owner of Settings setup semantics.
 
 ## Maintenance Rules
 

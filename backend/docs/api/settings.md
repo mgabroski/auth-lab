@@ -45,6 +45,19 @@ It establishes:
 
 It does **not** mean the full long-range Settings roadmap is complete.
 
+## Authoritative bootstrap and route-treatment truth
+
+`GET /settings/bootstrap` is the only active bootstrap source for Settings setup semantics. Auth bootstrap may expose compatibility metadata, but it must not be used for Settings banner visibility, aggregate setup state, section status, Needs Review state, or next recommended action.
+
+Route treatment is locked as follows:
+
+- Live v1 Settings surfaces: `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/account`, `/settings/modules`, `/settings/modules/personal`, and `/settings/integrations`.
+- Placeholder-only v1 surface: `/settings/communications`. It returns a minimal placeholder DTO and exposes no live configuration or mutation behavior.
+- Overview-card-only v1 surface: Workspace Experience. It appears only as an overview card and has no backend route.
+- Absent v1 surface: Permissions. It has no overview card, no backend route, and no tenant configuration API.
+
+The retired auth-phase workspace setup acknowledgement route is not part of the active Settings API surface. Setup progress changes only through Settings-native mutations and CP-driven cascade handling.
+
 ---
 
 ## Guard model

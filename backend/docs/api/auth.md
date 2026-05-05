@@ -250,17 +250,18 @@ This endpoint must not expose tenant-sensitive settings such as:
 - `adminInviteRequired` (exposed only through the derived `signupAllowed`)
 - other internal tenant policy details not needed for public bootstrap
 
-### Current workspace-setup scaffold note
+### Retired workspace-setup compatibility note
 
-`setupCompleted` is part of the current shipped auth/bootstrap contract because the repo already ships:
+`setupCompleted` remains on `ConfigResponse.tenant` as a compatibility field derived from the retired auth-phase acknowledgement timestamp. It is not the current Settings setup source of truth.
 
-- the admin dashboard workspace-setup banner
-- the SSR-gated `/admin/settings` placeholder route
-- the tenant-scoped `POST /auth/workspace-setup-ack` acknowledgement flow
+The active Settings implementation now owns tenant setup semantics through Settings-native persisted state and the Settings API:
 
-This is honest current behavior, but it is **temporary scaffolding**, not the final Settings bootstrap ownership model.
-The locked Settings implementation baseline moves Settings bootstrap semantics to a future `GET /settings/bootstrap` surface once the native Settings state engine exists.
-Until that rollout bridge is implemented, `/auth/config` remains the current shipped source for the banner's `setupCompleted` input only.
+- `/admin` reads `GET /settings/bootstrap` for banner visibility, setup status, and next recommended action.
+- `/admin/settings` reads `GET /settings/overview` for detailed section status and route treatment.
+- Settings writes update Settings-owned state through `/settings/*` mutations.
+- Auth no longer exposes a workspace-setup acknowledgement mutation.
+
+The legacy `setupCompleted` field is intentionally not used by the current admin Settings consumers. It exists only so older bootstrap readers and historical data migrations can remain understandable while the repo carries the legacy `tenants.setup_completed_at` column.
 
 ### Why it exists
 
@@ -269,7 +270,8 @@ This endpoint is intended for frontend bootstrap before authentication, for exam
 - whether signup should be shown (`signupAllowed`)
 - which SSO providers should be shown (`allowedSso`)
 - whether the tenant is effectively available (`isActive`)
-- whether the current shipped admin banner scaffold should render (`setupCompleted`)
+
+It must not be used by new Settings consumers for setup completion, banner visibility, Needs Review state, or section progress.
 
 ---
 

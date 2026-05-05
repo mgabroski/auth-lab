@@ -11,7 +11,7 @@ function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigRe
       publicSignupEnabled: true,
       signupAllowed: true,
       allowedSso: ['google'],
-      // Phase 9: setupCompleted is a required field. Default to true in tests —
+      // setupCompleted is a legacy compatibility field. Default to true in tests —
       // override explicitly when testing the banner-visible case.
       setupCompleted: true,
       ...overrides,
@@ -121,7 +121,7 @@ describe('resolveAuthRouteState', () => {
   });
 
   it('AUTHENTICATED_ADMIN carries setupCompleted=false through config for banner rendering', () => {
-    // Phase 9: the route state passes config through so admin page can read
+    // The route state passes config through for legacy compatibility readers.
     // config.tenant.setupCompleted to conditionally render the setup banner.
     const state = resolveAuthRouteState({
       config: makeConfig({ setupCompleted: false }),

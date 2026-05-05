@@ -12,7 +12,7 @@
  * - Final nextAction decision must route through decideLoginNextAction.
  * - User + tenant reads must execute in Promise.all.
  *
- * Note (Phase 9): workspace setup state is NOT derived here.
+ * Note: workspace setup state is NOT derived here.
  * setupCompleted lives in GET /auth/config (ConfigResponse) and is read
  * separately by the frontend bootstrap. AuthNextAction is not extended
  * with setup state — see ADR 0003.

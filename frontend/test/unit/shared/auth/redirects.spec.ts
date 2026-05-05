@@ -62,7 +62,7 @@ function makeMe(role: MembershipRole = 'MEMBER', nextAction: AuthNextAction = 'N
 // ─── getPathForNextAction ─────────────────────────────────────────────────────
 
 describe('getPathForNextAction', () => {
-  // NONE is role-aware (Phase 9 fix)
+  // NONE routing is role-aware.
   it('NONE + MEMBER → /app', () => {
     expect(getPathForNextAction('NONE', 'MEMBER')).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
   });

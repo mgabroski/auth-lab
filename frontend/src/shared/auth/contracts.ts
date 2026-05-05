@@ -21,9 +21,9 @@
  *   whether to render signup entry points. See backend auth.types.ts for rationale.
  *
  * LEGACY SCAFFOLD NOTE:
- * - setupCompleted remains in ConfigResponse.tenant because `/auth/config` still
- *   exposes the old auth-phase acknowledgement timestamp.
- * - Current `/admin` and `/admin/settings` pages no longer read this field for
+ * - setupCompleted remains in ConfigResponse.tenant as a compatibility field
+ *   derived from the retired auth-phase acknowledgement timestamp.
+ * - Current `/admin` and `/admin/settings` pages do not read this field for
  *   live Settings progress. They now use `GET /settings/bootstrap` and
  *   `GET /settings/overview` instead.
  * - AuthNextAction is NOT extended — workspace setup is tenant state, not auth

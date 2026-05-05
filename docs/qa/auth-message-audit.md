@@ -22,8 +22,9 @@ and free of information leaks.
 | `POST /auth/forgot-password`         | 200         | `If an account with that email exists, a password reset link has been sent.` | ✅ Yes       | **Deliberately vague.** Must never confirm or deny email existence. This phrasing is correct.                     |
 | `POST /auth/reset-password`          | 200         | `Password updated successfully. Please sign in with your new password.`      | ✅ Yes       | Directs user to login after reset. Actionable.                                                                    |
 | `POST /auth/resend-verification`     | 200         | `If your email is unverified, a new verification link has been sent.`        | ✅ Yes       | **Deliberately vague.** Matches forgot-password pattern — no account-existence leak.                              |
-| `POST /auth/workspace-setup-ack`     | 200         | `{ status: 'ACKNOWLEDGED' }`                                                 | ✅ Yes       | Not user-facing copy — internal status field consumed by the frontend SSR call only.                              |
 | `POST /auth/reset-password/validate` | 200         | `{ valid: true }`                                                            | ✅ Yes       | Not end-user copy. Internal validation result used by the reset-password page to decide whether to show the form. |
+
+Retired internal workspace-setup acknowledgement is intentionally absent from this audit. It is no longer an active auth endpoint and should not produce user-visible copy. Current Settings setup behavior is verified through the Settings QA and readiness proof pack.
 
 ---
 

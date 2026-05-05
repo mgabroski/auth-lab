@@ -5,6 +5,7 @@ import { buildTestApp } from '../helpers/build-test-app';
 import { up as upSettingsFoundationMigration } from '../../src/shared/db/migrations/0017_settings_foundation';
 import { up as upSettingsAccountMigration } from '../../src/shared/db/migrations/0018_settings_account';
 import { createAdminSession } from '../helpers/create-admin-session';
+import { acknowledgeAccess } from '../helpers/settings-fixtures';
 import type {
   SettingsBootstrapResponse,
   SettingsOverviewCardDto,
@@ -31,8 +32,8 @@ function requireCard(
   return card as SettingsOverviewCardDto;
 }
 
-describe('settings phase 2 read surfaces', () => {
-  it('returns bootstrap-safe native setup truth after the legacy auth bridge runs', async () => {
+describe('settings read surfaces', () => {
+  it('returns bootstrap-safe native setup truth after Access is acknowledged through Settings', async () => {
     const { app, deps, close, reset } = await buildTestApp();
 
     try {
@@ -72,15 +73,11 @@ describe('settings phase 2 read surfaces', () => {
         password: 'Password123!',
       });
 
-      const ackRes = await app.inject({
-        method: 'POST',
-        url: '/auth/workspace-setup-ack',
-        headers: {
-          host: hostForTenant(tenant.key),
-          cookie: admin.cookie,
-        },
+      await acknowledgeAccess({
+        app,
+        tenantKey: tenant.key,
+        cookie: admin.cookie,
       });
-      expect(ackRes.statusCode).toBe(200);
 
       const bootstrapRes = await app.inject({
         method: 'GET',

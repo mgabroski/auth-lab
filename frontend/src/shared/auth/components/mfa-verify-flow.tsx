@@ -35,7 +35,7 @@ import {
 
 type MfaVerifyFlowProps = {
   userEmail: string;
-  /** Phase 9: required to route NONE + ADMIN → /admin correctly. */
+  /** Required to route NONE + ADMIN → /admin correctly. */
   role: MembershipRole;
 };
 

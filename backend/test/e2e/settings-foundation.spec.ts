@@ -73,7 +73,7 @@ async function createCpProvisioning(opts: {
   return account;
 }
 
-describe('settings phase 1 foundation schema and rollout bridge', () => {
+describe('settings foundation schema and scaffold closure', () => {
   it('backfills legacy workspace acknowledgement conservatively during migration', async () => {
     const { deps, close, reset } = await buildTestApp();
 
@@ -149,7 +149,7 @@ describe('settings phase 1 foundation schema and rollout bridge', () => {
     }
   });
 
-  it('bridges the legacy auth acknowledgement into native foundation rows without fake completion', async () => {
+  it('does not expose the retired auth acknowledgement endpoint as a competing Settings writer', async () => {
     const { app, deps, close, reset } = await buildTestApp();
 
     try {
@@ -170,7 +170,19 @@ describe('settings phase 1 foundation schema and rollout bridge', () => {
         password: 'Password123!',
       });
 
-      const firstAckRes = await app.inject({
+      await deps.settings.foundationRepo.ensureFoundationRows({
+        tenantId: tenant.id,
+        appliedCpRevision: 0,
+        creationReasonCode: 'FOUNDATION_INITIALIZED',
+        transitionAt: new Date('2026-05-05T10:00:00.000Z'),
+      });
+
+      const before = await deps.settings.foundationRepo.getStateBundle(tenant.id);
+      expect(before).toBeDefined();
+      expect(before?.aggregate.overallStatus).toBe('NOT_STARTED');
+      expect(before?.sections.access.status).toBe('NOT_STARTED');
+
+      const retiredAckRes = await app.inject({
         method: 'POST',
         url: '/auth/workspace-setup-ack',
         headers: {
@@ -179,19 +191,7 @@ describe('settings phase 1 foundation schema and rollout bridge', () => {
         },
       });
 
-      expect(firstAckRes.statusCode).toBe(200);
-      expect(firstAckRes.json()).toEqual({ status: 'ACKNOWLEDGED' });
-
-      const secondAckRes = await app.inject({
-        method: 'POST',
-        url: '/auth/workspace-setup-ack',
-        headers: {
-          host: hostForTenant(tenant.key),
-          cookie: admin.cookie,
-        },
-      });
-
-      expect(secondAckRes.statusCode).toBe(200);
+      expect(retiredAckRes.statusCode).toBe(404);
 
       const tenantRow = await deps.db
         .selectFrom('tenants')
@@ -199,41 +199,20 @@ describe('settings phase 1 foundation schema and rollout bridge', () => {
         .where('id', '=', tenant.id)
         .executeTakeFirstOrThrow();
 
-      expect(tenantRow.setup_completed_at).not.toBeNull();
+      expect(tenantRow.setup_completed_at).toBeNull();
 
-      const repo = new SettingsFoundationRepo(deps.db);
-      const aggregate = await repo.findAggregateState(tenant.id);
-      const sections = await repo.listSectionStates(tenant.id);
-      const access = sections.find((section) => section.sectionKey === 'access');
-      const account = sections.find((section) => section.sectionKey === 'account');
-      const personal = sections.find((section) => section.sectionKey === 'personal');
-      const integrations = sections.find((section) => section.sectionKey === 'integrations');
-
-      expect(aggregate).toMatchObject({
-        overallStatus: 'IN_PROGRESS',
-        version: 2,
+      const after = await deps.settings.foundationRepo.getStateBundle(tenant.id);
+      expect(after).toBeDefined();
+      expect(after?.aggregate).toMatchObject({
+        overallStatus: 'NOT_STARTED',
+        version: before?.aggregate.version,
         appliedCpRevision: 0,
-        lastTransitionReasonCode: 'LEGACY_AUTH_ACK_BRIDGE',
       });
-      expect(access).toMatchObject({
-        status: 'COMPLETE',
-        version: 2,
-        appliedCpRevision: 0,
-        lastTransitionReasonCode: 'LEGACY_AUTH_ACK_BRIDGE',
-        lastReviewedByUserId: admin.userId,
-      });
-      expect(account).toMatchObject({ status: 'NOT_STARTED', version: 1, appliedCpRevision: 0 });
-      expect(personal).toMatchObject({
+      expect(after?.sections.access).toMatchObject({
         status: 'NOT_STARTED',
-        version: 1,
+        version: before?.sections.access.version,
         appliedCpRevision: 0,
       });
-      expect(integrations).toMatchObject({
-        status: 'NOT_STARTED',
-        version: 1,
-        appliedCpRevision: 0,
-      });
-      expect(aggregate?.overallStatus).not.toBe('COMPLETE');
     } finally {
       await close();
     }

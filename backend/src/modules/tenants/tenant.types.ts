@@ -15,10 +15,10 @@ export type TenantAllowedSso = string[];
  *   rule from the other.
  *
  * Legacy scaffold note:
- * - setupCompletedAt stores the old auth-phase acknowledgement timestamp used
- *   by POST /auth/workspace-setup-ack.
- * - The current admin pages no longer read this timestamp for live Settings
- *   progress, but the backend bridge still preserves it for compatibility.
+ * - setupCompletedAt stores the retired auth-phase acknowledgement timestamp.
+ * - The current admin pages do not read this timestamp for live Settings
+ *   progress. It remains only for auth/config compatibility and conservative
+ *   migration/backfill handling.
  */
 export type Tenant = {
   id: string;
@@ -34,7 +34,7 @@ export type Tenant = {
   allowedEmailDomains: TenantAllowedEmailDomains;
   allowedSso: TenantAllowedSso;
 
-  /** Legacy auth-phase acknowledgement timestamp used by the bridge only. */
+  /** Retired auth-phase acknowledgement timestamp retained for compatibility. */
   setupCompletedAt: Date | null;
 
   createdAt: Date;

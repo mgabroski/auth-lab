@@ -48,7 +48,7 @@ export const TOPOLOGY_CHECK_PATH = '/topology-check';
 /**
  * Maps a backend `nextAction` + membership `role` to a frontend pathname.
  *
- * Phase 9: `role` is required. NONE resolves differently by role:
+ * `role` is required. NONE resolves differently by role:
  *   NONE + ADMIN  → /admin
  *   NONE + MEMBER → /app
  *

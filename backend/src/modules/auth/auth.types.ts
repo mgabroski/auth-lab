@@ -29,9 +29,9 @@
  *   causes the frontend to show a signup path that the backend immediately rejects.
  *
  * LEGACY SCAFFOLD NOTE:
- * - setupCompleted remains in ConfigResponse.tenant because `/auth/config` still
- *   exposes the old auth-phase acknowledgement timestamp bridge.
- * - Current `/admin` and `/admin/settings` pages no longer use this field for
+ * - setupCompleted remains in ConfigResponse.tenant as a compatibility field
+ *   derived from the retired auth-phase acknowledgement timestamp.
+ * - Current `/admin` and `/admin/settings` pages do not use this field for
  *   live Settings progress. They read Settings-native DTOs instead.
  * - AuthNextAction is NOT extended — workspace setup is tenant state, not
  *   auth continuation state.
@@ -159,9 +159,9 @@ export type ConfigResponse = {
     signupAllowed: boolean;
     allowedSso: ('google' | 'microsoft')[];
     /**
-     * Legacy compatibility field derived from the auth-phase acknowledgement
-     * bridge. It is tenant-level state, not per-user state, and current admin
-     * pages no longer use it for live Settings progress.
+     * Legacy compatibility field derived from the retired auth-phase timestamp.
+     * It is tenant-level state, not per-user state, and current admin pages do
+     * not use it for live Settings progress.
      */
     setupCompleted: boolean;
   };

@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted (Phase 9)
+Accepted as historical auth-phase scaffold. Superseded for current Settings setup truth by the Settings-native bootstrap and readiness-gate closure.
+
+Current implementation note: this ADR explains why the repo originally added tenant-scoped workspace setup acknowledgement during auth closure. The active Settings implementation no longer uses auth as a Settings writer. `/admin` now reads Settings-native bootstrap truth, and auth no longer exposes a workspace-setup acknowledgement mutation.
 
 ## Context
 
@@ -29,8 +31,7 @@ per-membership state without a distributed lock.
 ### 1 — Workspace setup state belongs to the tenant, not to individual users
 
 Add `setup_completed_at TIMESTAMPTZ NULL` to the `tenants` table (migration
-`0013`). This is the authoritative record of whether workspace configuration has
-been acknowledged by any admin.
+`0013`) for the original auth-phase scaffold. That column is now a retired compatibility/backfill artifact, not the authoritative Settings setup record.
 
 ### 2 — All admins always land on `/admin` — no redirect from the auth flow
 
@@ -41,7 +42,7 @@ on `/admin`.
 
 ### 3 — A non-blocking banner on `/admin` surfaces the setup call to action
 
-When `config.tenant.setupCompleted === false`, the admin dashboard shows a
+During the auth-phase scaffold, when `config.tenant.setupCompleted === false`, the admin dashboard showed a
 persistent but non-blocking banner:
 
 ```
@@ -50,31 +51,21 @@ Configure SSO, invite policy, and MFA requirements before inviting your team.
 [Open workspace settings →]
 ```
 
-The banner links to `/admin/settings`. Any admin can dismiss it by visiting
-settings. Once any admin visits `/admin/settings`, `setup_completed_at` is
-written and the banner disappears for all admins immediately on their next
-page load.
+The current Settings implementation keeps the same non-blocking user experience, but the banner is now driven by `GET /settings/bootstrap` and Settings-owned persisted setup state. Visiting `/admin/settings` no longer writes auth-owned setup acknowledgement state.
 
 ### 4 — `setupCompleted` is exposed in `ConfigResponse`
 
-`GET /auth/config` already runs on every SSR bootstrap. Adding
-`setupCompleted: boolean` to the existing `ConfigResponse.tenant` shape
-means zero extra backend calls are needed — the admin dashboard already has
-this value when it renders.
+`GET /auth/config` originally exposed `setupCompleted: boolean` during the auth-phase scaffold.
 
-`setupCompleted` is derived as `setup_completed_at IS NOT NULL` by the
-backend at read time and is the only field the frontend needs to check.
+In the current Settings implementation, `setupCompleted` remains only as a compatibility field derived from `setup_completed_at IS NOT NULL`. It is not used by `/admin` or `/admin/settings` for Settings setup truth.
 
-### 5 — `POST /auth/workspace-setup-ack` marks the workspace as set up
+### 5 — Historical scaffold acknowledgement endpoint is retired
 
-Called by `/admin/settings` SSR on load when `!config.tenant.setupCompleted`.
-Requires an authenticated ADMIN session with email verified and MFA verified.
-Idempotent: `UPDATE tenants SET setup_completed_at = now() WHERE id = ? AND setup_completed_at IS NULL`.
+The auth-phase scaffold used an authenticated tenant-scoped acknowledgement endpoint to write `setup_completed_at`. That endpoint is no longer part of the active API surface.
 
-The ack is tenant-scoped, not user-scoped. One admin visiting settings clears
-the banner for all admins.
+Current behavior: Settings setup progress is changed only by Settings-owned mutations such as Access acknowledgement, Account card saves, Personal full replacement save, and CP-driven cascade handling. The retired auth acknowledgement route must not act as a competing Settings writer.
 
-### 6 — Role-aware `NONE` routing is fixed as part of this phase
+### 6 — Role-aware `NONE` routing is fixed
 
 `getPathForNextAction('NONE', role)` now accepts `role: MembershipRole`:
 
@@ -82,7 +73,7 @@ the banner for all admins.
 - `NONE + MEMBER` → `/app`
 
 This was a pre-existing bug independent of workspace setup. It is corrected
-here because it was discovered during Phase 9 scope and is required for correct
+here because it was discovered during workspace setup closure and is required for correct
 admin landing behaviour.
 
 ## Rejected alternatives
@@ -96,7 +87,7 @@ tenant layer. See Context above.
 
 ### Blocking first-visit wizard (Slack/Notion style)
 
-Rejected for this phase. A blocking wizard requires coordination state
+Rejected for this shipped model. A blocking wizard requires coordination state
 ("is another admin currently setting up?") and a waiting UI for other admins.
 Complexity is disproportionate to the current setup surface, which is a
 placeholder. This can be added later when real settings content justifies it.
@@ -115,11 +106,11 @@ The banner is minimal but provides that signal without blocking anything.
 - `tenant.queries.ts` maps `setup_completed_at` in `rowToTenant`.
 - `auth.types.ts` `ConfigResponse` gains `setupCompleted: boolean`. No change to `AuthNextAction`.
 - `get-auth-config.ts` derives `setupCompleted = setup_completed_at IS NOT NULL`.
-- `workspace-setup-ack-flow.ts` writes tenant-scoped `setup_completed_at`.
-- `POST /auth/workspace-setup-ack` is a new ADMIN-auth-gated endpoint.
+- The historical auth acknowledgement flow has been retired from the active API surface.
+- `setupCompleted` remains in auth config only as compatibility metadata, not as current Settings truth.
 - `contracts.ts` (frontend) `ConfigResponse.tenant` gains `setupCompleted: boolean`.
-- `/admin/page.tsx` renders a `WorkspaceSetupBanner` when `!config.tenant.setupCompleted`.
-- `/admin/settings/page.tsx` is a new real SSR-gated admin route that calls the ack on load.
+- `/admin/page.tsx` renders `WorkspaceSetupBanner` from `GET /settings/bootstrap`.
+- `/admin/settings/page.tsx` is a real SSR-gated admin route that reads `GET /settings/overview`; it does not call an auth acknowledgement endpoint.
 - `getPathForNextAction` requires `role: MembershipRole` — all callers updated.
 - `getPostAuthRedirectPath` requires `role: MembershipRole` — all callers updated.
 - All `AuthNextAction` types, route states, and test specs remain clean: no `FIRST_TIME_SETUP`.

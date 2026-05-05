@@ -5,10 +5,7 @@ import { buildTestApp } from '../helpers/build-test-app';
 import { up as upSettingsFoundationMigration } from '../../src/shared/db/migrations/0017_settings_foundation';
 import { up as upSettingsAccountMigration } from '../../src/shared/db/migrations/0018_settings_account';
 import { createAdminSession } from '../helpers/create-admin-session';
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
-}
+import { acknowledgeAccess } from '../helpers/settings-fixtures';
 
 async function recomputeCompletedAggregate(params: {
   deps: Awaited<ReturnType<typeof buildTestApp>>['deps'];
@@ -28,7 +25,7 @@ async function recomputeCompletedAggregate(params: {
   });
 }
 
-describe('settings phase 2 CP cascade', () => {
+describe('settings CP cascade', () => {
   it('marks Access as NEEDS_REVIEW when a published tenant changes required access allowance truth', async () => {
     const { app, deps, close, reset } = await buildTestApp();
     const accountKey = `cascade-${randomUUID().slice(0, 8)}`;
@@ -105,15 +102,7 @@ describe('settings phase 2 CP cascade', () => {
         password: 'Password123!',
       });
 
-      const ackRes = await app.inject({
-        method: 'POST',
-        url: '/auth/workspace-setup-ack',
-        headers: {
-          host: hostForTenant(tenant.key),
-          cookie: admin.cookie,
-        },
-      });
-      expect(ackRes.statusCode).toBe(200);
+      await acknowledgeAccess({ app, tenantKey: tenant.key, cookie: admin.cookie });
 
       await recomputeCompletedAggregate({
         deps,
@@ -230,15 +219,7 @@ describe('settings phase 2 CP cascade', () => {
         password: 'Password123!',
       });
 
-      const ackRes = await app.inject({
-        method: 'POST',
-        url: '/auth/workspace-setup-ack',
-        headers: {
-          host: hostForTenant(tenant.key),
-          cookie: admin.cookie,
-        },
-      });
-      expect(ackRes.statusCode).toBe(200);
+      await acknowledgeAccess({ app, tenantKey: tenant.key, cookie: admin.cookie });
 
       await recomputeCompletedAggregate({
         deps,

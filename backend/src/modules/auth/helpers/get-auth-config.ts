@@ -22,9 +22,9 @@
  *   The frontend now has a single authoritative boolean to use for signup UI gating.
  *
  * LEGACY SCAFFOLD NOTE:
- * - setupCompleted remains in the response because the auth-phase acknowledgement
- *   timestamp still exists in the backend bridge.
- * - Current `/admin` and `/admin/settings` consumers no longer read this field
+ * - setupCompleted remains in the response as a compatibility field derived from
+ *   the retired auth-phase acknowledgement timestamp.
+ * - Current `/admin` and `/admin/settings` consumers do not read this field
  *   for live Settings progress; they use Settings-native DTOs instead.
  * - UNAVAILABLE shape still returns setupCompleted: false for compatibility.
  */

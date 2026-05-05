@@ -57,7 +57,6 @@ import { executeStartSsoFlow } from './flows/sso/execute-start-sso-flow';
 import { executeLogoutFlow } from './flows/logout/execute-logout-flow';
 import { getAuthConfig } from './helpers/get-auth-config';
 import { getMe } from './helpers/get-me';
-import { workspaceSetupAckFlow } from './flows/settings/workspace-setup-ack-flow';
 import type { SsoProvider } from './helpers/sso-state';
 import type { SsoProviderRegistry } from './sso/sso-provider-registry';
 
@@ -386,10 +385,6 @@ export class AuthService {
       },
       params,
     );
-  }
-
-  async ackWorkspaceSetup(auth: RequiredAuthContext): Promise<{ status: 'ACKNOWLEDGED' }> {
-    return workspaceSetupAckFlow(auth, this.deps.db);
   }
 
   async logout(params: {

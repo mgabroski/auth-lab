@@ -45,18 +45,19 @@ The locked Settings execution baseline for future repo work is now:
 
 - `Account-Settings-Master-Context-v9_2.md` for product and ownership truth
 - `Hubins-Settings-Step10-Roadmap-v4.docx` as the accepted implementation roadmap baseline
-- `docs/decision-log.md` ADR-0017 and ADR-0018 for the now-locked Phase 0 contracts
+- `docs/decision-log.md` ADR-0017, ADR-0018, and ADR-0019 for the locked Settings bootstrap, cascade, and readiness-gate contracts
 
 What this means today:
 
-- the repo still retains the auth-phase workspace-setup scaffold (`/auth/config` + `/auth/workspace-setup-ack`) as a backend compatibility bridge
-- `/admin` now reads `GET /settings/bootstrap` as the only tenant-facing bootstrap-safe Settings source
-- `/admin/settings` now reads `GET /settings/overview` as the real Settings overview source
-- the repo now ships the real backend state engine foundation: persisted aggregate/section truth, aggregate recompute service, and synchronous CP cascade handling
+- the repo no longer exposes auth-phase workspace setup acknowledgement as an active Settings writer; `/auth/workspace-setup-ack` is retired and must not mutate setup state
+- `/auth/config.tenant.setupCompleted` remains only as retired compatibility metadata derived from the legacy timestamp column; current Settings consumers must not use it for setup truth
+- `/admin` reads `GET /settings/bootstrap` as the only tenant-facing bootstrap-safe Settings source
+- `/admin/settings` reads `GET /settings/overview` as the real Settings overview source
+- the repo ships the real backend state engine foundation: persisted aggregate/section truth, aggregate recompute service, and synchronous CP cascade handling
 - the current CP `settingsHandoff` snapshot remains producer-shaped, but it honestly reports that the Settings engine is present and synchronous cascade wiring is active
-- the auth scaffold is no longer the tenant-facing truth path for banner or overview behavior, even though the bridge endpoint and compatibility field still exist in the backend
-- no part of this baseline acceptance should be read as the full tenant Settings module already being shipped; the repo now holds the real read-side closure, the Access acknowledge path, the Account per-card save surface, the real Modules hub read surface, the real Personal builder read/write surface, and honest route treatment for later deferred pages
-- the Settings proof closure layer now includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, required/optional CP cascade behavior, placeholder/absent route treatment, tenant isolation, and a dedicated browser Settings proof path (`yarn workspace frontend test:e2e test/e2e/settings.spec.ts`)
+- the tenant Settings v1 route set is implemented exactly as locked: Access, Account, Modules, Personal, Integrations live; Communications placeholder-only; Workspace Experience overview-card-only with no route; Permissions absent
+- the active Settings consumer audit is closed: `/admin` consumes bootstrap; Settings overview consumes overview; section pages consume their own Settings read/write DTOs; no active Settings page consumes auth bootstrap setup truth
+- the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, and a dedicated browser Settings proof path (`yarn workspace frontend test:e2e test/e2e/settings.spec.ts`)
 
 ---
 
@@ -255,23 +256,25 @@ The Control Plane now ships its current internal create/setup/review/publish/re-
 - CP audit trail UI
 - later CP/Settings follow-up work such as explicit repair tooling and broader consumer wiring
 
-### Settings expansion
+### Settings v1 closure
 
-The repo contains real `/admin/settings` groundwork and locked Settings design inputs, but the broader Settings implementation remains open.
-Current shipped auth/settings surfaces must not be mistaken for full Settings completion.
+The repo now ships the locked Settings v1 surface and has passed the implementation-level readiness gate in code and documentation. This does not claim post-v1 surfaces are built. Communications remains placeholder-only, Workspace Experience remains overview-card-only, Permissions remains absent, and tenant secret-bearing integrations remain deferred.
 
 Current truthful boundary:
 
-- `/admin` now consumes `GET /settings/bootstrap` and no longer reads auth scaffold truth for banner semantics
-- `/admin/settings` now consumes `GET /settings/overview` and no longer uses the one-shot auth acknowledgement placeholder as its main content model
-- Step 10 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) are now consumed by live backend read surfaces and the synchronous CP cascade service
-- `/admin/settings/access` now resolves to the first real Settings section page backed by `GET /settings/access` and the explicit `POST /settings/access/acknowledge` write path
-- `/admin/settings/account` now resolves to the real Account Settings page backed by `GET /settings/account` plus the explicit per-card write routes for Branding, Organization Structure, and Company Calendar
-- `/admin/settings/modules` now resolves to the real navigation-only Modules hub backed by `GET /settings/modules`
-- `/admin/settings/modules/personal` now resolves to the real Personal builder page backed by `GET /settings/modules/personal` and `PUT /settings/modules/personal`
-- `/admin/settings/integrations` now resolves to the real v1 informational Integrations page backed by `GET /settings/integrations`; Google/Microsoft SSO show truthful readiness states, HRIS/Stripe stay deferred, Marketplace stays placeholder-only, `/admin/settings/communications` remains placeholder-only and is backed by `GET /settings/communications`, Workspace Experience remains an overview-card-only placeholder with no route, and Permissions remains absent
-- CP `settingsHandoff` remains producer-shaped but now honestly reports live Settings engine presence and active synchronous cascade wiring
-- later Settings write phases beyond Access + Account + Personal remain intentionally unimplemented; Integrations has no write route, no tenant credential entry, and no provider connection or recovery flow in v1
+- `/admin` consumes `GET /settings/bootstrap` and no longer reads auth scaffold truth for banner semantics
+- `/admin/settings` consumes `GET /settings/overview` and no longer uses a one-shot auth acknowledgement placeholder as its content model
+- Step 10 foundation rows (`tenant_setup_state`, `tenant_setup_section_state`) are consumed by live backend read surfaces and the synchronous CP cascade service
+- `/admin/settings/access` is backed by `GET /settings/access` and the explicit `POST /settings/access/acknowledge` write path
+- `/admin/settings/account` is backed by `GET /settings/account` plus the explicit per-card write routes for Branding, Organization Structure, and Company Calendar
+- `/admin/settings/modules` is backed by `GET /settings/modules` and remains navigation-only
+- `/admin/settings/modules/personal` is backed by `GET /settings/modules/personal` and `PUT /settings/modules/personal` with the canonical full-replacement save contract
+- `/admin/settings/integrations` is backed by `GET /settings/integrations`; Google/Microsoft SSO show truthful readiness states, HRIS/Stripe stay deferred, Marketplace stays placeholder-only, and no tenant credential entry or fake Connected flow exists
+- `/admin/settings/communications` remains placeholder-only and is backed by `GET /settings/communications`
+- Workspace Experience remains an overview-card-only placeholder with no route
+- Permissions remains absent: no overview card, no frontend route, no backend API surface
+- CP `settingsHandoff` remains producer-shaped but honestly reports live Settings engine presence and active synchronous cascade wiring
+- post-v1 Settings work remains intentionally limited to later product surfaces and operational enhancements, not completion of the locked v1 route set
 
 ### Future modules and later-scope surfaces
 

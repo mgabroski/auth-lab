@@ -74,7 +74,7 @@ function rowToTenant(row: Awaited<ReturnType<typeof findTenantByKeySql>>): Tenan
     allowedEmailDomains: parseAllowedEmailDomains(row.allowed_email_domains),
     allowedSso: parseAllowedSso(row.allowed_sso),
 
-    // Phase 9: normalise to Date | null regardless of driver return type.
+    // Normalise to Date | null regardless of driver return type.
     setupCompletedAt:
       setupAt == null ? null : setupAt instanceof Date ? setupAt : new Date(setupAt as string),
 

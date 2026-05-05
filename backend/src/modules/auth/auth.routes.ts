@@ -38,7 +38,4 @@ export function registerAuthRoutes(app: FastifyInstance, controller: AuthControl
 
   // Logout
   app.post('/auth/logout', controller.logout.bind(controller));
-
-  // Phase 9 — workspace setup acknowledgement
-  app.post('/auth/workspace-setup-ack', controller.workspaceSetupAck.bind(controller));
 }
