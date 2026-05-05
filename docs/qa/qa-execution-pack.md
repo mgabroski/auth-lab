@@ -306,13 +306,15 @@ Steps:
 
 1. Open `/admin/settings/modules/personal`.
 2. Confirm Family Review, Field Configuration, and Section Builder are present.
-3. Make a real draft change if the button is disabled, for example rename the first section.
-4. Click `Save Personal Configuration`.
-5. Return to `/admin`.
+3. Do not make an artificial draft change when the backend-generated defaults are acceptable.
+4. Confirm `Save Personal Configuration` is available for an unsaved or Needs Review Personal section.
+5. Click `Save Personal Configuration`.
+6. Return to `/admin`.
 
 Expected results:
 
 - Save uses the single Personal full-replacement contract.
+- Personal can be saved as an explicit review even when generated defaults are unchanged.
 - Personal becomes Complete when current required-floor and section assignment rules are satisfied.
 - If Access is already complete, overall setup becomes Complete.
 - `/admin` banner disappears.

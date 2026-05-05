@@ -116,6 +116,8 @@ They grow as the repo evolves.
 * `backend/docs/api/auth.md`
 * `backend/docs/api/invites.md`
 * `backend/docs/api/admin.md`
+* `backend/docs/api/cp-accounts.md`
+* `backend/docs/api/settings.md`
 * `code_review.md`
 
 ### Tier 3 — Support, execution, and secondary reference
@@ -287,7 +289,7 @@ Load:
 
 1. the external Control Plane Prerequisite Roadmap document
 2. `docs/current-foundation-status.md` — read the Control Plane foundation and boundary rules sections
-3. the Account Settings Master Context document only when the task involves CP-to-Settings cascade wiring or Phase 6 handoff work
+3. the Account Settings Master Context document only when the task involves CP-to-Settings handoff or cascade wiring
 
 ### New module introduction or module design work
 

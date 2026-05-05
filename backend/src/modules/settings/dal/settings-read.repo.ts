@@ -2,8 +2,8 @@
  * backend/src/modules/settings/dal/settings-read.repo.ts
  *
  * WHY:
- * - Aggregates the low-level read queries needed by the Phase 2 bootstrap and
- *   overview surfaces.
+ * - Aggregates the low-level read queries needed by the Settings bootstrap,
+ *   overview, section, and CP handoff read surfaces.
  * - Keeps tenant truth, persisted Settings state, and optional CP producer
  *   snapshot loading out of the higher-level composition services.
  *

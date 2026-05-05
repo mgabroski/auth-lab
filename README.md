@@ -10,6 +10,7 @@ This repo exists to prove and protect a small number of critical things before b
 - session and cookie behavior
 - the first shipped module: Auth + User Provisioning
 - the separate internal Control Plane application and provisioning surface
+- the shipped tenant-facing Settings v1 surface for `/admin` and `/admin/settings`
 
 This file is the single human entrypoint for the repo.
 
@@ -53,6 +54,7 @@ Today, this repository is the working foundation for:
 - backend session-aware auth and tenant resolution
 - frontend auth and provisioning flows
 - the separate internal Control Plane app for account provisioning, setup, review, and publish flows
+- the tenant-facing Settings v1 surface for setup progress, Access review, Account card saves, Modules/Personal, Integrations, and placeholder/absent treatment
 - Auth + User Provisioning as the first real module
 
 It is not the full future Hubins product.
@@ -126,6 +128,18 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 - producer-only `settingsHandoff` snapshot on full account detail DTOs
 - same-origin CP `/api/*` proxy for browser mutations and SSR helpers for server reads
 - bounded internal no-auth mode in current scope (local dev and CI only)
+
+### Tenant Settings Surface
+
+- `/admin` consumes Settings-native bootstrap truth for the setup banner
+- `/admin/settings` renders the Settings overview from `GET /settings/overview`
+- live v1 section routes exist for Access, Account, Modules, Personal, and Integrations
+- Access is read-only and completes only through explicit acknowledgement
+- Account uses card-level saves for Branding, Organization Structure, and Company Calendar
+- Modules is navigation-only; Personal is the only live actionable module in v1
+- Personal uses a backend-owned default draft and one full-replacement save contract
+- Integrations is informational-only: Google/Microsoft SSO readiness is truthful, HRIS/Stripe are deferred, and no tenant credential entry exists
+- Communications is placeholder-only, Workspace Experience is overview-card-only, and Permissions is absent
 
 Do not collapse broader architecture vision into shipped truth.
 

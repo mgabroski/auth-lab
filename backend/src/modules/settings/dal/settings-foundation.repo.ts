@@ -6,7 +6,7 @@
  *   schema.
  * - Keeps rollout-bridge writes, transition-safe state updates, and revision
  *   alignment out of auth, Control Plane, and future tenant write logic.
- * - Gives the Phase 2 state engine one typed DAL surface for aggregate and
+ * - Gives the Settings state engine one typed DAL surface for aggregate and
  *   section transitions without introducing DB-trigger logic.
  *
  * RULES:

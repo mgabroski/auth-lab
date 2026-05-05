@@ -6,7 +6,7 @@
  * - Keeps transition rules explicit and testable outside of controller/service
  *   orchestration.
  * - Centralises the locked v1 classification model so future write surfaces do
- *   not drift from the roadmap.
+ *   not drift from shipped Settings law.
  *
  * RULES:
  * - Pure functions only.

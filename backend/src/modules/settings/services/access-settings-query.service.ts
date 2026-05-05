@@ -5,7 +5,7 @@
  * - Composes the Access & Security read model and the v1 read-only page surface
  *   from real CP allowance truth, tenant bridge truth, and integration/runtime
  *   readiness state.
- * - Keeps the locked Phase 4 rules explicit:
+ * - Keeps the locked Access & Security rules explicit:
  *   - read-only in v1
  *   - explicit acknowledge is the only completion action
  *   - CP mismatch blockers stay distinct from operational readiness warnings

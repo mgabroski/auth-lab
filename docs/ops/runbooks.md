@@ -309,6 +309,10 @@ For browser proof:
 
 For full-stack proxy proof, use the proxy conformance script and CP smoke spec. Host preservation, cookie continuity, and `/api` prefix stripping are topology contracts and should not be debugged inside Settings code first.
 
+### Final Settings lock certification
+
+Use `docs/qa/settings-lock-certification.md` for the final evidence checklist before treating the shipped Settings v1 surface as locked. The certification checklist is not a second source of truth; it points reviewers back to current status, API docs, this runbook, and the QA execution pack.
+
 ### Evidence required for closure
 
 A Settings closure run must retain:

@@ -2,7 +2,7 @@
  * backend/src/modules/settings/services/access-settings.service.ts
  *
  * WHY:
- * - Implements the first real Settings write path for Phase 4:
+ * - Implements the Settings Access & Security write path:
  *   `POST /settings/access/acknowledge`.
  * - Keeps the write transaction explicit and scoped:
  *   validate current review state -> transition Access -> recompute aggregate -> audit success.
