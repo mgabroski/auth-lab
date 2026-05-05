@@ -8,6 +8,8 @@
  *   and save-driven completion only.
  */
 
+import { sql } from 'kysely';
+
 import type { AuditRepo } from '../../../shared/audit/audit.repo';
 import type { DbExecutor } from '../../../shared/db/db';
 import { AppError } from '../../../shared/http/errors';
@@ -29,6 +31,12 @@ import {
   type PersonalFieldCatalogEntry,
 } from '../../control-plane/accounts/cp-accounts.catalog';
 import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+
+async function lockTenantPersonalSettings(db: DbExecutor, tenantId: string): Promise<void> {
+  await sql`
+    select pg_advisory_xact_lock(hashtext('settings_personal'), hashtext(${tenantId}))
+  `.execute(db);
+}
 
 function getFailureAuditMetadata(error: unknown): { errorCode: string; message: string } {
   if (error instanceof AppError) {
@@ -241,6 +249,8 @@ export class PersonalSettingsService {
         const personalRepo = this.deps.personalRepo.withDb(trx);
         const stateService = this.deps.stateService.withDb(trx);
         const auditService = this.deps.auditService.withAuditRepo(this.deps.auditRepo.withDb(trx));
+
+        await lockTenantPersonalSettings(trx, auth.tenantId);
 
         const [state, cpHandoff] = await Promise.all([
           readRepo.getStateBundle(auth.tenantId),

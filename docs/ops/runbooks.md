@@ -217,7 +217,7 @@ Wait until the frontend, backend, CP app, Mailpit, and local helper services are
 Backend Settings proof:
 
 ```bash
-yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts
+yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-concurrency.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts
 ```
 
 Browser Settings proof against the local tenant origin:
@@ -282,7 +282,7 @@ Expected behavior:
 
 If CP writes commit while the corresponding Settings cascade fails, treat it as a P0/P1 consistency issue depending on user impact.
 
-### Conflict proof expectations
+### Conflict and concurrent-write proof expectations
 
 Settings writes are optimistic-concurrency guarded.
 
@@ -291,7 +291,12 @@ Expected behavior:
 - stale `expectedVersion` returns a version conflict
 - stale `expectedCpRevision` is accepted only when the submitted payload is still valid under current CP truth
 - invalid stale CP snapshot returns a CP revision conflict
+- two concurrent Account card saves using the same card version produce exactly one success and one conflict
+- two concurrent Personal full-replacement saves using the same section version produce exactly one success and one conflict
+- the final persisted DTO must match the successful request, not whichever request happened to finish last
 - frontend must never silently retry, discard, or hide conflict state
+
+When this proof fails, treat it as a P1 data-loss risk. Do not debug it as a flaky UI issue first; inspect the repository write predicate, transaction boundary, and Settings section transition version check.
 
 ### Tenant and topology proof expectations
 

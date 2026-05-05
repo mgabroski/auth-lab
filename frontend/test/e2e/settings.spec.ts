@@ -111,9 +111,6 @@ test.describe('settings tenant-admin proof', () => {
     await expect(
       page.getByText('This is the one authoritative save action for Family Review'),
     ).toBeVisible();
-    const firstSectionName = page.getByLabel('Section name 1');
-    const currentSectionName = await firstSectionName.inputValue();
-    await firstSectionName.fill(`${currentSectionName} Reviewed`);
     await page.getByRole('button', { name: 'Save Personal Configuration' }).click();
     await expect(page.getByText('Personal configuration saved')).toBeVisible();
 
@@ -130,6 +127,13 @@ test.describe('settings tenant-admin proof', () => {
     await page.goto(`${OPEN_ORIGIN}/admin/settings/communications`);
     await expect(page.getByRole('heading', { name: 'Communications' })).toBeVisible();
     await expect(page.getByText('Live configuration available: no')).toBeVisible();
+
+    const workspaceResponse = await page.request.get(
+      `${OPEN_ORIGIN}/admin/settings/workspace-experience`,
+    );
+    expect(workspaceResponse.status(), 'Workspace Experience must remain overview-card-only').toBe(
+      404,
+    );
 
     const permissionsResponse = await page.request.get(`${OPEN_ORIGIN}/admin/settings/permissions`);
     expect(permissionsResponse.status(), 'Permissions route must remain absent in v1').toBe(404);

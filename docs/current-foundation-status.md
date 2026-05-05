@@ -57,7 +57,7 @@ What this means today:
 - the current CP `settingsHandoff` snapshot remains producer-shaped, but it honestly reports that the Settings engine is present and synchronous cascade wiring is active
 - the tenant Settings v1 route set is implemented exactly as locked: Access, Account, Modules, Personal, Integrations live; Communications placeholder-only; Workspace Experience overview-card-only with no route; Permissions absent
 - the active Settings consumer audit is closed: `/admin` consumes bootstrap; Settings overview consumes overview; section pages consume their own Settings read/write DTOs; no active Settings page consumes auth bootstrap setup truth
-- the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, and a dedicated browser Settings proof path (`yarn workspace frontend test:e2e test/e2e/settings.spec.ts`)
+- the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Account/Personal concurrent-write conflict behavior, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, and a dedicated browser Settings proof path (`yarn workspace frontend test:e2e test/e2e/settings.spec.ts`)
 - the current Settings hardening layer now treats Settings writes as rate-limited, audit-rich, and conflict-protected at the mutation boundary; Personal can be explicitly saved even when backend-generated defaults are accepted unchanged; and `/admin/settings` marks the Modules/Personal action as required whenever Personal gates overall setup completion
 
 ---
@@ -269,7 +269,7 @@ Current truthful boundary:
 - `/admin/settings/access` is backed by `GET /settings/access` and the explicit `POST /settings/access/acknowledge` write path
 - `/admin/settings/account` is backed by `GET /settings/account` plus the explicit per-card write routes for Branding, Organization Structure, and Company Calendar
 - `/admin/settings/modules` is backed by `GET /settings/modules` and remains navigation-only
-- `/admin/settings/modules/personal` is backed by `GET /settings/modules/personal` and `PUT /settings/modules/personal` with the canonical full-replacement save contract
+- `/admin/settings/modules/personal` is backed by `GET /settings/modules/personal` and `PUT /settings/modules/personal` with the canonical full-replacement save contract; browser proof covers accepting generated defaults without artificial edits
 - `/admin/settings/integrations` is backed by `GET /settings/integrations`; Google/Microsoft SSO show truthful readiness states, HRIS/Stripe stay deferred, Marketplace stays placeholder-only, and no tenant credential entry or fake Connected flow exists
 - `/admin/settings/communications` remains placeholder-only and is backed by `GET /settings/communications`
 - Workspace Experience remains an overview-card-only placeholder with no route

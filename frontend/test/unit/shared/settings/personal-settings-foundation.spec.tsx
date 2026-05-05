@@ -175,4 +175,30 @@ describe('PersonalSettingsFoundation', () => {
     expect(html).toContain('Masked');
     expect(html).toContain('Platform changes require your review');
   });
+
+  it('keeps the canonical save action enabled when generated defaults still require explicit review', () => {
+    const html = renderToStaticMarkup(
+      <PersonalSettingsFoundation
+        data={makePersonal({
+          status: 'NOT_STARTED',
+          version: 1,
+          warnings: [],
+          progress: {
+            reviewedFamiliesCount: 0,
+            totalAllowedFamilies: 1,
+            requiredFieldsReady: false,
+            sectionAssignmentsReady: false,
+            blockers: [
+              'No family reviewed yet.',
+              'Required-floor fields still need configuration.',
+              'Section assignments still need save.',
+            ],
+          },
+        })}
+      />,
+    );
+
+    expect(html).toMatch(/<button[^>]*>Save Personal Configuration<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>Save Personal Configuration<\/button>/);
+  });
 });
