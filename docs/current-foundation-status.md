@@ -56,6 +56,7 @@ What this means today:
 - the current CP `settingsHandoff` snapshot remains producer-shaped, but it honestly reports that the Settings engine is present and synchronous cascade wiring is active
 - the auth scaffold is no longer the tenant-facing truth path for banner or overview behavior, even though the bridge endpoint and compatibility field still exist in the backend
 - no part of this baseline acceptance should be read as the full tenant Settings module already being shipped; the repo now holds the real read-side closure, the Access acknowledge path, the Account per-card save surface, the real Modules hub read surface, the real Personal builder read/write surface, and honest route treatment for later deferred pages
+- the Settings proof closure layer now includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, required/optional CP cascade behavior, placeholder/absent route treatment, tenant isolation, and a dedicated browser Settings proof path (`yarn workspace frontend test:e2e test/e2e/settings.spec.ts`)
 
 ---
 

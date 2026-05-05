@@ -191,3 +191,119 @@ The current repo still does **not** ship:
 - a giant all-settings publish action
 
 Do not invent recovery steps for surfaces that are not implemented.
+
+---
+
+## 6. Settings proof and QA closure runbook
+
+### Purpose
+
+Use this runbook when validating the shipped Settings v1 proof pack or investigating a failed Settings QA run. This runbook is intentionally operational; product scope remains defined by the Settings docs and API contracts.
+
+### Canonical reset before Settings proof
+
+Use a clean local state for browser proof because the admin MFA setup flow mutates seeded state.
+
+```bash
+yarn reset-db
+yarn dev
+```
+
+Wait until the frontend, backend, CP app, Mailpit, and local helper services are healthy. Then run the Green-Light Health Check in `docs/qa/qa-execution-pack.md`.
+
+### Automated proof commands
+
+Backend Settings proof:
+
+```bash
+yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts
+```
+
+Browser Settings proof against the local tenant origin:
+
+```bash
+yarn workspace frontend test:e2e test/e2e/settings.spec.ts
+```
+
+Full-stack CP/proxy proof, when the stack is running in proxy mode:
+
+```bash
+yarn workspace frontend test:e2e:cp
+./scripts/proxy-conformance.sh
+```
+
+### Deterministic Settings fixtures
+
+The backend proof suite uses `backend/test/helpers/settings-fixtures.ts` to build deterministic tenant states through the same public test-facing HTTP paths used by the shipped product:
+
+1. create a CP account
+2. save CP integrations
+3. save CP Access
+4. save CP Account Settings
+5. save CP Module Settings
+6. save CP Personal catalog when Personal is enabled
+7. publish the tenant as Active
+8. create an authenticated admin session
+9. drive Settings saves through `/settings/*`
+
+Do not replace these fixtures with ad hoc SQL unless the test is specifically about migration/backfill mechanics. SQL-only setup hides the CP-to-Settings cascade and gives false confidence.
+
+### Backfill proof expectations
+
+Legacy scaffold backfill is conservative by design.
+
+Expected behavior:
+
+- native Settings state rows are created
+- legacy Access acknowledgement may initialize Access as `COMPLETE`
+- aggregate setup must not become `COMPLETE` from legacy acknowledgement alone
+- other live sections remain `NOT_STARTED` unless real native configuration supports a stronger state
+
+If a legacy tenant becomes overall `COMPLETE` from scaffold acknowledgement alone, treat that as a P1 false-readiness bug.
+
+### CP cascade proof expectations
+
+Required CP changes must create review work when they affect a required Settings boundary.
+
+Expected behavior:
+
+- required Access changes set Access and aggregate to `NEEDS_REVIEW`
+- required Personal target changes set Personal and aggregate to `NEEDS_REVIEW`
+- optional Personal removals prune/hide the removed optional field without forcing review
+- Account Settings remains non-gating and must not control banner lifecycle
+
+If CP writes commit while the corresponding Settings cascade fails, treat it as a P0/P1 consistency issue depending on user impact.
+
+### Conflict proof expectations
+
+Settings writes are optimistic-concurrency guarded.
+
+Expected behavior:
+
+- stale `expectedVersion` returns a version conflict
+- stale `expectedCpRevision` is accepted only when the submitted payload is still valid under current CP truth
+- invalid stale CP snapshot returns a CP revision conflict
+- frontend must never silently retry, discard, or hide conflict state
+
+### Tenant and topology proof expectations
+
+For browser proof:
+
+- admin browser paths use the tenant origin and `/api/*` proxy path
+- same-tenant `/api/settings/bootstrap` succeeds after login
+- another tenant host returns 401 in the same browser context
+- direct backend origin is not a valid authenticated browser Settings path
+
+For full-stack proxy proof, use the proxy conformance script and CP smoke spec. Host preservation, cookie continuity, and `/api` prefix stripping are topology contracts and should not be debugged inside Settings code first.
+
+### Evidence required for closure
+
+A Settings closure run must retain:
+
+- backend command output for Settings proof specs
+- Playwright output or trace for `test/e2e/settings.spec.ts`
+- proxy conformance output when full-stack topology is in scope
+- screenshots for manual QA cases listed in `docs/qa/qa-execution-pack.md`
+- bug report links for every failed or deferred case
+
+CI green is necessary but not sufficient for closure.

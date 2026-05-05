@@ -469,6 +469,22 @@ If the touched area is the Control Plane, apply the same rule to `cp/` and verif
 
 Run local Playwright when the task needs route, redirect, or end-to-end browser confidence.
 
+Common browser proof commands:
+
+```bash
+yarn workspace frontend test:e2e:auth
+yarn workspace frontend test:e2e test/e2e/settings.spec.ts
+yarn workspace frontend test:e2e:cp
+```
+
+Use the normal frontend E2E command with the Settings spec path when validating the shipped Settings admin journey. Start from a clean local state first because the seeded admin MFA setup mutates session/account state:
+
+```bash
+yarn reset-db
+yarn dev
+yarn workspace frontend test:e2e test/e2e/settings.spec.ts
+```
+
 ### Proxy / topology proof
 
 Use the stack-level topology checks when the task touches:

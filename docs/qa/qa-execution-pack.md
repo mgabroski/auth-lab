@@ -1,26 +1,23 @@
-# QA Execution Pack — Auth + User Provisioning + Control Plane
+# QA Execution Pack — Auth + User Provisioning + Control Plane + Settings
 
 ## Purpose
 
-This is the single canonical QA execution document for the Auth + User Provisioning and Control Plane surfaces shipped in this repository.
+This is the single canonical QA execution document for the Auth, User Provisioning, Control Plane, and shipped Settings v1 surfaces in this repository.
 
 Use it for:
 
-- environments
+- environment matrix
 - personas
+- deterministic fixture requirements
 - test preconditions
 - execution order
-- exact flow coverage
+- exact Settings proof cases
 - expected evidence
 - out-of-scope items
 - bug reporting expectations
 - signoff readiness
 
-This file is the authoritative QA execution surface for this area.
-Do not maintain a second competing QA execution script for the same module.
-
-If a tester-friendly derivative manual exists, it must be generated from this document or kept strictly secondary.
-It must not become a second source of truth.
+Do not maintain a second competing QA execution script for these shipped surfaces. A tester-friendly derivative manual may exist, but this file remains the canonical execution pack.
 
 ---
 
@@ -30,16 +27,16 @@ Before using this file, read:
 
 1. `docs/current-foundation-status.md`
 2. `docs/developer-guide.md`
-3. relevant API docs only if a QA question becomes contract-specific
+3. `docs/ops/runbooks.md`
+4. relevant API docs only if a QA question becomes contract-specific
 
-Use this file for QA execution.
-Use `docs/developer-guide.md` for environment setup and daily developer workflow.
+Use this file for QA execution. Use `docs/developer-guide.md` for environment setup and daily developer workflow.
 
 ---
 
 ## Scope
 
-This pack covers QA execution for the current shipped Auth + User Provisioning slice, including:
+This pack covers QA execution for the current shipped repo slice:
 
 - login and logout
 - public signup
@@ -49,129 +46,104 @@ This pack covers QA execution for the current shipped Auth + User Provisioning s
 - MFA setup, verify, and recovery
 - admin invite management
 - role-aware landing
-- Settings-native workspace setup banner and overview behavior in the current shipped slice
-- the shipped Personal builder at `/admin/settings/modules/personal`, including full-replacement save and conflict surfacing
-- the shipped Integrations informational page at `/admin/settings/integrations`, including SSO status truth and deferred HRIS/Stripe treatment
-- rate limiting
-- access-control denial cases
-- Google SSO staging proof
-- Microsoft SSO staging proof
-- Control Plane create/setup/review/publish/re-entry/status-toggle proof
+- Control Plane account create/setup/review/publish/re-entry/status-toggle
+- Settings-native workspace setup banner and overview behavior
+- `/admin/settings/access` read-only review and explicit acknowledgement
+- `/admin/settings/account` non-gating per-card save behavior
+- `/admin/settings/modules` navigation hub behavior
+- `/admin/settings/modules/personal` family review, field configuration, section builder, and full-replacement save behavior
+- `/admin/settings/integrations` informational SSO and deferred integration behavior
+- `/admin/settings/communications` placeholder-only route behavior
+- absent Permissions treatment
+- version conflict and CP revision conflict proof
+- CP required-vs-optional Settings cascade proof
+- migration/backfill proof for legacy scaffold to native Settings rows
+- tenant-safe SSR/proxy/cookie behavior where current local topology supports it
 
 ---
 
 ## Out Of Scope
 
-Do not use this pack to claim QA signoff for work outside the current shipped auth/provisioning and Control Plane slices.
+Do not use this pack to claim QA signoff for work outside the current shipped repo.
 
-Out of scope here:
+Out of scope:
 
 - SCIM
 - SAML
-- HRIS module UX
-- device/session management UX beyond current shipped flows
-- broader Settings write implementation beyond the currently shipped `/admin`, `/admin/settings`, `/admin/settings/access`, `/admin/settings/account`, `/admin/settings/modules/personal`, and read-only `/admin/settings/integrations` slice
-- CP authentication, operator RBAC, or audit UI work that is not shipped in this repo
-- future modules not yet shipped in the repo
-- performance/load testing unless explicitly added later
+- HRIS runtime module UX
+- tenant secret entry for integrations
+- Communications live configuration
+- Workspace Experience live configuration
+- Permissions / Permission & Policy Management tenant surface
+- documents, benefits, payments, marketplace tenant modules
+- CP authentication
+- CP operator RBAC
+- CP audit viewer UI
+- production load/performance testing
+
+When a future surface is intentionally absent or placeholder-only, missing configuration UI is not a bug.
 
 ---
 
-## Environments
+## Environment Matrix
 
-## Local
+| Environment            | Use                                  | Required services                               | Email mode                             | SSO mode                                  | Settings proof level                                                         |
+| ---------------------- | ------------------------------------ | ----------------------------------------------- | -------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------- |
+| Local host-run         | Daily QA and developer proof         | Postgres, Redis, backend, frontend, CP, Mailpit | Mailpit                                | Local helper / disabled unless configured | Full backend/API proof plus browser Settings proof on `*.lvh.me:3000`        |
+| Local full-stack proxy | Topology and CP smoke                | Compose stack with Caddy                        | Mailpit                                | Local helper / disabled unless configured | Host preservation, same-origin `/api/*`, CP host, tenant-host boundary proof |
+| Staging                | Provider and release candidate proof | deployed stack                                  | sandbox SMTP or real non-prod provider | real Google/Microsoft                     | Repeat critical Settings browser paths and provider-dependent SSO flows      |
+| Production             | Release verification only            | production stack                                | production provider                    | production providers                      | Smoke only, according to release runbook                                     |
 
-Use for:
-
-- baseline auth and provisioning flow validation
-- seeded persona validation
-- Mailpit-backed email checks
-- role-aware route behavior
-- workspace invite flows
-- MFA local proof
-- rate-limit checks
-- access denial checks
-
-Expected environment traits:
-
-- tenant-aware `*.lvh.me` local URLs
-- Mailpit for email capture
-- local developer-controlled reset/reseed flow
-- no real production cookie/security claims beyond local intent
-
-## Staging
-
-Use for:
-
-- real Google SSO round-trip
-- real Microsoft SSO round-trip
-- non-production real SMTP/provider proof where applicable
-- browser validation against more realistic environment settings
-- browser and backend validation of the shipped Settings bootstrap/overview/account/access/personal/integrations slice, including `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/access/acknowledge`, the real Account per-card routes, `GET /settings/modules/personal`, `PUT /settings/modules/personal`, and `GET /settings/integrations`
-
-Expected environment traits:
-
-- real provider credentials configured
-- correct redirect URIs
-- reachable provider endpoints
-- environment-specific secrets already set
-
-## Production
-
-This QA pack is not the production operations runbook.
-Production release behavior belongs to the relevant ops and release docs.
+Local host-run starts with `yarn dev`. Local full-stack proxy starts with `yarn dev:stack`.
 
 ---
 
-## Canonical Personas
+## Canonical Personas and Fixtures
 
-These personas must stay aligned with the current seed/bootstrap truth.
-If they change, update this file and `docs/developer-guide.md` in the same PR.
+### Seeded local personas
 
-### Required persona classes
+| Persona                                         | Tenant          | Role   | Use                                              |
+| ----------------------------------------------- | --------------- | ------ | ------------------------------------------------ |
+| `member@example.com / Password123!`             | `goodwill-open` | Member | member login, logout, member routing             |
+| `e2e-admin@example.com / Password123!`          | `goodwill-open` | Admin  | admin landing, MFA setup, Settings browser proof |
+| `e2e-recovery-admin@example.com / Password123!` | `goodwill-open` | Admin  | MFA recovery proof                               |
+| `e2e-reset-member@example.com / Password123!`   | `goodwill-open` | Member | password reset proof                             |
 
-- one seeded member persona
-- one seeded admin persona
-- one invite-only tenant
-- one public-signup tenant
-- one fresh invitee email for invite tests
-- one fresh signup email for signup tests
-- one real Google staging account for Google SSO proof
-- one real Microsoft staging account for Microsoft SSO proof
-- one CP draft account key and one CP published account key for re-entry/status-toggle checks
+### Tenant fixtures
 
-### Typical local examples
+| Fixture              | URL                                | Purpose                                                 |
+| -------------------- | ---------------------------------- | ------------------------------------------------------- |
+| GoodWill Open        | `http://goodwill-open.lvh.me:3000` | public signup enabled, seeded member/admin personas     |
+| GoodWill CA          | `http://goodwill-ca.lvh.me:3000`   | invite-only tenant, cross-tenant boundary checks        |
+| CP-created QA tenant | generated account key              | CP publish, Settings cascade, and fixture-builder proof |
 
-- `member@example.com` -> seeded member on GoodWill Open
-- `e2e-admin@example.com` -> seeded admin on GoodWill Open
-- `system_admin@example.com` -> invite/bootstrap admin path when present in current seed/bootstrap flow
+### Deterministic Settings fixture builder
 
-Treat these as examples tied to the current repo state, not eternal constants.
+Backend proof tests use `backend/test/helpers/settings-fixtures.ts`. It creates reviewer-usable Settings states through the shipped CP and Settings APIs:
+
+- create CP account through `POST /cp/accounts`
+- save CP integrations, Access, Account Settings, Module Settings, and Personal catalog through real CP endpoints
+- publish the account through `POST /cp/accounts/:accountKey/publish`
+- create an admin session with real auth/MFA session state
+- drive Settings setup through `GET /settings/*`, `POST /settings/access/acknowledge`, and `PUT /settings/modules/personal`
+
+This fixture is intentionally not hidden DB magic. It uses direct DB reads only to resolve tenant IDs and create test admin membership/session data.
 
 ---
 
-## Preconditions
+## Green-Light Health Check
 
-Before any serious QA execution begins:
+Run before every QA session.
 
-1. local or staging environment is up
-2. environment-specific secrets/config are already in place
-3. seeded personas or required fresh test emails are ready
-4. tester knows whether the case is LOCAL only, STAGING only, or both
-5. Green-Light Health Check has passed in the active environment
+| ID   | Action                                             | Expected result        | Evidence                      |
+| ---- | -------------------------------------------------- | ---------------------- | ----------------------------- |
+| HC-1 | Open `http://goodwill-ca.lvh.me:3000/api/health`   | healthy response       | screenshot or copied response |
+| HC-2 | Open `http://goodwill-open.lvh.me:3000/auth/login` | login page loads       | screenshot                    |
+| HC-3 | Open `http://localhost:3002/accounts`              | CP Accounts page loads | screenshot                    |
+| HC-4 | Open `http://localhost:8025`                       | Mailpit loads          | screenshot                    |
+| HC-5 | Log in as `member@example.com` on GoodWill Open    | reaches `/app`         | screenshot                    |
 
-### Green-Light Health Check
-
-At minimum confirm:
-
-- backend health endpoint returns expected success
-- invite-only tenant login page loads
-- public-signup tenant login page loads
-- Mailpit loads for local email testing
-- seeded baseline member login works where expected
-- CP host loads and CP accounts list page renders
-
-Do not begin deeper QA against a broken baseline environment.
+Stop immediately if any health check fails.
 
 ---
 
@@ -179,120 +151,428 @@ Do not begin deeper QA against a broken baseline environment.
 
 Run cases in this order unless a focused bug task explicitly needs a smaller subset.
 
-### Group 1 — Baseline login and logout
-
-- member login
-- admin login continuation
-- wrong password
-- unknown email
-- pending invite blocked login
-- logout and protected-route rejection
-
-### Group 2 — Signup and email verification
-
-- public signup success
-- invite-only signup blocked
-- verification success
-- verification invalid/expired
-- resend verification
-
-### Group 3 — Password reset
-
-- forgot-password success
-- reset-password success
-- reset invalid/expired/reused
-- unknown email remains vague
-
-### Group 4 — MFA
-
-- setup path reached
-- real authenticator proof
-- correct TOTP accepted
-- wrong TOTP rejected
-- recovery code works once
-- used recovery code fails
-
-### Group 5 — Invite lifecycle
-
-- new-user invite acceptance
-- existing-user invite acceptance
-- expired invite
-- already-used invite
-- admin create invite
-- admin cancel invite
-- admin resend invite
-
-### Group 6 — Access control and setup guidance
-
-- role-aware landing
-- rate limiting
-- workspace setup banner behavior, `/admin/settings` overview consumption, real `/admin/settings/access` acknowledge behavior, real `/admin/settings/account` per-card save behavior, real `/admin/settings/integrations` informational behavior, and the real Personal builder save/conflict flow
-- suspended account denial
-- no-membership denial
-- cross-workspace isolation if included in current proof scope
-
-### Group 6B — Integrations informational page
-
-Run this after the Control Plane tenant has integration allowances saved.
-
-- open `/admin/settings/integrations` as a fully authenticated admin
-- confirm Google SSO and/or Microsoft SSO cards appear only when CP allows those integration surfaces
-- confirm visible SSO cards show one of: Ready, Not in use, or Blocked
-- confirm a degraded/missing runtime readiness snapshot appears as Blocked with warning copy rather than a fake success state
-- confirm ADP, Hint, iStream, and Stripe appear only as deferred tenant-configuration cards
-- confirm there is no credential-entry form, no connect/reconnect button, no mapping editor, no import rules UI, and no sync execution action
-- confirm Marketplace does not appear as a tenant configuration card
-
-### Group 7 — Staging-only SSO
-
-- Google SSO
-- Microsoft SSO
-- role-aware post-SSO landing
-- MFA continuation where applicable
-
-### Group 8 — Control Plane
-
-- create account draft
-- save all four Step 2 setup groups
-- save Personal sub-page when Personal remains enabled
-- confirm review gating blocks until required groups are truly configured
-- publish as Disabled
-- publish as Active only when Activation Ready passes
-- re-enter published account from accounts list
-- status toggle Active ↔ Disabled after publish
-- confirm `cpRevision` changes on allowance saves but not on publish-only or status-only changes
+1. Baseline login and logout
+2. Signup and email verification
+3. Password reset
+4. MFA
+5. Invite lifecycle
+6. Control Plane create/setup/review/publish/re-entry/status-toggle
+7. Settings banner, overview, required setup, Personal completion, placeholders, absent route
+8. Settings conflict and CP cascade proof
+9. Boundary and tenant isolation proof
+10. Staging-only SSO proof
+11. Signoff review
 
 ---
 
-## Core Test Coverage Matrix
+## Settings QA Cases
 
-Keep this matrix aligned with current shipped behavior.
+### SET-01 — Admin lands on `/admin` and sees setup banner
 
-| Area             | Must be proven                                                                                                                                                                                                                                                                                                                                                                                                                    | Environment |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| Login            | member success, admin continuation, wrong password, unknown email                                                                                                                                                                                                                                                                                                                                                                 | Local       |
-| Logout           | protected pages rejected after logout                                                                                                                                                                                                                                                                                                                                                                                             | Local       |
-| Signup           | open-tenant signup works, invite-only signup blocked                                                                                                                                                                                                                                                                                                                                                                              | Local       |
-| Verification     | verify, resend, invalid/expired handling                                                                                                                                                                                                                                                                                                                                                                                          | Local       |
-| Password Reset   | send, reset, old-password invalidation, invalid/reused token                                                                                                                                                                                                                                                                                                                                                                      | Local       |
-| MFA              | setup, verify, recovery, single-use recovery code                                                                                                                                                                                                                                                                                                                                                                                 | Local       |
-| Invite Lifecycle | create, accept, cancel, resend, expired, already-used                                                                                                                                                                                                                                                                                                                                                                             | Local       |
-| Access Control   | suspended, no-membership, role-aware landing                                                                                                                                                                                                                                                                                                                                                                                      | Local       |
-| Setup Guidance   | Settings-native workspace setup banner, `/admin/settings` overview, real `/admin/settings/access` acknowledge flow, real `/admin/settings/account` card saves, real `/admin/settings/modules` hub, real `/admin/settings/modules/personal` builder page, real `/admin/settings/integrations` informational page, Communications placeholder route, Workspace Experience overview-card-only/no-route behavior, Permissions absence | Local       |
-| Rate Limiting    | repeated bad login triggers lockout behavior                                                                                                                                                                                                                                                                                                                                                                                      | Local       |
-| Google SSO       | live provider round-trip                                                                                                                                                                                                                                                                                                                                                                                                          | Staging     |
-| Microsoft SSO    | live provider round-trip                                                                                                                                                                                                                                                                                                                                                                                                          | Staging     |
-| Control Plane    | create, group saves, Personal save, review gating, publish, re-entry, status toggle, honest `cpRevision` behavior                                                                                                                                                                                                                                                                                                                 | Local       |
-| Settings closure | `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/access/acknowledge`, `/settings/account`, the three Account card save routes, `/settings/modules`, `GET /settings/modules/personal`, `PUT /settings/modules/personal`, `GET /settings/integrations`, `GET /settings/communications`, synchronous CP cascade, persisted aggregate/section state, and honest route treatment                            | Local       |
+| Field         | Value                                                             |
+| ------------- | ----------------------------------------------------------------- |
+| Environment   | Local host-run                                                    |
+| Persona       | `e2e-admin@example.com` admin                                     |
+| Fixture       | clean seeded GoodWill Open state                                  |
+| Preconditions | run `yarn reset-db`, start `yarn dev`, complete MFA when prompted |
+
+Steps:
+
+1. Open `http://goodwill-open.lvh.me:3000/auth/login`.
+2. Sign in as `e2e-admin@example.com / Password123!`.
+3. Complete MFA setup if the account is prompted.
+4. Confirm the browser lands on `/admin`.
+5. Confirm the admin dashboard shows the non-blocking Workspace setup banner.
+6. Click `Open workspace settings →`.
+
+Expected results:
+
+- Admin lands on `/admin`, not `/app`.
+- Banner text says workspace setup requires attention.
+- Banner links to `/admin/settings`.
+- No detailed completion logic is shown on `/admin`.
+
+Evidence:
+
+- screenshot of `/admin` with URL bar and banner visible
+- screenshot after clicking into `/admin/settings`
 
 ---
 
-## Control Plane execution notes
+### SET-02 — Settings overview shows correct cards and no Permissions card
 
-Use the proxy-routed CP host for the honest browser proof path:
+| Field         | Value               |
+| ------------- | ------------------- |
+| Environment   | Local host-run      |
+| Persona       | authenticated admin |
+| Fixture       | same as SET-01      |
+| Preconditions | SET-01 completed    |
 
-- Full-stack/proxy proof: `http://cp.lvh.me:3000`
-- Host-run local UI iteration: `http://localhost:3002`
-- Host-run CP API shim: `http://localhost:3002/api/*` forwards to `http://localhost:3001/*`
+Steps:
 
-QA must use the proxy-routed CP host for topology proof and Playwright full-stack smoke. Host-run `localhost:3002` is acceptable for local manual UI iteration only and depends on the backend being started with `CP_ENABLED=true` and `CP_AUTH_MODE=none`.
+1. Open `/admin/settings`.
+2. Confirm `Required sections` is visible.
+3. Confirm `Optional sections` is visible.
+4. Confirm cards for Access & Security, Modules, Account Settings, Integrations, Communications, and Workspace Experience.
+5. Look for `Permissions`.
+
+Expected results:
+
+- Access and Modules/Personal are required setup paths.
+- Communications is placeholder-only.
+- Workspace Experience is overview-only placeholder.
+- Permissions is absent: no card, no CTA, no placeholder.
+
+Evidence:
+
+- screenshot of overview required sections
+- screenshot of overview optional sections
+
+---
+
+### SET-03 — Access acknowledge updates only Access boundary
+
+| Field         | Value                                    |
+| ------------- | ---------------------------------------- |
+| Environment   | Local host-run and backend tests         |
+| Persona       | authenticated admin                      |
+| Fixture       | seeded or deterministic Settings fixture |
+| Preconditions | Access section not yet complete          |
+
+Steps:
+
+1. Open `/admin/settings/access`.
+2. Confirm read-only Login Methods, MFA Policy, and Signup/Invite rows are visible.
+3. Confirm the explicit acknowledgement panel is visible.
+4. Click the acknowledgement button.
+5. Return to `/admin/settings`.
+
+Expected results:
+
+- Access saves through explicit acknowledge only.
+- Page visit alone does not complete Access.
+- Access completion does not fake-complete Personal.
+- Banner remains while Personal is still incomplete.
+
+Evidence:
+
+- screenshot before acknowledgement
+- screenshot of `Review saved`
+- screenshot of overview showing Personal/Modules still needing work when applicable
+
+---
+
+### SET-04 — Account save never fake-completes required setup
+
+| Field         | Value                                                              |
+| ------------- | ------------------------------------------------------------------ |
+| Environment   | Backend API proof plus optional browser visit                      |
+| Persona       | authenticated admin                                                |
+| Fixture       | deterministic Settings fixture with Access and Personal incomplete |
+| Preconditions | Account card DTO loaded                                            |
+
+Steps:
+
+1. Read `/settings/account`.
+2. Save Branding using the card version and cpRevision returned by the backend.
+3. Read `/settings/bootstrap`.
+4. Confirm next action still points to the first incomplete required section.
+
+Expected results:
+
+- Account local status may become In Progress or Complete for its card.
+- Overall setup does not become Complete.
+- Banner remains.
+- Access/Personal required truth is unchanged.
+
+Evidence:
+
+- API test output or screenshot of Account page
+- bootstrap response or overview screenshot proving banner remains
+
+---
+
+### SET-05 — Personal save drives required setup completion
+
+| Field         | Value                                               |
+| ------------- | --------------------------------------------------- |
+| Environment   | Local host-run and backend tests                    |
+| Persona       | authenticated admin                                 |
+| Fixture       | Access already acknowledged, Personal not yet saved |
+| Preconditions | `/admin/settings/modules/personal` loads            |
+
+Steps:
+
+1. Open `/admin/settings/modules/personal`.
+2. Confirm Family Review, Field Configuration, and Section Builder are present.
+3. Make a real draft change if the button is disabled, for example rename the first section.
+4. Click `Save Personal Configuration`.
+5. Return to `/admin`.
+
+Expected results:
+
+- Save uses the single Personal full-replacement contract.
+- Personal becomes Complete when current required-floor and section assignment rules are satisfied.
+- If Access is already complete, overall setup becomes Complete.
+- `/admin` banner disappears.
+
+Evidence:
+
+- screenshot of Personal page before save
+- screenshot of success message
+- screenshot of `/admin` without setup banner
+
+---
+
+### SET-06 — Communications placeholder loads, Workspace Experience has no route, Permissions remains absent
+
+| Field         | Value                         |
+| ------------- | ----------------------------- |
+| Environment   | Local host-run                |
+| Persona       | authenticated admin           |
+| Fixture       | any authenticated admin state |
+| Preconditions | admin session established     |
+
+Steps:
+
+1. Open `/admin/settings/communications`.
+2. Confirm page says live configuration is not available and mutation endpoints are not available.
+3. Open `/admin/settings/workspace-experience`.
+4. Open `/admin/settings/permissions`.
+
+Expected results:
+
+- Communications route loads as placeholder-only.
+- Workspace Experience route returns 404.
+- Permissions route returns 404.
+- No fake save, configure, connect, or request-access action appears.
+
+Evidence:
+
+- screenshot of Communications placeholder page
+- screenshot or browser/network proof of both 404 routes
+
+---
+
+### SET-07 — Version conflict is surfaced
+
+| Field         | Value                                                         |
+| ------------- | ------------------------------------------------------------- |
+| Environment   | Backend API test; frontend conflict rendering where practical |
+| Persona       | authenticated admin                                           |
+| Fixture       | deterministic Settings fixture                                |
+| Preconditions | read an old DTO version, then submit a stale mutation         |
+
+Steps:
+
+1. Read a mutable Settings DTO.
+2. Save the same section once to increment version.
+3. Submit another save with the original `expectedVersion`.
+
+Expected results:
+
+- Backend returns a conflict response.
+- Frontend must not silently retry, discard draft, or swallow the conflict.
+- User sees reload/review guidance when a conflict is surfaced through the UI.
+
+Evidence:
+
+- API response showing conflict code
+- screenshot of frontend conflict guidance when manually reproduced
+
+---
+
+### SET-08 — CP revision conflict is surfaced
+
+| Field         | Value                                                      |
+| ------------- | ---------------------------------------------------------- |
+| Environment   | Backend API test                                           |
+| Persona       | authenticated admin                                        |
+| Fixture       | deterministic Settings fixture                             |
+| Preconditions | read Personal DTO, then change CP Personal allowance truth |
+
+Steps:
+
+1. Read `/settings/modules/personal` and keep the returned `cpRevision`.
+2. Change CP allowance truth for the same tenant.
+3. Submit the stale Personal payload.
+
+Expected results:
+
+- Backend rejects invalid stale payloads with a CP revision conflict.
+- Backend accepts stale cpRevision only when the payload still remains valid under current CP truth.
+- No frontend-derived truth is used to hide the conflict.
+
+Evidence:
+
+- API response showing CP revision conflict or valid stale-acceptance path
+
+---
+
+### SET-09 — CP required change triggers Needs Review; optional removal does not
+
+| Field         | Value                                                        |
+| ------------- | ------------------------------------------------------------ |
+| Environment   | Backend API proof                                            |
+| Persona       | authenticated admin                                          |
+| Fixture       | deterministic Settings fixture completed to overall Complete |
+| Preconditions | Access and Personal are complete                             |
+
+Steps:
+
+1. Remove an optional Personal field from CP allowance truth.
+2. Read Settings bootstrap and Personal DTO.
+3. Change a required Access setting from CP, such as Member MFA policy.
+4. Read Settings bootstrap again.
+5. Acknowledge Access under the new CP truth.
+
+Expected results:
+
+- Optional Personal removal prunes/hides the removed field and keeps overall status Complete.
+- Required Access change sets Access and aggregate to Needs Review.
+- Banner returns.
+- Explicit Access acknowledgement clears Needs Review when no blockers remain.
+
+Evidence:
+
+- backend test output or captured API responses for each transition
+
+---
+
+### SET-10 — Migration/backfill tenant behaves correctly
+
+| Field         | Value                                                                     |
+| ------------- | ------------------------------------------------------------------------- |
+| Environment   | Backend migration/backfill proof                                          |
+| Persona       | developer/test runner                                                     |
+| Fixture       | legacy scaffold tenant with `setup_completed_at`, no native Settings rows |
+| Preconditions | migration/backfill path runs                                              |
+
+Steps:
+
+1. Create or load a tenant with legacy acknowledgement data and no native Settings state rows.
+2. Run the migration/backfill path.
+3. Inspect native Settings state rows.
+
+Expected results:
+
+- Native aggregate row exists.
+- Access can be backfilled to Complete only if legacy acknowledgement semantics still satisfy the current Access acknowledgement rule.
+- Overall setup is not backfilled to Complete from legacy acknowledgement alone.
+- Other live sections remain Not Started unless real persisted config supports a stronger state.
+
+Evidence:
+
+- automated test output from `settings-foundation.spec.ts`
+
+---
+
+### SET-11 — Cross-tenant isolation and topology-safe Settings access
+
+| Field         | Value                                                 |
+| ------------- | ----------------------------------------------------- |
+| Environment   | Local host-run plus full-stack proxy where available  |
+| Persona       | authenticated admin                                   |
+| Fixture       | admin session for one tenant and a second tenant host |
+| Preconditions | admin is logged into tenant A                         |
+
+Steps:
+
+1. Request `/api/settings/bootstrap` on the same tenant host.
+2. Request `/api/settings/bootstrap` on a different tenant host using the same browser context.
+3. In full-stack mode, run proxy conformance checks.
+
+Expected results:
+
+- Same-tenant request succeeds.
+- Cross-tenant request returns 401.
+- Browser uses same-origin `/api/*` paths.
+- SSR forwards Host/Cookie/X-Forwarded headers according to the topology contract.
+- Direct backend origin is not a valid authenticated browser Settings path.
+
+Evidence:
+
+- Playwright output for Settings isolation proof
+- proxy conformance output when run in full-stack mode
+
+---
+
+## Automated Proof Commands
+
+Run these from the repo root unless noted.
+
+| Proof                        | Command                                                                                                                                                                                                                                                                           | What it proves                                                                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend Settings proof suite | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts` | migration/backfill, required/optional CP cascade, conflicts, placeholder/absent behavior, account non-gating, personal completion     |
+| Frontend Settings unit proof | `yarn workspace frontend test:unit -- admin-settings`                                                                                                                                                                                                                             | SSR page loaders and component rendering contract for Settings pages                                                                  |
+| Browser Settings proof       | `yarn workspace frontend test:e2e test/e2e/settings.spec.ts`                                                                                                                                                                                                                      | real browser admin journey through `/admin`, Settings overview, Access acknowledge, Personal save, placeholders, and tenant isolation |
+| CP full-stack proof          | `yarn workspace frontend test:e2e:cp`                                                                                                                                                                                                                                             | CP host create/publish/re-entry/status and tenant-host boundary in full-stack mode                                                    |
+| Proxy conformance            | `./scripts/proxy-conformance.sh`                                                                                                                                                                                                                                                  | Host preservation, `/api` stripping, cookie continuity, X-Forwarded headers, tenant isolation                                         |
+
+The browser Settings proof should start from a clean seeded local state. Run `yarn reset-db` and restart `yarn dev` before it when the admin MFA state is dirty.
+
+---
+
+## Evidence Expectations
+
+For manual QA, collect:
+
+- screenshot with URL bar visible for every pass/fail checkpoint
+- exact error text for every failed expectation
+- environment name and startup mode (`yarn dev`, `yarn dev:stack`, staging)
+- persona used
+- account key / tenant key used
+- Mailpit screenshot for email-dependent flows
+- browser console/network screenshot when a route fails unexpectedly
+- automated command output for backend/frontend/Playwright proof
+
+A QA pass without evidence is incomplete.
+
+---
+
+## Bug Reporting Expectations
+
+Every bug report must include:
+
+- title with area prefix (`AUTH`, `CP`, `SETTINGS`, `PROXY`, `DOCS`)
+- environment and startup mode
+- tenant host
+- persona/email used
+- fixture state or CP account key
+- exact steps to reproduce
+- expected result from this pack
+- actual result
+- screenshots or trace artifacts
+- severity
+
+### Severity guide
+
+| Severity | Meaning                                     | Examples                                                                                 |
+| -------- | ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| P0       | security boundary or data isolation failure | cross-tenant Settings access succeeds, session accepted on wrong tenant                  |
+| P1       | critical shipped flow broken                | admin cannot complete MFA, `/admin/settings` crashes, CP cannot publish a valid tenant   |
+| P2       | shipped flow works only with workaround     | Personal save fails after normal edit, conflict message missing but API returns conflict |
+| P3       | copy/layout/non-blocking issue              | minor typo, helper text mismatch, visual spacing issue                                   |
+
+Do not mark future deferred scope as a bug unless this pack says the shipped repo should expose it.
+
+---
+
+## Signoff Checklist
+
+QA signoff for the shipped Settings proof slice requires all of the following:
+
+- local health check passed
+- baseline auth flows passed
+- CP smoke path passed or explicitly deferred to full-stack proof window
+- Settings browser proof passed
+- backend Settings proof suite passed
+- migration/backfill proof passed
+- CP required/optional cascade proof passed
+- version conflict and CP revision conflict proof passed
+- Communications placeholder and Permissions absent behavior passed
+- cross-tenant isolation proof passed
+- docs/runbooks checked against actual commands
+- all open bugs triaged with severity
+
+CI green alone is not enough. Evidence and this execution pack must also be current.
