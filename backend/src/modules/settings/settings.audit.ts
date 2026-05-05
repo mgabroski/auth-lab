@@ -22,6 +22,17 @@ export type SettingsAuditRequestContext = {
   membershipId: string;
 };
 
+type SettingsAuditStateSummary = {
+  status: string;
+  version: number;
+  cpRevision: number;
+};
+
+type SettingsAuditCardAndSectionSummary = {
+  card: SettingsAuditStateSummary;
+  section: SettingsAuditStateSummary;
+};
+
 function accountCardSavedAction(cardKey: SettingsAccountCardKey): string {
   switch (cardKey) {
     case 'branding':
@@ -56,6 +67,9 @@ export function auditAccessAcknowledged(
   writer: AuditWriter,
   data: {
     tenantId: string;
+    source: string;
+    before: SettingsAuditStateSummary;
+    after: SettingsAuditStateSummary;
     sectionVersion: number;
     cpRevision: number;
     status: string;
@@ -64,6 +78,9 @@ export function auditAccessAcknowledged(
 ): Promise<void> {
   return writer.append('settings.access.acknowledged', {
     tenantId: data.tenantId,
+    source: data.source,
+    before: data.before,
+    after: data.after,
     sectionVersion: data.sectionVersion,
     cpRevision: data.cpRevision,
     status: data.status,
@@ -79,10 +96,12 @@ export function auditAccessAcknowledgeFailed(
     message: string;
     expectedVersion: number;
     expectedCpRevision: number;
+    source?: string;
   },
 ): Promise<void> {
   return writer.append('settings.access.acknowledge.failed', {
     tenantId: data.tenantId,
+    source: data.source ?? 'AccessSettingsService.acknowledgeAccess',
     errorCode: data.errorCode,
     message: data.message,
     expectedVersion: data.expectedVersion,
@@ -95,6 +114,9 @@ export function auditAccountCardSaved(
   data: {
     tenantId: string;
     cardKey: SettingsAccountCardKey;
+    source: string;
+    before: SettingsAuditCardAndSectionSummary;
+    after: SettingsAuditCardAndSectionSummary;
     cardVersion: number;
     sectionVersion: number;
     cpRevision: number;
@@ -105,6 +127,9 @@ export function auditAccountCardSaved(
   return writer.append(accountCardSavedAction(data.cardKey), {
     tenantId: data.tenantId,
     cardKey: data.cardKey,
+    source: data.source,
+    before: data.before,
+    after: data.after,
     cardVersion: data.cardVersion,
     sectionVersion: data.sectionVersion,
     cpRevision: data.cpRevision,
@@ -122,11 +147,13 @@ export function auditAccountCardSaveFailed(
     message: string;
     expectedVersion: number;
     expectedCpRevision: number;
+    source?: string;
   },
 ): Promise<void> {
   return writer.append(accountCardFailedAction(data.cardKey), {
     tenantId: data.tenantId,
     cardKey: data.cardKey,
+    source: data.source ?? 'AccountSettingsService.saveCard',
     errorCode: data.errorCode,
     message: data.message,
     expectedVersion: data.expectedVersion,
@@ -138,6 +165,9 @@ export function auditPersonalSaved(
   writer: AuditWriter,
   data: {
     tenantId: string;
+    source: string;
+    before: SettingsAuditStateSummary;
+    after: SettingsAuditStateSummary;
     sectionVersion: number;
     cpRevision: number;
     status: string;
@@ -149,6 +179,9 @@ export function auditPersonalSaved(
 ): Promise<void> {
   return writer.append('settings.personal.saved', {
     tenantId: data.tenantId,
+    source: data.source,
+    before: data.before,
+    after: data.after,
     sectionVersion: data.sectionVersion,
     cpRevision: data.cpRevision,
     status: data.status,
@@ -167,10 +200,12 @@ export function auditPersonalSaveFailed(
     message: string;
     expectedVersion: number;
     expectedCpRevision: number;
+    source?: string;
   },
 ): Promise<void> {
   return writer.append('settings.personal.save.failed', {
     tenantId: data.tenantId,
+    source: data.source ?? 'PersonalSettingsService.savePersonalConfiguration',
     errorCode: data.errorCode,
     message: data.message,
     expectedVersion: data.expectedVersion,

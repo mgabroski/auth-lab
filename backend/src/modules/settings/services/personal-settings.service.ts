@@ -330,7 +330,7 @@ export class PersonalSettingsService {
           hasValidSectionAssignments: readModel.progress.sectionAssignmentsReady,
         });
 
-        await foundationRepo.transitionSectionState({
+        const transitioned = await foundationRepo.transitionSectionState({
           tenantId: auth.tenantId,
           sectionKey: 'personal',
           nextStatus: nextSectionStatus,
@@ -340,7 +340,12 @@ export class PersonalSettingsService {
           actorUserId: auth.userId,
           markSaved: true,
           markReviewed: true,
+          expectedVersion: currentSection.version,
         });
+
+        if (!transitioned) {
+          throw SettingsErrors.personalSectionVersionConflict();
+        }
 
         const recomputed = await stateService.recomputeAggregate({
           tenantId: auth.tenantId,
@@ -355,6 +360,17 @@ export class PersonalSettingsService {
         await auditService.recordPersonalSaved({
           writer,
           tenantId: auth.tenantId,
+          source: 'PersonalSettingsService.savePersonalConfiguration',
+          before: {
+            status: currentSection.status,
+            version: currentSection.version,
+            cpRevision: currentSection.appliedCpRevision,
+          },
+          after: {
+            status: recomputed.sections.personal.status,
+            version: recomputed.sections.personal.version,
+            cpRevision: recomputed.sections.personal.appliedCpRevision,
+          },
           sectionVersion: recomputed.sections.personal.version,
           cpRevision: recomputed.sections.personal.appliedCpRevision,
           status: recomputed.sections.personal.status,

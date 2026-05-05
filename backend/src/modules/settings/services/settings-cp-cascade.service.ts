@@ -121,7 +121,7 @@ export class SettingsCpCascadeService {
       const currentSection = current.sections[sectionKey];
       const impactedReason = impactedMap.get(sectionKey);
 
-      if (impactedReason && currentSection.status === 'COMPLETE') {
+      if (impactedReason && currentSection.status !== 'NOT_STARTED') {
         await this.foundationRepo.transitionSectionState({
           tenantId: params.tenantId,
           sectionKey,

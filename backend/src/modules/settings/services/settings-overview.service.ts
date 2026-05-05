@@ -79,6 +79,7 @@ export class SettingsOverviewService {
         status: state.sections.access.status,
         warnings: [...accessSurface.blockers, ...accessSurface.warnings],
         isRequired: true,
+        requiredReason: 'Access & Security is required before workspace setup can be complete.',
       },
     ];
 
@@ -92,8 +93,11 @@ export class SettingsOverviewService {
         status: state.sections.account.status,
         warnings: [],
         isRequired: false,
+        requiredReason: null,
       });
     }
+
+    const personalRequired = modulesModel.personalEnabled;
 
     cards.push(
       {
@@ -106,7 +110,10 @@ export class SettingsOverviewService {
         warnings: modulesModel.personalEnabled
           ? []
           : ['Personal is currently disabled by Control Plane allowance truth.'],
-        isRequired: false,
+        isRequired: personalRequired,
+        requiredReason: personalRequired
+          ? 'Personal is the only live actionable module in v1 and gates setup completion.'
+          : null,
       },
       {
         key: 'integrations',
@@ -117,6 +124,7 @@ export class SettingsOverviewService {
         status: state.sections.integrations.status,
         warnings: [...integrationsModel.google.warnings, ...integrationsModel.microsoft.warnings],
         isRequired: false,
+        requiredReason: null,
       },
       {
         key: 'communications',
@@ -127,6 +135,7 @@ export class SettingsOverviewService {
         status: 'PLACEHOLDER',
         warnings: [],
         isRequired: false,
+        requiredReason: null,
       },
       {
         key: 'workspaceExperience',
@@ -137,6 +146,7 @@ export class SettingsOverviewService {
         status: 'PLACEHOLDER',
         warnings: [],
         isRequired: false,
+        requiredReason: null,
       },
     );
 
@@ -144,7 +154,7 @@ export class SettingsOverviewService {
       overallStatus: state.aggregate.overallStatus,
       accessStatus: state.sections.access.status,
       personalStatus: state.sections.personal.status,
-      personalRequired: modulesModel.personalEnabled,
+      personalRequired,
     });
 
     return {

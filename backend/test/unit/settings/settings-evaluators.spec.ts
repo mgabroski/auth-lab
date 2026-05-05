@@ -329,7 +329,7 @@ describe('settings evaluators', () => {
       expect.arrayContaining([
         expect.objectContaining({
           sectionKey: 'personal',
-          reasonCode: 'CP_REQUIRED_TARGET_CHANGED',
+          reasonCode: 'CP_REQUIRED_TARGET_REMOVED',
         }),
       ]),
     );

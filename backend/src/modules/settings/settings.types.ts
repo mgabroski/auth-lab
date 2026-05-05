@@ -219,6 +219,7 @@ export type SettingsOverviewCardDto = {
   status: SettingsSetupStatus | 'PLACEHOLDER';
   warnings: string[];
   isRequired: boolean;
+  requiredReason: string | null;
 };
 
 export type SettingsOverviewDto = {
@@ -635,6 +636,7 @@ export type SettingsSectionTransitionInput = {
   actorUserId?: string | null;
   markReviewed?: boolean;
   markSaved?: boolean;
+  expectedVersion?: number;
 };
 
 export type SettingsAggregateTransitionInput = {
@@ -646,6 +648,7 @@ export type SettingsAggregateTransitionInput = {
   actorUserId?: string | null;
   markReviewed?: boolean;
   markSaved?: boolean;
+  expectedVersion?: number;
 };
 
 export type SettingsSectionRevisionSyncInput = {

@@ -14,6 +14,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AppConfig } from '../../app/config';
 import type { DbExecutor } from '../../shared/db/db';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
+import type { RateLimiter } from '../../shared/security/rate-limit';
 import { SettingsFoundationRepo } from './dal/settings-foundation.repo';
 import { SettingsReadRepo } from './dal/settings-read.repo';
 import { AccountSettingsRepo } from './dal/account-settings.repo';
@@ -46,6 +47,7 @@ export type SettingsModule = ReturnType<typeof createSettingsModule>;
 export function createSettingsModule(deps: {
   db: DbExecutor;
   auditRepo: AuditRepo;
+  rateLimiter: RateLimiter;
   config: Pick<AppConfig, 'sso'>;
 }) {
   const foundationRepo = new SettingsFoundationRepo(deps.db);
@@ -115,6 +117,7 @@ export function createSettingsModule(deps: {
     auditService,
   });
   const controller = new SettingsController(
+    deps.rateLimiter,
     bootstrapService,
     overviewService,
     accessReadService,

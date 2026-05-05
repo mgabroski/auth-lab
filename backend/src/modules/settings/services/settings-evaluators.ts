@@ -220,6 +220,51 @@ function isRequiredPersonalFieldRemoval(params: {
   });
 }
 
+function isRequiredPersonalFieldAddition(params: {
+  previous: CpSettingsHandoffSnapshot;
+  next: CpSettingsHandoffSnapshot;
+}): boolean {
+  const previousAllowedFields = new Set(
+    params.previous.allowances.personal.fields
+      .filter((field) => field.isAllowed)
+      .map((field) => field.fieldKey),
+  );
+
+  return params.next.allowances.personal.fields.some(
+    (field) =>
+      field.isAllowed &&
+      (field.minimumRequired === 'required' || field.isSystemManaged) &&
+      !previousAllowedFields.has(field.fieldKey),
+  );
+}
+
+function isRequiredPersonalFieldRuleChange(params: {
+  previous: CpSettingsHandoffSnapshot;
+  next: CpSettingsHandoffSnapshot;
+}): boolean {
+  const previousAllowedFields = new Map(
+    params.previous.allowances.personal.fields
+      .filter((field) => field.isAllowed)
+      .map((field) => [field.fieldKey, field]),
+  );
+
+  return params.next.allowances.personal.fields.some((field) => {
+    if (!field.isAllowed) {
+      return false;
+    }
+
+    const previous = previousAllowedFields.get(field.fieldKey);
+    if (!previous) {
+      return false;
+    }
+
+    return (
+      previous.minimumRequired !== field.minimumRequired ||
+      previous.isSystemManaged !== field.isSystemManaged
+    );
+  });
+}
+
 function isOptionalPersonalRemoval(params: {
   previous: CpSettingsHandoffSnapshot;
   next: CpSettingsHandoffSnapshot;
@@ -275,7 +320,34 @@ function personalRequiredBoundaryChanged(
     return true;
   }
 
-  return isRequiredPersonalFieldRemoval({ previous, next });
+  return (
+    isRequiredPersonalFieldRemoval({ previous, next }) ||
+    isRequiredPersonalFieldAddition({ previous, next }) ||
+    isRequiredPersonalFieldRuleChange({ previous, next })
+  );
+}
+
+function personalRequiredBoundaryReasonCode(
+  previous: CpSettingsHandoffSnapshot,
+  next: CpSettingsHandoffSnapshot,
+): SettingsReasonCode {
+  if (previous.allowances.modules.modules.personal && !next.allowances.modules.modules.personal) {
+    return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_REMOVED;
+  }
+
+  if (!previous.allowances.modules.modules.personal && next.allowances.modules.modules.personal) {
+    return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_ADDED;
+  }
+
+  if (isRequiredPersonalFieldAddition({ previous, next })) {
+    return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_ADDED;
+  }
+
+  if (isRequiredPersonalFieldRemoval({ previous, next })) {
+    return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_REMOVED;
+  }
+
+  return SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_CHANGED;
 }
 
 export const NeedsReviewCascadeEvaluator = {
@@ -300,11 +372,7 @@ export const NeedsReviewCascadeEvaluator = {
     if (personalRequiredBoundaryChanged(params.previous, params.next)) {
       impactedSections.push({
         sectionKey: 'personal',
-        reasonCode:
-          params.previous.allowances.modules.modules.personal &&
-          !params.next.allowances.modules.modules.personal
-            ? SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_REMOVED
-            : SETTINGS_REASON_CODES.CP_REQUIRED_TARGET_CHANGED,
+        reasonCode: personalRequiredBoundaryReasonCode(params.previous, params.next),
       });
     }
 

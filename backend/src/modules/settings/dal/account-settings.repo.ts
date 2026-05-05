@@ -235,12 +235,13 @@ export class AccountSettingsRepo {
 
   async saveBranding(params: {
     tenantId: string;
+    expectedVersion: number;
     appliedCpRevision: number;
     savedAt: Date;
     actorUserId: string;
     values: AccountBrandingValuesDto;
-  }): Promise<void> {
-    await this.db
+  }): Promise<boolean> {
+    const result = await this.db
       .updateTable('tenant_account_settings')
       .set({
         branding_status: 'COMPLETE',
@@ -255,17 +256,21 @@ export class AccountSettingsRepo {
         updated_at: params.savedAt,
       })
       .where('tenant_id', '=', params.tenantId)
-      .execute();
+      .where('branding_version', '=', params.expectedVersion)
+      .executeTakeFirst();
+
+    return Number(result.numUpdatedRows) > 0;
   }
 
   async saveOrgStructure(params: {
     tenantId: string;
+    expectedVersion: number;
     appliedCpRevision: number;
     savedAt: Date;
     actorUserId: string;
     values: AccountOrgStructureValuesDto;
-  }): Promise<void> {
-    await this.db
+  }): Promise<boolean> {
+    const result = await this.db
       .updateTable('tenant_account_settings')
       .set({
         org_structure_status: 'COMPLETE',
@@ -278,17 +283,21 @@ export class AccountSettingsRepo {
         updated_at: params.savedAt,
       })
       .where('tenant_id', '=', params.tenantId)
-      .execute();
+      .where('org_structure_version', '=', params.expectedVersion)
+      .executeTakeFirst();
+
+    return Number(result.numUpdatedRows) > 0;
   }
 
   async saveCalendar(params: {
     tenantId: string;
+    expectedVersion: number;
     appliedCpRevision: number;
     savedAt: Date;
     actorUserId: string;
     values: AccountCalendarValuesDto;
-  }): Promise<void> {
-    await this.db
+  }): Promise<boolean> {
+    const result = await this.db
       .updateTable('tenant_account_settings')
       .set({
         calendar_status: 'COMPLETE',
@@ -300,6 +309,9 @@ export class AccountSettingsRepo {
         updated_at: params.savedAt,
       })
       .where('tenant_id', '=', params.tenantId)
-      .execute();
+      .where('calendar_version', '=', params.expectedVersion)
+      .executeTakeFirst();
+
+    return Number(result.numUpdatedRows) > 0;
   }
 }

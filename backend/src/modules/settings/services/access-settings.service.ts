@@ -124,7 +124,7 @@ export class AccessSettingsService {
         const transitionAt = new Date();
 
         if (currentSection.status !== 'COMPLETE') {
-          await foundationRepo.transitionSectionState({
+          const transitioned = await foundationRepo.transitionSectionState({
             tenantId: auth.tenantId,
             sectionKey: 'access',
             nextStatus: 'COMPLETE',
@@ -134,7 +134,12 @@ export class AccessSettingsService {
             actorUserId: auth.userId,
             markReviewed: true,
             markSaved: true,
+            expectedVersion: currentSection.version,
           });
+
+          if (!transitioned) {
+            throw SettingsErrors.accessSectionVersionConflict();
+          }
         }
 
         const refreshedSections = await foundationRepo.getStateBundle(auth.tenantId);
@@ -166,6 +171,17 @@ export class AccessSettingsService {
         await auditService.recordAccessAcknowledged({
           writer,
           tenantId: auth.tenantId,
+          source: 'AccessSettingsService.acknowledgeAccess',
+          before: {
+            status: currentSection.status,
+            version: currentSection.version,
+            cpRevision: currentSection.appliedCpRevision,
+          },
+          after: {
+            status: section.status,
+            version: section.version,
+            cpRevision: section.appliedCpRevision,
+          },
           sectionVersion: section.version,
           cpRevision: section.appliedCpRevision,
           status: section.status,

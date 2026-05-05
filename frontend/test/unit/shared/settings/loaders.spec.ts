@@ -166,6 +166,7 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         status: 'IN_PROGRESS',
         warnings: [],
         isRequired: true,
+        requiredReason: 'Required for workspace setup.',
       },
     ],
     ...overrides,

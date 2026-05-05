@@ -99,8 +99,25 @@ Mutable Settings routes use:
 Conflict rules:
 
 - version drift returns `409`
+- version checks are enforced at the mutation boundary, not only by pre-read comparison; stale concurrent writes must not overwrite newer persisted Settings truth
 - stale `expectedCpRevision` returns `409` only when the submitted payload is no longer valid under current CP truth
 - stale `expectedCpRevision` is accepted when the submitted payload is still valid under current CP truth
+
+### Write rate limits
+
+Settings write endpoints use the shared platform rate limiter before semantic validation and database work:
+
+- Access acknowledge: light per-user/per-tenant limit
+- Account card saves: moderate per-user/per-tenant limit
+- Personal save: strict per-user/per-tenant limit because it is the heaviest full-replacement write path
+
+Settings does not define a separate rate-limit subsystem.
+
+### Audit payloads
+
+Meaningful Settings writes use the shared audit infrastructure. Success audits are written inside the transaction. Failure audits are written outside the transaction so they survive rollback.
+
+Settings audit metadata includes the source service, tenant, actor context from the request, target section/card, before/after summaries, versions, `cpRevision`, aggregate status, and conflict inputs where relevant.
 
 ### Shared mutation envelope
 
@@ -160,6 +177,9 @@ Each card reports:
 - `status`
 - `warnings[]`
 - `isRequired`
+- `requiredReason`
+
+`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account and Integrations remain live but non-gating; Communications and Workspace Experience are placeholder-only; Permissions remains absent.
 
 ### `GET /settings/access`
 

@@ -103,6 +103,7 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         status: 'IN_PROGRESS',
         warnings: [],
         isRequired: true,
+        requiredReason: 'Required for workspace setup.',
       },
       {
         key: 'account',
@@ -113,6 +114,7 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         status: 'NOT_STARTED',
         warnings: [],
         isRequired: false,
+        requiredReason: null,
       },
       {
         key: 'communications',
@@ -123,6 +125,7 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         status: 'PLACEHOLDER',
         warnings: [],
         isRequired: false,
+        requiredReason: null,
       },
       {
         key: 'workspaceExperience',
@@ -133,6 +136,7 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         status: 'PLACEHOLDER',
         warnings: [],
         isRequired: false,
+        requiredReason: null,
       },
     ],
     ...overrides,

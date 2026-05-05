@@ -34,9 +34,9 @@
  * - ControlPlaneModule wiring is now real for create/read/list, Step 2 saves, review/publish,
  *   status toggle, and producer-side handoff reads.
  * - CP module requires db + logger + auditRepo. No rate-limiter, no outbox, no session.
- * - Settings module now ships Phase 2 backend-only state engine + read surfaces
- *   and is wired here so routes and CP cascade orchestration share one module
- *   boundary.
+ * - Settings module is a first-class tenant-admin surface with native state,
+ *   section writes, CP cascade orchestration, and shared rate limiting wired
+ *   through one module boundary.
  */
 
 import type { AppConfig } from './config';
@@ -452,6 +452,7 @@ export async function buildDeps(
   const settings = createSettingsModule({
     db,
     auditRepo,
+    rateLimiter,
     config: {
       sso: config.sso,
     },

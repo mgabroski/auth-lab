@@ -58,6 +58,7 @@ What this means today:
 - the tenant Settings v1 route set is implemented exactly as locked: Access, Account, Modules, Personal, Integrations live; Communications placeholder-only; Workspace Experience overview-card-only with no route; Permissions absent
 - the active Settings consumer audit is closed: `/admin` consumes bootstrap; Settings overview consumes overview; section pages consume their own Settings read/write DTOs; no active Settings page consumes auth bootstrap setup truth
 - the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, and a dedicated browser Settings proof path (`yarn workspace frontend test:e2e test/e2e/settings.spec.ts`)
+- the current Settings hardening layer now treats Settings writes as rate-limited, audit-rich, and conflict-protected at the mutation boundary; Personal can be explicitly saved even when backend-generated defaults are accepted unchanged; and `/admin/settings` marks the Modules/Personal action as required whenever Personal gates overall setup completion
 
 ---
 

@@ -118,6 +118,7 @@ export function SettingsOverviewCard({ card }: SettingsOverviewCardProps) {
       <div style={{ display: 'grid', gap: '8px' }}>
         <h3 style={titleStyle}>{card.title}</h3>
         <p style={descriptionStyle}>{card.description}</p>
+        {card.requiredReason ? <p style={descriptionStyle}>{card.requiredReason}</p> : null}
       </div>
 
       {card.warnings.length > 0 ? (

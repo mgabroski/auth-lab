@@ -15,6 +15,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../../shared/http/errors';
 import { requireSession } from '../../shared/http/require-auth-context';
+import type { RateLimiter } from '../../shared/security/rate-limit';
 import {
   acknowledgeAccessSettingsSchema,
   saveAccountBrandingSchema,
@@ -35,8 +36,17 @@ import { IntegrationsSettingsReadService } from './services/integrations-setting
 import { CommunicationsPlaceholderReadService } from './services/communications-placeholder-read.service';
 import type { SettingsAuditRequestContext } from './settings.audit';
 
+const SETTINGS_WRITE_RATE_LIMITS = {
+  accessAcknowledge: { limit: 30, windowSeconds: 60 },
+  accountCardSave: { limit: 60, windowSeconds: 60 },
+  personalSave: { limit: 20, windowSeconds: 60 },
+} as const;
+
+type SettingsWriteLimitKind = keyof typeof SETTINGS_WRITE_RATE_LIMITS;
+
 export class SettingsController {
   constructor(
+    private readonly rateLimiter: RateLimiter,
     private readonly bootstrapService: SettingsBootstrapService,
     private readonly overviewService: SettingsOverviewService,
     private readonly accessReadService: AccessSettingsReadService,
@@ -67,6 +77,16 @@ export class SettingsController {
       userId: auth.userId,
       membershipId: auth.membershipId,
     };
+  }
+
+  private async enforceWriteLimit(
+    context: SettingsAuditRequestContext,
+    kind: SettingsWriteLimitKind,
+  ): Promise<void> {
+    await this.rateLimiter.hitOrThrow({
+      key: `settings:${kind}:tenant:${context.tenantId}:user:${context.userId}`,
+      ...SETTINGS_WRITE_RATE_LIMITS[kind],
+    });
   }
 
   async getBootstrap(req: FastifyRequest, reply: FastifyReply) {
@@ -104,6 +124,7 @@ export class SettingsController {
 
   async acknowledgeAccess(req: FastifyRequest, reply: FastifyReply) {
     const auditContext = this.buildAuditContext(req);
+    await this.enforceWriteLimit(auditContext, 'accessAcknowledge');
     const parsed = acknowledgeAccessSettingsSchema.safeParse(req.body);
 
     if (!parsed.success) {
@@ -129,6 +150,7 @@ export class SettingsController {
 
   async saveAccountBranding(req: FastifyRequest, reply: FastifyReply) {
     const auditContext = this.buildAuditContext(req);
+    await this.enforceWriteLimit(auditContext, 'accountCardSave');
     const parsed = saveAccountBrandingSchema.safeParse(req.body);
 
     if (!parsed.success) {
@@ -143,6 +165,7 @@ export class SettingsController {
 
   async saveAccountOrgStructure(req: FastifyRequest, reply: FastifyReply) {
     const auditContext = this.buildAuditContext(req);
+    await this.enforceWriteLimit(auditContext, 'accountCardSave');
     const parsed = saveAccountOrgStructureSchema.safeParse(req.body);
 
     if (!parsed.success) {
@@ -157,6 +180,7 @@ export class SettingsController {
 
   async saveAccountCalendar(req: FastifyRequest, reply: FastifyReply) {
     const auditContext = this.buildAuditContext(req);
+    await this.enforceWriteLimit(auditContext, 'accountCardSave');
     const parsed = saveAccountCalendarSchema.safeParse(req.body);
 
     if (!parsed.success) {
@@ -215,6 +239,7 @@ export class SettingsController {
 
   async savePersonal(req: FastifyRequest, reply: FastifyReply) {
     const auditContext = this.buildAuditContext(req);
+    await this.enforceWriteLimit(auditContext, 'personalSave');
     const parsed = savePersonalSettingsSchema.safeParse(req.body);
 
     if (!parsed.success) {

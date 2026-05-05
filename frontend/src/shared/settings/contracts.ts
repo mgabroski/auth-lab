@@ -60,6 +60,7 @@ export type SettingsOverviewCardResponse = {
   status: SettingsSetupStatus | 'PLACEHOLDER';
   warnings: string[];
   isRequired: boolean;
+  requiredReason: string | null;
 };
 
 export type SettingsOverviewResponse = {

@@ -41,6 +41,9 @@ export class SettingsAuditService {
   async recordAccessAcknowledged(params: {
     writer: AuditWriter;
     tenantId: string;
+    source: string;
+    before: { status: string; version: number; cpRevision: number };
+    after: { status: string; version: number; cpRevision: number };
     sectionVersion: number;
     cpRevision: number;
     status: string;
@@ -48,6 +51,9 @@ export class SettingsAuditService {
   }): Promise<void> {
     await auditAccessAcknowledged(params.writer, {
       tenantId: params.tenantId,
+      source: params.source,
+      before: params.before,
+      after: params.after,
       sectionVersion: params.sectionVersion,
       cpRevision: params.cpRevision,
       status: params.status,
@@ -69,6 +75,7 @@ export class SettingsAuditService {
       message: params.message,
       expectedVersion: params.expectedVersion,
       expectedCpRevision: params.expectedCpRevision,
+      source: 'AccessSettingsService.acknowledgeAccess',
     });
   }
 
@@ -76,6 +83,15 @@ export class SettingsAuditService {
     writer: AuditWriter;
     tenantId: string;
     cardKey: SettingsAccountCardKey;
+    source: string;
+    before: {
+      card: { status: string; version: number; cpRevision: number };
+      section: { status: string; version: number; cpRevision: number };
+    };
+    after: {
+      card: { status: string; version: number; cpRevision: number };
+      section: { status: string; version: number; cpRevision: number };
+    };
     cardVersion: number;
     sectionVersion: number;
     cpRevision: number;
@@ -85,6 +101,9 @@ export class SettingsAuditService {
     await auditAccountCardSaved(params.writer, {
       tenantId: params.tenantId,
       cardKey: params.cardKey,
+      source: params.source,
+      before: params.before,
+      after: params.after,
       cardVersion: params.cardVersion,
       sectionVersion: params.sectionVersion,
       cpRevision: params.cpRevision,
@@ -109,12 +128,16 @@ export class SettingsAuditService {
       message: params.message,
       expectedVersion: params.expectedVersion,
       expectedCpRevision: params.expectedCpRevision,
+      source: 'AccountSettingsService.saveCard',
     });
   }
 
   async recordPersonalSaved(params: {
     writer: AuditWriter;
     tenantId: string;
+    source: string;
+    before: { status: string; version: number; cpRevision: number };
+    after: { status: string; version: number; cpRevision: number };
     sectionVersion: number;
     cpRevision: number;
     status: string;
@@ -140,6 +163,7 @@ export class SettingsAuditService {
       message: params.message,
       expectedVersion: params.expectedVersion,
       expectedCpRevision: params.expectedCpRevision,
+      source: 'PersonalSettingsService.savePersonalConfiguration',
     });
   }
 }

@@ -236,9 +236,13 @@ export class SettingsFoundationRepo {
     };
   }
 
-  async transitionSectionState(params: SettingsSectionTransitionInput): Promise<void> {
+  async transitionSectionState(params: SettingsSectionTransitionInput): Promise<boolean> {
     const current = await this.getSectionState(params.tenantId, params.sectionKey);
-    if (!current) return;
+    if (!current) return false;
+
+    if (params.expectedVersion !== undefined && current.version !== params.expectedVersion) {
+      return false;
+    }
 
     const nextLastSavedAt = shouldMarkSave(current.lastSavedAt, params.markSaved)
       ? params.transitionAt
@@ -263,9 +267,9 @@ export class SettingsFoundationRepo {
       nextLastSavedBy !== current.lastSavedByUserId ||
       nextLastReviewedBy !== current.lastReviewedByUserId;
 
-    if (!changed) return;
+    if (!changed) return true;
 
-    await this.db
+    const query = this.db
       .updateTable('tenant_setup_section_state')
       .set({
         status: params.nextStatus,
@@ -280,13 +284,21 @@ export class SettingsFoundationRepo {
         updated_at: params.transitionAt,
       })
       .where('tenant_id', '=', params.tenantId)
-      .where('section_key', '=', params.sectionKey)
-      .execute();
+      .where('section_key', '=', params.sectionKey);
+
+    const result = await (params.expectedVersion === undefined
+      ? query.executeTakeFirst()
+      : query.where('version', '=', params.expectedVersion).executeTakeFirst());
+    return Number(result.numUpdatedRows) > 0;
   }
 
-  async transitionAggregateState(params: SettingsAggregateTransitionInput): Promise<void> {
+  async transitionAggregateState(params: SettingsAggregateTransitionInput): Promise<boolean> {
     const current = await this.findAggregateState(params.tenantId);
-    if (!current) return;
+    if (!current) return false;
+
+    if (params.expectedVersion !== undefined && current.version !== params.expectedVersion) {
+      return false;
+    }
 
     const nextLastSavedAt = shouldMarkSave(current.lastSavedAt, params.markSaved)
       ? params.transitionAt
@@ -311,9 +323,9 @@ export class SettingsFoundationRepo {
       nextLastSavedBy !== current.lastSavedByUserId ||
       nextLastReviewedBy !== current.lastReviewedByUserId;
 
-    if (!changed) return;
+    if (!changed) return true;
 
-    await this.db
+    const query = this.db
       .updateTable('tenant_setup_state')
       .set({
         overall_status: params.nextStatus,
@@ -327,8 +339,12 @@ export class SettingsFoundationRepo {
         last_reviewed_by_user_id: nextLastReviewedBy,
         updated_at: params.transitionAt,
       })
-      .where('tenant_id', '=', params.tenantId)
-      .execute();
+      .where('tenant_id', '=', params.tenantId);
+
+    const result = await (params.expectedVersion === undefined
+      ? query.executeTakeFirst()
+      : query.where('version', '=', params.expectedVersion).executeTakeFirst());
+    return Number(result.numUpdatedRows) > 0;
   }
 
   async syncSectionRevision(params: SettingsSectionRevisionSyncInput): Promise<void> {

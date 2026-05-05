@@ -375,6 +375,9 @@ export function PersonalSettingsFoundation({ data }: PersonalSettingsFoundationP
     [latestServer],
   );
   const hasChanges = JSON.stringify(currentRequest) !== JSON.stringify(latestRequest);
+  const requiresExplicitSave =
+    latestServer.status !== 'COMPLETE' || latestServer.warnings.length > 0;
+  const canSubmit = !saving && (hasChanges || requiresExplicitSave);
   const familyLabelMap = useMemo(() => familyLabelByKey(latestServer), [latestServer]);
 
   async function refreshLatestServer(): Promise<PersonalSettingsResponse | null> {
@@ -586,8 +589,8 @@ export function PersonalSettingsFoundation({ data }: PersonalSettingsFoundationP
           </div>
           <button
             type="button"
-            style={saving || !hasChanges ? disabledButtonStyle : buttonStyle}
-            disabled={saving || !hasChanges}
+            style={canSubmit ? buttonStyle : disabledButtonStyle}
+            disabled={!canSubmit}
             onClick={() => {
               void handleSave();
             }}
@@ -1036,8 +1039,8 @@ export function PersonalSettingsFoundation({ data }: PersonalSettingsFoundationP
           </div>
           <button
             type="button"
-            style={saving || !hasChanges ? disabledButtonStyle : buttonStyle}
-            disabled={saving || !hasChanges}
+            style={canSubmit ? buttonStyle : disabledButtonStyle}
+            disabled={!canSubmit}
             onClick={() => {
               void handleSave();
             }}

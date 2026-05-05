@@ -94,12 +94,13 @@ export class AccountSettingsService {
       repo: AccountSettingsRepo,
       args: {
         tenantId: string;
+        expectedVersion: number;
         appliedCpRevision: number;
         savedAt: Date;
         actorUserId: string;
         values: AccountBrandingValuesDto | AccountOrgStructureValuesDto | AccountCalendarValuesDto;
       },
-    ) => Promise<void>;
+    ) => Promise<boolean>;
     reasonCode:
       | typeof SETTINGS_REASON_CODES.ACCOUNT_BRANDING_SAVED
       | typeof SETTINGS_REASON_CODES.ACCOUNT_ORG_STRUCTURE_SAVED
@@ -162,13 +163,18 @@ export class AccountSettingsService {
         const savedAt = new Date();
         const sanitizedValues = params.sanitize(allowance);
 
-        await params.save(accountRepo, {
+        const saved = await params.save(accountRepo, {
           tenantId: params.auth.tenantId,
+          expectedVersion: currentVersion,
           appliedCpRevision: currentCpRevision,
           savedAt,
           actorUserId: params.auth.userId,
           values: sanitizedValues,
         });
+
+        if (!saved) {
+          throw params.conflictFactory();
+        }
 
         const refreshedAccount = await accountRepo.getByTenantId(params.auth.tenantId);
         if (!refreshedAccount) {
@@ -217,11 +223,43 @@ export class AccountSettingsService {
               ? refreshedAccount.orgStructure
               : refreshedAccount.calendar;
 
+        const beforeCardSummary =
+          params.cardKey === 'branding'
+            ? account.branding
+            : params.cardKey === 'orgStructure'
+              ? account.orgStructure
+              : account.calendar;
+
         const writer = auditService.buildWriter(params.auth);
         await auditService.recordAccountCardSaved({
           writer,
           tenantId: params.auth.tenantId,
           cardKey: params.cardKey,
+          source: 'AccountSettingsService.saveCard',
+          before: {
+            card: {
+              status: beforeCardSummary.status,
+              version: currentVersion,
+              cpRevision: currentCpRevision,
+            },
+            section: {
+              status: state.sections.account.status,
+              version: state.sections.account.version,
+              cpRevision: state.sections.account.appliedCpRevision,
+            },
+          },
+          after: {
+            card: {
+              status: cardSummary.status,
+              version: cardSummary.version,
+              cpRevision: cardSummary.appliedCpRevision,
+            },
+            section: {
+              status: recomputed.sections.account.status,
+              version: recomputed.sections.account.version,
+              cpRevision: recomputed.sections.account.appliedCpRevision,
+            },
+          },
           cardVersion: cardSummary.version,
           sectionVersion: recomputed.sections.account.version,
           cpRevision: cardSummary.appliedCpRevision,
@@ -283,6 +321,7 @@ export class AccountSettingsService {
       save: (repo, args) =>
         repo.saveBranding({
           tenantId: args.tenantId,
+          expectedVersion: args.expectedVersion,
           appliedCpRevision: args.appliedCpRevision,
           savedAt: args.savedAt,
           actorUserId: args.actorUserId,
@@ -312,6 +351,7 @@ export class AccountSettingsService {
       save: (repo, args) =>
         repo.saveOrgStructure({
           tenantId: args.tenantId,
+          expectedVersion: args.expectedVersion,
           appliedCpRevision: args.appliedCpRevision,
           savedAt: args.savedAt,
           actorUserId: args.actorUserId,
@@ -341,6 +381,7 @@ export class AccountSettingsService {
       save: (repo, args) =>
         repo.saveCalendar({
           tenantId: args.tenantId,
+          expectedVersion: args.expectedVersion,
           appliedCpRevision: args.appliedCpRevision,
           savedAt: args.savedAt,
           actorUserId: args.actorUserId,

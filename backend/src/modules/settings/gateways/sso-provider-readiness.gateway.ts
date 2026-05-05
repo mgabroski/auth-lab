@@ -49,6 +49,14 @@ export class SsoProviderReadinessGateway {
     }
   }
 
+  upsertRuntimeSnapshot(snapshot: SsoReadinessSnapshot): void {
+    this.cache.set(snapshot.providerKey, snapshot);
+  }
+
+  clearRuntimeSnapshot(providerKey: SsoProviderKey): void {
+    this.cache.delete(providerKey);
+  }
+
   getSnapshot(providerKey: SsoProviderKey): SsoReadinessSnapshot {
     const current = this.cache.get(providerKey);
     const now = this.now();
