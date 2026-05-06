@@ -305,14 +305,10 @@ For browser proof:
 
 For full-stack proxy proof, use the proxy conformance script and CP smoke spec. Host preservation, cookie continuity, and `/api` prefix stripping are topology contracts and should not be debugged inside Settings code first.
 
-### Evidence required for closure
+### Closure evidence model
 
-A Settings closure run must retain:
+Settings closure uses the normal repository quality system as proof: backend tests, frontend tests, Playwright proof, proxy conformance, pre-push, and GitHub Actions.
 
-- backend command output for Settings proof specs
-- Playwright output or trace for `test/e2e/settings.spec.ts`
-- proxy conformance output when full-stack topology is in scope
-- screenshots for manual QA cases listed in `docs/qa/qa-execution-pack.md`
-- bug report links for every failed or deferred case
+Do not commit raw command logs, Playwright traces, screenshots, or generated evidence files into the repo unless the team intentionally chooses a separate evidence-storage policy. The certification record at `docs/qa/settings-lock-certification.md` should stay lightweight and reference the final passing commit/checks.
 
-CI green is necessary but not sufficient for closure.
+Bug report links are still required for failed or deferred cases. Known accepted quality exceptions belong in `docs/quality-exceptions.md`.

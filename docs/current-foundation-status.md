@@ -58,7 +58,7 @@ What this means today:
 - the tenant Settings v1 route set is implemented exactly as locked: Access, Account, Modules, Personal, Integrations live; Communications placeholder-only; Workspace Experience overview-card-only with no route; Permissions absent
 - the active Settings consumer audit is closed: `/admin` consumes bootstrap; Settings overview consumes overview; section pages consume their own Settings read/write DTOs; no active Settings page consumes auth bootstrap setup truth
 - the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Account/Personal concurrency, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, failure-audit proof, and a dedicated browser Settings proof path (`yarn workspace frontend test:e2e test/e2e/settings.spec.ts`)
-- final Settings lock certification evidence is tracked in `docs/qa/settings-lock-certification.md`; the checklist must be filled with real command output/screenshots/traces during the final lock review
+- final Settings lock certification is recorded in `docs/qa/settings-lock-certification.md` as a lightweight signoff record; proof remains in the normal repo quality gate, pre-push checks, CI checks, Playwright reports, and QA/runbook artifacts rather than duplicated raw logs in docs
 - the only open Settings-specific quality exception is QE-0001 in `docs/quality-exceptions.md`: production external-provider SSO readiness snapshot refresh is deferred while the v1 Integrations page remains informational-only and fail-closed
 
 ---

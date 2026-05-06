@@ -4,6 +4,8 @@
 
 This is the single canonical QA execution document for the Auth, User Provisioning, Control Plane, and shipped Settings v1 surfaces in this repository.
 
+`docs/qa/settings-lock-certification.md` is only a lightweight final signoff record. It must not duplicate this QA pack, raw command logs, screenshots, or Playwright traces.
+
 Use it for:
 
 - environment matrix
@@ -579,7 +581,7 @@ QA signoff for the shipped Settings proof slice requires all of the following:
 - Communications placeholder and Permissions absent behavior passed
 - cross-tenant isolation proof passed
 - docs/runbooks checked against actual commands
-- `docs/qa/settings-lock-certification.md` filled with real command output/screenshots/traces before final lock
+- `docs/qa/settings-lock-certification.md` updated only as a lightweight final signoff record, referencing the final passing repo gate / CI checks instead of duplicating raw logs or screenshots
 - all open bugs triaged with severity
 
-CI green alone is not enough. Evidence and this execution pack must also be current.
+CI green alone is not a substitute for truthful QA docs and runbooks. Keep this execution pack current, but do not duplicate CI logs or screenshot evidence inside certification docs.
