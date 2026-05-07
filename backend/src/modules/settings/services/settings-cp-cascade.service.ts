@@ -17,7 +17,7 @@
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts';
 import { AccountSettingsRepo } from '../dal/account-settings.repo';
 import { PersonalSettingsRepo } from '../dal/personal-settings.repo';
 import { SettingsFoundationRepo } from '../dal/settings-foundation.repo';

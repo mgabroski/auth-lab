@@ -4,8 +4,8 @@
  * WHY:
  * - Aggregates the low-level read queries needed by the Settings bootstrap,
  *   overview, section, and CP handoff read surfaces.
- * - Keeps tenant truth, persisted Settings state, and optional CP producer
- *   snapshot loading out of the higher-level composition services.
+ * - Keeps tenant truth, persisted Settings state, and the published CP handoff
+ *   read boundary out of the higher-level composition services.
  *
  * RULES:
  * - Read-only.
@@ -16,23 +16,30 @@
 import type { DbExecutor } from '../../../shared/db/db';
 import type { Tenant } from '../../tenants/tenant.types';
 import { getTenantById } from '../../tenants/queries/tenant.queries';
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
-import {
-  loadAccountSnapshot,
-  snapshotToAccountDetail,
-} from '../../control-plane/accounts/cp-accounts.domain';
+import type {
+  CpSettingsHandoffReader,
+  CpSettingsHandoffSnapshot,
+} from '../../control-plane/accounts';
 import { SettingsFoundationRepo } from './settings-foundation.repo';
 import type { SettingsStateBundle } from '../settings.types';
+
+export type CpSettingsHandoffReaderFactory = (db: DbExecutor) => CpSettingsHandoffReader;
 
 export class SettingsReadRepo {
   private readonly foundationRepo: SettingsFoundationRepo;
 
-  constructor(private readonly db: DbExecutor) {
+  private readonly cpHandoffReader: CpSettingsHandoffReader;
+
+  constructor(
+    private readonly db: DbExecutor,
+    private readonly cpHandoffReaderFactory: CpSettingsHandoffReaderFactory,
+  ) {
     this.foundationRepo = new SettingsFoundationRepo(db);
+    this.cpHandoffReader = cpHandoffReaderFactory(db);
   }
 
   withDb(db: DbExecutor): SettingsReadRepo {
-    return new SettingsReadRepo(db);
+    return new SettingsReadRepo(db, this.cpHandoffReaderFactory);
   }
 
   async getTenant(tenantId: string): Promise<Tenant | undefined> {
@@ -44,18 +51,6 @@ export class SettingsReadRepo {
   }
 
   async getCpHandoffByTenantId(tenantId: string): Promise<CpSettingsHandoffSnapshot | undefined> {
-    const row = await this.db
-      .selectFrom('cp_account_provisioning as provisioning')
-      .innerJoin('cp_accounts as account', 'account.id', 'provisioning.account_id')
-      .select('account.account_key as account_key')
-      .where('provisioning.tenant_id', '=', tenantId)
-      .executeTakeFirst();
-
-    if (!row) {
-      return undefined;
-    }
-
-    const snapshot = await loadAccountSnapshot(this.db, row.account_key);
-    return snapshotToAccountDetail(snapshot).settingsHandoff;
+    return this.cpHandoffReader.getByTenantId(tenantId);
   }
 }

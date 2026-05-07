@@ -7,7 +7,7 @@
  *   placeholder-only when Control Plane allows them.
  */
 
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts';
 import type {
   ModulesHubModuleCardDto,
   SettingsModuleCardKey,

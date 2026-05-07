@@ -10,7 +10,7 @@
  *   the tenant was not provisioned through the Control Plane.
  */
 
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts';
 import type { SettingsSetupStatus } from '../settings.types';
 
 export type AccountSettingsReadModel = {

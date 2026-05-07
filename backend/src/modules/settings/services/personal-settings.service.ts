@@ -28,9 +28,9 @@ import { deriveSettingsNextAction } from './settings-next-action';
 import { PersonalCompletionEvaluator } from './settings-evaluators';
 import {
   PERSONAL_FIELD_CATALOG,
+  type CpSettingsHandoffSnapshot,
   type PersonalFieldCatalogEntry,
-} from '../../control-plane/accounts/cp-accounts.catalog';
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+} from '../../control-plane/accounts';
 
 async function lockTenantPersonalSettings(db: DbExecutor, tenantId: string): Promise<void> {
   await sql`

@@ -6,7 +6,7 @@ import {
   SetupAggregateEvaluator,
 } from '../../../src/modules/settings/services/settings-evaluators';
 import type { SettingsStateBundle } from '../../../src/modules/settings/settings.types';
-import type { CpSettingsHandoffSnapshot } from '../../../src/modules/control-plane/accounts/handoff/cp-settings-handoff.types';
+import type { CpSettingsHandoffSnapshot } from '../../../src/modules/control-plane/accounts';
 
 function buildStateBundle(overrides?: Partial<SettingsStateBundle>): SettingsStateBundle {
   const base: SettingsStateBundle = {

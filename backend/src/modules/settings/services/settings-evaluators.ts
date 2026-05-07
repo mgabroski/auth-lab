@@ -15,7 +15,7 @@
  *   aggregate truth must still come from persisted state updated by services.
  */
 
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts';
 import {
   SETTINGS_REASON_CODES,
   type SettingsReasonCode,

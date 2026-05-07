@@ -74,7 +74,12 @@ export async function buildServer(opts: { config: AppConfig; deps: AppDeps }) {
 
   registerRequestContext(app);
   registerAuthContext(app);
-  registerSessionMiddleware(app, deps.sessionStore, getSessionCookieName(isProduction));
+  registerSessionMiddleware(
+    app,
+    deps.sessionStore,
+    getSessionCookieName(isProduction),
+    deps.sessionAccessValidator,
+  );
   registerErrorHandler(app);
 
   app.addHook('onRequest', (req, reply, done) => {

@@ -57,6 +57,10 @@ import type { Logger } from '../shared/logger/logger';
 
 import { AuditRepo } from '../shared/audit/audit.repo';
 import { SessionStore } from '../shared/session/session.store';
+import {
+  DatabaseSessionAccessValidator,
+  type SessionAccessValidator,
+} from '../shared/session/session-access-validator';
 
 import { TotpService } from '../shared/security/totp';
 import { EncryptionService } from '../shared/security/encryption';
@@ -114,6 +118,7 @@ export type AppDeps = {
 
   auditRepo: AuditRepo;
   sessionStore: SessionStore;
+  sessionAccessValidator: SessionAccessValidator;
 
   totpService: TotpService;
   encryptionService: EncryptionService;
@@ -366,6 +371,7 @@ export async function buildDeps(
 
   const auditRepo = new AuditRepo(db);
   const sessionStore = new SessionStore(redis, config.sessionTtlSeconds, tokenHasher);
+  const sessionAccessValidator = new DatabaseSessionAccessValidator(db);
 
   const totpService = new TotpService(config.mfa.issuer);
   const encryptionService = new EncryptionService(config.mfa.encryptionKeyBase64);
@@ -467,6 +473,7 @@ export async function buildDeps(
     passwordHasher,
     auditRepo,
     sessionStore,
+    sessionAccessValidator,
 
     totpService,
     encryptionService,

@@ -115,11 +115,32 @@ describe('Auth contract surfaces (regression suite)', () => {
         publicSignupEnabled: false,
       });
 
+      const user = await deps.db
+        .insertInto('users')
+        .values({
+          email: `unverified-admin-${randomUUID().slice(0, 8)}@example.com`,
+          name: 'Unverified Admin',
+          email_verified: false,
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
+
+      const membership = await deps.db
+        .insertInto('memberships')
+        .values({
+          tenant_id: tenant.id,
+          user_id: user.id,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
+
       const sessionId = await deps.sessionStore.create({
-        userId: randomUUID(),
+        userId: user.id,
         tenantId: tenant.id,
         tenantKey,
-        membershipId: randomUUID(),
+        membershipId: membership.id,
         role: 'ADMIN',
         mfaVerified: true,
         emailVerified: false,

@@ -15,6 +15,7 @@ import type { AppConfig } from '../../app/config';
 import type { DbExecutor } from '../../shared/db/db';
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import type { RateLimiter } from '../../shared/security/rate-limit';
+import { createCpSettingsHandoffReader } from '../control-plane/accounts';
 import { SettingsFoundationRepo } from './dal/settings-foundation.repo';
 import { SettingsReadRepo } from './dal/settings-read.repo';
 import { AccountSettingsRepo } from './dal/account-settings.repo';
@@ -51,7 +52,7 @@ export function createSettingsModule(deps: {
   config: Pick<AppConfig, 'sso'>;
 }) {
   const foundationRepo = new SettingsFoundationRepo(deps.db);
-  const readRepo = new SettingsReadRepo(deps.db);
+  const readRepo = new SettingsReadRepo(deps.db, createCpSettingsHandoffReader);
   const accountRepo = new AccountSettingsRepo(deps.db);
   const personalRepo = new PersonalSettingsRepo(deps.db);
   const stateService = new SettingsStateService(foundationRepo);

@@ -50,6 +50,10 @@ export function buildCpBoundaryPreHandler(config: AppConfig) {
       return;
     }
 
-    done(AppError.unauthorized('Control Plane authentication is not enabled yet.'));
+    done(
+      AppError.unauthorized(
+        'Control Plane session authentication is not implemented yet; CP_AUTH_MODE=session fails closed.',
+      ),
+    );
   };
 }

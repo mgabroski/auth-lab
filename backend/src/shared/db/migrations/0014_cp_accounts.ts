@@ -21,13 +21,10 @@
  * - 'Active'   — published and reachable by tenants
  * - 'Disabled' — published but access is suspended
  *
- * FUTURE CP TABLES (deferred — not created here):
- * - cp_access_config
- * - cp_account_settings_config
- * - cp_module_config
- * - cp_personal_family_config
- * - cp_personal_field_config
- * - cp_integration_config
+ * CP SETUP GROUP TABLES:
+ * - The group-level CP configuration tables are created in
+ *   0015_cp_setup_groups.ts. This migration intentionally owns only the
+ *   account identity/lifecycle foundation.
  */
 
 import type { Kysely } from 'kysely';

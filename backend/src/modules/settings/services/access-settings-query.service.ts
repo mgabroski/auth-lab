@@ -17,7 +17,7 @@
  */
 
 import type { Tenant } from '../../tenants/tenant.types';
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts';
 import type {
   AccessSettingsGroupDto,
   AccessSettingsRowDto,

@@ -12,9 +12,9 @@ import {
   PERSONAL_FAMILY_DEFAULTS,
   PERSONAL_FAMILY_LABELS,
   PERSONAL_FIELD_CATALOG,
+  type CpSettingsHandoffSnapshot,
   type PersonalFamilyKey,
-} from '../../control-plane/accounts/cp-accounts.catalog';
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+} from '../../control-plane/accounts';
 import type { TenantPersonalSettingsRecord } from '../dal/personal-settings.repo';
 import type {
   PersonalConflictGuidanceDto,

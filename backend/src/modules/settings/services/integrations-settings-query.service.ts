@@ -17,9 +17,9 @@
 
 import {
   INTEGRATION_CATALOG,
+  type CpSettingsHandoffSnapshot,
   type IntegrationCatalogEntry,
-} from '../../control-plane/accounts/cp-accounts.catalog';
-import type { CpSettingsHandoffSnapshot } from '../../control-plane/accounts/handoff/cp-settings-handoff.types';
+} from '../../control-plane/accounts';
 import type { Tenant } from '../../tenants/tenant.types';
 import { SsoProviderReadinessGateway } from '../gateways/sso-provider-readiness.gateway';
 import type {

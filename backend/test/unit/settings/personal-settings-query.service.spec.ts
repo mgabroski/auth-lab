@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { PersonalSettingsQueryService } from '../../../src/modules/settings/services/personal-settings-query.service';
-import type { CpSettingsHandoffSnapshot } from '../../../src/modules/control-plane/accounts/handoff/cp-settings-handoff.types';
+import type { CpSettingsHandoffSnapshot } from '../../../src/modules/control-plane/accounts';
 import type { TenantPersonalSettingsRecord } from '../../../src/modules/settings/dal/personal-settings.repo';
 
 function buildHandoff(overrides?: Partial<CpSettingsHandoffSnapshot>): CpSettingsHandoffSnapshot {

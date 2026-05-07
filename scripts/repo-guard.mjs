@@ -111,9 +111,7 @@ const AUTH_MESSAGE_AUDIT_TRIGGERS = [
   /^backend\/src\/shared\/http\/errors\.ts$/,
 ];
 
-const BACKEND_SHARED_TO_MODULE_ALLOWLIST = new Set([
-  'backend/src/shared/http/require-auth-context.ts -> backend/src/modules/memberships/membership.types.ts',
-]);
+const BACKEND_SHARED_TO_MODULE_ALLOWLIST = new Set();
 
 const FRONTEND_PRIVATE_BACKEND_ALLOWLIST = new Set([
   'frontend/src/shared/ssr-api-client.ts',
@@ -379,6 +377,16 @@ function checkImportBoundaries() {
             `Backend boundary violation: shared/ must not import from modules/ (${edge}).`,
           );
         }
+      }
+
+      if (
+        relFile.startsWith('backend/src/modules/settings/') &&
+        relResolved.startsWith('backend/src/modules/control-plane/accounts/') &&
+        relResolved !== 'backend/src/modules/control-plane/accounts/index.ts'
+      ) {
+        failures.push(
+          `Backend boundary violation: Settings must import CP Accounts only through the public accounts/index.ts boundary (${relFile} -> ${relResolved}).`,
+        );
       }
     }
   }

@@ -11,20 +11,20 @@
 
 import type { FastifyRequest } from 'fastify';
 import { AppError } from './errors';
-import type { MembershipRole } from '../../modules/memberships/membership.types';
+import type { Role } from './auth-context';
 
 export type RequiredAuthContext = Readonly<{
   sessionId: string;
   userId: string;
   tenantId: string;
   membershipId: string;
-  role: MembershipRole;
+  role: Role;
   mfaVerified: boolean;
   emailVerified: boolean;
 }>;
 
 export type RequireSessionOptions = Readonly<{
-  role?: MembershipRole;
+  role?: Role;
   requireMfa?: boolean;
   requireEmailVerified?: boolean;
 }>;

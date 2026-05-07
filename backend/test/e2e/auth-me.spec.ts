@@ -44,6 +44,14 @@ function extractSidCookie(headers: Record<string, unknown>): string {
   return first.split(';')[0] ?? '';
 }
 
+function extractSessionIdFromCookie(cookie: string): string {
+  const [, value] = cookie.split('=');
+  if (!value) {
+    throw new Error(`Expected sid cookie value, got: ${cookie}`);
+  }
+  return value;
+}
+
 async function createTenant(opts: {
   db: DbExecutor;
   tenantKey: string;
@@ -370,6 +378,102 @@ describe('GET /auth/me', () => {
 
       expect(meRes.statusCode).toBe(200);
       expect(readJson<MeResponse>(meRes).nextAction).toBe('EMAIL_VERIFICATION_REQUIRED');
+    } finally {
+      await close();
+    }
+  });
+
+  it('returns 401 and destroys the session when the tenant is disabled after login', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const tenantKey = `tenant-disabled-${randomUUID().slice(0, 8)}`;
+    const host = hostForTenant(tenantKey);
+    const email = `disabled-session-${randomUUID().slice(0, 8)}@example.com`;
+    const password = 'MemberPass123!';
+
+    try {
+      const tenant = await createTenant({ db: deps.db, tenantKey });
+      await seedUserWithPassword({
+        db: deps.db,
+        passwordHasher: deps.passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        role: 'MEMBER',
+      });
+
+      const loginRes = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { host },
+        payload: { email, password },
+      });
+
+      expect(loginRes.statusCode).toBe(200);
+      const sid = extractSidCookie(loginRes.headers);
+      const sessionId = extractSessionIdFromCookie(sid);
+
+      await deps.db
+        .updateTable('tenants')
+        .set({ is_active: false })
+        .where('id', '=', tenant.id)
+        .execute();
+
+      const meRes = await app.inject({
+        method: 'GET',
+        url: '/auth/me',
+        headers: { host, cookie: sid },
+      });
+
+      expect(meRes.statusCode).toBe(401);
+      expect(await deps.sessionStore.get(sessionId)).toBeNull();
+    } finally {
+      await close();
+    }
+  });
+
+  it('returns 401 and destroys the session when the membership is suspended after login', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const tenantKey = `tenant-suspended-${randomUUID().slice(0, 8)}`;
+    const host = hostForTenant(tenantKey);
+    const email = `suspended-session-${randomUUID().slice(0, 8)}@example.com`;
+    const password = 'MemberPass123!';
+
+    try {
+      const tenant = await createTenant({ db: deps.db, tenantKey });
+      const { membership } = await seedUserWithPassword({
+        db: deps.db,
+        passwordHasher: deps.passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        role: 'MEMBER',
+      });
+
+      const loginRes = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { host },
+        payload: { email, password },
+      });
+
+      expect(loginRes.statusCode).toBe(200);
+      const sid = extractSidCookie(loginRes.headers);
+      const sessionId = extractSessionIdFromCookie(sid);
+
+      await deps.db
+        .updateTable('memberships')
+        .set({ status: 'SUSPENDED', suspended_at: new Date() })
+        .where('id', '=', membership.id)
+        .execute();
+
+      const meRes = await app.inject({
+        method: 'GET',
+        url: '/auth/me',
+        headers: { host, cookie: sid },
+      });
+
+      expect(meRes.statusCode).toBe(401);
+      expect(await deps.sessionStore.get(sessionId)).toBeNull();
     } finally {
       await close();
     }

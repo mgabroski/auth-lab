@@ -64,4 +64,39 @@ describe('cp accounts host boundary', () => {
       await close();
     }
   });
+
+  it('fails closed when CP_AUTH_MODE=session is configured before CP session auth exists', async () => {
+    const { app, close, reset } = await buildTestApp({
+      controlPlane: {
+        enabled: true,
+        authMode: 'session',
+        noAuthAllowed: false,
+      },
+    });
+
+    try {
+      await reset();
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/cp/accounts',
+        headers: {
+          host: 'cp.lvh.me:3000',
+          'x-forwarded-host': 'cp.lvh.me:3000',
+          'x-forwarded-proto': 'http',
+        },
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(readJson<ErrorResponseBody>(res)).toEqual({
+        error: {
+          code: 'UNAUTHORIZED',
+          message:
+            'Control Plane session authentication is not implemented yet; CP_AUTH_MODE=session fails closed.',
+        },
+      });
+    } finally {
+      await close();
+    }
+  });
 });

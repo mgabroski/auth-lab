@@ -11,7 +11,8 @@
  * - Missing cookie => unauthenticated
  * - Missing/expired session => unauthenticated
  * - Session tenant mismatch => unauthenticated
- * - No business logic belongs here
+ * - Current tenant/membership access is revalidated through an injected shared validator
+ *   so disabled tenants and suspended memberships fail closed before controllers run.
  *
  * IMPORTANT:
  * - cookieName is injected by app bootstrap
@@ -23,6 +24,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import type { SessionStore } from './session.store';
+import type { SessionAccessValidator } from './session-access-validator';
 
 function parseCookies(raw: string | undefined): Record<string, string> {
   if (!raw) return {};
@@ -48,6 +50,7 @@ export function registerSessionMiddleware(
   app: FastifyInstance,
   sessionStore: SessionStore,
   cookieName: string,
+  sessionAccessValidator: SessionAccessValidator,
 ): void {
   app.addHook('onRequest', async (req: FastifyRequest) => {
     const cookies = parseCookies(req.headers.cookie);
@@ -66,6 +69,16 @@ export function registerSessionMiddleware(
 
     // Fail closed: a valid session from tenant A must never authenticate on tenant B.
     if (session.tenantKey !== requestTenantKey) {
+      return;
+    }
+
+    // Fail closed: Redis session identity must still match current DB access truth.
+    // This prevents a tenant disable or membership suspension from leaving an
+    // old session usable until TTL expiry. Destroying the session avoids paying
+    // the DB revalidation cost repeatedly for already-invalid cookies.
+    const stillAllowed = await sessionAccessValidator.isSessionStillAllowed(session);
+    if (!stillAllowed) {
+      await sessionStore.destroy(sessionId);
       return;
     }
 
