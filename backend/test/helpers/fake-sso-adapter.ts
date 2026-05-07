@@ -26,7 +26,12 @@ export class FakeSsoAdapter implements SsoProviderAdapter {
     this.providerKey = real.providerKey as 'google' | 'microsoft';
   }
 
-  buildAuthorizationUrl(input: { redirectUri: string; state: string; nonce: string }): string {
+  buildAuthorizationUrl(input: {
+    redirectUri: string;
+    state: string;
+    nonce: string;
+    pkceCodeChallenge: string;
+  }): string {
     return this.real.buildAuthorizationUrl(input);
   }
 
@@ -41,6 +46,7 @@ export class FakeSsoAdapter implements SsoProviderAdapter {
   exchangeAuthorizationCode(_input: {
     code: string;
     redirectUri: string;
+    pkceCodeVerifier: string;
   }): Promise<SsoTokenExchangeResult> {
     const next = this.nextExchange;
     this.nextExchange = null;

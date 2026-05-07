@@ -13,10 +13,7 @@ import type {
   SettingsOverviewResponse,
   PlaceholderPageResponse,
 } from '../../src/modules/settings/settings.types';
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
-}
+import { hostForTenant } from '../helpers/tenant-host';
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;

@@ -21,10 +21,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DbExecutor } from '../../src/shared/db/db';
 import { buildTestApp } from '../helpers/build-test-app';
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
-}
+import { hostForTenant } from '../helpers/tenant-host';
 
 function expectNoCorsHeaders(headers: OutgoingHttpHeaders, context: string) {
   expect(headers['access-control-allow-origin'], `${context}: ACAO must be absent`).toBeUndefined();

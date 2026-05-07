@@ -30,7 +30,12 @@ export class GoogleSsoAdapter implements SsoProviderAdapter {
     private readonly clientSecret: string,
   ) {}
 
-  buildAuthorizationUrl(input: { redirectUri: string; state: string; nonce: string }): string {
+  buildAuthorizationUrl(input: {
+    redirectUri: string;
+    state: string;
+    nonce: string;
+    pkceCodeChallenge: string;
+  }): string {
     const url = new URL(GOOGLE_AUTH_BASE);
     url.searchParams.set('client_id', this.clientId);
     url.searchParams.set('redirect_uri', input.redirectUri);
@@ -38,6 +43,8 @@ export class GoogleSsoAdapter implements SsoProviderAdapter {
     url.searchParams.set('scope', 'openid email profile');
     url.searchParams.set('state', input.state);
     url.searchParams.set('nonce', input.nonce);
+    url.searchParams.set('code_challenge', input.pkceCodeChallenge);
+    url.searchParams.set('code_challenge_method', 'S256');
     url.searchParams.set('prompt', 'select_account');
     return url.toString();
   }
@@ -45,6 +52,7 @@ export class GoogleSsoAdapter implements SsoProviderAdapter {
   async exchangeAuthorizationCode(input: {
     code: string;
     redirectUri: string;
+    pkceCodeVerifier: string;
   }): Promise<SsoTokenExchangeResult> {
     const body = new URLSearchParams({
       code: input.code,
@@ -52,6 +60,7 @@ export class GoogleSsoAdapter implements SsoProviderAdapter {
       client_secret: this.clientSecret,
       redirect_uri: input.redirectUri,
       grant_type: 'authorization_code',
+      code_verifier: input.pkceCodeVerifier,
     });
 
     const res = await fetch(GOOGLE_TOKEN_ENDPOINT, {
@@ -84,11 +93,11 @@ export class GoogleSsoAdapter implements SsoProviderAdapter {
   }): Promise<SsoIdentityPayload> {
     let payload: Record<string, unknown>;
     try {
-      payload = (await verifyGoogleJwt({
+      payload = await verifyGoogleJwt({
         idToken: input.idToken,
         clientId: this.clientId,
         expectedNonce: input.expectedNonce,
-      })) as unknown as Record<string, unknown>;
+      });
     } catch (e: unknown) {
       const reason =
         e instanceof Error && e.message === 'jwt_nonce_mismatch'

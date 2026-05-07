@@ -9,14 +9,15 @@
  *
  * FORMAT:
  * - State is JSON -> AES-256-GCM encrypted via EncryptionService.
- * - Nonce is embedded inside the encrypted payload (and also sent as `nonce=`).
+ * - Nonce and PKCE code verifier are embedded inside the encrypted payload.
+ * - Only the nonce and PKCE code challenge are sent to the authorization URL.
  *
  * RULES:
  * - Never log the raw state.
  * - Keep payload minimal.
  */
 
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { EncryptionService } from '../../../shared/security/encryption';
 
 export type SsoProvider = 'google' | 'microsoft';
@@ -25,6 +26,12 @@ export type SsoStatePayload = {
   provider: SsoProvider;
   tenantKey: string;
   nonce: string;
+  /**
+   * OAuth 2.1 / RFC 9700 defense-in-depth for the authorization-code flow.
+   * Stored only inside the encrypted, short-lived sso-state cookie.
+   * Sent to the provider only during token exchange.
+   */
+  pkceCodeVerifier: string;
   issuedAt: number;
   expiresAt: number;
   requestId: string;
@@ -58,6 +65,14 @@ export function generateNonce(): string {
   return base64Url(randomBytes(16));
 }
 
+export function generatePkceCodeVerifier(): string {
+  return base64Url(randomBytes(32));
+}
+
+export function buildPkceCodeChallenge(codeVerifier: string): string {
+  return base64Url(createHash('sha256').update(codeVerifier).digest());
+}
+
 export function buildEncryptedSsoState(input: {
   encryptionService: EncryptionService;
   provider: SsoProvider;
@@ -71,11 +86,13 @@ export function buildEncryptedSsoState(input: {
   const issuedAt = now.getTime();
   const expiresAt = issuedAt + STATE_TTL_MS;
   const nonce = generateNonce();
+  const pkceCodeVerifier = generatePkceCodeVerifier();
 
   const payload: SsoStatePayload = {
     provider: input.provider,
     tenantKey: input.tenantKey,
     nonce,
+    pkceCodeVerifier,
     issuedAt,
     expiresAt,
     requestId: input.requestId,

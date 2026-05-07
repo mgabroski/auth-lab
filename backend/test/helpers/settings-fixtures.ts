@@ -38,6 +38,9 @@ import type {
 } from '../../src/modules/settings/settings.types';
 import type { AdminSessionResult } from './create-admin-session';
 import { createAdminSession } from './create-admin-session';
+import { hostForTenant } from './tenant-host';
+
+export { hostForTenant } from './tenant-host';
 
 export type SettingsTenantFixture = {
   tenantId: string;
@@ -49,10 +52,6 @@ type InjectResponse = {
   statusCode: number;
   json: () => unknown;
 };
-
-export function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
-}
 
 export function readJson<T>(res: InjectResponse): T {
   return res.json() as T;

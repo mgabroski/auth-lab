@@ -11,11 +11,8 @@ import {
 import { up as upSettingsAccountMigration } from '../../src/shared/db/migrations/0018_settings_account';
 import type { DbExecutor } from '../../src/shared/db/db';
 import { buildTestApp } from '../helpers/build-test-app';
+import { hostForTenant } from '../helpers/tenant-host';
 import { createAdminSession } from '../helpers/create-admin-session';
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
-}
 
 async function createTenant(opts: {
   db: DbExecutor;

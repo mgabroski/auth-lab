@@ -40,6 +40,8 @@ describe('decryptAndValidateSsoState', () => {
     });
 
     expect(payload.returnTo).toBe('/admin');
+    expect(payload.pkceCodeVerifier).toBeTruthy();
+    expect(payload.pkceCodeVerifier.length).toBeGreaterThanOrEqual(43);
   });
 
   it('drops an absolute returnTo URL after decrypting state', () => {
@@ -50,6 +52,7 @@ describe('decryptAndValidateSsoState', () => {
         provider: 'google',
         tenantKey: 'goodwill-ca',
         nonce: 'nonce-1',
+        pkceCodeVerifier: 'pkce-verifier-1',
         issuedAt: now.getTime(),
         expiresAt: now.getTime() + 60_000,
         requestId: 'req-1',
@@ -77,6 +80,7 @@ describe('decryptAndValidateSsoState', () => {
         provider: 'google',
         tenantKey: 'goodwill-ca',
         nonce: 'nonce-1',
+        pkceCodeVerifier: 'pkce-verifier-1',
         issuedAt: now.getTime(),
         expiresAt: now.getTime() + 60_000,
         requestId: 'req-1',
@@ -104,6 +108,7 @@ describe('decryptAndValidateSsoState', () => {
         provider: 'google',
         tenantKey: 'goodwill-ca',
         nonce: 'nonce-1',
+        pkceCodeVerifier: 'pkce-verifier-1',
         issuedAt: now.getTime(),
         expiresAt: now.getTime() + 60_000,
         requestId: 'req-1',
@@ -121,6 +126,36 @@ describe('decryptAndValidateSsoState', () => {
     });
 
     expect(payload.returnTo).toBeUndefined();
+  });
+
+  it('rejects encrypted state that lacks a PKCE verifier', () => {
+    const encryptionService = createEncryptionService();
+    const now = new Date('2026-03-20T10:00:00.000Z');
+    const state = encryptionService.encrypt(
+      JSON.stringify({
+        provider: 'google',
+        tenantKey: 'goodwill-ca',
+        nonce: 'nonce-1',
+        issuedAt: now.getTime(),
+        expiresAt: now.getTime() + 60_000,
+        requestId: 'req-1',
+        redirectUri: 'http://goodwill-ca.lvh.me:3000/api/auth/sso/google/callback',
+      }),
+    );
+
+    try {
+      decryptAndValidateSsoState({
+        encryptionService,
+        encryptedState: state,
+        provider: 'google',
+        tenantKey: 'goodwill-ca',
+        now: new Date(now.getTime() + 1_000),
+      });
+      throw new Error('expected throw');
+    } catch (err) {
+      expectAppErrorStatus(err, 400);
+      expect((err as AppError).message).toBe('Invalid or expired SSO request. Please try again.');
+    }
   });
 
   it('rejects malformed encrypted state with the standard SSO state error', () => {

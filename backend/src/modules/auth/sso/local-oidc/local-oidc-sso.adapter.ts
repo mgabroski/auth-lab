@@ -66,7 +66,12 @@ export class LocalOidcSsoAdapter implements SsoProviderAdapter {
     this.jwks = createRemoteJWKSet(new URL(`${this.issuerUrl}/.well-known/jwks.json`));
   }
 
-  buildAuthorizationUrl(input: { redirectUri: string; state: string; nonce: string }): string {
+  buildAuthorizationUrl(input: {
+    redirectUri: string;
+    state: string;
+    nonce: string;
+    pkceCodeChallenge: string;
+  }): string {
     // WHY: In CI the "authorization URL" is never actually navigated to. The
     // Playwright test uses POST /code on the OIDC server to get a code and then
     // calls the backend callback endpoint directly. This method must return a
@@ -79,12 +84,15 @@ export class LocalOidcSsoAdapter implements SsoProviderAdapter {
     url.searchParams.set('scope', 'openid email profile');
     url.searchParams.set('state', input.state);
     url.searchParams.set('nonce', input.nonce);
+    url.searchParams.set('code_challenge', input.pkceCodeChallenge);
+    url.searchParams.set('code_challenge_method', 'S256');
     return url.toString();
   }
 
   async exchangeAuthorizationCode(input: {
     code: string;
     redirectUri: string;
+    pkceCodeVerifier: string;
   }): Promise<SsoTokenExchangeResult> {
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -92,6 +100,7 @@ export class LocalOidcSsoAdapter implements SsoProviderAdapter {
       client_id: this.clientId,
       client_secret: 'local-oidc-ci-secret', // local server doesn't validate the secret
       redirect_uri: input.redirectUri,
+      code_verifier: input.pkceCodeVerifier,
     });
 
     const res = await fetch(`${this.issuerUrl}/token`, {

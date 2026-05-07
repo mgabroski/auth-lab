@@ -30,11 +30,17 @@ export interface SsoProviderAdapter {
    */
   readonly providerKey: string;
 
-  buildAuthorizationUrl(input: { redirectUri: string; state: string; nonce: string }): string;
+  buildAuthorizationUrl(input: {
+    redirectUri: string;
+    state: string;
+    nonce: string;
+    pkceCodeChallenge: string;
+  }): string;
 
   exchangeAuthorizationCode(input: {
     code: string;
     redirectUri: string;
+    pkceCodeVerifier: string;
   }): Promise<SsoTokenExchangeResult>;
 
   /**

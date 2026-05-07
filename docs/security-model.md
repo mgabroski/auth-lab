@@ -148,7 +148,7 @@ There are exactly two cookies in this system. They have different names, differe
 
 **Why `SameSite=Lax` for SSO state:** The OAuth provider redirects back to the callback URL as a cross-site top-level navigation. `Strict` would block this cookie during the OAuth redirect, breaking the SSO flow. `Lax` allows top-level navigations while still blocking cross-site POST and subresource requests.
 
-**Why the SSO state cookie is safe at `Lax`:** The cookie contains only encrypted, short-lived OAuth state material (PKCE verifier, CSRF token, tenant redirect URI). It contains no user data and no session identity. It is cleared immediately after callback completion.
+**Why the SSO state cookie is safe at `Lax`:** The cookie contains only encrypted, short-lived OAuth state material: provider, tenant key, OAuth nonce, PKCE code verifier, request metadata, tenant callback URI, and a safe app-relative return path when present. It contains no user data and no session identity. It is cleared immediately after callback completion.
 
 ### 3.3 The `__Host-` prefix invariants (production)
 

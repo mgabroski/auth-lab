@@ -11,13 +11,10 @@ type ErrorResponseBody = {
 };
 import type { CpAccountReview } from '../../src/modules/control-plane/accounts/cp-accounts.types';
 import { buildTestApp } from '../helpers/build-test-app';
+import { hostForTenant } from '../helpers/tenant-host';
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
-}
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
 }
 
 describe('cp accounts review & publish', () => {

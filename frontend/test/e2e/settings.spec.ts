@@ -99,6 +99,19 @@ test.describe('settings tenant-admin proof', () => {
     await expect(page.getByText('Organization Structure')).toBeVisible();
     await expect(page.getByText('Company Calendar')).toBeVisible();
 
+    await page.getByLabel('Welcome Message').fill('Welcome to the Settings E2E proof.');
+    await page.getByRole('button', { name: 'Save Branding' }).click();
+    await expect(page.getByText('Branding was saved.')).toBeVisible();
+
+    await page.getByLabel('Employers (one per line)').fill('GoodWill E2E Employer');
+    await page.getByLabel('Locations (one per line)').fill('GoodWill E2E Location');
+    await page.getByRole('button', { name: 'Save Organization Structure' }).click();
+    await expect(page.getByText('Organization Structure was saved.')).toBeVisible();
+
+    await page.getByLabel('Observed company dates (one YYYY-MM-DD per line)').fill('2026-01-01');
+    await page.getByRole('button', { name: 'Save Company Calendar' }).click();
+    await expect(page.getByText('Company Calendar was saved.')).toBeVisible();
+
     await page.goto(`${OPEN_ORIGIN}/admin/settings/modules`);
     await expect(page.getByRole('heading', { name: 'Modules' })).toBeVisible();
     await expect(page.getByText('Personal')).toBeVisible();

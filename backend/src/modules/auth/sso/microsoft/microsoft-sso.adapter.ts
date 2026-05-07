@@ -42,7 +42,12 @@ export class MicrosoftSsoAdapter implements SsoProviderAdapter {
     private readonly clientSecret: string,
   ) {}
 
-  buildAuthorizationUrl(input: { redirectUri: string; state: string; nonce: string }): string {
+  buildAuthorizationUrl(input: {
+    redirectUri: string;
+    state: string;
+    nonce: string;
+    pkceCodeChallenge: string;
+  }): string {
     const url = new URL(MICROSOFT_AUTH_BASE);
     url.searchParams.set('client_id', this.clientId);
     url.searchParams.set('redirect_uri', input.redirectUri);
@@ -51,12 +56,15 @@ export class MicrosoftSsoAdapter implements SsoProviderAdapter {
     url.searchParams.set('scope', 'openid email profile');
     url.searchParams.set('state', input.state);
     url.searchParams.set('nonce', input.nonce);
+    url.searchParams.set('code_challenge', input.pkceCodeChallenge);
+    url.searchParams.set('code_challenge_method', 'S256');
     return url.toString();
   }
 
   async exchangeAuthorizationCode(input: {
     code: string;
     redirectUri: string;
+    pkceCodeVerifier: string;
   }): Promise<SsoTokenExchangeResult> {
     const body = new URLSearchParams({
       code: input.code,
@@ -64,6 +72,7 @@ export class MicrosoftSsoAdapter implements SsoProviderAdapter {
       client_secret: this.clientSecret,
       redirect_uri: input.redirectUri,
       grant_type: 'authorization_code',
+      code_verifier: input.pkceCodeVerifier,
     });
 
     const res = await fetch(MICROSOFT_TOKEN_ENDPOINT, {
@@ -112,12 +121,12 @@ export class MicrosoftSsoAdapter implements SsoProviderAdapter {
     // 2) Cryptographic verification — jwtVerify enforces iss, aud, exp.
     let payload: Record<string, unknown>;
     try {
-      payload = (await verifyMicrosoftJwt({
+      payload = await verifyMicrosoftJwt({
         idToken: input.idToken,
         clientId: this.clientId,
         expectedNonce: input.expectedNonce,
         tid,
-      })) as unknown as Record<string, unknown>;
+      });
     } catch (e: unknown) {
       const reason =
         e instanceof Error && e.message === 'jwt_nonce_mismatch'

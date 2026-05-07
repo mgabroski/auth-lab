@@ -23,13 +23,10 @@ import { describe, expect, it } from 'vitest';
 import type { ConfigResponse } from '../../src/modules/auth/auth.types';
 import type { DbExecutor } from '../../src/shared/db/db';
 import { buildTestApp } from '../helpers/build-test-app';
+import { hostForTenant } from '../helpers/tenant-host';
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
-}
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
 }
 
 async function createTenant(opts: {

@@ -7,11 +7,8 @@ import type { IntegrationsSettingsResponse } from '../../src/modules/settings/se
 import { up as upSettingsFoundationMigration } from '../../src/shared/db/migrations/0017_settings_foundation';
 import { up as upSettingsAccountMigration } from '../../src/shared/db/migrations/0018_settings_account';
 import { buildTestApp } from '../helpers/build-test-app';
+import { hostForTenant } from '../helpers/tenant-host';
 import { createAdminSession } from '../helpers/create-admin-session';
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
-}
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;

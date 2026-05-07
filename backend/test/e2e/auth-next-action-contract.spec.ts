@@ -8,13 +8,10 @@ import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
 import { getSessionCookieName } from '../../src/shared/session/session.types';
 import { buildTestApp } from '../helpers/build-test-app';
+import { hostForTenant } from '../helpers/tenant-host';
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
-}
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.localhost:3000`;
 }
 
 function extractSidCookie(headers: Record<string, unknown>): string {
@@ -205,7 +202,7 @@ describe('NextAction contract matrix', () => {
     it(`POST /auth/login + GET /auth/me — ${scenario.name}`, async () => {
       const { app, deps, close } = await buildTestApp();
       const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-      const host = hostForTenant(tenantKey);
+      const host = hostForTenant(tenantKey, 'localhost:3000');
       const email = `${scenario.role.toLowerCase()}-${randomUUID().slice(0, 8)}@example.com`;
       const password = 'Password123!';
 
@@ -267,7 +264,7 @@ describe('NextAction contract matrix', () => {
   it('POST /auth/signup returns EMAIL_VERIFICATION_REQUIRED for a new public-signup session and /auth/me agrees', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = hostForTenant(tenantKey);
+    const host = hostForTenant(tenantKey, 'localhost:3000');
     const email = `signup-${randomUUID().slice(0, 8)}@example.com`;
 
     try {
@@ -313,7 +310,7 @@ describe('NextAction contract matrix', () => {
   it('POST /auth/register resolves MEMBER invite registration to NONE', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = hostForTenant(tenantKey);
+    const host = hostForTenant(tenantKey, 'localhost:3000');
     const email = `member-register-${randomUUID().slice(0, 8)}@example.com`;
     const inviteToken = `invite_${randomUUID()}`;
 
@@ -352,7 +349,7 @@ describe('NextAction contract matrix', () => {
   it('POST /auth/register resolves ADMIN invite registration to MFA_SETUP_REQUIRED', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = hostForTenant(tenantKey);
+    const host = hostForTenant(tenantKey, 'localhost:3000');
     const email = `admin-register-${randomUUID().slice(0, 8)}@example.com`;
     const inviteToken = `invite_${randomUUID()}`;
 

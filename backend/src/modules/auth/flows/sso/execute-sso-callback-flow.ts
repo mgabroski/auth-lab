@@ -209,6 +209,7 @@ export async function executeSsoCallbackFlow(
       const tokens = await adapter.exchangeAuthorizationCode({
         code: params.code,
         redirectUri,
+        pkceCodeVerifier: statePayload.pkceCodeVerifier,
       });
 
       const identity = await adapter.validateAndExtractIdentity({

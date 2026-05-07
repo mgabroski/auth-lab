@@ -11,6 +11,7 @@ import type {
   SettingsBootstrapResponse,
   SettingsMutationResponse,
 } from '../../src/modules/settings/settings.types';
+import { hostForTenant } from '../helpers/tenant-host';
 
 type ErrorResponseBody = {
   error: {
@@ -18,10 +19,6 @@ type ErrorResponseBody = {
     message: string;
   };
 };
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.hubins.com`;
-}
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;

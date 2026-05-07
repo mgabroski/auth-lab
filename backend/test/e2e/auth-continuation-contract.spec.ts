@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { DbExecutor } from '../../src/shared/db/db';
 import type { PasswordHasher } from '../../src/shared/security/password-hasher';
 import { buildTestApp } from '../helpers/build-test-app';
+import { hostForTenant } from '../helpers/tenant-host';
 
 type AcceptInviteResponse = {
   status: 'ACCEPTED';
@@ -15,10 +16,6 @@ type AcceptInviteResponse = {
 
 function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
-}
-
-function hostForTenant(tenantKey: string): string {
-  return `${tenantKey}.localhost:3000`;
 }
 
 async function createTenant(opts: { db: DbExecutor; tenantKey: string }) {
@@ -108,7 +105,7 @@ describe('Continuation-flow contracts', () => {
   it('POST /auth/invites/accept returns SET_PASSWORD when the invite email has no existing user yet', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = hostForTenant(tenantKey);
+    const host = hostForTenant(tenantKey, 'localhost:3000');
     const token = `invite_${randomUUID()}`;
     const email = `fresh-${randomUUID().slice(0, 8)}@example.com`;
 
@@ -145,7 +142,7 @@ describe('Continuation-flow contracts', () => {
   it('POST /auth/invites/accept returns SIGN_IN when the invite email already belongs to a password user', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = hostForTenant(tenantKey);
+    const host = hostForTenant(tenantKey, 'localhost:3000');
     const token = `invite_${randomUUID()}`;
     const email = `existing-${randomUUID().slice(0, 8)}@example.com`;
 
@@ -187,7 +184,7 @@ describe('Continuation-flow contracts', () => {
   it('POST /auth/invites/accept returns MFA_SETUP_REQUIRED for an existing admin invitee without verified MFA', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = hostForTenant(tenantKey);
+    const host = hostForTenant(tenantKey, 'localhost:3000');
     const token = `invite_${randomUUID()}`;
     const email = `admin-${randomUUID().slice(0, 8)}@example.com`;
 
@@ -230,7 +227,7 @@ describe('Continuation-flow contracts', () => {
   it('POST /auth/invites/accept stays on SIGN_IN for an existing admin invitee who already has verified MFA', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
-    const host = hostForTenant(tenantKey);
+    const host = hostForTenant(tenantKey, 'localhost:3000');
     const token = `invite_${randomUUID()}`;
     const email = `admin-ready-${randomUUID().slice(0, 8)}@example.com`;
 

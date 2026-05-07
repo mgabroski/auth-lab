@@ -26,7 +26,7 @@ import type { EncryptionService } from '../../../../shared/security/encryption';
 import type { DbExecutor } from '../../../../shared/db/db';
 import type { SsoProvider } from '../../helpers/sso-state';
 import type { SsoProviderRegistry } from '../../sso/sso-provider-registry';
-import { buildEncryptedSsoState } from '../../helpers/sso-state';
+import { buildEncryptedSsoState, buildPkceCodeChallenge } from '../../helpers/sso-state';
 import { AUTH_RATE_LIMITS } from '../../auth.constants';
 import { resolveTenantForAuth } from '../../../tenants';
 import { AuthErrors } from '../../auth.errors';
@@ -91,7 +91,11 @@ export async function executeStartSsoFlow(
 
   const adapter = deps.sso.providerRegistry.getOrThrow(params.provider);
 
-  const { state: ssoState, nonce } = buildEncryptedSsoState({
+  const {
+    state: ssoState,
+    nonce,
+    payload,
+  } = buildEncryptedSsoState({
     encryptionService: deps.sso.stateEncryptionService,
     provider: params.provider,
     tenantKey: params.tenantKey,
@@ -100,7 +104,12 @@ export async function executeStartSsoFlow(
     returnTo: params.returnTo,
   });
 
-  const redirectTo = adapter.buildAuthorizationUrl({ redirectUri, state: ssoState, nonce });
+  const redirectTo = adapter.buildAuthorizationUrl({
+    redirectUri,
+    state: ssoState,
+    nonce,
+    pkceCodeChallenge: buildPkceCodeChallenge(payload.pkceCodeVerifier),
+  });
 
   return { redirectTo, ssoState };
 }

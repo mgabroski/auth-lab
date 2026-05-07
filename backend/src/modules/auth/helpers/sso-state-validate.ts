@@ -43,6 +43,7 @@ export function decryptAndValidateSsoState(params: {
   const tenantKey = getString(parsed, 'tenantKey');
   const nonce = getString(parsed, 'nonce');
   const requestId = getString(parsed, 'requestId');
+  const pkceCodeVerifier = getString(parsed, 'pkceCodeVerifier');
   const issuedAt = getNumber(parsed, 'issuedAt');
   const expiresAt = getNumber(parsed, 'expiresAt');
   const redirectUri = getString(parsed, 'redirectUri');
@@ -56,6 +57,9 @@ export function decryptAndValidateSsoState(params: {
   }
   if (!nonce) {
     throw AuthErrors.ssoStateInvalid({ reason: 'nonce_missing' });
+  }
+  if (!pkceCodeVerifier) {
+    throw AuthErrors.ssoStateInvalid({ reason: 'pkceCodeVerifier_missing' });
   }
   if (!issuedAt) {
     throw AuthErrors.ssoStateInvalid({ reason: 'issued_missing' });
@@ -86,6 +90,7 @@ export function decryptAndValidateSsoState(params: {
     provider: params.provider,
     tenantKey: params.tenantKey,
     nonce,
+    pkceCodeVerifier,
     issuedAt,
     expiresAt,
     requestId,
