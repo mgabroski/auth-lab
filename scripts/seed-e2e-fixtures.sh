@@ -25,7 +25,7 @@
 #   MFA:        none (so login returns MFA_SETUP_REQUIRED)
 #
 # WHAT THIS ENABLES:
-#   auth.spec.ts — "admin login without MFA continues to /auth/mfa/setup"
+#   frontend/test/e2e/auth/mfa.spec.ts — admin login without MFA continues to /auth/mfa/setup
 
 set -euo pipefail
 
@@ -44,4 +44,4 @@ echo "   Tenant:    goodwill-open (ADMIN, ACTIVE, no MFA)"
 echo "   Effect:    login will return MFA_SETUP_REQUIRED"
 echo ""
 echo "   Run real-stack Playwright tests with:"
-echo "     yarn workspace frontend test:e2e:real-stack"
+echo "     yarn workspace frontend test:e2e:auth"

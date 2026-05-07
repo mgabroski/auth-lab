@@ -23,14 +23,18 @@ This repo already has:
 - host-derived tenant routing
 - backend-owned auth/session/membership truth
 - current auth and invite API surfaces
+- PKCE S256 protection for SSO authorization-code flows across Google, Microsoft, and local OIDC proof paths
 - current QA and developer execution documents
 - a locked documentation routing model with explicit tiering
 - a separate internal Control Plane frontend app with real create, setup, review, publish, re-entry, and status-toggle surfaces
 - dedicated CP route-level integrity tests for create and edit / re-entry page surfaces
+- a focused frontend auth E2E proof layer split by flow under `frontend/test/e2e/auth/`
+- a frontend unit proof layer covering Settings pages, Settings loaders/API, shared auth helpers, SSR API forwarding, and the tenant API proxy route
 - a dedicated real-stack CP browser smoke in CI covering create → required-group saves → review → publish → re-enter → status toggle
 - a real CP backend module (`backend/src/modules/control-plane/`) with create/read/list, group-save, review/publish, status-toggle, and producer-side handoff endpoints
 - a real `cp_accounts` table (migration `0014_cp_accounts.ts`)
 - real CP Step 2 persistence for setup groups and Personal field-catalog truth
+- DB-enforced CP/Settings invariant hardening through migration `0021_harden_cp_settings_constraints.ts`
 - real CP Review & Publish backend composition, Activation Ready validation, publish action, and tenant provisioning truth
 - real CP edit/re-entry surfaces, published-account status toggle, and practical accounts list actions
 - real CP producer-side Settings handoff snapshot on full account detail DTOs and internal backend service composition
@@ -57,7 +61,7 @@ What this means today:
 - the current CP `settingsHandoff` snapshot remains producer-shaped, but it honestly reports that the Settings engine is present and synchronous cascade wiring is active
 - the tenant Settings v1 route set is implemented exactly as locked: Access, Account, Modules, Personal, Integrations live; Communications placeholder-only; Workspace Experience overview-card-only with no route; Permissions absent
 - the active Settings consumer audit is closed: `/admin` consumes bootstrap; Settings overview consumes overview; section pages consume their own Settings read/write DTOs; no active Settings page consumes auth bootstrap setup truth
-- the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Account/Personal concurrency, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, failure-audit proof, and a dedicated browser Settings proof path (`yarn workspace frontend test:e2e test/e2e/settings.spec.ts`)
+- the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Account/Personal concurrency, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, failure-audit proof, a dedicated browser Settings proof path (`yarn workspace frontend playwright test test/e2e/settings.spec.ts`), and frontend unit coverage for Settings pages, loaders, browser API calls, and route shell behavior
 - final Settings lock certification is recorded in `docs/qa/settings-lock-certification.md` as a lightweight signoff record; proof remains in the normal repo quality gate, pre-push checks, CI checks, Playwright reports, and QA/runbook artifacts rather than duplicated raw logs in docs
 - the only open Settings-specific quality exception is QE-0001 in `docs/quality-exceptions.md`: production external-provider SSO readiness snapshot refresh is deferred while the v1 Integrations page remains informational-only and fail-closed
 

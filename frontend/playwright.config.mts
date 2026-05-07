@@ -17,7 +17,7 @@
  *
  * IMPORTANT:
  * - Not every spec is valid in every topology.
- * - auth.spec.ts works in host-run dev and full-stack dev.
+ * - auth/*.spec.ts works in host-run dev and full-stack dev.
  * - cp-smoke.spec.ts requires the real proxy topology (yarn dev:stack or CI CP workflow).
  *
  * WHY workers: 1:

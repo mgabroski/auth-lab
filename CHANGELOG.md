@@ -30,6 +30,12 @@ The format is based on Keep a Changelog principles, adapted to the current repo 
 
 ### Added
 
+- Added end-to-end PKCE S256 support for Google, Microsoft, and local OIDC SSO authorization-code flows, including per-flow verifier generation, encrypted state-cookie storage, callback verifier validation, and adapter-level proof that the verifier is sent only during token exchange.
+- Added frontend Settings and proxy unit proof covering Settings pages, Settings loaders/browser API calls, shared auth helpers, SSR API forwarding, and tenant API proxy header/body handling.
+- Added focused frontend auth E2E specs under `frontend/test/e2e/auth/`, replacing the former 1,100+ line monolithic auth smoke file with login/routing, signup, SSO, MFA, invite, and password-reset specs that preserve the same real-stack coverage while improving reviewer navigation.
+- Added an explicit Set-Cookie append helper so auth responses can safely emit multiple cookies in one response, including SSO callback responses that set the session cookie and clear the short-lived SSO state cookie.
+- Added backend E2E proof that Google and Microsoft SSO callbacks emit both the session cookie and the cleared SSO state cookie.
+- Added backend E2E proof that direct CP API calls cannot disable Personal families containing required baseline or system-managed fields.
 - Added `docs/ops/release-engineering.md` as the repo’s release-engineering contract covering release lanes, applicable merge gates, migration safety, rollback expectations, post-change verification, incident severity, hotfix handling, changelog discipline, and explicit external GitHub-control dependencies.
 - Added `CHANGELOG.md` as the repo’s human-written release-relevant history surface.
 - Added dedicated Control Plane route-integrity unit coverage for the create flow and edit / re-entry flow so server-page regressions on the CP app surface are test-detectable before browser proof.
@@ -37,6 +43,8 @@ The format is based on Keep a Changelog principles, adapted to the current repo 
 
 ### Changed
 
+- Updated frontend auth E2E scripts and CI wiring to run the split `test/e2e/auth/` spec folder instead of the legacy monolithic `auth.spec.ts` entrypoint.
+- Updated Control Plane Personal normalization so backend validation rejects attempts to disable locked Personal families instead of relying only on disabled frontend controls.
 - Updated final shipped-truth wording across CP backend comments, CP operator-facing copy, and current-status documentation so the repo describes the current Control Plane surface without stale phase-coupled language.
 - Updated `docs/current-foundation-status.md` to reflect the current repo truth more precisely, including that Stage 5 practical closure is now completed to the strongest honest repo-visible depth, while external GitHub branch-protection and required-review behavior remain explicit external dependencies.
 - Updated shipped-truth documentation to state explicitly that CP now has route-level integrity proof plus a dedicated real-stack browser smoke in CI, closing the remaining proof-gap between shipped CP behavior and repo-visible closure evidence.
@@ -56,9 +64,15 @@ The format is based on Keep a Changelog principles, adapted to the current repo 
 
 ### Fixed
 
+- Fixed the release-record gap by documenting the security-relevant PKCE/SSO cookie hardening, DB constraint hardening, and frontend auth test split in the changelog.
+- Fixed the remaining auth E2E maintainability finding by splitting the legacy monolithic auth smoke file into focused flow-level specs.
 - Fixed Control Plane reserved account-key enforcement so namespace collisions such as `app` are rejected consistently at create time, and added regression coverage for that validation path.
 - Fixed the CP integrations validation path to use an integration-scoped validation error instead of incorrectly reusing the personal-validation error factory.
 - Renamed the CP server-side account loader facade away from `mock-data.ts` so the file name matches its real runtime role.
+
+### Migration
+
+- Added migration `0021_harden_cp_settings_constraints.ts`, which promotes stable CP and Settings invariants to database-enforced constraints: CP status vocabulary, non-negative CP revision, account-key format, Personal default-selected implies allowed, non-blank tenant section names, and non-negative section/field sort order.
 
 ---
 

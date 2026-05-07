@@ -320,7 +320,7 @@ jobs:
           echo "Redis flushed — rate limit counters reset for clean E2E run."
 
       - name: Run Playwright tenant auth smoke tests
-        run: yarn workspace frontend playwright test test/e2e/auth.spec.ts
+        run: yarn workspace frontend playwright test test/e2e/auth
         env:
           MAILPIT_API_URL: http://localhost:8025
           CI: 'true'
