@@ -14,6 +14,7 @@ export {
 export type { CpSettingsHandoffSnapshot } from './handoff/cp-settings-handoff.types';
 export {
   INTEGRATION_CATALOG,
+  LOCKED_PERSONAL_FAMILY_KEYS,
   PERSONAL_FAMILY_DEFAULTS,
   PERSONAL_FAMILY_LABELS,
   PERSONAL_FIELD_CATALOG,

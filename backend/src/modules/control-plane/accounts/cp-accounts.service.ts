@@ -59,6 +59,7 @@ import {
   EDITABLE_PERSONAL_FIELD_CATALOG,
   GOOGLE_SSO_INTEGRATION_KEY,
   INTEGRATION_CATALOG,
+  LOCKED_PERSONAL_FAMILY_KEYS,
   MICROSOFT_SSO_INTEGRATION_KEY,
   PERSONAL_FAMILY_DEFAULTS,
   REQUIRED_BASELINE_PERSONAL_FIELD_KEYS,
@@ -671,6 +672,15 @@ export class CpAccountsService {
         const familyAllowedMap = new Map<PersonalFamilyKey, boolean>(
           input.families.map((family) => [family.familyKey as PersonalFamilyKey, family.isAllowed]),
         );
+
+        for (const familyKey of LOCKED_PERSONAL_FAMILY_KEYS) {
+          if (familyAllowedMap.get(familyKey) === false) {
+            throw CpAccountErrors.personalValidation(
+              'Personal families that contain required baseline or system-managed fields cannot be disabled.',
+              { familyKey },
+            );
+          }
+        }
 
         const normalizedFamilies = PERSONAL_FAMILY_DEFAULTS.map((family) => ({
           familyKey: family.familyKey,

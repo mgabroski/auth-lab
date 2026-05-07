@@ -614,6 +614,12 @@ export const REQUIRED_BASELINE_PERSONAL_FIELD_KEYS = new Set(
   ),
 );
 
+export const LOCKED_PERSONAL_FAMILY_KEYS = new Set(
+  PERSONAL_FIELD_CATALOG.filter(
+    (field) => field.isSystemManaged || field.minimumRequired === 'required',
+  ).map((field) => field.familyKey),
+);
+
 export const INTEGRATION_CATALOG: IntegrationCatalogEntry[] = [
   {
     integrationKey: 'integration.adp',

@@ -34,6 +34,7 @@
  */
 
 import type { FastifyReply } from 'fastify';
+import { appendSetCookieHeader } from './set-cookie-header';
 import { getSsoStateCookieName } from './session.types';
 
 /** SSO state cookie TTL: 10 minutes. Must exceed the OAuth provider round-trip. */
@@ -65,7 +66,7 @@ export function setSsoStateCookie(
 
   // Use append so we don't overwrite the session cookie if both are set
   // in the same response (should not happen, but safe).
-  reply.header('Set-Cookie', parts.join('; '));
+  appendSetCookieHeader(reply, parts.join('; '));
 }
 
 export function clearSsoStateCookie(reply: FastifyReply, isProduction: boolean): void {
@@ -84,7 +85,7 @@ export function clearSsoStateCookie(reply: FastifyReply, isProduction: boolean):
     parts.push('Secure');
   }
 
-  reply.header('Set-Cookie', parts.join('; '));
+  appendSetCookieHeader(reply, parts.join('; '));
 }
 
 /**

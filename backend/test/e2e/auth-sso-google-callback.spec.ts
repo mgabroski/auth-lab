@@ -12,19 +12,40 @@ import {
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? 'test-google-client-id';
 
-function extractSessionIdFromSetCookie(setCookieHeader: string | string[] | undefined): string {
-  const first = Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader;
+function getSetCookieHeaders(setCookieHeader: string | string[] | undefined): string[] {
+  if (Array.isArray(setCookieHeader)) return setCookieHeader;
+  return setCookieHeader ? [setCookieHeader] : [];
+}
 
-  if (!first) {
+function extractSessionIdFromSetCookie(setCookieHeader: string | string[] | undefined): string {
+  const sessionCookie = getSetCookieHeaders(setCookieHeader).find((cookie) =>
+    cookie.startsWith('sid='),
+  );
+
+  if (!sessionCookie) {
     throw new Error('Expected Set-Cookie header to contain a session cookie');
   }
 
-  const match = /^sid=([^;]+)/.exec(first);
+  const match = /^sid=([^;]+)/.exec(sessionCookie);
   if (!match) {
-    throw new Error(`Could not extract sid cookie from: ${first}`);
+    throw new Error(`Could not extract sid cookie from: ${sessionCookie}`);
   }
 
   return match[1];
+}
+
+function expectSsoCallbackCookies(setCookieHeader: string | string[] | undefined): void {
+  const cookies = getSetCookieHeaders(setCookieHeader);
+
+  expect(cookies.some((cookie) => cookie.startsWith('sid='))).toBe(true);
+  expect(
+    cookies.some(
+      (cookie) =>
+        cookie.startsWith('sso-state=;') &&
+        cookie.includes('Max-Age=0') &&
+        cookie.includes('SameSite=Lax'),
+    ),
+  ).toBe(true);
 }
 
 describe('GET /auth/sso/google/callback', () => {
@@ -71,7 +92,7 @@ describe('GET /auth/sso/google/callback', () => {
 
       expect(res.statusCode).toBe(302);
       expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
-      expect(res.headers['set-cookie']).toBeTruthy();
+      expectSsoCallbackCookies(res.headers['set-cookie']);
 
       const sessionId = extractSessionIdFromSetCookie(res.headers['set-cookie']);
       const session = await deps.sessionStore.get(sessionId);

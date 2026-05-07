@@ -27,6 +27,7 @@
  */
 
 import type { FastifyReply } from 'fastify';
+import { appendSetCookieHeader } from './set-cookie-header';
 import { getSessionCookieName } from './session.types';
 
 export function setSessionCookie(
@@ -54,7 +55,7 @@ export function setSessionCookie(
     parts.push('Secure');
   }
 
-  reply.header('Set-Cookie', parts.join('; '));
+  appendSetCookieHeader(reply, parts.join('; '));
 }
 
 export function clearSessionCookie(reply: FastifyReply, isProduction: boolean): void {
@@ -74,5 +75,5 @@ export function clearSessionCookie(reply: FastifyReply, isProduction: boolean): 
     parts.push('Secure');
   }
 
-  reply.header('Set-Cookie', parts.join('; '));
+  appendSetCookieHeader(reply, parts.join('; '));
 }
