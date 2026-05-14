@@ -101,6 +101,9 @@ import type { ControlPlaneModule } from '../modules/control-plane/control-plane.
 import { createSettingsModule } from '../modules/settings/settings.module';
 import type { SettingsModule } from '../modules/settings/settings.module';
 
+import { createPeopleTeamsModule } from '../modules/people-teams/people-teams.module';
+import type { PeopleTeamsModule } from '../modules/people-teams/people-teams.module';
+
 import { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
 import { GoogleSsoAdapter } from '../modules/auth/sso/google/google-sso.adapter';
 import { MicrosoftSsoAdapter } from '../modules/auth/sso/microsoft/microsoft-sso.adapter';
@@ -138,6 +141,7 @@ export type AppDeps = {
   audit: AuditModule;
   controlPlane: ControlPlaneModule;
   settings: SettingsModule;
+  peopleTeams: PeopleTeamsModule;
 
   close: () => Promise<void>;
 };
@@ -455,6 +459,8 @@ export async function buildDeps(
   // No rate-limiter or outbox. CP access mode is enforced by CP_AUTH_MODE/host boundary.
   const controlPlane = createControlPlaneModule({ db, logger, auditRepo });
 
+  const peopleTeams = createPeopleTeamsModule({ db });
+
   const settings = createSettingsModule({
     db,
     auditRepo,
@@ -493,6 +499,7 @@ export async function buildDeps(
     audit,
     controlPlane,
     settings,
+    peopleTeams,
 
     close: async () => {
       await redis.close();

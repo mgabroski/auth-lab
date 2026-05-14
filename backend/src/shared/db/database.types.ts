@@ -248,6 +248,30 @@ export interface TenantAccountSettings {
   updated_at: Generated<Timestamp>;
 }
 
+export interface TenantGroupMembers {
+  added_by_membership_id: string | null;
+  created_at: Generated<Timestamp>;
+  group_id: string;
+  membership_id: string;
+  tenant_id: string;
+}
+
+export interface TenantGroups {
+  archived_at: Timestamp | null;
+  archived_by_membership_id: string | null;
+  created_at: Generated<Timestamp>;
+  created_by_membership_id: string | null;
+  description: string | null;
+  id: Generated<string>;
+  level: string;
+  name: string;
+  normalized_name: string;
+  status: Generated<string>;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+  updated_by_membership_id: string | null;
+}
+
 export interface TenantFieldConfig {
   applied_cp_revision: Generated<number>;
   created_at: Generated<Timestamp>;
@@ -366,6 +390,8 @@ export interface DB {
   mfa_secrets: MfaSecrets;
   outbox_messages: OutboxMessages;
   password_reset_tokens: PasswordResetTokens;
+  tenant_group_members: TenantGroupMembers;
+  tenant_groups: TenantGroups;
   tenant_account_settings: TenantAccountSettings;
   tenant_field_config: TenantFieldConfig;
   tenant_personal_family_state: TenantPersonalFamilyState;
