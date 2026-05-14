@@ -50,7 +50,7 @@ async function createAcceptedInvite(opts: {
   tokenHasher: TokenHasher;
   tenantId: string;
   email: string;
-  role: 'ADMIN' | 'AGENT' | 'USER';
+  role: 'ADMIN' | 'AGENT' | 'USER' | 'MEMBER';
   tokenRaw: string;
 }) {
   const tokenHash = opts.tokenHasher.hash(opts.tokenRaw);
@@ -202,6 +202,100 @@ describe('POST /auth/register', () => {
       const body = readJson<AuthenticatedResponseBody>(res);
       expect(body.nextAction).toBe('MFA_SETUP_REQUIRED');
       expect(body.membership.role).toBe('ADMIN');
+    } finally {
+      await close();
+    }
+  });
+
+  it('agent registration preserves canonical AGENT invited role', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db, tokenHasher } = deps;
+
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `agent-${randomUUID().slice(0, 8)}@example.com`;
+    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`;
+
+    try {
+      const tenant = await createTenant({ db, tenantKey });
+      await createAcceptedInvite({
+        db,
+        tokenHasher,
+        tenantId: tenant.id,
+        email,
+        role: 'AGENT',
+        tokenRaw,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/register',
+        headers: { host },
+        payload: { email, password: 'SecurePass123!', name: 'Agent User', inviteToken: tokenRaw },
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      const body = readJson<AuthenticatedResponseBody>(res);
+      expect(body.nextAction).toBe('NONE');
+      expect(body.membership.role).toBe('AGENT');
+    } finally {
+      await close();
+    }
+  });
+
+  it('legacy MEMBER invite registration creates canonical USER membership and response', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db, tokenHasher } = deps;
+
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `legacy-member-${randomUUID().slice(0, 8)}@example.com`;
+    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`;
+
+    try {
+      const tenant = await createTenant({ db, tenantKey });
+      await createAcceptedInvite({
+        db,
+        tokenHasher,
+        tenantId: tenant.id,
+        email,
+        role: 'MEMBER',
+        tokenRaw,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/register',
+        headers: { host },
+        payload: {
+          email,
+          password: 'SecurePass123!',
+          name: 'Legacy Member User',
+          inviteToken: tokenRaw,
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      const body = readJson<AuthenticatedResponseBody>(res);
+      expect(body.nextAction).toBe('NONE');
+      expect(body.membership.role).toBe('USER');
+
+      const user = await db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email.toLowerCase())
+        .executeTakeFirstOrThrow();
+
+      const membership = await db
+        .selectFrom('memberships')
+        .select(['role', 'status'])
+        .where('tenant_id', '=', tenant.id)
+        .where('user_id', '=', user.id)
+        .executeTakeFirstOrThrow();
+
+      expect(membership).toEqual({ role: 'USER', status: 'ACTIVE' });
     } finally {
       await close();
     }

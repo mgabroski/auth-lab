@@ -21,12 +21,7 @@ import {
   AUTH_TENANT_UNAVAILABLE_PATH,
   getRouteStateRedirectPath,
 } from '@/shared/auth/redirects';
-import {
-  getInviteToken,
-  getReturnToPath,
-  normalizeReturnToPath,
-  type SearchParamsRecord,
-} from '@/shared/auth/url-tokens';
+import { getInviteToken, getReturnToPath, type SearchParamsRecord } from '@/shared/auth/url-tokens';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,7 +60,7 @@ export default async function RegisterPage({ searchParams }: PageProps) {
   }
 
   const { tenant } = bootstrap.config;
-  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/');
+  const returnTo = getReturnToPath(resolvedSearchParams);
   const acceptInviteHref = token
     ? `${AUTH_ACCEPT_INVITE_PATH}?token=${encodeURIComponent(token)}`
     : AUTH_ACCEPT_INVITE_PATH;

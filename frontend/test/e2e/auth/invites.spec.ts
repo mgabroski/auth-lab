@@ -127,7 +127,7 @@ test.describe('auth smoke: invite acceptance', () => {
 
       // ── G. Verify landing on /app (USER, no MFA required) ───────────────
       await expect(freshPage).toHaveURL(`${AUTH_E2E.OPEN_ORIGIN}/app`, { timeout: 15_000 });
-      await expect(freshPage.getByRole('heading', { name: 'Member app' })).toBeVisible();
+      await expect(freshPage.getByRole('heading', { name: 'Workspace' })).toBeVisible();
       await expect(freshPage.getByText('Authenticated handoff complete')).toBeVisible();
 
       // Confirm the session is authenticated as the new member

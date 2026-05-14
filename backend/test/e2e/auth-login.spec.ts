@@ -53,7 +53,7 @@ async function seedUserWithPassword(opts: {
   tenantId: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'AGENT' | 'USER';
+  role: 'ADMIN' | 'AGENT' | 'USER' | 'MEMBER';
   membershipStatus?: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
 }) {
   const user = await opts.db
@@ -271,6 +271,78 @@ describe('POST /auth/login', () => {
       const body = readJson<AuthenticatedResponseBody>(res);
       expect(body.nextAction).toBe('NONE');
       expect(body.user.email).toBe(email.toLowerCase());
+      expect(body.membership.role).toBe('USER');
+    } finally {
+      await close();
+    }
+  });
+
+  it('agent login returns AUTHENTICATED nextAction NONE and canonical AGENT role', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db, passwordHasher } = deps;
+
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.hubins.com`;
+    const email = `agent-${randomUUID().slice(0, 8)}@example.com`;
+    const password = 'AgentPass123!';
+
+    try {
+      const tenant = await createTenant({ db, tenantKey });
+      await seedUserWithPassword({
+        db,
+        passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        role: 'AGENT',
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { host },
+        payload: { email, password },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = readJson<AuthenticatedResponseBody>(res);
+      expect(body.nextAction).toBe('NONE');
+      expect(body.membership.role).toBe('AGENT');
+    } finally {
+      await close();
+    }
+  });
+
+  it('legacy MEMBER membership login returns canonical USER role', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db, passwordHasher } = deps;
+
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.hubins.com`;
+    const email = `legacy-member-${randomUUID().slice(0, 8)}@example.com`;
+    const password = 'MemberPass123!';
+
+    try {
+      const tenant = await createTenant({ db, tenantKey });
+      await seedUserWithPassword({
+        db,
+        passwordHasher,
+        tenantId: tenant.id,
+        email,
+        password,
+        role: 'MEMBER',
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        headers: { host },
+        payload: { email, password },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = readJson<AuthenticatedResponseBody>(res);
+      expect(body.nextAction).toBe('NONE');
       expect(body.membership.role).toBe('USER');
     } finally {
       await close();

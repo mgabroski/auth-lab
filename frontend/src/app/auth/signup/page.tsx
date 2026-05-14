@@ -22,11 +22,7 @@ import { AuthShell } from '@/shared/auth/components/auth-shell';
 import { AuthNote } from '@/shared/auth/components/auth-form-ui';
 import { SignupForm } from '@/shared/auth/components/signup-form';
 import { AUTH_LOGIN_PATH, getRouteStateRedirectPath } from '@/shared/auth/redirects';
-import {
-  getReturnToPath,
-  normalizeReturnToPath,
-  type SearchParamsRecord,
-} from '@/shared/auth/url-tokens';
+import { getReturnToPath, type SearchParamsRecord } from '@/shared/auth/url-tokens';
 
 export const dynamic = 'force-dynamic';
 
@@ -57,8 +53,10 @@ export default async function SignupPage({ searchParams }: PageProps) {
   }
 
   const { tenant } = bootstrap.config;
-  const returnTo = normalizeReturnToPath(getReturnToPath(resolvedSearchParams), '/');
-  const loginHref = `${AUTH_LOGIN_PATH}?returnTo=${encodeURIComponent(returnTo)}`;
+  const returnTo = getReturnToPath(resolvedSearchParams);
+  const loginHref = returnTo
+    ? `${AUTH_LOGIN_PATH}?returnTo=${encodeURIComponent(returnTo)}`
+    : AUTH_LOGIN_PATH;
 
   return (
     <AuthShell

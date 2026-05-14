@@ -169,11 +169,28 @@ describe('AdminPage', () => {
     loadAuthBootstrapMock.mockResolvedValue({
       ok: true,
       routeState: {
-        kind: 'AUTHENTICATED_MEMBER',
+        kind: 'AUTHENTICATED_WORKSPACE',
         config: makeConfig(),
-        me: makeMe({ membership: { id: 'membership-1', role: 'MEMBER' } }),
+        me: makeMe({ membership: { id: 'membership-1', role: 'USER' } }),
       },
-      me: makeMe({ membership: { id: 'membership-1', role: 'MEMBER' } }),
+      me: makeMe({ membership: { id: 'membership-1', role: 'USER' } }),
+    });
+
+    await expect(AdminPage()).rejects.toThrow('REDIRECT:/app');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
+  });
+
+  it('redirects AGENT route states away from /admin', async () => {
+    const agentMe = makeMe({ membership: { id: 'membership-1', role: 'AGENT' } });
+
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_WORKSPACE',
+        config: makeConfig(),
+        me: agentMe,
+      },
+      me: agentMe,
     });
 
     await expect(AdminPage()).rejects.toThrow('REDIRECT:/app');

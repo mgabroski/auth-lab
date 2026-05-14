@@ -27,7 +27,7 @@ test.describe('auth smoke: login, logout, routing, and tenant isolation', () => 
     await page.getByRole('button', { name: 'Sign in' }).click();
 
     await expect(page).toHaveURL(`${AUTH_E2E.OPEN_ORIGIN}/app`);
-    await expect(page.getByRole('heading', { name: 'Member app' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible();
     await expect(page.getByText('Authenticated handoff complete')).toBeVisible();
 
     const cookies = await page.context().cookies(`${AUTH_E2E.OPEN_ORIGIN}`);
@@ -154,7 +154,7 @@ test.describe('auth smoke: login, logout, routing, and tenant isolation', () => 
 
     // NONE + USER → /app (not /admin, not /admin/settings)
     await expect(page).toHaveURL(`${AUTH_E2E.OPEN_ORIGIN}/app`);
-    await expect(page.getByRole('heading', { name: 'Member app' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible();
     await expect(page.getByText('Authenticated handoff complete')).toBeVisible();
   });
 

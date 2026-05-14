@@ -9,18 +9,17 @@
  * RULES:
  * - This file owns frontend route targets, not backend truth.
  * - Future route changes should update this file instead of scattering string literals.
- *
- * PHASE 9 UPDATE (ADR 0003):
- * - Added ADMIN_SETTINGS_PATH = '/admin/settings'.
- * - `getPathForNextAction` now requires `role: MembershipRole`.
- *   NONE + ADMIN → /admin  |  NONE + AGENT/USER/MEMBER → /app  (fixes pre-existing role-blind routing).
- * - `getPostAuthRedirectPath` gains `role: MembershipRole` parameter and threads
- *   it through to `getPathForNextAction`.
+ * - ADMIN lands on /admin. AGENT and USER land on the authenticated workspace
+ *   shell (/app). MEMBER is accepted only as a legacy input alias and is
+ *   normalized to USER defensively.
+ * - AGENT must not pass admin-only route checks just because it shares /app
+ *   with USER today.
  * - No FIRST_TIME_SETUP case — workspace setup state drives a UI banner on /admin,
  *   not an auth continuation redirect. See ADR 0003.
  */
 
-import type { MembershipRole, AuthNextAction } from './contracts';
+import type { AuthNextAction, MembershipRoleInput } from './contracts';
+import { normalizeMembershipRole } from './contracts';
 import type { AuthRouteState } from './route-state';
 import { isSafeReturnToPath } from './url-tokens';
 
@@ -37,11 +36,11 @@ export const AUTH_EMAIL_VERIFICATION_PATH = '/verify-email';
 export const AUTH_MFA_SETUP_PATH = '/auth/mfa/setup';
 export const AUTH_MFA_VERIFY_PATH = '/auth/mfa/verify';
 export const AUTH_SSO_DONE_PATH = '/auth/sso/done';
-export const AUTHENTICATED_MEMBER_ENTRY_PATH = '/app';
+export const AUTHENTICATED_WORKSPACE_ENTRY_PATH = '/app';
 export const AUTHENTICATED_ADMIN_ENTRY_PATH = '/admin';
 export const ADMIN_SETTINGS_PATH = '/admin/settings';
 export const ADMIN_INVITES_PATH = '/admin/invites';
-export const AUTHENTICATED_APP_ENTRY_PATH = AUTHENTICATED_MEMBER_ENTRY_PATH;
+export const AUTHENTICATED_APP_ENTRY_PATH = AUTHENTICATED_WORKSPACE_ENTRY_PATH;
 export const LEGACY_AUTHENTICATED_DASHBOARD_PATH = '/dashboard';
 export const TOPOLOGY_CHECK_PATH = '/topology-check';
 
@@ -49,16 +48,23 @@ export const TOPOLOGY_CHECK_PATH = '/topology-check';
  * Maps a backend `nextAction` + membership `role` to a frontend pathname.
  *
  * `role` is required. NONE resolves differently by role:
- *   NONE + ADMIN             → /admin
- *   NONE + AGENT/USER/MEMBER → /app
+ *   NONE + ADMIN                   → /admin
+ *   NONE + AGENT/USER/MEMBER alias → /app
  *
  * Continuation states (EMAIL_VERIFICATION_REQUIRED, MFA_SETUP_REQUIRED,
  * MFA_REQUIRED) are role-independent.
  */
-export function getPathForNextAction(nextAction: AuthNextAction, role: MembershipRole): string {
+export function getPathForNextAction(
+  nextAction: AuthNextAction,
+  role: MembershipRoleInput,
+): string {
+  const canonicalRole = normalizeMembershipRole(role);
+
   switch (nextAction) {
     case 'NONE':
-      return role === 'ADMIN' ? AUTHENTICATED_ADMIN_ENTRY_PATH : AUTHENTICATED_MEMBER_ENTRY_PATH;
+      return canonicalRole === 'ADMIN'
+        ? AUTHENTICATED_ADMIN_ENTRY_PATH
+        : AUTHENTICATED_WORKSPACE_ENTRY_PATH;
     case 'EMAIL_VERIFICATION_REQUIRED':
       return AUTH_EMAIL_VERIFICATION_PATH;
     case 'MFA_SETUP_REQUIRED':
@@ -74,7 +80,7 @@ export function getPathForNextAction(nextAction: AuthNextAction, role: Membershi
 
 function isContinuationReturnToPath(
   nextAction: AuthNextAction,
-  role: MembershipRole,
+  role: MembershipRoleInput,
   returnTo?: string | null,
 ): boolean {
   if (!isSafeReturnToPath(returnTo) || nextAction === 'NONE') {
@@ -96,7 +102,7 @@ function isContinuationReturnToPath(
  */
 export function getPostAuthRedirectPath(
   nextAction: AuthNextAction,
-  role: MembershipRole,
+  role: MembershipRoleInput,
   returnTo?: string | null,
 ): string {
   if (nextAction === 'NONE' && isSafeReturnToPath(returnTo)) {
@@ -122,8 +128,8 @@ export function getRouteStateRedirectPath(state: AuthRouteState): string {
       return AUTH_MFA_SETUP_PATH;
     case 'MFA_REQUIRED':
       return AUTH_MFA_VERIFY_PATH;
-    case 'AUTHENTICATED_MEMBER':
-      return AUTHENTICATED_MEMBER_ENTRY_PATH;
+    case 'AUTHENTICATED_WORKSPACE':
+      return AUTHENTICATED_WORKSPACE_ENTRY_PATH;
     case 'AUTHENTICATED_ADMIN':
       return AUTHENTICATED_ADMIN_ENTRY_PATH;
     default: {

@@ -123,6 +123,138 @@ describe('GET /auth/sso/google/callback', () => {
     }
   });
 
+  it('success: ACTIVE agent → preserves canonical AGENT role in session', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+      const email = `agent-${randomUUID().slice(0, 8)}@example.com`;
+
+      const created = await createUserWithMembership({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'AGENT',
+        status: 'ACTIVE',
+      });
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`,
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
+
+      const sessionId = extractSessionIdFromSetCookie(res.headers['set-cookie']);
+      const session = await deps.sessionStore.get(sessionId);
+
+      expect(session).toMatchObject({
+        userId: created.user.id,
+        tenantId: tenant.id,
+        tenantKey,
+        membershipId: created.membership.id,
+        role: 'AGENT',
+        mfaVerified: true,
+        emailVerified: true,
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it('success: legacy MEMBER membership read during SSO normalizes to USER in session', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+
+    try {
+      const tenant = await createSsoTenant({ db: deps.db, tenantKey, allowedSso: ['google'] });
+      const email = `legacy-member-${randomUUID().slice(0, 8)}@example.com`;
+
+      const user = await deps.db
+        .insertInto('users')
+        .values({ email, name: 'Legacy Member SSO User', email_verified: true })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
+
+      const membership = await deps.db
+        .insertInto('memberships')
+        .values({
+          tenant_id: tenant.id,
+          user_id: user.id,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+          accepted_at: new Date(),
+        })
+        .returning(['id'])
+        .executeTakeFirstOrThrow();
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`,
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
+
+      const sessionId = extractSessionIdFromSetCookie(res.headers['set-cookie']);
+      const session = await deps.sessionStore.get(sessionId);
+
+      expect(session).toMatchObject({
+        userId: user.id,
+        tenantId: tenant.id,
+        tenantKey,
+        membershipId: membership.id,
+        role: 'USER',
+        mfaVerified: true,
+        emailVerified: true,
+      });
+    } finally {
+      await close();
+    }
+  });
+
   it('success: ADMIN with verified MFA → 302 done?nextAction=MFA_REQUIRED', async () => {
     const { app, deps, sso, close } = await buildTestApp();
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
@@ -415,10 +547,10 @@ describe('GET /auth/sso/google/callback', () => {
 
       const membership = await deps.db
         .selectFrom('memberships')
-        .select(['status', 'tenant_id'])
+        .select(['status', 'tenant_id', 'role'])
         .where('user_id', '=', user!.id)
         .executeTakeFirst();
-      expect(membership).toEqual({ status: 'ACTIVE', tenant_id: tenant.id });
+      expect(membership).toEqual({ status: 'ACTIVE', tenant_id: tenant.id, role: 'USER' });
     } finally {
       await close();
     }

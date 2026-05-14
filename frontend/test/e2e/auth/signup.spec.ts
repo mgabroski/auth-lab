@@ -40,7 +40,7 @@ test.describe('auth smoke: public signup and signup policy', () => {
 
     await page.goto(verifyLink);
     await expect(page).toHaveURL(`${AUTH_E2E.OPEN_ORIGIN}/app`);
-    await expect(page.getByRole('heading', { name: 'Member app' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible();
     await expect(page.getByText('Authenticated handoff complete')).toBeVisible();
   });
 

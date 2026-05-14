@@ -27,7 +27,7 @@ import {
   AUTH_PUBLIC_ENTRY_PATH,
   AUTH_TENANT_UNAVAILABLE_PATH,
   AUTHENTICATED_ADMIN_ENTRY_PATH,
-  AUTHENTICATED_MEMBER_ENTRY_PATH,
+  AUTHENTICATED_WORKSPACE_ENTRY_PATH,
   getPathForNextAction,
   getPostAuthRedirectPath,
   getRouteStateRedirectPath,
@@ -49,7 +49,7 @@ function makeConfig(setupCompleted = true) {
   };
 }
 
-function makeMe(role: MembershipRole = 'MEMBER', nextAction: AuthNextAction = 'NONE') {
+function makeMe(role: MembershipRole = 'USER', nextAction: AuthNextAction = 'NONE') {
   return {
     user: { id: 'u1', email: 'user@example.com', name: 'User' },
     membership: { id: 'm1', role },
@@ -63,8 +63,16 @@ function makeMe(role: MembershipRole = 'MEMBER', nextAction: AuthNextAction = 'N
 
 describe('getPathForNextAction', () => {
   // NONE routing is role-aware.
-  it('NONE + MEMBER → /app', () => {
-    expect(getPathForNextAction('NONE', 'MEMBER')).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
+  it('NONE + USER → /app', () => {
+    expect(getPathForNextAction('NONE', 'USER')).toBe(AUTHENTICATED_WORKSPACE_ENTRY_PATH);
+  });
+
+  it('NONE + AGENT → /app', () => {
+    expect(getPathForNextAction('NONE', 'AGENT')).toBe(AUTHENTICATED_WORKSPACE_ENTRY_PATH);
+  });
+
+  it('NONE + legacy MEMBER alias → /app', () => {
+    expect(getPathForNextAction('NONE', 'MEMBER')).toBe(AUTHENTICATED_WORKSPACE_ENTRY_PATH);
   });
 
   it('NONE + ADMIN → /admin', () => {
@@ -100,8 +108,16 @@ describe('getPathForNextAction', () => {
 describe('getPostAuthRedirectPath', () => {
   // ── Happy paths ────────────────────────────────────────────────────────────
 
-  it('NONE + MEMBER with no returnTo → /app', () => {
-    expect(getPostAuthRedirectPath('NONE', 'MEMBER')).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
+  it('NONE + USER with no returnTo → /app', () => {
+    expect(getPostAuthRedirectPath('NONE', 'USER')).toBe(AUTHENTICATED_WORKSPACE_ENTRY_PATH);
+  });
+
+  it('NONE + AGENT with no returnTo → /app', () => {
+    expect(getPostAuthRedirectPath('NONE', 'AGENT')).toBe(AUTHENTICATED_WORKSPACE_ENTRY_PATH);
+  });
+
+  it('NONE + legacy MEMBER alias with no returnTo → /app', () => {
+    expect(getPostAuthRedirectPath('NONE', 'MEMBER')).toBe(AUTHENTICATED_WORKSPACE_ENTRY_PATH);
   });
 
   it('NONE + ADMIN with no returnTo → /admin', () => {
@@ -117,7 +133,9 @@ describe('getPostAuthRedirectPath', () => {
   });
 
   it('NONE + MEMBER with null returnTo → /app', () => {
-    expect(getPostAuthRedirectPath('NONE', 'MEMBER', null)).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
+    expect(getPostAuthRedirectPath('NONE', 'MEMBER', null)).toBe(
+      AUTHENTICATED_WORKSPACE_ENTRY_PATH,
+    );
   });
 
   it('MFA_REQUIRED + ADMIN with returnTo matching continuation path → uses returnTo', () => {
@@ -147,13 +165,13 @@ describe('getPostAuthRedirectPath', () => {
 
   it('NONE + MEMBER with unsafe returnTo (external URL) → /app', () => {
     expect(getPostAuthRedirectPath('NONE', 'MEMBER', 'https://evil.com')).toBe(
-      AUTHENTICATED_MEMBER_ENTRY_PATH,
+      AUTHENTICATED_WORKSPACE_ENTRY_PATH,
     );
   });
 
   it('NONE + MEMBER with unsafe returnTo (protocol-relative //) → /app', () => {
     expect(getPostAuthRedirectPath('NONE', 'MEMBER', '//evil.com')).toBe(
-      AUTHENTICATED_MEMBER_ENTRY_PATH,
+      AUTHENTICATED_WORKSPACE_ENTRY_PATH,
     );
   });
 
@@ -161,7 +179,7 @@ describe('getPostAuthRedirectPath', () => {
     // Some browsers normalize \evil.com to //evil.com in navigation contexts.
     // Must fall back to the safe default, not redirect to the external host.
     expect(getPostAuthRedirectPath('NONE', 'MEMBER', '\\evil.com')).toBe(
-      AUTHENTICATED_MEMBER_ENTRY_PATH,
+      AUTHENTICATED_WORKSPACE_ENTRY_PATH,
     );
   });
 
@@ -170,7 +188,7 @@ describe('getPostAuthRedirectPath', () => {
     // Must fall back to the safe default.
     expect(
       getPostAuthRedirectPath('NONE', 'MEMBER', 'data:text/html,<script>alert(1)</script>'),
-    ).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
+    ).toBe(AUTHENTICATED_WORKSPACE_ENTRY_PATH);
   });
 
   it('NONE + ADMIN with backslash returnTo → /admin', () => {
@@ -211,7 +229,7 @@ describe('getRouteStateRedirectPath', () => {
     const state: AuthRouteState = {
       kind: 'EMAIL_VERIFICATION_REQUIRED',
       config: makeConfig(),
-      me: makeMe('MEMBER', 'EMAIL_VERIFICATION_REQUIRED'),
+      me: makeMe('USER', 'EMAIL_VERIFICATION_REQUIRED'),
     };
     expect(getRouteStateRedirectPath(state)).toBe(AUTH_EMAIL_VERIFICATION_PATH);
   });
@@ -234,13 +252,13 @@ describe('getRouteStateRedirectPath', () => {
     expect(getRouteStateRedirectPath(state)).toBe(AUTH_MFA_VERIFY_PATH);
   });
 
-  it('AUTHENTICATED_MEMBER → /app', () => {
+  it('AUTHENTICATED_WORKSPACE → /app', () => {
     const state: AuthRouteState = {
-      kind: 'AUTHENTICATED_MEMBER',
+      kind: 'AUTHENTICATED_WORKSPACE',
       config: makeConfig(),
-      me: makeMe('MEMBER', 'NONE'),
+      me: makeMe('USER', 'NONE'),
     };
-    expect(getRouteStateRedirectPath(state)).toBe(AUTHENTICATED_MEMBER_ENTRY_PATH);
+    expect(getRouteStateRedirectPath(state)).toBe(AUTHENTICATED_WORKSPACE_ENTRY_PATH);
   });
 
   it('AUTHENTICATED_ADMIN → /admin', () => {

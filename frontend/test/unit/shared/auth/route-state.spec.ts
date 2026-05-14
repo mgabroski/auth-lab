@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ConfigResponse, MeResponse } from '../../../../src/shared/auth/contracts';
+import type { ConfigResponse, MeResponseWire } from '../../../../src/shared/auth/contracts';
 import { resolveAuthRouteState } from '../../../../src/shared/auth/route-state';
 
 function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigResponse {
@@ -19,7 +19,7 @@ function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigRe
   };
 }
 
-function makeMe(overrides: Partial<MeResponse> = {}): MeResponse {
+function makeMe(overrides: Partial<MeResponseWire> = {}): MeResponseWire {
   return {
     user: {
       id: 'user-1',
@@ -28,7 +28,7 @@ function makeMe(overrides: Partial<MeResponse> = {}): MeResponse {
     },
     membership: {
       id: 'membership-1',
-      role: 'MEMBER',
+      role: 'USER',
     },
     tenant: {
       id: 'tenant-1',
@@ -69,7 +69,19 @@ describe('resolveAuthRouteState', () => {
     expect(state.kind).toBe('PUBLIC_ENTRY');
   });
 
-  it('maps NONE + MEMBER to AUTHENTICATED_MEMBER', () => {
+  it('maps NONE + USER to AUTHENTICATED_WORKSPACE', () => {
+    const state = resolveAuthRouteState({
+      config: makeConfig(),
+      me: makeMe({
+        nextAction: 'NONE',
+        membership: { id: 'membership-1', role: 'USER' },
+      }),
+    });
+
+    expect(state.kind).toBe('AUTHENTICATED_WORKSPACE');
+  });
+
+  it('maps legacy MEMBER wire role to AUTHENTICATED_WORKSPACE with canonical USER role', () => {
     const state = resolveAuthRouteState({
       config: makeConfig(),
       me: makeMe({
@@ -78,7 +90,25 @@ describe('resolveAuthRouteState', () => {
       }),
     });
 
-    expect(state.kind).toBe('AUTHENTICATED_MEMBER');
+    expect(state.kind).toBe('AUTHENTICATED_WORKSPACE');
+
+    if (state.kind !== 'AUTHENTICATED_WORKSPACE') {
+      throw new Error('Expected authenticated workspace route state');
+    }
+
+    expect(state.me.membership.role).toBe('USER');
+  });
+
+  it('maps NONE + AGENT to AUTHENTICATED_WORKSPACE', () => {
+    const state = resolveAuthRouteState({
+      config: makeConfig(),
+      me: makeMe({
+        nextAction: 'NONE',
+        membership: { id: 'membership-1', role: 'AGENT' },
+      }),
+    });
+
+    expect(state.kind).toBe('AUTHENTICATED_WORKSPACE');
   });
 
   it('maps NONE + ADMIN to AUTHENTICATED_ADMIN', () => {

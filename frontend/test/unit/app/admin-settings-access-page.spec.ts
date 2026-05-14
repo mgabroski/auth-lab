@@ -175,11 +175,11 @@ describe('AdminSettingsAccessPage', () => {
     loadAuthBootstrapMock.mockResolvedValue({
       ok: true,
       routeState: {
-        kind: 'AUTHENTICATED_MEMBER',
+        kind: 'AUTHENTICATED_WORKSPACE',
         config: makeConfig(),
-        me: makeMe({ membership: { id: 'membership-1', role: 'MEMBER' } }),
+        me: makeMe({ membership: { id: 'membership-1', role: 'USER' } }),
       },
-      me: makeMe({ membership: { id: 'membership-1', role: 'MEMBER' } }),
+      me: makeMe({ membership: { id: 'membership-1', role: 'USER' } }),
     });
 
     await expect(AdminSettingsAccessPage()).rejects.toThrow('REDIRECT:/app');

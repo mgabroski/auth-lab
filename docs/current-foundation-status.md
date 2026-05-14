@@ -78,9 +78,10 @@ Current shipped truth remains:
 - backend runtime membership roles are now canonical `ADMIN`, `AGENT`, and `USER`
 - legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled API/input/read boundaries
 - existing `MEMBER` membership and invite rows are backfilled to `USER` by the runtime role migration
-- public signup and default self-service provisioning create canonical `USER`
+- public signup and default self-service provisioning create canonical `USER`; public/self-service SSO provisioning also creates `USER`
 - `AGENT` is recognized as a membership level, but Agent operational access is not implemented yet
-- AGENT and USER may currently share the authenticated workspace shell; they are not equivalent product behaviors
+- AGENT and USER are distinct membership levels, but both currently land in the authenticated workspace shell at `/app`
+- the shared `/app` shell does not make AGENT and USER equivalent product behaviors
 - Agent group invite requirements are not implemented yet
 - `/admin/settings/access` is the current **Access & Security** Settings page
 - the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
@@ -91,6 +92,7 @@ Current shipped truth remains:
 - People & Teams group levels `ADMIN / AGENT / USER` remain classification for groups and do not grant Operational Access
 - Agent Groups as Operational Access grant subjects are not implemented
 - Person Exceptions are not implemented
+- Managed People is not implemented
 - a reusable backend Effective Access Resolver is not implemented
 - no shipped module may claim to consume Operational Access today
 
@@ -182,10 +184,10 @@ The following foundations are treated as real in the repo now.
 
 - password login exists
 - invite-driven onboarding exists
-- public signup exists where tenant policy allows it
+- public signup exists where tenant policy allows it and creates `USER`
 - email verification and password reset flows exist in the product surface
 - MFA setup and verification flows exist in the product surface
-- admin vs member post-auth routing exists
+- role-aware post-auth routing exists: `ADMIN` lands on `/admin`; `AGENT` and `USER` land on `/app`
 - `/admin/settings` exists as a real admin route in current scope
 - workspace-setup guidance exists as a real current surface, though broader Settings work remains open
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiHttpError } from '../../../../src/shared/auth/api-errors';
-import type { ConfigResponse, MeResponse } from '../../../../src/shared/auth/contracts';
+import type { ConfigResponse, MeResponseWire } from '../../../../src/shared/auth/contracts';
 
 const { ssrFetchMock, serverLoggerErrorMock, serverLoggerInfoMock, serverLoggerWarnMock } =
   vi.hoisted(() => ({
@@ -50,7 +50,7 @@ function makeConfig(overrides: Partial<ConfigResponse['tenant']> = {}): ConfigRe
   };
 }
 
-function makeMe(overrides: Partial<MeResponse> = {}): MeResponse {
+function makeMe(overrides: Partial<MeResponseWire> = {}): MeResponseWire {
   return {
     user: {
       id: 'user-1',
@@ -114,8 +114,9 @@ describe('loadAuthBootstrap', () => {
       throw new Error('Expected bootstrap success');
     }
 
-    expect(result.routeState.kind).toBe('AUTHENTICATED_MEMBER');
+    expect(result.routeState.kind).toBe('AUTHENTICATED_WORKSPACE');
     expect(result.me?.user.email).toBe('user@example.com');
+    expect(result.me?.membership.role).toBe('USER');
   });
 
   it('treats 401 from /auth/me as PUBLIC_ENTRY instead of a fatal bootstrap error', async () => {

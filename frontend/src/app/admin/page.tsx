@@ -83,8 +83,8 @@ export default async function AdminPage() {
         <div style={{ display: 'grid', gap: '10px' }}>
           <h2 style={{ margin: 0, fontSize: '22px', lineHeight: 1.2 }}>Admin landing ready</h2>
           <p style={{ margin: 0, fontSize: '15px', lineHeight: 1.7, color: '#475569' }}>
-            Admin users are separated from members at the route-state layer so the root gate lands
-            them in <code>/admin</code> instead of the member app.
+            Admin users are separated from Agent/User workspace sessions at the route-state layer so
+            the root gate lands them in <code>/admin</code> instead of <code>/app</code>.
           </p>
         </div>
 

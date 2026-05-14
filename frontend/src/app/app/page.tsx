@@ -2,8 +2,12 @@
  * frontend/src/app/app/page.tsx
  *
  * WHY:
- * - Minimal but real authenticated landing route for workspace members.
- * - Only renders when backend bootstrap truth resolves to a fully-authenticated MEMBER session.
+ * - Minimal but real authenticated workspace landing route for non-admin sessions.
+ * - Only renders when backend bootstrap truth resolves to a fully-authenticated
+ *   AGENT or USER session.
+ * - AGENT and USER share this shell today, but future operational modules must
+ *   use backend-resolved access to distinguish Agent operational scope from User
+ *   own/self-service behavior.
  */
 
 import { redirect } from 'next/navigation';
@@ -13,14 +17,14 @@ import { getRouteStateRedirectPath } from '@/shared/auth/redirects';
 
 export const dynamic = 'force-dynamic';
 
-export default async function MemberAppPage() {
+export default async function WorkspaceAppPage() {
   const bootstrap = await loadAuthBootstrap();
 
   if (!bootstrap.ok) {
     return (
       <main>
-        <h1>Hubins — Member app</h1>
-        <p>Bootstrap failed while loading the member landing route.</p>
+        <h1>Hubins — Workspace</h1>
+        <p>Bootstrap failed while loading the authenticated workspace route.</p>
         <p>
           <strong>Error:</strong> {bootstrap.error.message}
         </p>
@@ -30,15 +34,18 @@ export default async function MemberAppPage() {
 
   const routeState = bootstrap.routeState;
 
-  if (routeState.kind !== 'AUTHENTICATED_MEMBER') {
+  if (routeState.kind !== 'AUTHENTICATED_WORKSPACE') {
     redirect(getRouteStateRedirectPath(routeState));
   }
 
   return (
     <AuthenticatedShell
-      eyebrow="Hubins member workspace"
-      title="Member app"
-      subtitle="This is the minimal authenticated landing page for non-admin members after the root bootstrap gate and any required continuation are complete."
+      eyebrow="Hubins workspace"
+      title="Workspace"
+      subtitle={
+        'Authenticated workspace shell for User and Agent sessions. Agent and User share this shell ' +
+        'while operational modules are still deferred.'
+      }
       me={routeState.me}
     >
       <div style={{ display: 'grid', gap: '12px' }}>
@@ -46,9 +53,10 @@ export default async function MemberAppPage() {
           Authenticated handoff complete
         </h2>
         <p style={{ margin: 0, fontSize: '15px', lineHeight: 1.7, color: '#475569' }}>
-          The backend has already resolved tenant, session, and continuation truth for this member
-          session. This page intentionally stays a narrow authenticated landing surface while
-          broader member-facing product modules remain outside the current frontend scope.
+          The backend has already resolved tenant, session, continuation, and role truth for this
+          workspace session. This shared shell does not make Agent and User behavior the same;
+          future operational modules must use backend-resolved access before showing scoped data or
+          actions.
         </p>
       </div>
     </AuthenticatedShell>

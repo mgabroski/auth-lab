@@ -12,6 +12,7 @@ import type { DbExecutor } from '../../src/shared/db/db';
 type SignupResponseBody = {
   status: 'EMAIL_VERIFICATION_REQUIRED' | 'AUTHENTICATED';
   nextAction: string;
+  membership: { role: 'ADMIN' | 'AGENT' | 'USER' };
 };
 
 async function createTenant(opts: {
@@ -72,6 +73,7 @@ describe('POST /auth/signup', () => {
       expect(res.statusCode).toBe(201);
       const body = res.json<SignupResponseBody>();
       expect(body.status).toBe('EMAIL_VERIFICATION_REQUIRED');
+      expect(body.membership.role).toBe('USER');
 
       const cookie = extractCookie(res);
       expect(cookie).toContain('HttpOnly');

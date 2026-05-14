@@ -5,12 +5,15 @@
  * - Converts backend bootstrap truth into explicit frontend route categories.
  * - Keeps continuation/app-entry decisions centralized and easy to review.
  * - Splits fully-authenticated state by membership role so the root gate can hand off
- *   to the correct non-admin or admin landing route.
+ *   to the correct workspace or admin landing route.
  *
  * RULES:
  * - Route state must be derived from backend truth only (`/auth/config`, `/auth/me`).
  * - `nextAction` is authoritative.
  * - Do not infer auth continuation from scattered frontend heuristics.
+ * - AGENT and USER currently share the authenticated workspace shell; this does not
+ *   make them the same product behavior. Future modules must use backend-resolved
+ *   access to distinguish operational Agent access from User self-service access.
  *
  * Legacy compatibility note: `setupCompleted` still passes through the auth
  * config contract, but Settings progress is no longer owned here. `/admin` and
@@ -19,7 +22,8 @@
  * to AUTHENTICATED_ADMIN regardless of setup progress.
  */
 
-import type { ConfigResponse, MeResponse } from './contracts';
+import { normalizeMeResponse } from './contracts';
+import type { ConfigResponse, MeResponse, MeResponseWire } from './contracts';
 
 export type PublicRouteState = {
   kind: 'PUBLIC_ENTRY';
@@ -33,8 +37,8 @@ export type TenantUnavailableRouteState = {
   me: null;
 };
 
-export type AuthenticatedMemberRouteState = {
-  kind: 'AUTHENTICATED_MEMBER';
+export type AuthenticatedWorkspaceRouteState = {
+  kind: 'AUTHENTICATED_WORKSPACE';
   config: ConfigResponse;
   me: MeResponse;
 };
@@ -66,7 +70,7 @@ export type MfaVerifyRouteState = {
 export type AuthRouteState =
   | PublicRouteState
   | TenantUnavailableRouteState
-  | AuthenticatedMemberRouteState
+  | AuthenticatedWorkspaceRouteState
   | AuthenticatedAdminRouteState
   | EmailVerificationRouteState
   | MfaSetupRouteState
@@ -74,9 +78,10 @@ export type AuthRouteState =
 
 export function resolveAuthRouteState(input: {
   config: ConfigResponse;
-  me: MeResponse | null;
+  me: MeResponseWire | null;
 }): AuthRouteState {
-  const { config, me } = input;
+  const { config } = input;
+  const me = input.me ? normalizeMeResponse(input.me) : null;
 
   if (!config.tenant.isActive) {
     return {
@@ -121,7 +126,7 @@ export function resolveAuthRouteState(input: {
             me,
           }
         : {
-            kind: 'AUTHENTICATED_MEMBER',
+            kind: 'AUTHENTICATED_WORKSPACE',
             config,
             me,
           };

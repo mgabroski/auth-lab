@@ -29,10 +29,12 @@
  *
  * ROLE COMPATIBILITY NOTE:
  * - Backend canonical runtime roles are ADMIN / AGENT / USER.
- * - MEMBER remains accepted by the frontend as a legacy alias for USER while
- *   old mocks and the current invite UI are still compatible.
- * - AGENT currently routes as a non-admin shell user; Operational Access is not
- *   implemented in this frontend contract.
+ * - MEMBER is accepted only as a legacy wire/input alias and is normalized to USER
+ *   before route-state, session display, or auth result data reaches page code.
+ * - Current admin invite UI compatibility is intentionally preserved here until
+ *   the invite UI is updated in a later Agent-group-aware implementation.
+ * - AGENT currently routes as authenticated non-admin workspace user; Operational
+ *   Access is not implemented in this frontend contract.
  *
  * - AuthNextAction is NOT extended — workspace setup is tenant state, not auth
  *   continuation state. See ADR 0003 and the Settings bootstrap ADR.
@@ -42,8 +44,9 @@ export type AuthProvider = 'password' | 'google' | 'microsoft';
 export type PublicSsoProvider = Exclude<AuthProvider, 'password'>;
 export type CanonicalMembershipRole = 'ADMIN' | 'AGENT' | 'USER';
 export type LegacyMembershipRole = 'MEMBER';
-export type MembershipRole = CanonicalMembershipRole | LegacyMembershipRole;
-export type InviteRole = MembershipRole;
+export type MembershipRole = CanonicalMembershipRole;
+export type MembershipRoleInput = MembershipRole | LegacyMembershipRole;
+export type InviteRole = MembershipRoleInput;
 export type InviteStatus = 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
 
 export type AuthNextAction =
@@ -67,11 +70,20 @@ export type AuthMembership = {
   role: MembershipRole;
 };
 
+export type AuthMembershipWire = {
+  id: string;
+  role: MembershipRoleInput;
+};
+
 export type AuthResult = {
   status: AuthResultStatus;
   nextAction: AuthNextAction;
   user: AuthUser;
   membership: AuthMembership;
+};
+
+export type AuthResultWire = Omit<AuthResult, 'membership'> & {
+  membership: AuthMembershipWire;
 };
 
 export type MeResponse = {
@@ -87,6 +99,10 @@ export type MeResponse = {
     emailVerified: boolean;
   };
   nextAction: AuthNextAction;
+};
+
+export type MeResponseWire = Omit<MeResponse, 'membership'> & {
+  membership: AuthMembershipWire;
 };
 
 export type ConfigResponse = {
@@ -241,3 +257,28 @@ export type BackendErrorResponse = {
     message: string;
   };
 };
+
+export function normalizeMembershipRole(role: MembershipRoleInput): MembershipRole {
+  return role === 'MEMBER' ? 'USER' : role;
+}
+
+export function normalizeAuthMembership(membership: AuthMembershipWire): AuthMembership {
+  return {
+    ...membership,
+    role: normalizeMembershipRole(membership.role),
+  };
+}
+
+export function normalizeAuthResult(result: AuthResultWire): AuthResult {
+  return {
+    ...result,
+    membership: normalizeAuthMembership(result.membership),
+  };
+}
+
+export function normalizeMeResponse(response: MeResponseWire): MeResponse {
+  return {
+    ...response,
+    membership: normalizeAuthMembership(response.membership),
+  };
+}

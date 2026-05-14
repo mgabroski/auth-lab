@@ -18,6 +18,7 @@ import type {
   AcceptInviteRequest,
   AcceptInviteResponse,
   AuthResult,
+  AuthResultWire,
   CancelAdminInviteResponse,
   ConfigResponse,
   CreateAdminInviteRequest,
@@ -29,6 +30,7 @@ import type {
   LoginRequest,
   LogoutResponse,
   MeResponse,
+  MeResponseWire,
   MfaCodeRequest,
   MfaRecoverRequest,
   MfaSetupResponse,
@@ -42,6 +44,7 @@ import type {
   VerifyEmailRequest,
   VerifyEmailResponse,
 } from './contracts';
+import { normalizeAuthResult, normalizeMeResponse } from './contracts';
 
 export type BrowserAuthSuccess<T> = {
   ok: true;
@@ -80,6 +83,20 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<Browser
   };
 }
 
+function mapBrowserAuthResult<TInput, TOutput>(
+  result: BrowserAuthResult<TInput>,
+  mapper: (input: TInput) => TOutput,
+): BrowserAuthResult<TOutput> {
+  if (!result.ok) {
+    return result;
+  }
+
+  return {
+    ...result,
+    data: mapper(result.data),
+  };
+}
+
 function jsonRequest<T>(
   path: string,
   method: 'GET' | 'POST' | 'DELETE',
@@ -95,8 +112,9 @@ export function getAuthConfig(): Promise<BrowserAuthResult<ConfigResponse>> {
   return jsonRequest<ConfigResponse>('/auth/config', 'GET');
 }
 
-export function getAuthMe(): Promise<BrowserAuthResult<MeResponse>> {
-  return jsonRequest<MeResponse>('/auth/me', 'GET');
+export async function getAuthMe(): Promise<BrowserAuthResult<MeResponse>> {
+  const result = await jsonRequest<MeResponseWire>('/auth/me', 'GET');
+  return mapBrowserAuthResult(result, normalizeMeResponse);
 }
 
 export function acceptInvite(
@@ -105,16 +123,21 @@ export function acceptInvite(
   return jsonRequest<AcceptInviteResponse>('/auth/invites/accept', 'POST', input);
 }
 
-export function login(input: LoginRequest): Promise<BrowserAuthResult<AuthResult>> {
-  return jsonRequest<AuthResult>('/auth/login', 'POST', input);
+export async function login(input: LoginRequest): Promise<BrowserAuthResult<AuthResult>> {
+  const result = await jsonRequest<AuthResultWire>('/auth/login', 'POST', input);
+  return mapBrowserAuthResult(result, normalizeAuthResult);
 }
 
-export function registerWithInvite(input: RegisterRequest): Promise<BrowserAuthResult<AuthResult>> {
-  return jsonRequest<AuthResult>('/auth/register', 'POST', input);
+export async function registerWithInvite(
+  input: RegisterRequest,
+): Promise<BrowserAuthResult<AuthResult>> {
+  const result = await jsonRequest<AuthResultWire>('/auth/register', 'POST', input);
+  return mapBrowserAuthResult(result, normalizeAuthResult);
 }
 
-export function signup(input: SignupRequest): Promise<BrowserAuthResult<AuthResult>> {
-  return jsonRequest<AuthResult>('/auth/signup', 'POST', input);
+export async function signup(input: SignupRequest): Promise<BrowserAuthResult<AuthResult>> {
+  const result = await jsonRequest<AuthResultWire>('/auth/signup', 'POST', input);
+  return mapBrowserAuthResult(result, normalizeAuthResult);
 }
 
 export function requestPasswordReset(

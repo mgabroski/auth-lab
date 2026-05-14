@@ -21,7 +21,8 @@
 import { ssrFetch } from '@/shared/ssr-api-client';
 import { serverLogger } from '@/shared/server/logger';
 import { ApiHttpError, readApiError } from './api-errors';
-import type { ConfigResponse, MeResponse } from './contracts';
+import type { ConfigResponse, MeResponse, MeResponseWire } from './contracts';
+import { normalizeMeResponse } from './contracts';
 import { resolveAuthRouteState, type AuthRouteState } from './route-state';
 
 export type AuthBootstrapSuccess = {
@@ -107,7 +108,8 @@ async function fetchMe(): Promise<MeResponse | null> {
       throw error;
     }
 
-    return (await response.json()) as MeResponse;
+    const body = (await response.json()) as MeResponseWire;
+    return normalizeMeResponse(body);
   } catch (error) {
     if (!(error instanceof ApiHttpError)) {
       serverLogger.error('auth.bootstrap.me_transport_failed', {
