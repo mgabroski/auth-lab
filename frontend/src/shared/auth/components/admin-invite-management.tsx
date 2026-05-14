@@ -4,17 +4,26 @@
  * frontend/src/shared/auth/components/admin-invite-management.tsx
  *
  * WHY:
- * - Implements the browser-side admin invite management surface for Phase 7.
+ * - Implements the browser-side admin invite management surface.
  * - Uses the real admin invite backend endpoints through the same-origin browser API wrapper.
- * - Keeps create/list/resend/cancel behavior together in one explicit client component.
+ * - Wires Admin / Agent / User provisioning language to the canonical backend invite contract.
  *
  * RULES:
  * - This component is client-only because it reacts to admin actions after hydration.
  * - Access control is not decided here; the server page must gate entry with loadAuthBootstrap().
- * - Invite statuses shown here come from backend truth; do not infer or synthesize them.
+ * - Invite statuses and levels shown here come from backend truth, normalized at the API boundary.
+ * - Agent group selection is provisioning-only. It does not grant Operational Access.
  */
 
-import { useEffect, useState, type ChangeEvent, type CSSProperties, type FormEvent } from 'react';
+import Link from 'next/link';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type FormEvent,
+} from 'react';
 import {
   cancelAdminInvite,
   createAdminInvite,
@@ -22,11 +31,16 @@ import {
   resendAdminInvite,
 } from '@/shared/auth/browser-api';
 import type {
+  CreateAdminInviteRequest,
   InviteRole,
+  InviteRoleInput,
   InviteStatus,
   InviteSummary,
   ListAdminInvitesResponse,
 } from '@/shared/auth/contracts';
+import { normalizeMembershipRole } from '@/shared/auth/contracts';
+import { fetchPeopleTeamGroupsBrowser } from '@/shared/people-teams/browser-api';
+import type { PeopleTeamGroup } from '@/shared/people-teams/contracts';
 import { AuthErrorBanner } from './auth-error-banner';
 import {
   AuthNote,
@@ -39,6 +53,11 @@ import {
 } from './auth-form-ui';
 import { AuthSuccessBanner } from './auth-success-banner';
 
+const _jsxRuntimeReact = React;
+
+const PEOPLE_TEAMS_ROUTE = '/admin/settings/people-teams';
+const PAGE_SIZE = 20;
+
 const cardStyle: CSSProperties = {
   borderRadius: '18px',
   border: '1px solid rgba(148, 163, 184, 0.22)',
@@ -48,31 +67,24 @@ const cardStyle: CSSProperties = {
   gap: '16px',
 };
 
-const sectionHeaderStyle: CSSProperties = {
-  display: 'grid',
-  gap: '6px',
-};
-
+const sectionHeaderStyle: CSSProperties = { display: 'grid', gap: '6px' };
 const sectionTitleStyle: CSSProperties = {
   margin: 0,
   fontSize: '20px',
   lineHeight: 1.2,
   fontWeight: 700,
 };
-
 const sectionDescriptionStyle: CSSProperties = {
   margin: 0,
   fontSize: '14px',
   lineHeight: 1.6,
   color: '#475569',
 };
-
 const formGridStyle: CSSProperties = {
   display: 'grid',
   gap: '14px',
   gridTemplateColumns: 'minmax(0, 2fr) minmax(180px, 1fr)',
 };
-
 const selectStyle: CSSProperties = {
   width: '100%',
   minHeight: '46px',
@@ -86,7 +98,6 @@ const selectStyle: CSSProperties = {
   outline: 'none',
   boxSizing: 'border-box',
 };
-
 const controlsRowStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -94,12 +105,7 @@ const controlsRowStyle: CSSProperties = {
   gap: '16px',
   flexWrap: 'wrap',
 };
-
-const inviteListStyle: CSSProperties = {
-  display: 'grid',
-  gap: '12px',
-};
-
+const inviteListStyle: CSSProperties = { display: 'grid', gap: '12px' };
 const inviteCardStyle: CSSProperties = {
   borderRadius: '16px',
   border: '1px solid rgba(148, 163, 184, 0.22)',
@@ -108,7 +114,6 @@ const inviteCardStyle: CSSProperties = {
   display: 'grid',
   gap: '14px',
 };
-
 const inviteHeaderStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -116,7 +121,6 @@ const inviteHeaderStyle: CSSProperties = {
   gap: '12px',
   flexWrap: 'wrap',
 };
-
 const inviteEmailStyle: CSSProperties = {
   margin: 0,
   fontSize: '16px',
@@ -125,20 +129,17 @@ const inviteEmailStyle: CSSProperties = {
   color: '#0f172a',
   wordBreak: 'break-word',
 };
-
 const inviteMetaStyle: CSSProperties = {
   margin: 0,
   fontSize: '13px',
   lineHeight: 1.6,
   color: '#64748b',
 };
-
 const detailGridStyle: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
   gap: '12px',
 };
-
 const detailLabelStyle: CSSProperties = {
   margin: 0,
   fontSize: '12px',
@@ -147,20 +148,13 @@ const detailLabelStyle: CSSProperties = {
   textTransform: 'uppercase',
   color: '#64748b',
 };
-
 const detailValueStyle: CSSProperties = {
   margin: '4px 0 0',
   fontSize: '14px',
   lineHeight: 1.5,
   color: '#0f172a',
 };
-
-const buttonRowStyle: CSSProperties = {
-  display: 'flex',
-  gap: '10px',
-  flexWrap: 'wrap',
-};
-
+const buttonRowStyle: CSSProperties = { display: 'flex', gap: '10px', flexWrap: 'wrap' };
 const paginationRowStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -168,13 +162,30 @@ const paginationRowStyle: CSSProperties = {
   gap: '12px',
   flexWrap: 'wrap',
 };
-
 const helperTextStyle: CSSProperties = {
   margin: 0,
   fontSize: '13px',
   lineHeight: 1.6,
   color: '#475569',
 };
+const selectorCardStyle: CSSProperties = {
+  borderRadius: '16px',
+  border: '1px solid rgba(14, 165, 233, 0.22)',
+  backgroundColor: 'rgba(240, 249, 255, 0.72)',
+  padding: '16px',
+  display: 'grid',
+  gap: '12px',
+};
+const checkboxListStyle: CSSProperties = { display: 'grid', gap: '8px' };
+const checkboxItemStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px',
+  fontSize: '14px',
+  lineHeight: 1.5,
+  color: '#0f172a',
+};
+const linkStyle: CSSProperties = { color: '#0f172a', fontWeight: 700 };
 
 const statusPillStyles: Record<InviteStatus, CSSProperties> = {
   PENDING: {
@@ -208,50 +219,36 @@ const statusPillBaseStyle: CSSProperties = {
   textTransform: 'uppercase',
 };
 
-const PAGE_SIZE = 20;
+export const INVITE_LEVEL_OPTIONS: ReadonlyArray<{ value: InviteRole; label: string }> = [
+  { value: 'USER', label: 'User' },
+  { value: 'AGENT', label: 'Agent' },
+  { value: 'ADMIN', label: 'Admin' },
+];
 
-type InviteFilterValue = 'ALL' | InviteStatus;
+export type InviteFilterValue = 'ALL' | InviteStatus;
+export type InviteDraft = { email: string; level: InviteRole; selectedAgentGroupIds: string[] };
 
-type InviteListState = {
-  loading: boolean;
-  error: unknown;
-  data: ListAdminInvitesResponse | null;
-};
+type InviteListState = { loading: boolean; error: unknown; data: ListAdminInvitesResponse | null };
+type AgentGroupsState = { loading: boolean; error: unknown; groups: PeopleTeamGroup[] };
 
 function formatDateTime(value: string | null): string {
-  if (!value) {
-    return 'Not available';
-  }
-
+  if (!value) return 'Not available';
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
+    date,
+  );
 }
 
 function getVisibleRange(data: ListAdminInvitesResponse | null): string {
-  if (!data || data.total === 0 || data.invites.length === 0) {
-    return 'Showing 0 invites';
-  }
-
-  const start = data.offset + 1;
-  const end = data.offset + data.invites.length;
-
-  return `Showing ${start}-${end} of ${data.total} invites`;
+  if (!data || data.total === 0 || data.invites.length === 0) return 'Showing 0 invites';
+  return `Showing ${data.offset + 1}-${data.offset + data.invites.length} of ${data.total} invites`;
 }
 
 function getEmptyStateCopy(filter: InviteFilterValue): string {
-  if (filter === 'ALL') {
-    return 'No invites exist for this workspace yet.';
-  }
-
-  return `No ${filter.toLowerCase()} invites match this filter right now.`;
+  return filter === 'ALL'
+    ? 'No invites exist for this workspace yet.'
+    : `No ${filter.toLowerCase()} invites match this filter right now.`;
 }
 
 function getInviteStatusDetail(invite: InviteSummary): string {
@@ -281,80 +278,215 @@ function canCancelInvite(invite: InviteSummary): boolean {
   return invite.status === 'PENDING';
 }
 
+export function getInviteLevelLabel(level: InviteRoleInput): string {
+  const normalized = normalizeMembershipRole(level);
+  switch (normalized) {
+    case 'USER':
+      return 'User';
+    case 'AGENT':
+      return 'Agent';
+    case 'ADMIN':
+      return 'Admin';
+    default: {
+      const exhaustiveCheck: never = normalized;
+      return String(exhaustiveCheck);
+    }
+  }
+}
+
+export function isSelectableAgentGroup(group: PeopleTeamGroup): boolean {
+  return group.level === 'AGENT' && group.status === 'ACTIVE';
+}
+
+export function getSelectableAgentGroups(groups: readonly PeopleTeamGroup[]): PeopleTeamGroup[] {
+  return groups.filter(isSelectableAgentGroup);
+}
+
+export function shouldShowAgentGroupSelector(level: InviteRole): boolean {
+  return level === 'AGENT';
+}
+
+export function validateInviteDraft(draft: InviteDraft): string | null {
+  if (draft.level === 'AGENT' && draft.selectedAgentGroupIds.length === 0) {
+    return 'Select at least one active Agent group before inviting an Agent.';
+  }
+  return null;
+}
+
+export function getSelectedAgentGroupIdsForLevel(
+  nextLevel: InviteRole,
+  selectedAgentGroupIds: readonly string[],
+): string[] {
+  return nextLevel === 'AGENT' ? [...selectedAgentGroupIds] : [];
+}
+
+export function buildCreateInviteRequest(draft: InviteDraft): CreateAdminInviteRequest {
+  if (draft.level !== 'AGENT') return { email: draft.email, role: draft.level };
+  return { email: draft.email, role: 'AGENT', agentGroupIds: draft.selectedAgentGroupIds };
+}
+
+type AgentGroupSelectorProps = {
+  loading: boolean;
+  error: unknown;
+  groups: PeopleTeamGroup[];
+  selectedGroupIds: string[];
+  disabled: boolean;
+  onToggleGroup: (groupId: string) => void;
+};
+
+export function AdminInviteAgentGroupSelector({
+  loading,
+  error,
+  groups,
+  selectedGroupIds,
+  disabled,
+  onToggleGroup,
+}: AgentGroupSelectorProps) {
+  const selectableGroups = getSelectableAgentGroups(groups);
+  const selectedGroups = selectableGroups.filter((group) => selectedGroupIds.includes(group.id));
+
+  return (
+    <div style={selectorCardStyle}>
+      <div style={sectionHeaderStyle}>
+        <p style={{ ...detailLabelStyle, color: '#0369a1' }}>Agent groups</p>
+        <p style={helperTextStyle}>
+          Agent invite group selection records provisioning context only. It does not grant
+          Operational Access.
+        </p>
+      </div>
+
+      {loading ? <AuthNote>Loading active Agent groups from People &amp; Teams…</AuthNote> : null}
+      {error ? (
+        <AuthErrorBanner error={error} fallbackMessage="Unable to load Agent groups." />
+      ) : null}
+
+      {!loading && !error && selectableGroups.length === 0 ? (
+        <AuthNote>
+          Create an active Agent group in People &amp; Teams before inviting an Agent.{' '}
+          <Link href={PEOPLE_TEAMS_ROUTE} style={linkStyle}>
+            Open People &amp; Teams
+          </Link>
+        </AuthNote>
+      ) : null}
+
+      {!loading && !error && selectableGroups.length > 0 ? (
+        <div style={checkboxListStyle}>
+          {selectableGroups.map((group) => (
+            <label key={group.id} style={checkboxItemStyle}>
+              <input
+                type="checkbox"
+                checked={selectedGroupIds.includes(group.id)}
+                disabled={disabled}
+                onChange={() => onToggleGroup(group.id)}
+              />
+              <span>{group.name}</span>
+            </label>
+          ))}
+        </div>
+      ) : null}
+
+      {selectedGroups.length > 0 ? (
+        <p style={helperTextStyle}>
+          <strong>Selected Agent groups:</strong>{' '}
+          {selectedGroups.map((group) => group.name).join(', ')}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function getAgentGroupSummary(invite: InviteSummary): string {
+  if (invite.role !== 'AGENT') return 'Not applicable';
+  const groups = invite.agentGroups ?? [];
+  if (groups.length === 0) return 'No Agent groups returned';
+  return `${groups.map((group) => group.name).join(', ')} (provisioning context only)`;
+}
+
 export function AdminInviteManagement() {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<InviteRole>('MEMBER');
+  const [level, setLevel] = useState<InviteRole>('USER');
+  const [selectedAgentGroupIds, setSelectedAgentGroupIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<InviteFilterValue>('ALL');
   const [offset, setOffset] = useState(0);
   const [reloadToken, setReloadToken] = useState(0);
-
   const [createPending, setCreatePending] = useState(false);
   const [createError, setCreateError] = useState<unknown>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
   const [listState, setListState] = useState<InviteListState>({
     loading: true,
     error: null,
     data: null,
   });
-
+  const [agentGroupsState, setAgentGroupsState] = useState<AgentGroupsState>({
+    loading: true,
+    error: null,
+    groups: [],
+  });
   const [resendingInviteId, setResendingInviteId] = useState<string | null>(null);
   const [cancellingInviteId, setCancellingInviteId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<unknown>(null);
 
+  const selectableAgentGroups = useMemo(
+    () => getSelectableAgentGroups(agentGroupsState.groups),
+    [agentGroupsState.groups],
+  );
+
   useEffect(() => {
     let isActive = true;
-
     const loadInvites = async (): Promise<void> => {
-      setListState((current) => ({
-        loading: true,
-        error: null,
-        data: current.data,
-      }));
-
+      setListState((current) => ({ loading: true, error: null, data: current.data }));
       const result = await listAdminInvites({
         limit: PAGE_SIZE,
         offset,
         status: filter === 'ALL' ? undefined : filter,
       });
-
-      if (!isActive) {
-        return;
-      }
-
+      if (!isActive) return;
       if (!result.ok) {
-        setListState({
-          loading: false,
-          error: result.error,
-          data: null,
-        });
+        setListState({ loading: false, error: result.error, data: null });
         return;
       }
-
-      setListState({
-        loading: false,
-        error: null,
-        data: result.data,
-      });
+      setListState({ loading: false, error: null, data: result.data });
     };
-
     void loadInvites();
-
     return () => {
       isActive = false;
     };
   }, [filter, offset, reloadToken]);
 
+  useEffect(() => {
+    let isActive = true;
+    const loadGroups = async (): Promise<void> => {
+      setAgentGroupsState((current) => ({ ...current, loading: true, error: null }));
+      const result = await fetchPeopleTeamGroupsBrowser();
+      if (!isActive) return;
+      if (!result.ok) {
+        setAgentGroupsState({ loading: false, error: result.error, groups: [] });
+        return;
+      }
+      setAgentGroupsState({ loading: false, error: null, groups: result.data.groups });
+    };
+    void loadGroups();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const handleCreateInvite = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
-
     setCreatePending(true);
     setCreateError(null);
     setActionError(null);
     setSuccessMessage(null);
 
-    const result = await createAdminInvite({ email, role });
+    const draft: InviteDraft = { email, level, selectedAgentGroupIds };
+    const validationMessage = validateInviteDraft(draft);
+    if (validationMessage) {
+      setCreateError(validationMessage);
+      setCreatePending(false);
+      return;
+    }
 
+    const result = await createAdminInvite(buildCreateInviteRequest(draft));
     if (!result.ok) {
       setCreateError(result.error);
       setCreatePending(false);
@@ -362,12 +494,9 @@ export function AdminInviteManagement() {
     }
 
     setEmail('');
-    setRole('MEMBER');
-
-    if (filter !== 'ALL' && filter !== 'PENDING') {
-      setFilter('PENDING');
-    }
-
+    setLevel('USER');
+    setSelectedAgentGroupIds([]);
+    if (filter !== 'ALL' && filter !== 'PENDING') setFilter('PENDING');
     setOffset(0);
     setReloadToken((value) => value + 1);
     setSuccessMessage(`Invite created for ${result.data.invite.email}.`);
@@ -387,8 +516,18 @@ export function AdminInviteManagement() {
     setSuccessMessage(null);
   };
 
-  const handleRoleChange = (event: ChangeEvent<HTMLSelectElement>): void => {
-    setRole(event.target.value as InviteRole);
+  const handleLevelChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    const nextLevel = event.target.value as InviteRole;
+    setLevel(nextLevel);
+    setCreateError(null);
+    setSelectedAgentGroupIds((current) => getSelectedAgentGroupIdsForLevel(nextLevel, current));
+  };
+
+  const handleToggleAgentGroup = (groupId: string): void => {
+    if (!selectableAgentGroups.some((group) => group.id === groupId)) return;
+    setSelectedAgentGroupIds((current) =>
+      current.includes(groupId) ? current.filter((id) => id !== groupId) : [...current, groupId],
+    );
   };
 
   const handleResendInvite = async (invite: InviteSummary): Promise<void> => {
@@ -396,19 +535,13 @@ export function AdminInviteManagement() {
     setActionError(null);
     setCreateError(null);
     setSuccessMessage(null);
-
     const result = await resendAdminInvite(invite.id);
-
     if (!result.ok) {
       setActionError(result.error);
       setResendingInviteId(null);
       return;
     }
-
-    if (filter !== 'ALL' && filter !== 'PENDING') {
-      setFilter('PENDING');
-    }
-
+    if (filter !== 'ALL' && filter !== 'PENDING') setFilter('PENDING');
     setOffset(0);
     setReloadToken((value) => value + 1);
     setSuccessMessage(
@@ -422,20 +555,16 @@ export function AdminInviteManagement() {
     setActionError(null);
     setCreateError(null);
     setSuccessMessage(null);
-
     const result = await cancelAdminInvite(invite.id);
-
     if (!result.ok) {
       setActionError(result.error);
       setCancellingInviteId(null);
       return;
     }
-
     const nextOffset =
       listState.data && listState.data.invites.length === 1 && offset > 0
         ? Math.max(0, offset - PAGE_SIZE)
         : offset;
-
     setOffset(nextOffset);
     setReloadToken((value) => value + 1);
     setSuccessMessage(`Invite for ${invite.email} cancelled.`);
@@ -445,6 +574,8 @@ export function AdminInviteManagement() {
   const listData = listState.data;
   const hasPreviousPage = offset > 0;
   const hasNextPage = listData ? offset + listData.invites.length < listData.total : false;
+  const disableAgentSubmit =
+    level === 'AGENT' && (agentGroupsState.loading || selectableAgentGroups.length === 0);
 
   return (
     <div style={{ display: 'grid', gap: '20px' }}>
@@ -452,14 +583,15 @@ export function AdminInviteManagement() {
         <div style={sectionHeaderStyle}>
           <h2 style={sectionTitleStyle}>Create invite</h2>
           <p style={sectionDescriptionStyle}>
-            Send a new workspace invitation with the real backend contract. Admin invites will
-            require MFA after acceptance; member invites continue into the member app.
+            Send a new workspace invitation with the real backend contract. Admin invites require
+            MFA after acceptance; User and Agent invites continue into the shared workspace shell.
           </p>
         </div>
 
         <AuthNote>
           Invite rules are backend-owned: invites expire after 7 days, each link is one-time use,
-          and resending replaces the previous link.
+          and resending replaces the previous link. Agent group selection is provisioning-only and
+          does not grant Operational Access.
         </AuthNote>
 
         <AuthSuccessBanner title="Invite updated" message={successMessage} />
@@ -488,22 +620,36 @@ export function AdminInviteManagement() {
                 />
               </FormField>
 
-              <FormField label="Role" htmlFor="admin-invite-role">
+              <FormField label="Level" htmlFor="admin-invite-level">
                 <select
-                  id="admin-invite-role"
-                  name="role"
-                  value={role}
+                  id="admin-invite-level"
+                  name="level"
+                  value={level}
                   disabled={createPending}
-                  onChange={handleRoleChange}
+                  onChange={handleLevelChange}
                   style={selectStyle}
                 >
-                  <option value="MEMBER">Member</option>
-                  <option value="ADMIN">Admin</option>
+                  {INVITE_LEVEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </FormField>
             </div>
 
-            <SubmitButton disabled={createPending}>
+            {shouldShowAgentGroupSelector(level) ? (
+              <AdminInviteAgentGroupSelector
+                loading={agentGroupsState.loading}
+                error={agentGroupsState.error}
+                groups={agentGroupsState.groups}
+                selectedGroupIds={selectedAgentGroupIds}
+                disabled={createPending}
+                onToggleGroup={handleToggleAgentGroup}
+              />
+            ) : null}
+
+            <SubmitButton disabled={createPending || disableAgentSubmit}>
               {createPending ? 'Creating invite…' : 'Create invite'}
             </SubmitButton>
           </FormStack>
@@ -544,15 +690,12 @@ export function AdminInviteManagement() {
         </div>
 
         <p style={helperTextStyle}>{getVisibleRange(listData)}</p>
-
         {listState.loading && !listData ? (
           <AuthNote>Loading invites from the workspace admin endpoints…</AuthNote>
         ) : null}
-
         {listState.error ? (
           <AuthErrorBanner error={listState.error} fallbackMessage="Unable to load invites." />
         ) : null}
-
         {!listState.loading && !listState.error && listData && listData.invites.length === 0 ? (
           <AuthNote>{getEmptyStateCopy(filter)}</AuthNote>
         ) : null}
@@ -563,7 +706,6 @@ export function AdminInviteManagement() {
               const resendPending = resendingInviteId === invite.id;
               const cancelPending = cancellingInviteId === invite.id;
               const busy = resendPending || cancelPending;
-
               return (
                 <article key={invite.id} style={inviteCardStyle}>
                   <div style={inviteHeaderStyle}>
@@ -571,7 +713,6 @@ export function AdminInviteManagement() {
                       <p style={inviteEmailStyle}>{invite.email}</p>
                       <p style={inviteMetaStyle}>{getInviteStatusDetail(invite)}</p>
                     </div>
-
                     <span style={{ ...statusPillBaseStyle, ...statusPillStyles[invite.status] }}>
                       {invite.status}
                     </span>
@@ -579,8 +720,12 @@ export function AdminInviteManagement() {
 
                   <div style={detailGridStyle}>
                     <div>
-                      <p style={detailLabelStyle}>Role</p>
-                      <p style={detailValueStyle}>{invite.role}</p>
+                      <p style={detailLabelStyle}>Level</p>
+                      <p style={detailValueStyle}>{getInviteLevelLabel(invite.role)}</p>
+                    </div>
+                    <div>
+                      <p style={detailLabelStyle}>Agent groups</p>
+                      <p style={detailValueStyle}>{getAgentGroupSummary(invite)}</p>
                     </div>
                     <div>
                       <p style={detailLabelStyle}>Created</p>
@@ -609,7 +754,6 @@ export function AdminInviteManagement() {
                         {resendPending ? 'Resending…' : 'Resend invite'}
                       </SecondaryButton>
                     ) : null}
-
                     {canCancelInvite(invite) ? (
                       <SecondaryButton
                         disabled={busy}
@@ -632,7 +776,6 @@ export function AdminInviteManagement() {
             Pending invites can be resent or cancelled. Accepted, cancelled, and expired invites are
             shown as read-only history.
           </p>
-
           <FormRow
             left={
               <SecondaryButton

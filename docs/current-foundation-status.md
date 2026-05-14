@@ -82,8 +82,10 @@ Current shipped truth remains:
 - `AGENT` is recognized as a membership level, but Agent operational access is not implemented yet
 - AGENT and USER are distinct membership levels, but both currently land in the authenticated workspace shell at `/app`
 - the shared `/app` shell does not make AGENT and USER equivalent product behaviors
-- admin invites support canonical `ADMIN / AGENT / USER`; legacy `MEMBER` invite input normalizes to `USER`
+- admin invite API and UI support canonical `ADMIN / AGENT / USER`; legacy `MEMBER` invite input/read compatibility normalizes to `USER`
+- the admin invite form now uses `Level` with visible `User / Agent / Admin` choices and does not expose `MEMBER` as a selectable option
 - `AGENT` admin invites require at least one currently active People & Teams Agent group
+- the admin invite form requires active Agent group selection for Agent invites and links to People & Teams when no active Agent groups exist
 - Agent invite group assignment is provisioning-only: successful invite activation adds the user to the selected Agent group(s), but creates no Operational Access grants
 - `/admin/settings/access` is the current **Access & Security** Settings page
 - the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
@@ -108,7 +110,7 @@ Accepted future target truth is:
 - User has own/self-service data access by default
 - Agent receives operational access through Agent Groups and rare Person Exceptions
 - public signup and HRIS import map to future `User` in the target model
-- admin invitation already supports Admin / Agent / User at the backend contract level, and Agent invite activation requires at least one still-active Agent Group
+- admin invitation supports Admin / Agent / User in the backend contract and admin invite UI, and Agent invite activation requires at least one still-active Agent Group
 - reusable tenant-level groups combine with explicit Where/scope instead of creating employer/location-specific group explosions
 - MVP operational grants go through Agent Groups, with Person Exceptions as the rare direct-user exception path
 - User Groups do not receive operational grants in MVP, and Admin Groups do not restrict Admin access

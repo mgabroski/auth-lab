@@ -31,8 +31,9 @@
  * - Backend canonical runtime roles are ADMIN / AGENT / USER.
  * - MEMBER is accepted only as a legacy wire/input alias and is normalized to USER
  *   before route-state, session display, or auth result data reaches page code.
- * - Current admin invite UI compatibility is intentionally preserved here until
- *   the invite UI is updated in a later Agent-group-aware implementation.
+ * - Admin invite create requests now send only canonical ADMIN / AGENT / USER.
+ * - Invite responses still normalize legacy MEMBER to USER defensively at the
+ *   browser API boundary while the compatibility window exists.
  * - AGENT currently routes as authenticated non-admin workspace user; Operational
  *   Access is not implemented in this frontend contract.
  *
@@ -46,7 +47,8 @@ export type CanonicalMembershipRole = 'ADMIN' | 'AGENT' | 'USER';
 export type LegacyMembershipRole = 'MEMBER';
 export type MembershipRole = CanonicalMembershipRole;
 export type MembershipRoleInput = MembershipRole | LegacyMembershipRole;
-export type InviteRole = MembershipRoleInput;
+export type InviteRole = MembershipRole;
+export type InviteRoleInput = InviteRole | LegacyMembershipRole;
 export type InviteStatus = 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
 
 export type AgentInviteGroupSummary = {
@@ -149,6 +151,10 @@ export type InviteSummary = {
   agentGroups?: AgentInviteGroupSummary[];
 };
 
+export type InviteSummaryWire = Omit<InviteSummary, 'role'> & {
+  role: InviteRoleInput;
+};
+
 export type AcceptInviteRequest = {
   token: string;
 };
@@ -239,6 +245,10 @@ export type CreateAdminInviteResponse = {
   invite: InviteSummary;
 };
 
+export type CreateAdminInviteResponseWire = {
+  invite: InviteSummaryWire;
+};
+
 export type ListAdminInvitesRequest = {
   limit?: number;
   offset?: number;
@@ -252,8 +262,16 @@ export type ListAdminInvitesResponse = {
   offset: number;
 };
 
+export type ListAdminInvitesResponseWire = Omit<ListAdminInvitesResponse, 'invites'> & {
+  invites: InviteSummaryWire[];
+};
+
 export type ResendAdminInviteResponse = {
   invite: InviteSummary;
+};
+
+export type ResendAdminInviteResponseWire = {
+  invite: InviteSummaryWire;
 };
 
 export type CancelAdminInviteResponse = {
@@ -289,5 +307,37 @@ export function normalizeMeResponse(response: MeResponseWire): MeResponse {
   return {
     ...response,
     membership: normalizeAuthMembership(response.membership),
+  };
+}
+
+export function normalizeInviteSummary(invite: InviteSummaryWire): InviteSummary {
+  return {
+    ...invite,
+    role: normalizeMembershipRole(invite.role),
+  };
+}
+
+export function normalizeCreateAdminInviteResponse(
+  response: CreateAdminInviteResponseWire,
+): CreateAdminInviteResponse {
+  return {
+    invite: normalizeInviteSummary(response.invite),
+  };
+}
+
+export function normalizeListAdminInvitesResponse(
+  response: ListAdminInvitesResponseWire,
+): ListAdminInvitesResponse {
+  return {
+    ...response,
+    invites: response.invites.map(normalizeInviteSummary),
+  };
+}
+
+export function normalizeResendAdminInviteResponse(
+  response: ResendAdminInviteResponseWire,
+): ResendAdminInviteResponse {
+  return {
+    invite: normalizeInviteSummary(response.invite),
   };
 }

@@ -23,10 +23,12 @@ import type {
   ConfigResponse,
   CreateAdminInviteRequest,
   CreateAdminInviteResponse,
+  CreateAdminInviteResponseWire,
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   ListAdminInvitesRequest,
   ListAdminInvitesResponse,
+  ListAdminInvitesResponseWire,
   LoginRequest,
   LogoutResponse,
   MeResponse,
@@ -37,6 +39,7 @@ import type {
   MfaVerifyResponse,
   RegisterRequest,
   ResendAdminInviteResponse,
+  ResendAdminInviteResponseWire,
   ResendVerificationResponse,
   ResetPasswordRequest,
   ResetPasswordResponse,
@@ -44,7 +47,13 @@ import type {
   VerifyEmailRequest,
   VerifyEmailResponse,
 } from './contracts';
-import { normalizeAuthResult, normalizeMeResponse } from './contracts';
+import {
+  normalizeAuthResult,
+  normalizeCreateAdminInviteResponse,
+  normalizeListAdminInvitesResponse,
+  normalizeMeResponse,
+  normalizeResendAdminInviteResponse,
+} from './contracts';
 
 export type BrowserAuthSuccess<T> = {
   ok: true;
@@ -186,13 +195,14 @@ export function logout(): Promise<BrowserAuthResult<LogoutResponse>> {
   return jsonRequest<LogoutResponse>('/auth/logout', 'POST');
 }
 
-export function createAdminInvite(
+export async function createAdminInvite(
   input: CreateAdminInviteRequest,
 ): Promise<BrowserAuthResult<CreateAdminInviteResponse>> {
-  return jsonRequest<CreateAdminInviteResponse>('/admin/invites', 'POST', input);
+  const result = await jsonRequest<CreateAdminInviteResponseWire>('/admin/invites', 'POST', input);
+  return mapBrowserAuthResult(result, normalizeCreateAdminInviteResponse);
 }
 
-export function listAdminInvites(
+export async function listAdminInvites(
   input: ListAdminInvitesRequest,
 ): Promise<BrowserAuthResult<ListAdminInvitesResponse>> {
   const params = new URLSearchParams();
@@ -212,13 +222,18 @@ export function listAdminInvites(
   const query = params.toString();
   const path = query ? `/admin/invites?${query}` : '/admin/invites';
 
-  return jsonRequest<ListAdminInvitesResponse>(path, 'GET');
+  const result = await jsonRequest<ListAdminInvitesResponseWire>(path, 'GET');
+  return mapBrowserAuthResult(result, normalizeListAdminInvitesResponse);
 }
 
-export function resendAdminInvite(
+export async function resendAdminInvite(
   inviteId: string,
 ): Promise<BrowserAuthResult<ResendAdminInviteResponse>> {
-  return jsonRequest<ResendAdminInviteResponse>(`/admin/invites/${inviteId}/resend`, 'POST');
+  const result = await jsonRequest<ResendAdminInviteResponseWire>(
+    `/admin/invites/${inviteId}/resend`,
+    'POST',
+  );
+  return mapBrowserAuthResult(result, normalizeResendAdminInviteResponse);
 }
 
 export function cancelAdminInvite(

@@ -7,7 +7,12 @@
  */
 
 import Link from 'next/link';
-import type { CSSProperties, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
+import React, {
+  type CSSProperties,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type TextareaHTMLAttributes,
+} from 'react';
 
 const stackBaseStyle: CSSProperties = {
   display: 'grid',

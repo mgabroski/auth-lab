@@ -2,13 +2,13 @@
  * frontend/src/shared/auth/components/authenticated-shell.tsx
  *
  * WHY:
- * - Provides a minimal but real authenticated shell for member/admin landing routes.
+ * - Provides a minimal but real authenticated shell for User/Agent/Admin landing routes.
  * - Keeps authenticated pages consistent without pretending broader product modules already exist.
  * - Hosts the real logout button in a shared place.
  */
 
 import type { CSSProperties, ReactNode } from 'react';
-import type { MeResponse } from '@/shared/auth/contracts';
+import type { MeResponse, MembershipRole } from '@/shared/auth/contracts';
 import { LogoutButton } from './logout-button';
 
 const pageStyle: CSSProperties = {
@@ -110,6 +110,21 @@ function booleanLabel(value: boolean): string {
   return value ? 'Yes' : 'No';
 }
 
+function levelLabel(role: MembershipRole): string {
+  switch (role) {
+    case 'USER':
+      return 'User';
+    case 'AGENT':
+      return 'Agent';
+    case 'ADMIN':
+      return 'Admin';
+    default: {
+      const exhaustiveCheck: never = role;
+      return String(exhaustiveCheck);
+    }
+  }
+}
+
 export function AuthenticatedShell({
   eyebrow,
   title,
@@ -137,8 +152,8 @@ export function AuthenticatedShell({
           </article>
 
           <article style={cardStyle}>
-            <p style={labelStyle}>Role</p>
-            <p style={valueStyle}>{me.membership.role}</p>
+            <p style={labelStyle}>Level</p>
+            <p style={valueStyle}>{levelLabel(me.membership.role)}</p>
           </article>
 
           <article style={cardStyle}>
