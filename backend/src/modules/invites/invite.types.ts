@@ -22,6 +22,13 @@ export type InviteRoleInput = MembershipRoleInput;
 
 export type InviteId = string;
 
+export type AgentInviteGroupSummary = {
+  id: string;
+  name: string;
+  level: string;
+  status: string;
+};
+
 export type Invite = {
   id: InviteId;
   tenantId: string;
@@ -37,6 +44,8 @@ export type Invite = {
 
   createdAt: Date;
   createdByUserId: string | null;
+
+  agentGroups?: AgentInviteGroupSummary[];
 };
 
 /**
@@ -59,4 +68,6 @@ export type InviteSummary = {
 
   createdAt: Date;
   createdByUserId: string | null;
+
+  agentGroups?: AgentInviteGroupSummary[];
 };

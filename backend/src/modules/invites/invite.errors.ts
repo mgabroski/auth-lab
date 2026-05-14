@@ -40,4 +40,11 @@ export const InviteErrors = {
   tenantMismatch(meta?: AppErrorMeta) {
     return AppError.notFound('Invite not found', meta);
   },
+
+  agentInviteGroupsInvalid(meta?: AppErrorMeta) {
+    return AppError.conflict(
+      'This Agent invitation no longer has an active Agent group. Ask an administrator to resend the invitation.',
+      meta,
+    );
+  },
 } as const;

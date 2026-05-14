@@ -40,7 +40,7 @@ The current canonical invite/membership role contract is `ADMIN | AGENT | USER`.
 
 Legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled input/read boundaries during the backend compatibility window. New canonical invite writes normalize `MEMBER` to `USER`.
 
-`AGENT` is a recognized runtime membership level, but this endpoint does not implement Agent group assignment, Agent operational access, Person Exceptions, Managed People, Effective Access resolution, or module-level Agent/User data differences. The future Agent invite group requirement is not implemented here.
+`AGENT` is a recognized runtime membership level. Agent invite group assignment is created by the admin invite API and revalidated by this endpoint before an Agent invite is consumed. This is provisioning-only: it does not implement Agent operational access, Person Exceptions, Managed People, Effective Access resolution, or module-level Agent/User data differences.
 
 ---
 
@@ -126,7 +126,7 @@ Validation notes:
 - success writes an `invite.accepted` audit event inside the same transaction
 - the endpoint never returns the raw token or token hash
 - acceptance does **not** expose whether a token existed in another tenant
-- Agent invite validation does not exist in this endpoint yet; future Agent invites require at least one Agent Group before invite creation/acceptance can become valid.
+- Agent invite acceptance revalidates the assigned Agent group(s) before consuming the invite. If no assigned group is still an active Agent group in the current tenant, acceptance fails and the invite remains pending.
 
 ---
 
@@ -134,14 +134,15 @@ Validation notes:
 
 ### Common error responses
 
-| Situation                             | Status | Code               | Message               |
-| ------------------------------------- | ------ | ------------------ | --------------------- |
-| malformed request body                | `400`  | `VALIDATION_ERROR` | validation-driven     |
-| token not found for this tenant       | `404`  | `NOT_FOUND`        | `Invite not found`    |
-| token belongs to another tenant       | `404`  | `NOT_FOUND`        | `Invite not found`    |
-| invite expired                        | `409`  | `CONFLICT`         | `Invite has expired`  |
-| invite already consumed / not pending | `409`  | `CONFLICT`         | `Invite is not valid` |
-| rate-limited invite acceptance        | `429`  | `RATE_LIMITED`     | rate-limit message    |
+| Situation                              | Status | Code               | Message                                                                                                     |
+| -------------------------------------- | ------ | ------------------ | ----------------------------------------------------------------------------------------------------------- |
+| malformed request body                 | `400`  | `VALIDATION_ERROR` | validation-driven                                                                                           |
+| token not found for this tenant        | `404`  | `NOT_FOUND`        | `Invite not found`                                                                                          |
+| token belongs to another tenant        | `404`  | `NOT_FOUND`        | `Invite not found`                                                                                          |
+| invite expired                         | `409`  | `CONFLICT`         | `Invite has expired`                                                                                        |
+| invite already consumed / not pending  | `409`  | `CONFLICT`         | `Invite is not valid`                                                                                       |
+| Agent invite has no active Agent group | `409`  | `CONFLICT`         | `This Agent invitation no longer has an active Agent group. Ask an administrator to resend the invitation.` |
+| rate-limited invite acceptance         | `429`  | `RATE_LIMITED`     | rate-limit message                                                                                          |
 
 ### Privacy / anti-enumeration posture
 

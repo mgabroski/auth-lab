@@ -29,6 +29,7 @@ import {
 import { getUserByEmail } from '../../users';
 import { getMfaSecretForUser } from '../../auth';
 import { getInviteByTenantAndTokenHash } from '../queries/invite.queries';
+import { requireValidAgentGroupsForInviteActivation } from '../helpers/agent-invite-groups';
 
 import {
   assertInviteBelongsToTenant,
@@ -135,6 +136,13 @@ export async function executeAcceptInviteFlow(
         assertInviteNotExpired(invite, now);
       } catch (err) {
         failureCtx = { tenantId: tenant.id, userId: null, reason: 'invite_expired' };
+        throw err;
+      }
+
+      try {
+        await requireValidAgentGroupsForInviteActivation(trx, invite);
+      } catch (err) {
+        failureCtx = { tenantId: tenant.id, userId: null, reason: 'agent_groups_invalid' };
         throw err;
       }
 

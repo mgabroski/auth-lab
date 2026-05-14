@@ -43,4 +43,32 @@ export const AdminInviteErrors: Record<string, ErrorFactory> = {
   inviteNotResendable(meta?: AppErrorMeta): AppError {
     return AppError.conflict('This invite can no longer be resent.', meta);
   },
+
+  agentGroupsRequired(meta?: AppErrorMeta): AppError {
+    return AppError.validationError(
+      'Agent invitations require at least one active Agent group.',
+      meta,
+    );
+  },
+
+  agentGroupsOnlyForAgent(meta?: AppErrorMeta): AppError {
+    return AppError.validationError(
+      'Agent group IDs are only allowed for Agent invitations.',
+      meta,
+    );
+  },
+
+  invalidAgentGroups(meta?: AppErrorMeta): AppError {
+    return AppError.validationError(
+      'Agent invitations require active Agent groups from this workspace.',
+      meta,
+    );
+  },
+
+  invalidAgentGroupsForResend(meta?: AppErrorMeta): AppError {
+    return AppError.conflict(
+      'This Agent invite no longer has an active Agent group. Select an active Agent group and create a new invitation.',
+      meta,
+    );
+  },
 };

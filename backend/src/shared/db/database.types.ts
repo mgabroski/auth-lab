@@ -152,6 +152,13 @@ export interface EmailVerificationTokens {
   user_id: string;
 }
 
+export interface InviteAgentGroups {
+  created_at: Generated<Timestamp>;
+  group_id: string;
+  invite_id: string;
+  tenant_id: string;
+}
+
 export interface Invites {
   created_at: Generated<Timestamp>;
   created_by_user_id: string | null;
@@ -384,6 +391,7 @@ export interface DB {
   cp_personal_family_config: CpPersonalFamilyConfig;
   cp_personal_field_config: CpPersonalFieldConfig;
   email_verification_tokens: EmailVerificationTokens;
+  invite_agent_groups: InviteAgentGroups;
   invites: Invites;
   memberships: Memberships;
   mfa_recovery_codes: MfaRecoveryCodes;

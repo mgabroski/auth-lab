@@ -12,6 +12,7 @@
  * - Outbox enqueue inside same transaction as invite row insert.
  * - tokenHash never returned in InviteSummary.
  * - No membership pre-creation (Decision C — locked).
+ * - Agent group assignment is provisioning-only; it creates no Operational Access grants.
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';
@@ -26,10 +27,16 @@ import type { OutboxRepo } from '../../../../shared/outbox/outbox.repo';
 import type { OutboxEncryption } from '../../../../shared/outbox/outbox-encryption';
 
 import type { InviteRepo } from '../../dal/invite.repo';
+import { InviteAgentGroupsRepo } from '../../dal/invite-agent-groups.repo';
 import type { InviteRoleInput, InviteSummary } from '../../invite.types';
 import { ADMIN_INVITE_RATE_LIMITS, INVITE_TTL_DAYS } from '../../invite.constants';
 import { getPendingInviteByTenantAndEmail } from '../../queries/invite.queries';
 import { auditInviteCreated, auditInviteCreateFailed } from '../../invite.audit';
+import {
+  validateAgentGroupSelectionForAdminInvite,
+  withAgentGroups,
+  type AgentInviteGroupSummary,
+} from '../../helpers/agent-invite-groups';
 
 import { getTenantById, isEmailDomainAllowed, assertTenantIsActive } from '../../../tenants';
 import { getUserByEmail } from '../../../users';
@@ -44,6 +51,7 @@ export type CreateInviteFlowParams = {
   tenantKey: string;
   email: string;
   role: InviteRoleInput;
+  agentGroupIds?: string[];
   requestId: string;
   ip: string;
   userAgent: string | null;
@@ -78,6 +86,7 @@ export async function executeCreateAdminInviteFlow(
   try {
     const result = await deps.db.transaction().execute(async (trx) => {
       const inviteRepo = deps.inviteRepo.withDb(trx);
+      const inviteAgentGroupsRepo = new InviteAgentGroupsRepo(trx);
 
       // ── Success audit writer — bound to trx (ER-38) ──────────────────
       const audit = new AuditWriter(deps.auditRepo.withDb(trx), {
@@ -92,6 +101,18 @@ export async function executeCreateAdminInviteFlow(
         throw AppError.notFound('Tenant not found.');
       }
       assertTenantIsActive(tenant);
+
+      let agentGroups: AgentInviteGroupSummary[];
+      try {
+        agentGroups = await validateAgentGroupSelectionForAdminInvite(trx, {
+          tenantId: params.tenantId,
+          role,
+          agentGroupIds: params.agentGroupIds,
+        });
+      } catch (err) {
+        failureCtx = { reason: 'invalid_agent_groups' };
+        throw err;
+      }
 
       if (!isEmailDomainAllowed(tenant, email)) {
         failureCtx = { reason: 'email_domain_not_permitted' };
@@ -138,12 +159,21 @@ export async function executeCreateAdminInviteFlow(
         createdByUserId: params.userId,
       });
 
+      if (role === 'AGENT') {
+        await inviteAgentGroupsRepo.insertInviteAgentGroups({
+          tenantId: params.tenantId,
+          inviteId: inserted.id,
+          groupIds: agentGroups.map((group) => group.id),
+        });
+      }
+
       // ── Success audit — inside tx (ER-38) ────────────────────────────
       await auditInviteCreated(audit, {
         id: inserted.id,
         email,
         role,
         createdByUserId: params.userId,
+        ...(role === 'AGENT' ? { agentGroups } : {}),
       });
 
       const payload = deps.outboxEncryption.encryptPayload({
@@ -152,6 +182,7 @@ export async function executeCreateAdminInviteFlow(
         tenantKey: params.tenantKey,
         inviteId: inserted.id,
         role,
+        ...(role === 'AGENT' ? { agentGroupIds: agentGroups.map((group) => group.id) } : {}),
       });
 
       await deps.outboxRepo.enqueueWithinTx(trx, {
@@ -160,7 +191,7 @@ export async function executeCreateAdminInviteFlow(
         idempotencyKey: `invite-created:${inserted.id}:${tokenHash}`,
       });
 
-      const s: InviteSummary = {
+      const summary: InviteSummary = {
         id: inserted.id,
         tenantId: params.tenantId,
         email,
@@ -172,7 +203,7 @@ export async function executeCreateAdminInviteFlow(
         createdByUserId: params.userId,
       };
 
-      return { summary: s };
+      return { summary: withAgentGroups(summary, agentGroups) };
     });
 
     const summary = result.summary;

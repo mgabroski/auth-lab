@@ -11,6 +11,8 @@
  * - Failure audit in catch using bare auditRepo (ER-39).
  * - Outbox enqueue inside same transaction as new invite row.
  * - tokenHash never returned in InviteSummary.
+ * - Agent invite resend preserves existing Agent group assignments only when
+ *   they are still active Agent groups in the same tenant.
  */
 
 import type { DbExecutor } from '../../../../shared/db/db';
@@ -24,10 +26,16 @@ import type { OutboxRepo } from '../../../../shared/outbox/outbox.repo';
 import type { OutboxEncryption } from '../../../../shared/outbox/outbox-encryption';
 
 import type { InviteRepo } from '../../dal/invite.repo';
+import { InviteAgentGroupsRepo } from '../../dal/invite-agent-groups.repo';
 import type { InviteSummary } from '../../invite.types';
 import { ADMIN_INVITE_RATE_LIMITS, INVITE_TTL_DAYS } from '../../invite.constants';
 import { getInviteByIdAndTenant } from '../../queries/invite.queries';
 import { auditInviteResent, auditInviteResendFailed } from '../../invite.audit';
+import {
+  requireValidAgentGroupsForAdminResend,
+  withAgentGroups,
+  type AgentInviteGroupSummary,
+} from '../../helpers/agent-invite-groups';
 
 import { AdminInviteErrors } from '../admin-invite.errors';
 import { generateSecureToken } from '../../../../shared/security/token';
@@ -68,6 +76,7 @@ export async function executeResendAdminInviteFlow(
   try {
     const result = await deps.db.transaction().execute(async (trx) => {
       const inviteRepo = deps.inviteRepo.withDb(trx);
+      const inviteAgentGroupsRepo = new InviteAgentGroupsRepo(trx);
 
       // ── Success audit writer — bound to trx (ER-38) ──────────────────
       const audit = new AuditWriter(deps.auditRepo.withDb(trx), {
@@ -88,6 +97,18 @@ export async function executeResendAdminInviteFlow(
       if (existing.status !== 'PENDING') {
         failureCtx = { reason: 'invite_not_resendable' };
         throw AdminInviteErrors.inviteNotResendable();
+      }
+
+      let agentGroups: AgentInviteGroupSummary[];
+      try {
+        agentGroups = await requireValidAgentGroupsForAdminResend(trx, {
+          tenantId: params.tenantId,
+          inviteId: existing.id,
+          role: existing.role,
+        });
+      } catch (err) {
+        failureCtx = { reason: 'invalid_agent_groups' };
+        throw err;
       }
 
       const now = new Date();
@@ -114,12 +135,21 @@ export async function executeResendAdminInviteFlow(
         createdByUserId: params.userId,
       });
 
+      if (existing.role === 'AGENT') {
+        await inviteAgentGroupsRepo.insertInviteAgentGroups({
+          tenantId: params.tenantId,
+          inviteId: newRow.id,
+          groupIds: agentGroups.map((group) => group.id),
+        });
+      }
+
       // ── Success audit — inside tx (ER-38) ────────────────────────────
       await auditInviteResent(audit, {
         oldInviteId: params.inviteId,
         newInviteId: newRow.id,
         email: existing.email,
         role: existing.role,
+        ...(existing.role === 'AGENT' ? { agentGroups } : {}),
       });
 
       const payload = deps.outboxEncryption.encryptPayload({
@@ -128,6 +158,9 @@ export async function executeResendAdminInviteFlow(
         tenantKey: params.tenantKey,
         inviteId: newRow.id,
         role: existing.role,
+        ...(existing.role === 'AGENT'
+          ? { agentGroupIds: agentGroups.map((group) => group.id) }
+          : {}),
       });
 
       await deps.outboxRepo.enqueueWithinTx(trx, {
@@ -136,7 +169,7 @@ export async function executeResendAdminInviteFlow(
         idempotencyKey: `invite-resent:${newRow.id}:${tokenHash}`,
       });
 
-      const s: InviteSummary = {
+      const summary: InviteSummary = {
         id: newRow.id,
         tenantId: params.tenantId,
         email: existing.email,
@@ -148,7 +181,7 @@ export async function executeResendAdminInviteFlow(
         createdByUserId: params.userId,
       };
 
-      return { newSummary: s };
+      return { newSummary: withAgentGroups(summary, agentGroups) };
     });
 
     const newSummary = result.newSummary;

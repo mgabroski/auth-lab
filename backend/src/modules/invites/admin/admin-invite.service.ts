@@ -24,6 +24,7 @@ import type { OutboxEncryption } from '../../../shared/outbox/outbox-encryption'
 import type { InviteRepo } from '../dal/invite.repo';
 import type { InviteStatus, InviteSummary } from '../invite.types';
 import { listInvitesByTenant } from '../queries/invite.queries';
+import { loadAgentGroupsForInviteSummaries, withAgentGroups } from '../helpers/agent-invite-groups';
 
 import {
   executeCreateAdminInviteFlow,
@@ -82,12 +83,24 @@ export class AdminInviteService {
       offset: params.offset,
     });
 
-    return listInvitesByTenant(this.deps.db, {
+    const result = await listInvitesByTenant(this.deps.db, {
       tenantId: params.tenantId,
       status: params.status,
       limit: params.limit,
       offset: params.offset,
     });
+
+    const groupsByInviteId = await loadAgentGroupsForInviteSummaries(this.deps.db, {
+      tenantId: params.tenantId,
+      invites: result.invites,
+    });
+
+    return {
+      ...result,
+      invites: result.invites.map((invite) =>
+        withAgentGroups(invite, groupsByInviteId.get(invite.id) ?? []),
+      ),
+    };
   }
 
   async resendInvite(params: ResendInviteParams): Promise<InviteSummary> {

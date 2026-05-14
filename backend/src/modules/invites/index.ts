@@ -14,4 +14,8 @@ export {
   getInviteByTenantAndTokenHash,
   getLatestInviteByTenantAndEmail,
 } from './queries/invite.queries';
+export {
+  attachAgentInviteGroupsToMembership,
+  requireValidAgentGroupsForInviteActivation,
+} from './helpers/agent-invite-groups';
 export type { Invite, InviteRole, InviteStatus } from './invite.types';

@@ -18,7 +18,7 @@
  */
 
 import type { AuditWriter } from '../../shared/audit/audit.writer';
-import type { Invite } from './invite.types';
+import type { AgentInviteGroupSummary, Invite } from './invite.types';
 
 export function auditInviteAccepted(writer: AuditWriter, invite: Invite): Promise<void> {
   return writer.append('invite.accepted', {
@@ -30,13 +30,20 @@ export function auditInviteAccepted(writer: AuditWriter, invite: Invite): Promis
 
 export function auditInviteCreated(
   writer: AuditWriter,
-  invite: { id: string; email: string; role: string; createdByUserId: string },
+  invite: {
+    id: string;
+    email: string;
+    role: string;
+    createdByUserId: string;
+    agentGroups?: AgentInviteGroupSummary[];
+  },
 ): Promise<void> {
   return writer.append('invite.created', {
     inviteId: invite.id,
     email: invite.email,
     role: invite.role,
     createdByUserId: invite.createdByUserId,
+    ...(invite.agentGroups ? { agentGroups: invite.agentGroups } : {}),
   });
 }
 
@@ -53,13 +60,20 @@ export function auditInviteCancelled(
 
 export function auditInviteResent(
   writer: AuditWriter,
-  data: { oldInviteId: string; newInviteId: string; email: string; role: string },
+  data: {
+    oldInviteId: string;
+    newInviteId: string;
+    email: string;
+    role: string;
+    agentGroups?: AgentInviteGroupSummary[];
+  },
 ): Promise<void> {
   return writer.append('invite.resent', {
     oldInviteId: data.oldInviteId,
     newInviteId: data.newInviteId,
     email: data.email,
     role: data.role,
+    ...(data.agentGroups ? { agentGroups: data.agentGroups } : {}),
   });
 }
 

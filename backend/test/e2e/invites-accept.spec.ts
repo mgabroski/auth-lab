@@ -59,6 +59,47 @@ async function createTenant(opts: {
   return { id: row.id, key: row.key };
 }
 
+async function createAgentGroup(opts: {
+  db: DbExecutor;
+  tenantId: string;
+  status?: 'ACTIVE' | 'ARCHIVED';
+}): Promise<{ id: string }> {
+  const name = `Agent Group ${randomUUID().slice(0, 8)}`;
+  const status = opts.status ?? 'ACTIVE';
+  return opts.db
+    .insertInto('tenant_groups')
+    .values({
+      tenant_id: opts.tenantId,
+      name,
+      normalized_name: name.toLowerCase(),
+      description: null,
+      level: 'AGENT',
+      status,
+      created_by_membership_id: null,
+      updated_by_membership_id: null,
+      archived_at: status === 'ARCHIVED' ? new Date() : null,
+      archived_by_membership_id: null,
+    })
+    .returning(['id'])
+    .executeTakeFirstOrThrow();
+}
+
+async function attachInviteAgentGroup(opts: {
+  db: DbExecutor;
+  tenantId: string;
+  inviteId: string;
+  groupId: string;
+}): Promise<void> {
+  await opts.db
+    .insertInto('invite_agent_groups')
+    .values({
+      tenant_id: opts.tenantId,
+      invite_id: opts.inviteId,
+      group_id: opts.groupId,
+    })
+    .execute();
+}
+
 async function createInvite(opts: {
   db: DbExecutor;
   tokenHasher: TokenHasher;
@@ -164,6 +205,66 @@ describe('POST /auth/invites/accept', () => {
       expect(meta.inviteId).toBe(invite.id);
       expect(meta.email).toBe(email.toLowerCase());
       expect(meta.role).toBe('USER');
+    } finally {
+      await close();
+    }
+  });
+
+  it('rejects Agent invite acceptance when assigned Agent group is archived', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db, tokenHasher } = deps;
+
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`;
+    const email = `agent-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createTenant({
+        db,
+        tenantKey,
+        tenantName: `Tenant ${tenantKey}`,
+        isActive: true,
+      });
+      const group = await createAgentGroup({ db, tenantId: tenant.id });
+      const invite = await createInvite({
+        db,
+        tokenHasher,
+        tenantId: tenant.id,
+        email,
+        role: 'AGENT',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        tokenRaw,
+      });
+      await attachInviteAgentGroup({
+        db,
+        tenantId: tenant.id,
+        inviteId: invite.id,
+        groupId: group.id,
+      });
+      await db
+        .updateTable('tenant_groups')
+        .set({ status: 'ARCHIVED', archived_at: new Date() })
+        .where('id', '=', group.id)
+        .execute();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/invites/accept',
+        headers: { host },
+        payload: { token: tokenRaw },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toContain('This Agent invitation no longer has an active Agent group');
+
+      const inviteRow = await db
+        .selectFrom('invites')
+        .select(['status', 'used_at'])
+        .where('id', '=', invite.id)
+        .executeTakeFirstOrThrow();
+      expect(inviteRow.status).toBe('PENDING');
+      expect(inviteRow.used_at).toBeNull();
     } finally {
       await close();
     }

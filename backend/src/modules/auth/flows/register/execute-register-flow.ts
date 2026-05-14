@@ -36,6 +36,10 @@ import type { AuthResult } from '../../auth.types';
 
 import { resolveTenantForAuth } from '../../../tenants';
 import { validateInviteForRegister } from '../../helpers/validate-invite-for-register';
+import {
+  attachAgentInviteGroupsToMembership,
+  requireValidAgentGroupsForInviteActivation,
+} from '../../../invites';
 import { ensurePasswordIdentity } from '../../helpers/ensure-password-identity';
 import { provisionUserToTenant } from '../../../_shared/use-cases/provision-user-to-tenant.usecase';
 import { writeRegisterAudits } from '../../helpers/write-register-audits';
@@ -118,6 +122,8 @@ export async function executeRegisterFlow(
       email,
     });
 
+    await requireValidAgentGroupsForInviteActivation(trx, invite);
+
     const provisionResult = await provisionUserToTenant({
       trx,
       userRepo,
@@ -144,6 +150,14 @@ export async function executeRegisterFlow(
     });
 
     await writeRegisterAudits(fullAudit, provisionResult);
+    await attachAgentInviteGroupsToMembership({
+      trx,
+      tenantId: tenant.id,
+      invite,
+      membership: provisionResult.membership,
+      user: provisionResult.user,
+      audit: fullAudit,
+    });
 
     return { ...provisionResult, tenant };
   });

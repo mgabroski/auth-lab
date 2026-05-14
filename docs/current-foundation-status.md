@@ -82,7 +82,9 @@ Current shipped truth remains:
 - `AGENT` is recognized as a membership level, but Agent operational access is not implemented yet
 - AGENT and USER are distinct membership levels, but both currently land in the authenticated workspace shell at `/app`
 - the shared `/app` shell does not make AGENT and USER equivalent product behaviors
-- Agent group invite requirements are not implemented yet
+- admin invites support canonical `ADMIN / AGENT / USER`; legacy `MEMBER` invite input normalizes to `USER`
+- `AGENT` admin invites require at least one currently active People & Teams Agent group
+- Agent invite group assignment is provisioning-only: successful invite activation adds the user to the selected Agent group(s), but creates no Operational Access grants
 - `/admin/settings/access` is the current **Access & Security** Settings page
 - the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
 - the current Access & Security page is not future tenant Operational Access
@@ -106,7 +108,7 @@ Accepted future target truth is:
 - User has own/self-service data access by default
 - Agent receives operational access through Agent Groups and rare Person Exceptions
 - public signup and HRIS import map to future `User` in the target model
-- future admin invitation must support Admin / Agent / User, and Agent invite acceptance requires at least one still-active Agent Group
+- admin invitation already supports Admin / Agent / User at the backend contract level, and Agent invite activation requires at least one still-active Agent Group
 - reusable tenant-level groups combine with explicit Where/scope instead of creating employer/location-specific group explosions
 - MVP operational grants go through Agent Groups, with Person Exceptions as the rare direct-user exception path
 - User Groups do not receive operational grants in MVP, and Admin Groups do not restrict Admin access
@@ -123,7 +125,7 @@ Accepted future target truth is:
 
 Documentation and QA rule:
 
-> Operational Access scenarios may be planned now, but they are future / not executable until Agent Groups as grant subjects, Person Exceptions, Effective Access Resolver, and module consumers exist in code. The shipped People & Teams foundation is group and membership management only.
+> Operational Access scenarios may be planned now, but they are future / not executable until Agent Groups as Operational Access grant subjects, Person Exceptions, Effective Access Resolver, and module consumers exist in code. The shipped People & Teams foundation plus Agent invite group assignment is provisioning and group-membership management only.
 
 This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, Integrations, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
 

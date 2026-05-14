@@ -72,6 +72,7 @@ Creates a new tenant-scoped invite and queues invite email delivery.
 {
   email: string;
   role: 'ADMIN' | 'AGENT' | 'USER' | 'MEMBER';
+  agentGroupIds?: string[];
 }
 ```
 
@@ -79,6 +80,11 @@ Validation notes:
 
 - `email` must be a valid email address
 - `role` must be `ADMIN`, `AGENT`, `USER`, or legacy `MEMBER`
+- `agentGroupIds` is required when `role` is `AGENT`
+- `agentGroupIds` must contain one or more UUIDs for active People & Teams groups in the current tenant
+- every Agent invite group must be status `ACTIVE` and group level `AGENT`
+- `agentGroupIds` is rejected for `ADMIN`, `USER`, and legacy `MEMBER` invite requests
+- duplicate Agent group IDs are normalized before persistence
 - invalid payloads return `400 VALIDATION_ERROR`
 
 ### Success response
@@ -97,6 +103,12 @@ Status: `201 Created`
     usedAt: string | null;
     createdAt: string;
     createdByUserId: string | null;
+    agentGroups?: Array<{
+      id: string;
+      name: string;
+      level: 'ADMIN' | 'AGENT' | 'USER';
+      status: 'ACTIVE' | 'ARCHIVED';
+    }>;
   }
 }
 ```
@@ -108,16 +120,22 @@ Status: `201 Created`
 - response DTO never includes `tokenHash`
 - success writes `invite.created` audit data
 - success enqueues outbox delivery for the invite email
-- `AGENT` is accepted as a runtime membership level only; Agent group assignment and Operational Access are not implemented here
+- `AGENT` is a runtime membership level and requires at least one active Agent group assignment at invite creation time
+- Agent invite group assignment is provisioning-only; it creates no Operational Access grants, scopes, Person Exceptions, Managed People links, or module visibility
+- accepted Agent invite activation creates/activates an `AGENT` membership and attaches that membership to the selected Agent group(s)
+- `/admin/settings/access` remains Access & Security; this endpoint does not create the future Operational Access surface
 
 ### Common business failures
 
-| Situation                             | Status | Code               | Message                                                  |
-| ------------------------------------- | ------ | ------------------ | -------------------------------------------------------- |
-| already active member in this tenant  | `409`  | `CONFLICT`         | `This email already has an active membership.`           |
-| suspended account in this tenant path | `403`  | `FORBIDDEN`        | `This user account has been suspended.`                  |
-| active pending invite already exists  | `409`  | `CONFLICT`         | `An active invite already exists for this email.`        |
-| email domain blocked by tenant policy | `400`  | `VALIDATION_ERROR` | `This email domain is not permitted for this workspace.` |
+| Situation                               | Status | Code               | Message                                                              |
+| --------------------------------------- | ------ | ------------------ | -------------------------------------------------------------------- |
+| already active member in this tenant    | `409`  | `CONFLICT`         | `This email already has an active membership.`                       |
+| suspended account in this tenant path   | `403`  | `FORBIDDEN`        | `This user account has been suspended.`                              |
+| active pending invite already exists    | `409`  | `CONFLICT`         | `An active invite already exists for this email.`                    |
+| email domain blocked by tenant policy   | `400`  | `VALIDATION_ERROR` | `This email domain is not permitted for this workspace.`             |
+| Agent invite missing groups             | `400`  | `VALIDATION_ERROR` | `Agent invitations require at least one active Agent group.`         |
+| Agent group IDs on non-Agent invite     | `400`  | `VALIDATION_ERROR` | `Agent group IDs are only allowed for Agent invitations.`            |
+| invalid / archived / wrong-tenant group | `400`  | `VALIDATION_ERROR` | `Agent invitations require active Agent groups from this workspace.` |
 
 ---
 
@@ -153,6 +171,12 @@ Status: `200 OK`
     usedAt: string | null;
     createdAt: string;
     createdByUserId: string | null;
+    agentGroups?: Array<{
+      id: string;
+      name: string;
+      level: 'ADMIN' | 'AGENT' | 'USER';
+      status: 'ACTIVE' | 'ARCHIVED';
+    }>;
   }>;
   total: number;
   limit: number;
@@ -164,6 +188,8 @@ Status: `200 OK`
 
 - results are always scoped to the session tenant
 - `tokenHash` is never returned
+- `role` is always canonical `ADMIN`, `AGENT`, or `USER`; legacy `MEMBER` rows read back as `USER`
+- Agent invites may include `agentGroups` with safe tenant-scoped group metadata only
 - invalid query params return `400 VALIDATION_ERROR`
 
 ---
@@ -198,6 +224,12 @@ Status: `200 OK`
     usedAt: string | null;
     createdAt: string;
     createdByUserId: string | null;
+    agentGroups?: Array<{
+      id: string;
+      name: string;
+      level: 'ADMIN' | 'AGENT' | 'USER';
+      status: 'ACTIVE' | 'ARCHIVED';
+    }>;
   }
 }
 ```
@@ -207,13 +239,16 @@ Status: `200 OK`
 - invalid `inviteId` format returns `400 VALIDATION_ERROR`
 - the operation is tenant-scoped; cross-tenant lookups do not reveal existence
 - success rotates the link rather than reusing the old token
+- Agent invite resend preserves the existing Agent group assignments when they remain valid
+- Agent invite resend fails instead of silently dropping invalid or archived Agent groups
 
 ### Common business failures
 
-| Situation                                  | Status | Code        | Message                                |
-| ------------------------------------------ | ------ | ----------- | -------------------------------------- |
-| invite not found in this tenant            | `404`  | `NOT_FOUND` | `Invite not found.`                    |
-| invite cannot be resent from current state | `409`  | `CONFLICT`  | `This invite can no longer be resent.` |
+| Situation                                  | Status | Code        | Message                                                                                                            |
+| ------------------------------------------ | ------ | ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| invite not found in this tenant            | `404`  | `NOT_FOUND` | `Invite not found.`                                                                                                |
+| invite cannot be resent from current state | `409`  | `CONFLICT`  | `This invite can no longer be resent.`                                                                             |
+| Agent group assignment no longer valid     | `409`  | `CONFLICT`  | `This Agent invite no longer has an active Agent group. Select an active Agent group and create a new invitation.` |
 
 ---
 

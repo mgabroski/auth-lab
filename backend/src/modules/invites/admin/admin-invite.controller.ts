@@ -44,6 +44,7 @@ export class AdminInviteController {
       tenantKey,
       email: parsed.data.email,
       role: parsed.data.role,
+      agentGroupIds: parsed.data.agentGroupIds,
       requestId: req.requestContext.requestId,
       ip: req.ip,
       userAgent: req.headers['user-agent'] ?? null,

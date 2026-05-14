@@ -79,7 +79,7 @@ Out of scope:
 - Communications live configuration
 - Workspace Experience live configuration
 - Permissions / Permission & Policy Management tenant surface
-- Operational Access grants, Person Exceptions, Managed People, Agent invite requirements, runtime role migration, and Effective Access Resolver behavior
+- Operational Access grants, Person Exceptions, Managed People, and Effective Access Resolver behavior
 - documents, benefits, payments, marketplace tenant modules
 - CP authentication
 - CP operator RBAC

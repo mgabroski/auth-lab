@@ -45,6 +45,42 @@ async function createTenant(opts: { db: DbExecutor; tenantKey: string }) {
     .executeTakeFirstOrThrow();
 }
 
+async function createAgentGroup(opts: { db: DbExecutor; tenantId: string }) {
+  const name = `Agent Group ${randomUUID().slice(0, 8)}`;
+  return opts.db
+    .insertInto('tenant_groups')
+    .values({
+      tenant_id: opts.tenantId,
+      name,
+      normalized_name: name.toLowerCase(),
+      description: null,
+      level: 'AGENT',
+      status: 'ACTIVE',
+      created_by_membership_id: null,
+      updated_by_membership_id: null,
+      archived_at: null,
+      archived_by_membership_id: null,
+    })
+    .returning(['id'])
+    .executeTakeFirstOrThrow();
+}
+
+async function attachInviteAgentGroup(opts: {
+  db: DbExecutor;
+  tenantId: string;
+  inviteId: string;
+  groupId: string;
+}): Promise<void> {
+  await opts.db
+    .insertInto('invite_agent_groups')
+    .values({
+      tenant_id: opts.tenantId,
+      invite_id: opts.inviteId,
+      group_id: opts.groupId,
+    })
+    .execute();
+}
+
 async function createAcceptedInvite(opts: {
   db: DbExecutor;
   tokenHasher: TokenHasher;
@@ -218,6 +254,69 @@ describe('POST /auth/register', () => {
 
     try {
       const tenant = await createTenant({ db, tenantKey });
+      const group = await createAgentGroup({ db, tenantId: tenant.id });
+      const invite = await createAcceptedInvite({
+        db,
+        tokenHasher,
+        tenantId: tenant.id,
+        email,
+        role: 'AGENT',
+        tokenRaw,
+      });
+      await attachInviteAgentGroup({
+        db,
+        tenantId: tenant.id,
+        inviteId: invite.id,
+        groupId: group.id,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/register',
+        headers: { host },
+        payload: { email, password: 'SecurePass123!', name: 'Agent User', inviteToken: tokenRaw },
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      const body = readJson<AuthenticatedResponseBody>(res);
+      expect(body.nextAction).toBe('NONE');
+      expect(body.membership.role).toBe('AGENT');
+
+      const groupMembers = await db
+        .selectFrom('tenant_group_members')
+        .select(['tenant_id', 'group_id', 'membership_id'])
+        .where('tenant_id', '=', tenant.id)
+        .where('group_id', '=', group.id)
+        .where('membership_id', '=', body.membership.id)
+        .execute();
+      expect(groupMembers).toEqual([
+        { tenant_id: tenant.id, group_id: group.id, membership_id: body.membership.id },
+      ]);
+
+      const auditRows = await db
+        .selectFrom('audit_events')
+        .select(['action'])
+        .where('tenant_id', '=', tenant.id)
+        .where('action', '=', 'people_teams.member_added')
+        .execute();
+      expect(auditRows).toHaveLength(1);
+    } finally {
+      await close();
+    }
+  });
+
+  it('agent registration fails without a still-active Agent group assignment', async () => {
+    const { app, deps, close } = await buildTestApp();
+    const { db, tokenHasher } = deps;
+
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `agent-invalid-${randomUUID().slice(0, 8)}@example.com`;
+    const tokenRaw = `inv_${randomUUID()}_${randomUUID()}`;
+
+    try {
+      const tenant = await createTenant({ db, tenantKey });
       await createAcceptedInvite({
         db,
         tokenHasher,
@@ -234,11 +333,18 @@ describe('POST /auth/register', () => {
         payload: { email, password: 'SecurePass123!', name: 'Agent User', inviteToken: tokenRaw },
       });
 
-      expect(res.statusCode).toBe(201);
+      expect(res.statusCode).toBe(409);
+      const body = readJson<ErrorResponseBody>(res);
+      expect(body.error.message).toContain(
+        'This Agent invitation no longer has an active Agent group',
+      );
 
-      const body = readJson<AuthenticatedResponseBody>(res);
-      expect(body.nextAction).toBe('NONE');
-      expect(body.membership.role).toBe('AGENT');
+      const users = await db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email.toLowerCase())
+        .execute();
+      expect(users).toHaveLength(0);
     } finally {
       await close();
     }

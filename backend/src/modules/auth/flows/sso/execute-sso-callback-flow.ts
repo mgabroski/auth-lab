@@ -48,6 +48,11 @@ import {
   auditUserCreated,
 } from '../../auth.audit';
 import { auditInviteAccepted } from '../../../invites/invite.audit';
+import { InviteErrors } from '../../../invites/invite.errors';
+import {
+  attachAgentInviteGroupsToMembership,
+  requireValidAgentGroupsForInviteActivation,
+} from '../../../invites';
 
 import { hasVerifiedMfaSecret } from '../../helpers/has-verified-mfa-secret';
 
@@ -307,6 +312,24 @@ export async function executeSsoCallbackFlow(
             throw AppError.internal('Invite-driven SSO activation missing role context.');
           }
 
+          if (resolvedEntry.invite) {
+            try {
+              await requireValidAgentGroupsForInviteActivation(trx, resolvedEntry.invite);
+            } catch {
+              throw new SsoDeniedError({
+                appError: InviteErrors.agentInviteGroupsInvalid(),
+                audit: {
+                  ctx: toFailureAuditContext({
+                    tenantId: tenant.id,
+                    userId: resolvedEntry.user?.id,
+                    membershipId: resolvedEntry.membership?.id,
+                  }),
+                  payload: { provider: params.provider, reason: 'agent_groups_invalid', emailKey },
+                },
+              });
+            }
+          }
+
           if (resolvedEntry.decision.code === 'INVITED_VALID' && resolvedEntry.invite) {
             const accepted = await inviteRepo.markAccepted({
               inviteId: resolvedEntry.invite.id,
@@ -373,6 +396,17 @@ export async function executeSsoCallbackFlow(
               membershipId: membership.id,
               userId: user.id,
               role: membership.role,
+            });
+          }
+
+          if (resolvedEntry.invite) {
+            await attachAgentInviteGroupsToMembership({
+              trx,
+              tenantId: tenant.id,
+              invite: resolvedEntry.invite,
+              membership,
+              user,
+              audit: fullAudit,
             });
           }
           break;

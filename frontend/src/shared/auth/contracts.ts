@@ -49,6 +49,13 @@ export type MembershipRoleInput = MembershipRole | LegacyMembershipRole;
 export type InviteRole = MembershipRoleInput;
 export type InviteStatus = 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
 
+export type AgentInviteGroupSummary = {
+  id: string;
+  name: string;
+  level: 'ADMIN' | 'AGENT' | 'USER';
+  status: 'ACTIVE' | 'ARCHIVED';
+};
+
 export type AuthNextAction =
   | 'NONE'
   | 'MFA_SETUP_REQUIRED'
@@ -139,6 +146,7 @@ export type InviteSummary = {
   usedAt: string | null;
   createdAt: string;
   createdByUserId: string | null;
+  agentGroups?: AgentInviteGroupSummary[];
 };
 
 export type AcceptInviteRequest = {
@@ -224,6 +232,7 @@ export type LogoutResponse = {
 export type CreateAdminInviteRequest = {
   email: string;
   role: InviteRole;
+  agentGroupIds?: string[];
 };
 
 export type CreateAdminInviteResponse = {

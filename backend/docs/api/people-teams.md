@@ -17,11 +17,10 @@ It does not implement:
 - Person Exceptions
 - Managed People
 - Effective Access Resolver
-- Agent invite group requirements
-- Operational Access role grants or Agent group invite requirements
+- Operational Access role grants
 - permissions UI
 
-Current runtime membership roles are canonical `ADMIN`, `AGENT`, and `USER`; legacy `MEMBER` is normalized to `USER` at compatibility boundaries. Group levels are classification only for this foundation surface. Adding a person to a group does not grant module access or Operational Access yet.
+Current runtime membership roles are canonical `ADMIN`, `AGENT`, and `USER`; legacy `MEMBER` is normalized to `USER` at compatibility boundaries. Group levels are classification only for this foundation surface. Agent invite activation may add the accepted Agent membership to selected active Agent groups as provisioning-only group membership. Adding a person to a group does not grant module access or Operational Access yet.
 
 ## Security
 
