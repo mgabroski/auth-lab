@@ -75,17 +75,20 @@ That roadmap is accepted as the product and architecture direction for future mo
 
 Current shipped truth remains:
 
-- runtime membership roles are still `ADMIN` and `MEMBER`
-- `MEMBER` is the current shipped runtime role, not a shipped `USER` enum
-- `AGENT` is not implemented
-- public signup and member invite flows still create the current member-style account
+- backend runtime membership roles are now canonical `ADMIN`, `AGENT`, and `USER`
+- legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled API/input/read boundaries
+- existing `MEMBER` membership and invite rows are backfilled to `USER` by the runtime role migration
+- public signup and default self-service provisioning create canonical `USER`
+- `AGENT` is recognized as a membership level, but Agent operational access is not implemented yet
+- AGENT and USER may currently share the authenticated workspace shell; they are not equivalent product behaviors
+- Agent group invite requirements are not implemented yet
 - `/admin/settings/access` is the current **Access & Security** Settings page
 - the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
 - the current Access & Security page is not future tenant Operational Access
 - Permissions UI is absent in v1: no card, no route, no API surface
 - People & Teams foundation groups and group membership management are implemented as a tenant-admin Settings surface
 - People & Teams is a live non-gating management card, not a setup-completion section; its overview status is management-only and does not affect setup completion or banner lifecycle
-- People & Teams group levels `ADMIN / AGENT / USER` are classification only and do not change current runtime membership role behavior
+- People & Teams group levels `ADMIN / AGENT / USER` remain classification for groups and do not grant Operational Access
 - Agent Groups as Operational Access grant subjects are not implemented
 - Person Exceptions are not implemented
 - a reusable backend Effective Access Resolver is not implemented
@@ -96,7 +99,7 @@ Accepted future target truth is formally locked in `docs/decision-log.md` ADR-00
 Accepted future target truth is:
 
 - the long-range tenant user model moves toward `Admin / Agent / User`
-- current `MEMBER` remains a compatibility alias for future `User` until a real migration is designed and implemented
+- legacy `MEMBER` remains a compatibility alias for `User` during the backend compatibility window
 - Admin has full tenant-wide access by level
 - User has own/self-service data access by default
 - Agent receives operational access through Agent Groups and rare Person Exceptions

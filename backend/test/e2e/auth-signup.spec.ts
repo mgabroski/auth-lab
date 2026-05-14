@@ -60,7 +60,7 @@ describe('POST /auth/signup', () => {
 
     try {
       // Tenant must exist so tenant resolution from Host works.
-      await createTenant({ db, tenantKey, publicSignupEnabled: true });
+      const tenant = await createTenant({ db, tenantKey, publicSignupEnabled: true });
 
       const res = await app.inject({
         method: 'POST',
@@ -83,6 +83,14 @@ describe('POST /auth/signup', () => {
         .execute();
       expect(users).toHaveLength(1);
       expect(users[0].email_verified).toBe(false);
+
+      const membership = await db
+        .selectFrom('memberships')
+        .select(['role', 'status'])
+        .where('tenant_id', '=', tenant.id)
+        .where('user_id', '=', users[0].id)
+        .executeTakeFirstOrThrow();
+      expect(membership).toEqual({ role: 'USER', status: 'ACTIVE' });
 
       const tokens = await db
         .selectFrom('email_verification_tokens')
@@ -148,7 +156,7 @@ describe('POST /auth/signup', () => {
 
     try {
       const tenant = await createTenant({ db, tenantKey, publicSignupEnabled: true });
-      await createInvite({ db, tenantId: tenant.id, email, role: 'MEMBER' });
+      await createInvite({ db, tenantId: tenant.id, email, role: 'USER' });
 
       const res = await app.inject({
         method: 'POST',
@@ -182,7 +190,7 @@ describe('POST /auth/signup', () => {
         db,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'PENDING',
         expiresAt: new Date(Date.now() - 60_000),
       });

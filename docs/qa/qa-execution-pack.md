@@ -97,10 +97,10 @@ This section is planning guidance only. These scenarios are **future / not execu
 
 Current shipped truth remains:
 
-- runtime roles are `ADMIN | MEMBER`
-- `Agent` and distinct runtime `User` are future target concepts
+- backend runtime roles are `ADMIN | AGENT | USER`
+- `MEMBER` is a legacy alias for `USER`; Agent operational access remains future work
 - People & Teams foundation groups and group memberships are implemented
-- group levels `ADMIN / AGENT / USER` are classification only and do not change runtime roles
+- group levels `ADMIN / AGENT / USER` do not grant Operational Access
 - Agent Groups as Operational Access grant subjects are not implemented
 - Person Exceptions are not implemented
 - a reusable Effective Access Resolver is not implemented

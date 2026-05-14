@@ -8,7 +8,7 @@
  * RULES:
  * - No business logic here.
  * - No DB access here.
- * - Current MEMBER users are denied; future Agent/User runtime roles are not shipped yet.
+ * - AGENT and USER sessions are denied for this admin-only foundation surface.
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';

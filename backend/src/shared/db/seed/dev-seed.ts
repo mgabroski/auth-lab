@@ -199,7 +199,7 @@ async function ensureMemberPersona(opts: {
       .values({
         tenant_id: member.tenantId,
         user_id: user.id,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
         invited_at: acceptedAt,
         accepted_at: acceptedAt,
@@ -214,7 +214,7 @@ async function ensureMemberPersona(opts: {
       membershipId: createdMembership.id,
       userId: user.id,
       email,
-      role: 'MEMBER',
+      role: 'USER',
       status: 'ACTIVE',
     });
 

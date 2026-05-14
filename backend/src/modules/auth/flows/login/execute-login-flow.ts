@@ -39,6 +39,7 @@ import type { SessionStore } from '../../../../shared/session/session.store';
 import { AuthErrors } from '../../auth.errors';
 import type { AuthResult } from '../../auth.types';
 import type { Tenant } from '../../../tenants';
+import type { MembershipRole } from '../../../memberships/membership.types';
 
 import { auditLoginSuccess, auditLoginFailed } from '../../auth.audit';
 
@@ -87,7 +88,7 @@ type LoginFailureContext = {
 
 type LoginTxResult = {
   user: { id: string; email: string; name: string | null; emailVerified: boolean };
-  membership: { id: string; role: 'ADMIN' | 'MEMBER'; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
+  membership: { id: string; role: MembershipRole; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
   tenant: Tenant;
 };
 

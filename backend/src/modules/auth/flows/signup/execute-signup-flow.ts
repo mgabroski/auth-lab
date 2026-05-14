@@ -42,6 +42,7 @@ import type { AuthRepo } from '../../dal/auth.repo';
 import type { EmailVerificationRepo } from '../../dal/email-verification.repo';
 
 import type { AuthResult } from '../../auth.types';
+import type { MembershipRole } from '../../../memberships/membership.types';
 
 import { resolveTenantForAuth, assertEmailDomainAllowed } from '../../../tenants';
 import { provisionUserToTenant } from '../../../_shared/use-cases/provision-user-to-tenant.usecase';
@@ -80,7 +81,7 @@ export type SignupParams = {
 
 type SignupTxResult = {
   user: { id: string; email: string; name: string | null; emailVerified: boolean };
-  membership: { id: string; role: 'ADMIN' | 'MEMBER'; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
+  membership: { id: string; role: MembershipRole; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
   tenant: import('../../../tenants').Tenant;
   verificationEnqueued: boolean;
 };
@@ -185,7 +186,7 @@ export async function executeSignupFlow(
       email,
       name: params.name,
       tenantId: tenant.id,
-      role: 'MEMBER',
+      role: 'USER',
       now,
       emailVerifiedForNewUser: false,
     });

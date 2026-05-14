@@ -9,12 +9,12 @@
  *
  * RULES:
  * - No AppError / HTTP concerns here. Return true/false only.
- * - No feature-module imports. Shared session infrastructure must not depend on
- *   modules/ internals.
  * - Validate current tenant + membership state on every authenticated request.
+ * - Normalize legacy role values before comparing cached session truth to DB truth.
  */
 
 import type { DbExecutor } from '../db/db';
+import { parseMembershipRole } from '../../modules/memberships/membership-role';
 import type { SessionData } from './session.types';
 
 export type SessionAccessValidator = {
@@ -42,6 +42,10 @@ export class DatabaseSessionAccessValidator implements SessionAccessValidator {
 
     if (!row) return false;
 
+    const currentRole = parseMembershipRole(row.role);
+    const sessionRole = parseMembershipRole(session.role);
+    if (!currentRole || !sessionRole) return false;
+
     return (
       row.tenant_is_active === true &&
       row.membership_status === 'ACTIVE' &&
@@ -49,7 +53,7 @@ export class DatabaseSessionAccessValidator implements SessionAccessValidator {
       row.user_id === session.userId &&
       row.tenant_id === session.tenantId &&
       row.tenant_key === session.tenantKey &&
-      row.role === session.role
+      currentRole === sessionRole
     );
   }
 }

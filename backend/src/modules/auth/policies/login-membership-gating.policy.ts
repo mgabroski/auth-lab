@@ -18,13 +18,14 @@
  */
 
 import { AuthErrors } from '../auth.errors';
+import type { MembershipRole } from '../../memberships/membership.types';
 
 export type MembershipStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED';
 
 export type MembershipLike = Readonly<{
   id: string;
   status: MembershipStatus;
-  role: 'ADMIN' | 'MEMBER';
+  role: MembershipRole;
 }>;
 
 export type LoginMembershipGatingFailure =

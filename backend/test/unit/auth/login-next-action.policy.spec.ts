@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { decideLoginNextAction } from '../../../src/modules/auth/policies/login-next-action.policy';
+import type { MembershipRole } from '../../../src/modules/memberships/membership.types';
 
 type Scenario = {
   name: string;
   input: {
-    role: 'ADMIN' | 'MEMBER';
+    role: MembershipRole;
     memberMfaRequired: boolean;
     hasVerifiedMfaSecret: boolean;
     emailVerified?: boolean;
@@ -15,27 +16,36 @@ type Scenario = {
 
 const SCENARIOS: Scenario[] = [
   {
-    name: 'member with no MFA requirement resolves to NONE',
+    name: 'user with no MFA requirement resolves to NONE',
     input: {
-      role: 'MEMBER',
+      role: 'USER',
       memberMfaRequired: false,
       hasVerifiedMfaSecret: false,
     },
     expected: 'NONE',
   },
   {
-    name: 'member with tenant MFA requirement and no verified secret resolves to MFA_SETUP_REQUIRED',
+    name: 'agent with no MFA requirement resolves to NONE',
     input: {
-      role: 'MEMBER',
+      role: 'AGENT',
+      memberMfaRequired: false,
+      hasVerifiedMfaSecret: false,
+    },
+    expected: 'NONE',
+  },
+  {
+    name: 'user with tenant MFA requirement and no verified secret resolves to MFA_SETUP_REQUIRED',
+    input: {
+      role: 'USER',
       memberMfaRequired: true,
       hasVerifiedMfaSecret: false,
     },
     expected: 'MFA_SETUP_REQUIRED',
   },
   {
-    name: 'member with tenant MFA requirement and verified secret resolves to MFA_REQUIRED',
+    name: 'agent with tenant MFA requirement and verified secret resolves to MFA_REQUIRED',
     input: {
-      role: 'MEMBER',
+      role: 'AGENT',
       memberMfaRequired: true,
       hasVerifiedMfaSecret: true,
     },

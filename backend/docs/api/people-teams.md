@@ -18,10 +18,10 @@ It does not implement:
 - Managed People
 - Effective Access Resolver
 - Agent invite group requirements
-- runtime role migration from `ADMIN | MEMBER`
+- Operational Access role grants or Agent group invite requirements
 - permissions UI
 
-Current runtime membership roles remain `ADMIN | MEMBER`. Group levels are classification only: `ADMIN`, `AGENT`, `USER`. Changing a group level does not change login routing, session role, or membership runtime behavior. Adding a person to a group does not grant module access yet.
+Current runtime membership roles are canonical `ADMIN`, `AGENT`, and `USER`; legacy `MEMBER` is normalized to `USER` at compatibility boundaries. Group levels are classification only for this foundation surface. Adding a person to a group does not grant module access or Operational Access yet.
 
 ## Security
 
@@ -33,7 +33,7 @@ All endpoints require a fully authenticated current `ADMIN` session:
 - MFA verified
 - membership role `ADMIN`
 
-Current `MEMBER` sessions are denied. All reads and writes are scoped to the authenticated tenant. No request parameter may widen tenant scope.
+Current `AGENT` and `USER` sessions are denied. Legacy `MEMBER` sessions normalize to `USER` and are denied. All reads and writes are scoped to the authenticated tenant. No request parameter may widen tenant scope.
 
 ## GET `/people-teams/groups`
 
@@ -144,7 +144,7 @@ Returns safe identifying data for members of one tenant-local group. Cross-tenan
       "userId": "uuid",
       "email": "person@example.com",
       "name": "Person Name",
-      "role": "MEMBER",
+      "role": "USER",
       "status": "ACTIVE",
       "addedAt": "2026-05-14T00:00:00.000Z"
     }
@@ -207,7 +207,7 @@ Only `ACTIVE` memberships for the authenticated tenant are returned.
       "userId": "uuid",
       "email": "person@example.com",
       "name": "Person Name",
-      "role": "MEMBER",
+      "role": "USER",
       "status": "ACTIVE"
     }
   ]

@@ -397,8 +397,8 @@ Every future module must pass this overlay before implementation if it is operat
 
 Current repo truth:
 
-- current runtime roles are still `ADMIN | MEMBER`
-- future `Admin / Agent / User` is target roadmap truth, not shipped behavior
+- current backend runtime roles are `ADMIN | AGENT | USER`
+- legacy `MEMBER` is a compatibility alias for `USER`
 - current `/admin/settings/access` is Access & Security, not Operational Access
 - People & Teams operational groups, Agent Groups, Person Exceptions, and a reusable Effective Access Resolver are not implemented yet
 

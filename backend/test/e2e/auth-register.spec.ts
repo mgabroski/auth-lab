@@ -16,7 +16,7 @@ type AuthenticatedResponseBody = {
   status: 'AUTHENTICATED';
   nextAction: 'NONE' | 'MFA_SETUP_REQUIRED';
   user: { id: string; email: string; name: string };
-  membership: { id: string; role: 'ADMIN' | 'MEMBER' };
+  membership: { id: string; role: 'ADMIN' | 'AGENT' | 'USER' };
 };
 
 type ErrorResponseBody = {
@@ -50,7 +50,7 @@ async function createAcceptedInvite(opts: {
   tokenHasher: TokenHasher;
   tenantId: string;
   email: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER';
   tokenRaw: string;
 }) {
   const tokenHash = opts.tokenHasher.hash(opts.tokenRaw);
@@ -87,7 +87,7 @@ describe('POST /auth/register', () => {
         tokenHasher,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         tokenRaw,
       });
 
@@ -107,10 +107,10 @@ describe('POST /auth/register', () => {
 
       const body = readJson<AuthenticatedResponseBody>(res);
       expect(body.status).toBe('AUTHENTICATED');
-      expect(body.nextAction).toBe('NONE'); // MEMBER, no MFA required
+      expect(body.nextAction).toBe('NONE'); // USER, no MFA required
       expect(body.user.email).toBe(email.toLowerCase());
       expect(body.user.name).toBe('Test User');
-      expect(body.membership.role).toBe('MEMBER');
+      expect(body.membership.role).toBe('USER');
 
       // Session cookie set
       const setCookie = res.headers['set-cookie'] as string;
@@ -144,7 +144,7 @@ describe('POST /auth/register', () => {
         .execute();
       expect(memberships).toHaveLength(1);
       expect(memberships[0].status).toBe('ACTIVE');
-      expect(memberships[0].role).toBe('MEMBER');
+      expect(memberships[0].role).toBe('USER');
 
       // Audit events written
       const audits = await db
@@ -223,7 +223,7 @@ describe('POST /auth/register', () => {
         tokenHasher,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         tokenRaw,
       });
 

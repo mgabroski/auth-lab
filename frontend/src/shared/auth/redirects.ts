@@ -13,7 +13,7 @@
  * PHASE 9 UPDATE (ADR 0003):
  * - Added ADMIN_SETTINGS_PATH = '/admin/settings'.
  * - `getPathForNextAction` now requires `role: MembershipRole`.
- *   NONE + ADMIN → /admin  |  NONE + MEMBER → /app  (fixes pre-existing role-blind routing).
+ *   NONE + ADMIN → /admin  |  NONE + AGENT/USER/MEMBER → /app  (fixes pre-existing role-blind routing).
  * - `getPostAuthRedirectPath` gains `role: MembershipRole` parameter and threads
  *   it through to `getPathForNextAction`.
  * - No FIRST_TIME_SETUP case — workspace setup state drives a UI banner on /admin,
@@ -49,8 +49,8 @@ export const TOPOLOGY_CHECK_PATH = '/topology-check';
  * Maps a backend `nextAction` + membership `role` to a frontend pathname.
  *
  * `role` is required. NONE resolves differently by role:
- *   NONE + ADMIN  → /admin
- *   NONE + MEMBER → /app
+ *   NONE + ADMIN             → /admin
+ *   NONE + AGENT/USER/MEMBER → /app
  *
  * Continuation states (EMAIL_VERIFICATION_REQUIRED, MFA_SETUP_REQUIRED,
  * MFA_REQUIRED) are role-independent.

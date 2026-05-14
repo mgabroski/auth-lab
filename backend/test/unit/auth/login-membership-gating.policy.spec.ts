@@ -18,13 +18,13 @@ describe('getLoginMembershipGatingFailure', () => {
   });
 
   it('returns failure for SUSPENDED membership', () => {
-    const res = getLoginMembershipGatingFailure({ id: 'm1', role: 'MEMBER', status: 'SUSPENDED' });
+    const res = getLoginMembershipGatingFailure({ id: 'm1', role: 'USER', status: 'SUSPENDED' });
     expect(res).not.toBeNull();
     expect(res!.reason).toBe('suspended');
   });
 
   it('returns failure for INVITED membership', () => {
-    const res = getLoginMembershipGatingFailure({ id: 'm1', role: 'MEMBER', status: 'INVITED' });
+    const res = getLoginMembershipGatingFailure({ id: 'm1', role: 'USER', status: 'INVITED' });
     expect(res).not.toBeNull();
     expect(res!.reason).toBe('invite_not_accepted');
   });

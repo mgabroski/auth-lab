@@ -12,6 +12,7 @@
 import type { SessionStore } from '../../../shared/session/session.store';
 import type { AuthNextAction } from '../auth.types';
 import type { Tenant } from '../../tenants/tenant.types';
+import type { MembershipRole } from '../../memberships/membership.types';
 import { decideLoginNextAction } from '../policies/login-next-action.policy';
 
 export type CreateAuthSessionParams = {
@@ -20,7 +21,7 @@ export type CreateAuthSessionParams = {
   tenantId: string;
   tenantKey: string;
   membershipId: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: MembershipRole;
   tenant: Tenant;
   hasVerifiedMfaSecret: boolean;
   emailVerified?: boolean;

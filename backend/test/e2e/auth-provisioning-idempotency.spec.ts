@@ -94,7 +94,7 @@ describe('auth provisioning idempotency', () => {
           email,
           name: 'Race User',
           tenantId: tenant.id,
-          role: 'MEMBER',
+          role: 'USER',
           now,
         }),
         provisionUserToTenant({
@@ -104,7 +104,7 @@ describe('auth provisioning idempotency', () => {
           email,
           name: 'Race User',
           tenantId: tenant.id,
-          role: 'MEMBER',
+          role: 'USER',
           now,
         }),
       ]);
@@ -137,7 +137,7 @@ describe('auth provisioning idempotency', () => {
 
       expect(memberships).toHaveLength(1);
       expect(memberships[0].id).toBe(first.membership.id);
-      expect(memberships[0].role).toBe('MEMBER');
+      expect(memberships[0].role).toBe('USER');
       expect(memberships[0].status).toBe('ACTIVE');
     } finally {
       await close();

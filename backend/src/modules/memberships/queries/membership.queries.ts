@@ -17,12 +17,8 @@ import {
   selectMembershipByIdSql,
 } from '../dal/membership.query-sql';
 import type { MembershipRow } from '../dal/membership.query-sql';
-import type { Membership, MembershipRole, MembershipStatus } from '../membership.types';
-
-function parseMembershipRole(value: string): MembershipRole {
-  if (value === 'ADMIN' || value === 'MEMBER') return value;
-  return 'MEMBER';
-}
+import type { Membership, MembershipStatus } from '../membership.types';
+import { requireMembershipRole } from '../membership-role';
 
 function parseMembershipStatus(value: string): MembershipStatus {
   if (value === 'INVITED' || value === 'ACTIVE' || value === 'SUSPENDED') return value;
@@ -34,7 +30,7 @@ function toMembership(row: MembershipRow): Membership {
     id: row.id,
     tenantId: row.tenant_id,
     userId: row.user_id,
-    role: parseMembershipRole(row.role),
+    role: requireMembershipRole(row.role),
     status: parseMembershipStatus(row.status),
     invitedAt: row.invited_at,
     acceptedAt: row.accepted_at ?? null,

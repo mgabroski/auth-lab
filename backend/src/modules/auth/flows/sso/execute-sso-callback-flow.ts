@@ -29,6 +29,7 @@ import { resolveTenantForAuth, Tenant } from '../../../tenants';
 import { isEmailDomainAllowed } from '../../../tenants';
 
 import type { MembershipRepo } from '../../../memberships';
+import type { MembershipRole } from '../../../memberships/membership.types';
 import type { UserRepo } from '../../../users';
 import type { AuthRepo } from '../../dal/auth.repo';
 import { InviteRepo } from '../../../invites/dal/invite.repo';
@@ -66,7 +67,7 @@ export type SsoCallbackParams = {
 
 type TxResult = {
   user: { id: string; email: string; name: string | null; emailVerified: boolean };
-  membership: { id: string; role: 'ADMIN' | 'MEMBER'; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
+  membership: { id: string; role: MembershipRole; status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' };
   tenant: Tenant;
 };
 
@@ -300,7 +301,7 @@ export async function executeSsoCallbackFlow(
           const role =
             resolvedEntry.membership?.role ??
             resolvedEntry.invite?.role ??
-            (resolvedEntry.decision.code === 'PUBLIC_SIGNUP_ALLOWED' ? 'MEMBER' : null);
+            (resolvedEntry.decision.code === 'PUBLIC_SIGNUP_ALLOWED' ? 'USER' : null);
 
           if (!role) {
             throw AppError.internal('Invite-driven SSO activation missing role context.');

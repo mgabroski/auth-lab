@@ -86,15 +86,15 @@ This means:
 
 The session carries:
 
-| Field           | Type                | Meaning                                    |
-| --------------- | ------------------- | ------------------------------------------ |
-| `userId`        | string              | Global user ID                             |
-| `tenantId`      | string              | Tenant this session is bound to            |
-| `tenantKey`     | string              | Subdomain key (used for isolation check)   |
-| `membershipId`  | string              | The specific membership for this tenant    |
-| `role`          | `ADMIN` \| `MEMBER` | Role at this tenant                        |
-| `mfaVerified`   | boolean             | Whether MFA has been verified this session |
-| `emailVerified` | boolean             | Whether user's email is verified           |
+| Field           | Type                         | Meaning                                                             |
+| --------------- | ---------------------------- | ------------------------------------------------------------------- |
+| `userId`        | string                       | Global user ID                                                      |
+| `tenantId`      | string                       | Tenant this session is bound to                                     |
+| `tenantKey`     | string                       | Subdomain key (used for isolation check)                            |
+| `membershipId`  | string                       | The specific membership for this tenant                             |
+| `role`          | `ADMIN` \| `AGENT` \| `USER` | Canonical role at this tenant; legacy `MEMBER` normalizes to `USER` |
+| `mfaVerified`   | boolean                      | Whether MFA has been verified this session                          |
+| `emailVerified` | boolean                      | Whether user's email is verified                                    |
 
 **Note on `mfaVerified`:** This field is false after login if MFA is required but not yet completed. It is set to true only after a successful `POST /auth/mfa/verify` or `POST /auth/mfa/verify-setup` call, which also rotates the session ID.
 

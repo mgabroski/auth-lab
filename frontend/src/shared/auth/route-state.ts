@@ -5,7 +5,7 @@
  * - Converts backend bootstrap truth into explicit frontend route categories.
  * - Keeps continuation/app-entry decisions centralized and easy to review.
  * - Splits fully-authenticated state by membership role so the root gate can hand off
- *   to the correct member or admin landing route.
+ *   to the correct non-admin or admin landing route.
  *
  * RULES:
  * - Route state must be derived from backend truth only (`/auth/config`, `/auth/me`).

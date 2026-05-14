@@ -25,7 +25,7 @@ test.describe('auth smoke: invite acceptance', () => {
   // - The invite link is shaped correctly (tenant-scoped, contains token).
   // - POST /auth/invites/accept returns nextAction: SET_PASSWORD.
   // - POST /auth/register with the token succeeds with 201 and creates a real session.
-  // - MEMBER role + no MFA → nextAction: NONE → frontend routes to /app.
+  // - USER role + no MFA → nextAction: NONE → frontend routes to /app.
   //
   // WHY this test uses a SECOND admin persona (e2e-invite-admin@example.com):
   // - Test 11 configures MFA for e2e-admin@example.com. After test 11, that admin
@@ -125,7 +125,7 @@ test.describe('auth smoke: invite acceptance', () => {
         `POST /auth/register must return 201 (got ${registerResponse.status()})`,
       ).toBe(201);
 
-      // ── G. Verify landing on /app (MEMBER, no MFA required) ───────────────
+      // ── G. Verify landing on /app (USER, no MFA required) ───────────────
       await expect(freshPage).toHaveURL(`${AUTH_E2E.OPEN_ORIGIN}/app`, { timeout: 15_000 });
       await expect(freshPage.getByRole('heading', { name: 'Member app' })).toBeVisible();
       await expect(freshPage.getByText('Authenticated handoff complete')).toBeVisible();
@@ -141,7 +141,7 @@ test.describe('auth smoke: invite acceptance', () => {
       };
 
       expect(meBody.user.email.toLowerCase()).toBe(inviteRecipientEmail.toLowerCase());
-      expect(meBody.membership.role, 'Invite-registered user must have MEMBER role').toBe('MEMBER');
+      expect(meBody.membership.role, 'Invite-registered user must have USER role').toBe('USER');
     } finally {
       await freshContext.close().catch(() => undefined);
     }

@@ -68,7 +68,7 @@ async function seedUserWithPassword(opts: {
     .values({
       tenant_id: opts.tenantId,
       user_id: user.id,
-      role: 'MEMBER',
+      role: 'USER',
       status: 'ACTIVE',
     })
     .execute();

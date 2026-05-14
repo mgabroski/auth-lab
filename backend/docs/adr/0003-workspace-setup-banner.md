@@ -70,7 +70,9 @@ Current behavior: Settings setup progress is changed only by Settings-owned muta
 `getPathForNextAction('NONE', role)` now accepts `role: MembershipRole`:
 
 - `NONE + ADMIN` → `/admin`
-- `NONE + MEMBER` → `/app`
+- `NONE + AGENT` → `/app`
+- `NONE + USER` → `/app`
+- legacy `MEMBER` normalizes to `USER` before route selection
 
 This was a pre-existing bug independent of workspace setup. It is corrected
 here because it was discovered during workspace setup closure and is required for correct

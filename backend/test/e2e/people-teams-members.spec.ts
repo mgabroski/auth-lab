@@ -113,7 +113,7 @@ async function createMembership(opts: {
     .values({
       tenant_id: opts.tenantId,
       user_id: user.id,
-      role: opts.role ?? 'MEMBER',
+      role: opts.role ?? 'USER',
       status: opts.status ?? 'ACTIVE',
     })
     .returning(['id'])
@@ -223,7 +223,7 @@ describe('people-teams group membership writes', () => {
         deps,
         tenantId: tenant.id,
         tenantKey: tenant.key,
-        role: 'MEMBER',
+        role: 'USER',
       });
       const group = await createGroupFixture({
         deps,
@@ -292,7 +292,7 @@ describe('people-teams group membership writes', () => {
         userId: firstMember.userId,
         email: firstMember.email,
         name: 'First Member',
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
       });
 
@@ -341,7 +341,7 @@ describe('people-teams group membership writes', () => {
         userId: member.userId,
         email: member.email,
         name: 'Operator One',
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
       });
 
@@ -373,7 +373,7 @@ describe('people-teams group membership writes', () => {
         deps,
         tenantId: tenant.id,
         tenantKey: tenant.key,
-        role: 'MEMBER',
+        role: 'USER',
       });
       const group = await createGroupFixture({
         deps,
@@ -487,7 +487,7 @@ describe('people-teams group membership writes', () => {
         deps,
         tenantId: tenant.id,
         tenantKey: tenant.key,
-        role: 'MEMBER',
+        role: 'USER',
       });
       const group = await createGroupFixture({
         deps,

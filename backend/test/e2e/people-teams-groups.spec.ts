@@ -184,7 +184,7 @@ describe('people-teams group lifecycle writes', () => {
     }
   });
 
-  it('rejects MEMBER and unauthenticated group creation', async () => {
+  it('rejects USER and unauthenticated group creation', async () => {
     const { app, deps, close, reset } = await buildTestApp();
 
     try {
@@ -196,7 +196,7 @@ describe('people-teams group lifecycle writes', () => {
         deps,
         tenantId: tenant.id,
         tenantKey: tenant.key,
-        role: 'MEMBER',
+        role: 'USER',
       });
 
       const payload = { name: 'HR Agents', level: 'AGENT' };
@@ -356,7 +356,7 @@ describe('people-teams group lifecycle writes', () => {
         deps,
         tenantId: tenant.id,
         tenantKey: tenant.key,
-        role: 'MEMBER',
+        role: 'USER',
       });
       const group = await createGroupFixture({
         deps,
@@ -442,7 +442,7 @@ describe('people-teams group lifecycle writes', () => {
         deps,
         tenantId: tenant.id,
         tenantKey: tenant.key,
-        role: 'MEMBER',
+        role: 'USER',
       });
       const group = await createGroupFixture({
         deps,

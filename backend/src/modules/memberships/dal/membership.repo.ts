@@ -13,7 +13,8 @@
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
-import type { MembershipRole, MembershipStatus } from '../membership.types';
+import type { MembershipRoleInput, MembershipStatus } from '../membership.types';
+import { normalizeMembershipRole } from '../membership-role';
 import { selectMembershipIdByTenantAndUserSql } from './membership.query-sql';
 
 export class MembershipRepo {
@@ -29,7 +30,7 @@ export class MembershipRepo {
   async insertMembership(params: {
     tenantId: string;
     userId: string;
-    role: MembershipRole;
+    role: MembershipRoleInput;
     status: MembershipStatus;
     invitedAt: Date;
   }): Promise<{ id: string }> {
@@ -38,7 +39,7 @@ export class MembershipRepo {
       .values({
         tenant_id: params.tenantId,
         user_id: params.userId,
-        role: params.role,
+        role: normalizeMembershipRole(params.role),
         status: params.status,
         invited_at: params.invitedAt,
       })
@@ -63,7 +64,7 @@ export class MembershipRepo {
   async insertMembershipIfAbsent(params: {
     tenantId: string;
     userId: string;
-    role: MembershipRole;
+    role: MembershipRoleInput;
     status: MembershipStatus;
     invitedAt: Date;
   }): Promise<{ id: string; created: boolean }> {
@@ -72,7 +73,7 @@ export class MembershipRepo {
       .values({
         tenant_id: params.tenantId,
         user_id: params.userId,
-        role: params.role,
+        role: normalizeMembershipRole(params.role),
         status: params.status,
         invited_at: params.invitedAt,
       })

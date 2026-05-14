@@ -192,7 +192,7 @@ describe('people-teams read foundation', () => {
     }
   });
 
-  it('rejects unauthenticated and MEMBER requests for group listing', async () => {
+  it('rejects unauthenticated and USER requests for group listing', async () => {
     const { app, deps, close, reset } = await buildTestApp();
 
     try {
@@ -204,7 +204,7 @@ describe('people-teams read foundation', () => {
         deps,
         tenantId: tenant.id,
         tenantKey: tenant.key,
-        role: 'MEMBER',
+        role: 'USER',
       });
 
       const unauthenticatedRes = await app.inject({
@@ -245,7 +245,7 @@ describe('people-teams read foundation', () => {
       const activeMember = await createMembership({
         deps,
         tenantId: tenant.id,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
         email: `active-${randomUUID().slice(0, 8)}@example.com`,
         name: 'Active Member',
@@ -253,21 +253,21 @@ describe('people-teams read foundation', () => {
       const invitedMember = await createMembership({
         deps,
         tenantId: tenant.id,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'INVITED',
         email: `invited-${randomUUID().slice(0, 8)}@example.com`,
       });
       const suspendedMember = await createMembership({
         deps,
         tenantId: tenant.id,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'SUSPENDED',
         email: `suspended-${randomUUID().slice(0, 8)}@example.com`,
       });
       const otherTenantMember = await createMembership({
         deps,
         tenantId: otherTenant.id,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
         email: `other-${randomUUID().slice(0, 8)}@example.com`,
       });
@@ -294,7 +294,7 @@ describe('people-teams read foundation', () => {
       expect(activePerson).toMatchObject({
         userId: activeMember.userId,
         name: 'Active Member',
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
       });
     } finally {

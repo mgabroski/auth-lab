@@ -8,7 +8,7 @@
  * RULES (Decision 3 — Brick 11, LOCKED):
  * - If email is not verified → EMAIL_VERIFICATION_REQUIRED (always wins).
  * - ADMIN always requires MFA.
- * - MEMBER requires MFA only if tenant.memberMfaRequired is true.
+ * - AGENT and USER require MFA only if tenant.memberMfaRequired is true.
  * - If MFA is required but user has no verified secret → MFA_SETUP_REQUIRED.
  * - If MFA is required and user has verified secret → MFA_REQUIRED.
  * - If MFA not required → NONE.

@@ -7,10 +7,10 @@
  *
  * RULE:
  * - Admins ALWAYS require MFA.
- * - Members require MFA only when tenant setting enforces it.
+ * - Agent and User follow the existing non-admin tenant member MFA policy.
  */
 
-export type MembershipRole = 'ADMIN' | 'MEMBER';
+import type { MembershipRole } from '../../memberships/membership.types';
 
 export function isMfaRequiredForLogin(input: {
   role: MembershipRole;

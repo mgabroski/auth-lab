@@ -4,7 +4,7 @@
  * WHY:
  * - Creates real-stack E2E test personas that cannot be satisfied by the dev
  *   seed alone.
- * - The dev seed creates a MEMBER in goodwill-open.  E2E Phase 8 smoke tests
+ * - The dev seed creates a USER in goodwill-open.  E2E Phase 8 smoke tests
  *   additionally require an ADMIN persona in goodwill-open with no MFA
  *   configured, so the backend returns MFA_SETUP_REQUIRED on login and the
  *   Playwright test can prove the frontend continuation routing is wired
@@ -485,12 +485,12 @@ async function seedE2eRecoveryAdminPersona(opts: {
 //   correct. Any failure in test 19's restore step poisons the whole suite.
 // - A dedicated persona that only test 19 uses means no other test cares what
 //   happens to its password. No restore step needed. No cross-test contamination.
-// - This is a MEMBER (not ADMIN) with public signup and password auth, which
+// - This is a USER (not ADMIN) with public signup and password auth, which
 //   is exactly what the password reset flow requires.
 //
 // PERSONAS CREATED:
 //   goodwill-open / e2e-reset-member@example.com
-//     - MEMBER role, ACTIVE status, email_verified: true
+//     - USER role, ACTIVE status, email_verified: true
 //     - Password: Password123!
 
 const E2E_RESET_MEMBER_EMAIL = 'e2e-reset-member@example.com';
@@ -566,7 +566,7 @@ async function seedE2eResetMemberPersona(opts: {
     logger.info('seed.e2e.reset_member.password_identity.reset', { flow, email, userId: user.id });
   }
 
-  // ── Ensure MEMBER ACTIVE membership ─────────────────────────────────────
+  // ── Ensure USER ACTIVE membership ─────────────────────────────────────
   const existing = await db
     .selectFrom('memberships')
     .select(['id', 'role', 'status'])
@@ -581,7 +581,7 @@ async function seedE2eResetMemberPersona(opts: {
       .values({
         tenant_id: tenant.id,
         user_id: user.id,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
         invited_at: now,
         accepted_at: now,
@@ -603,6 +603,6 @@ async function seedE2eResetMemberPersona(opts: {
     email,
     tenantKey: tenant.key,
     message:
-      'E2E reset-member persona ready: MEMBER, ACTIVE, email_verified, password restored to Password123!',
+      'E2E reset-member persona ready: USER, ACTIVE, email_verified, password restored to Password123!',
   });
 }

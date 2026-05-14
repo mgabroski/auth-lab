@@ -67,7 +67,7 @@ describe('memberships DAL', () => {
         const created = await repo.insertMembership({
           tenantId: tenant.id,
           userId: user.id,
-          role: 'MEMBER',
+          role: 'USER',
           status: 'INVITED',
           invitedAt: new Date(),
         });
@@ -78,8 +78,36 @@ describe('memberships DAL', () => {
           userId: user.id,
         });
         expect(row).toBeDefined();
-        expect(row!.role).toBe('MEMBER');
+        expect(row!.role).toBe('USER');
         expect(row!.status).toBe('INVITED');
+      } finally {
+        await cleanup();
+      }
+    } finally {
+      await close();
+    }
+  });
+
+  it('normalizes legacy MEMBER input to canonical USER on write', async () => {
+    const { deps, close } = await buildTestApp();
+    try {
+      const { tenant, user, cleanup } = await seedTenantAndUser(deps.db);
+      try {
+        const repo = new MembershipRepo(deps.db);
+        await repo.insertMembership({
+          tenantId: tenant.id,
+          userId: user.id,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+          invitedAt: new Date(),
+        });
+
+        const row = await selectMembershipByTenantAndUserSql(deps.db, {
+          tenantId: tenant.id,
+          userId: user.id,
+        });
+        expect(row).toBeDefined();
+        expect(row!.role).toBe('USER');
       } finally {
         await cleanup();
       }
@@ -98,7 +126,7 @@ describe('memberships DAL', () => {
         const first = await repo.insertMembershipIfAbsent({
           tenantId: tenant.id,
           userId: user.id,
-          role: 'MEMBER',
+          role: 'USER',
           status: 'ACTIVE',
           invitedAt: new Date(),
         });
@@ -106,7 +134,7 @@ describe('memberships DAL', () => {
         const second = await repo.insertMembershipIfAbsent({
           tenantId: tenant.id,
           userId: user.id,
-          role: 'MEMBER',
+          role: 'USER',
           status: 'ACTIVE',
           invitedAt: new Date(),
         });
@@ -175,7 +203,7 @@ describe('memberships DAL', () => {
         const created = await repo.insertMembership({
           tenantId: tenant.id,
           userId: user.id,
-          role: 'MEMBER',
+          role: 'USER',
           status: 'INVITED',
           invitedAt: new Date(),
         });
@@ -232,7 +260,7 @@ describe('memberships DAL', () => {
         await repo.insertMembership({
           tenantId: tenant.id,
           userId: user.id,
-          role: 'MEMBER',
+          role: 'USER',
           status: 'ACTIVE',
           invitedAt: new Date(),
         });
@@ -256,7 +284,7 @@ describe('membership policies', () => {
     id: 'mem-1',
     tenantId: 'ten-1',
     userId: 'usr-1',
-    role: 'MEMBER',
+    role: 'USER',
     status: 'ACTIVE',
     invitedAt: new Date(),
     acceptedAt: new Date(),

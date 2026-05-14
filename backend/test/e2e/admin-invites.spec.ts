@@ -30,7 +30,7 @@ const InviteSummarySchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),
   email: z.string().email(),
-  role: z.enum(['ADMIN', 'MEMBER']),
+  role: z.enum(['ADMIN', 'AGENT', 'USER']),
   status: z.enum(['PENDING', 'ACCEPTED', 'CANCELLED', 'EXPIRED']),
   expiresAt: z.string(),
   usedAt: z.string().nullable(),
@@ -109,7 +109,7 @@ describe('POST /admin/invites', () => {
     await close();
   });
 
-  it('admin creates a MEMBER invite → 201 with correct InviteSummary', async () => {
+  it('admin creates a USER invite → 201 with correct InviteSummary', async () => {
     const tk = tenantKey();
     const tenant = await createTenant({ db: deps.db, tenantKey: tk });
     const { cookie } = await createAdminSession({
@@ -128,7 +128,7 @@ describe('POST /admin/invites', () => {
       method: 'POST',
       url: '/admin/invites',
       headers: { host: `${tk}.hubins.com`, cookie },
-      body: { email: invitedEmail, role: 'MEMBER' },
+      body: { email: invitedEmail, role: 'USER' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -136,7 +136,7 @@ describe('POST /admin/invites', () => {
 
     expect(invite.tenantId).toBe(tenant.id);
     expect(invite.email).toBe(invitedEmail.toLowerCase());
-    expect(invite.role).toBe('MEMBER');
+    expect(invite.role).toBe('USER');
     expect(invite.status).toBe('PENDING');
     expect(invite.createdByUserId).toBeTruthy();
 
@@ -154,7 +154,7 @@ describe('POST /admin/invites', () => {
     expect(inviteRows).toHaveLength(1);
     expect(inviteRows[0].tenant_id).toBe(tenant.id);
     expect(inviteRows[0].email).toBe(invitedEmail.toLowerCase());
-    expect(inviteRows[0].role).toBe('MEMBER');
+    expect(inviteRows[0].role).toBe('USER');
     expect(inviteRows[0].status).toBe('PENDING');
   });
 
@@ -224,7 +224,7 @@ describe('POST /admin/invites', () => {
       method: 'POST',
       url: '/admin/invites',
       headers: { host: `${tk}.hubins.com`, cookie },
-      body: { email: invitedEmail, role: 'MEMBER' },
+      body: { email: invitedEmail, role: 'USER' },
     });
 
     expect(res.statusCode).toBe(201);
@@ -267,7 +267,7 @@ describe('POST /admin/invites', () => {
       method: 'POST',
       url: '/admin/invites',
       headers: { host: `${tk}.hubins.com`, cookie },
-      body: { email: 'someone@gmail.com', role: 'MEMBER' },
+      body: { email: 'someone@gmail.com', role: 'USER' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -292,7 +292,7 @@ describe('POST /admin/invites', () => {
       method: 'POST',
       url: '/admin/invites',
       headers: { host: `${tk}.hubins.com`, cookie },
-      body: { email: uniqueEmail('invited-1'), role: 'MEMBER' },
+      body: { email: uniqueEmail('invited-1'), role: 'USER' },
     });
     await app.inject({
       method: 'POST',
@@ -329,7 +329,7 @@ describe('POST /admin/invites', () => {
       method: 'POST',
       url: '/admin/invites',
       headers: { host: `${tk}.hubins.com`, cookie },
-      body: { email: uniqueEmail('to-cancel'), role: 'MEMBER' },
+      body: { email: uniqueEmail('to-cancel'), role: 'USER' },
     });
 
     expect(created.statusCode).toBe(201);

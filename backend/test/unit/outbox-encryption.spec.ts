@@ -53,7 +53,7 @@ describe('OutboxEncryption', () => {
       tenantKey: 'goodwill-ca',
       userId: 'u1',
       inviteId: 'i1',
-      role: 'MEMBER',
+      role: 'USER',
     };
 
     const encrypted = enc.encryptPayload(raw);

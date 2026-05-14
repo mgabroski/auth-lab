@@ -126,7 +126,8 @@ function buildInviteCreatedEmail(opts: {
     : opts.publicBaseUrl;
 
   const link = `${origin}/accept-invite?token=${encodeURIComponent(opts.token)}`;
-  const roleLabel = opts.role === 'ADMIN' ? 'an admin' : 'a member';
+  const roleLabel =
+    opts.role === 'ADMIN' ? 'an admin' : opts.role === 'AGENT' ? 'an agent' : 'a user';
 
   return {
     subject: "You've been invited to join Hubins",

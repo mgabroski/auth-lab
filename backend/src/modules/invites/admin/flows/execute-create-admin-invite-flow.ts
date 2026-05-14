@@ -26,14 +26,14 @@ import type { OutboxRepo } from '../../../../shared/outbox/outbox.repo';
 import type { OutboxEncryption } from '../../../../shared/outbox/outbox-encryption';
 
 import type { InviteRepo } from '../../dal/invite.repo';
-import type { InviteRole, InviteSummary } from '../../invite.types';
+import type { InviteRoleInput, InviteSummary } from '../../invite.types';
 import { ADMIN_INVITE_RATE_LIMITS, INVITE_TTL_DAYS } from '../../invite.constants';
 import { getPendingInviteByTenantAndEmail } from '../../queries/invite.queries';
 import { auditInviteCreated, auditInviteCreateFailed } from '../../invite.audit';
 
 import { getTenantById, isEmailDomainAllowed, assertTenantIsActive } from '../../../tenants';
 import { getUserByEmail } from '../../../users';
-import { getMembershipByTenantAndUser } from '../../../memberships';
+import { getMembershipByTenantAndUser, normalizeMembershipRole } from '../../../memberships';
 
 import { AdminInviteErrors } from '../admin-invite.errors';
 import { generateSecureToken } from '../../../../shared/security/token';
@@ -43,7 +43,7 @@ export type CreateInviteFlowParams = {
   userId: string;
   tenantKey: string;
   email: string;
-  role: InviteRole;
+  role: InviteRoleInput;
   requestId: string;
   ip: string;
   userAgent: string | null;
@@ -71,6 +71,7 @@ export async function executeCreateAdminInviteFlow(
   });
 
   const email = params.email.toLowerCase();
+  const role = normalizeMembershipRole(params.role);
 
   let failureCtx: FailureCtx | null = null;
 
@@ -131,7 +132,7 @@ export async function executeCreateAdminInviteFlow(
       const inserted = await inviteRepo.insertInvite({
         tenantId: params.tenantId,
         email,
-        role: params.role,
+        role,
         tokenHash,
         expiresAt,
         createdByUserId: params.userId,
@@ -141,7 +142,7 @@ export async function executeCreateAdminInviteFlow(
       await auditInviteCreated(audit, {
         id: inserted.id,
         email,
-        role: params.role,
+        role,
         createdByUserId: params.userId,
       });
 
@@ -150,7 +151,7 @@ export async function executeCreateAdminInviteFlow(
         toEmail: email,
         tenantKey: params.tenantKey,
         inviteId: inserted.id,
-        role: params.role,
+        role,
       });
 
       await deps.outboxRepo.enqueueWithinTx(trx, {
@@ -163,7 +164,7 @@ export async function executeCreateAdminInviteFlow(
         id: inserted.id,
         tenantId: params.tenantId,
         email,
-        role: params.role,
+        role,
         status: 'PENDING',
         expiresAt,
         usedAt: null,
@@ -182,7 +183,7 @@ export async function executeCreateAdminInviteFlow(
       requestId: params.requestId,
       tenantId: params.tenantId,
       inviteId: summary.id,
-      role: params.role,
+      role,
     });
 
     return summary;

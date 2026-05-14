@@ -69,7 +69,7 @@ async function seedMemberSession(opts: {
     .values({
       tenant_id: opts.tenantId,
       user_id: user.id,
-      role: 'MEMBER',
+      role: 'USER',
       status: 'ACTIVE',
     })
     .execute();
@@ -245,8 +245,8 @@ describe('POST /auth/logout', () => {
     }
   });
 
-  // ── Test 6: MEMBER session (no MFA) → 200 ───────────────────────────────
-  it('MEMBER session without MFA → 200 (no role/MFA gate on logout)', async () => {
+  // ── Test 6: USER session (no MFA) → 200 ───────────────────────────────
+  it('USER session without MFA → 200 (no role/MFA gate on logout)', async () => {
     const { app, deps, close } = await buildTestApp();
     try {
       const tenantKey = `t-${randomUUID().slice(0, 8)}`;

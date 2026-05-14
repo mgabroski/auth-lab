@@ -236,7 +236,7 @@ describe('Outbox worker lifecycle', () => {
           tenantKey: 'tenant-contract',
           userId: randomUUID(),
           inviteId: randomUUID(),
-          role: 'MEMBER',
+          role: 'USER',
         }),
         idempotencyKey,
       });

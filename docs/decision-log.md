@@ -76,7 +76,7 @@ Do not write ADRs for:
 | ADR-0022 | Current Access & Security Route Must Not Be Confused With Future Operational Access                                         | LOCKED | settings / access routing     |
 | ADR-0023 | Backend-Owned Effective Access Resolver Is Future Platform Authorization Truth                                              | LOCKED | authorization / architecture  |
 | ADR-0024 | Reusable Groups Combine With Where Scope To Avoid Employer/Location-Specific Group Explosion                                | LOCKED | access / People & Teams       |
-| ADR-0025 | Operational Access Provisioning Target Behavior Keeps Current ADMIN/MEMBER APIs Honest                                      | LOCKED | provisioning / access target  |
+| ADR-0025 | Operational Access Provisioning Target Behavior Preserves Role Compatibility                                                | LOCKED | provisioning / access target  |
 | ADR-0026 | Operational Access MVP Grants Use Agent Groups, Rare Person Exceptions, And Explicit Where Scope                            | LOCKED | access / People & Teams       |
 | ADR-0027 | Personal Cards Are Reusable Field Groupings, Not Workflow Or Module State                                                   | LOCKED | Personal / access             |
 | ADR-0028 | Person Exceptions Are Rare, Reviewed, Audited, And Scope-Bound Access Exceptions                                            | LOCKED | access / security             |
@@ -723,31 +723,31 @@ LOCKED
 
 The future Operational Access model uses three tenant user levels: `Admin`, `Agent`, and `User`.
 
-The current shipped runtime contract remains `ADMIN | MEMBER`. `MEMBER` is treated as the compatibility alias for future `User` until a real migration changes code, data, API contracts, and QA evidence together.
+The current shipped backend runtime contract is `ADMIN | AGENT | USER`. Legacy `MEMBER` is treated as a compatibility alias for `USER` at controlled input/read boundaries during the backend compatibility window.
 
 Future behavior target:
 
 - `Admin` sees everything tenant-wide by level.
 - `User` sees own/self-service data by default.
 - `Agent` receives operational access through Agent Groups or rare Person Exceptions.
-- Public signup creates the current member-style account today and maps conceptually to future `User`.
+- Public signup creates canonical `User`.
 - HRIS/imported users map conceptually to future `User` unless explicitly promoted later.
-- Future Agent invitations require at least one Agent Group.
+- Future Agent invitations require at least one Agent Group; that group-selection requirement is not implemented by the backend role foundation alone.
 
 ### Why
 
-The repo currently has a simple `ADMIN | MEMBER` runtime contract. The future product needs a clearer distinction between self-service users and operational workers without pretending that distinction exists today.
+The product needs a clear distinction between tenant administrators, operational workers, and self-service users without pretending Operational Access is shipped. The backend role foundation now carries the three runtime levels, while Agent operational access remains deferred.
 
 ### Consequences
 
-- API docs must keep the current `ADMIN | MEMBER` contract until runtime code changes.
-- Future docs may describe `Admin / Agent / User` only as target truth.
-- QA must not test Agent/User runtime behavior until it exists.
-- Migration work must preserve MEMBER compatibility and must not be performed as a documentation-only change.
+- API docs must describe canonical `ADMIN | AGENT | USER` where backend responses/inputs now expose those values.
+- Legacy `MEMBER` must remain documented only as a compatibility alias for `USER`.
+- QA may test role parsing, session carrying, admin-only guards, and non-admin MFA policy for `AGENT`/`USER`.
+- QA must not test Agent operational access, Agent Groups, Person Exceptions, or module-level Agent/User data differences until those surfaces exist.
 
 ### Supersedes
 
-Any wording that implies `Agent` or a distinct runtime `User` role is already shipped.
+Any wording that implies Agent operational access, Agent Group invite assignment, Person Exceptions, or module-level Agent/User data differences are already shipped.
 
 ## ADR-0021 — Sensitive Field Conflicts Resolve To The Most Restrictive Effective Result
 
@@ -883,7 +883,7 @@ Creating separate groups such as `IT Dallas`, `IT Chicago`, and `IT Miami` for e
 
 Any default model that solves access by requiring location-specific groups.
 
-## ADR-0025 — Operational Access Provisioning Target Behavior Keeps Current ADMIN/MEMBER APIs Honest
+## ADR-0025 — Operational Access Provisioning Target Behavior Preserves Role Compatibility
 
 ### Status
 
@@ -898,19 +898,19 @@ The future provisioning target for Operational Access is:
 - Admin invitation must later support `Admin`, `Agent`, and `User`.
 - Agent invitation requires at least one active Agent Group.
 - If every selected Agent Group is archived, deleted, orphaned, or otherwise inactive before invite acceptance, invite acceptance must fail closed and require an admin to update/resend the invitation.
-- Existing invite and provisioning APIs remain current-runtime `ADMIN | MEMBER` surfaces until a real implementation migration changes code, contracts, tests, QA, and docs together.
+- Backend invite and provisioning APIs recognize canonical runtime roles `ADMIN | AGENT | USER`; legacy `MEMBER` input is normalized to `USER` during compatibility.
 
 ### Why
 
-Provisioning is the entry point into tenant access. The repo needs the future target locked now so People & Teams, invite UX, HRIS import, and Effective Access planning do not invent incompatible models. At the same time, documentation must not pretend the current runtime already supports Agent/User.
+Provisioning is the entry point into tenant access. The backend role foundation now supports the canonical runtime vocabulary while still preventing documentation from pretending Agent operational access or Agent Group invite assignment is implemented.
 
 ### Consequences
 
-- Current API docs must continue to describe `ADMIN | MEMBER` until implementation changes.
+- Current API docs must describe canonical `ADMIN | AGENT | USER` where backend contracts changed, with `MEMBER` only as a legacy alias.
 - Future invite design must validate Agent Group selection at invitation creation and again at acceptance.
 - Agent invite acceptance must not silently activate an Agent with ghost access from archived groups.
 - HRIS import planning must not create operational Agents in MVP without a later explicit promotion/admin action path.
-- QA for Agent invite behavior is future/not executable until People & Teams Agent Groups and the new invite role model are implemented.
+- QA for Agent group invite behavior is future/not executable until Agent Group selection and Operational Access are implemented.
 
 ### Supersedes
 

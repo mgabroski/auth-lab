@@ -25,6 +25,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 import type { SessionStore } from './session.store';
 import type { SessionAccessValidator } from './session-access-validator';
+import { parseMembershipRole } from '../../modules/memberships/membership-role';
 
 function parseCookies(raw: string | undefined): Record<string, string> {
   if (!raw) return {};
@@ -65,6 +66,12 @@ export function registerSessionMiddleware(
       return;
     }
 
+    const normalizedRole = parseMembershipRole(session.role);
+    if (!normalizedRole) {
+      await sessionStore.destroy(sessionId);
+      return;
+    }
+
     const requestTenantKey = req.requestContext?.tenantKey ?? null;
 
     // Fail closed: a valid session from tenant A must never authenticate on tenant B.
@@ -85,7 +92,7 @@ export function registerSessionMiddleware(
     req.authContext = {
       userId: session.userId,
       membershipId: session.membershipId,
-      role: session.role,
+      role: normalizedRole,
       sessionId,
       mfaVerified: session.mfaVerified,
       tenantId: session.tenantId,

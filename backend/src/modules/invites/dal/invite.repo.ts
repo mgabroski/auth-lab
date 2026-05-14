@@ -17,7 +17,8 @@
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
-import type { InviteRole } from '../invite.types';
+import type { InviteRoleInput } from '../invite.types';
+import { normalizeMembershipRole } from '../../memberships';
 
 export class InviteRepo {
   constructor(private readonly db: DbExecutor) {}
@@ -55,7 +56,7 @@ export class InviteRepo {
   async insertInvite(params: {
     tenantId: string;
     email: string;
-    role: InviteRole;
+    role: InviteRoleInput;
     tokenHash: string;
     expiresAt: Date;
     createdByUserId: string;
@@ -65,7 +66,7 @@ export class InviteRepo {
       .values({
         tenant_id: params.tenantId,
         email: params.email,
-        role: params.role,
+        role: normalizeMembershipRole(params.role),
         status: 'PENDING',
         token_hash: params.tokenHash,
         expires_at: params.expiresAt,

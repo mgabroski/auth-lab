@@ -25,12 +25,14 @@
  * - Use getSessionCookieName(isProduction) everywhere the cookie name is needed.
  */
 
+import type { MembershipRole } from '../../modules/memberships/membership.types';
+
 export type SessionData = {
   userId: string;
   tenantId: string;
   tenantKey: string; // subdomain key — used by middleware for tenant safety check
   membershipId: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: MembershipRole;
   mfaVerified: boolean;
   emailVerified: boolean;
   createdAt: string; // ISO string (JSON-safe)

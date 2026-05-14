@@ -215,7 +215,7 @@ describe('Auth contract surfaces (regression suite)', () => {
         tenantId,
         tenantKey,
         membershipId: randomUUID(),
-        role: 'MEMBER',
+        role: 'USER',
         mfaVerified: false,
         emailVerified: true,
         createdAt: new Date().toISOString(),
@@ -391,7 +391,7 @@ describe('Login lockout message (X6 regression)', () => {
 
       await deps.db
         .insertInto('memberships')
-        .values({ tenant_id: tenant.id, user_id: user.id, role: 'MEMBER', status: 'ACTIVE' })
+        .values({ tenant_id: tenant.id, user_id: user.id, role: 'USER', status: 'ACTIVE' })
         .execute();
 
       const host = `${tenantKey}.localhost:3000`;

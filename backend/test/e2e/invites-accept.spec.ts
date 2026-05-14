@@ -32,7 +32,7 @@ type AcceptInviteResponse = z.infer<typeof AcceptInviteResponseSchema>;
 const AuditInviteAcceptedMetaSchema = z.object({
   inviteId: z.string().uuid(),
   email: z.string().email(),
-  role: z.enum(['ADMIN', 'MEMBER']),
+  role: z.enum(['ADMIN', 'AGENT', 'USER']),
 });
 
 type AuditInviteAcceptedMeta = z.infer<typeof AuditInviteAcceptedMetaSchema>;
@@ -120,7 +120,7 @@ describe('POST /auth/invites/accept', () => {
         tokenHasher,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         tokenRaw,
       });
@@ -163,7 +163,7 @@ describe('POST /auth/invites/accept', () => {
 
       expect(meta.inviteId).toBe(invite.id);
       expect(meta.email).toBe(email.toLowerCase());
-      expect(meta.role).toBe('MEMBER');
+      expect(meta.role).toBe('USER');
     } finally {
       await close();
     }
@@ -193,7 +193,7 @@ describe('POST /auth/invites/accept', () => {
         tokenHasher,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         expiresAt: new Date(Date.now() - 60 * 1000),
         tokenRaw,
       });
@@ -254,7 +254,7 @@ describe('POST /auth/invites/accept', () => {
         tokenHasher,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'CANCELLED',
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         tokenRaw,

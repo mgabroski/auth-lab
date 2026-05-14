@@ -15,7 +15,7 @@ import { z } from 'zod';
 
 export const createInviteSchema = z.object({
   email: z.string().email('Invalid email address'),
-  role: z.enum(['ADMIN', 'MEMBER']),
+  role: z.enum(['ADMIN', 'AGENT', 'USER', 'MEMBER']),
 });
 
 export type CreateInviteInput = z.infer<typeof createInviteSchema>;

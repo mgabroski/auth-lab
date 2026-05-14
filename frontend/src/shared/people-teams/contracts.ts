@@ -8,7 +8,7 @@
  *
  * RULES:
  * - Group level is classification only: ADMIN / AGENT / USER.
- * - Current runtime auth roles remain ADMIN / MEMBER.
+ * - Current canonical runtime auth roles are ADMIN / AGENT / USER; MEMBER is a legacy alias.
  * - No Operational Access grants, Person Exceptions, Managed People, or
  *   Effective Access Resolver contracts belong here.
  */

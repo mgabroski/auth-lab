@@ -8,7 +8,7 @@
  *   Person Exceptions, or an Effective Access Resolver.
  *
  * RULES:
- * - Current runtime membership roles remain ADMIN / MEMBER.
+ * - Runtime membership roles are ADMIN / AGENT / USER; group level remains classification only.
  * - Group level is classification only: ADMIN / AGENT / USER.
  * - Group membership anchors to tenant memberships, not global users alone.
  * - The migration owns only constraints prefixed for tenant_group_members so

@@ -5,7 +5,7 @@ import { decideRegisterNextAction } from '../../../src/modules/auth/policies/reg
 type Scenario = {
   name: string;
   input: {
-    role: 'ADMIN' | 'MEMBER';
+    role: 'ADMIN' | 'AGENT' | 'USER';
     memberMfaRequired: boolean;
     emailVerified?: boolean;
   };
@@ -16,7 +16,7 @@ const SCENARIOS: Scenario[] = [
   {
     name: 'member with no MFA requirement resolves to NONE',
     input: {
-      role: 'MEMBER',
+      role: 'USER',
       memberMfaRequired: false,
     },
     expected: 'NONE',
@@ -24,7 +24,7 @@ const SCENARIOS: Scenario[] = [
   {
     name: 'member with tenant MFA requirement resolves to MFA_SETUP_REQUIRED',
     input: {
-      role: 'MEMBER',
+      role: 'USER',
       memberMfaRequired: true,
     },
     expected: 'MFA_SETUP_REQUIRED',

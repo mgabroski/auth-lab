@@ -47,17 +47,17 @@ Current route surface:
 
 ---
 
-## 1.1 Current role contract and Operational Access roadmap note
+## 1.1 Current role contract and Operational Access boundary
 
-The current Auth API role contract remains:
+The current Auth API canonical role contract is:
 
 ```ts
-'ADMIN' | 'MEMBER';
+'ADMIN' | 'AGENT' | 'USER';
 ```
 
-This file must not describe `AGENT` or a distinct runtime `USER` role as shipped until backend code, migrations, tests, and API contracts actually change.
+Legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled input/read boundaries during the backend compatibility window. New default self-service provisioning writes `USER`.
 
-Future Operational Access planning uses `Admin / Agent / User` as target terminology. In that future model, current `MEMBER` is the compatibility alias for future `User`, and `Agent` will require explicit operational access through Agent Groups or rare Person Exceptions. That is roadmap truth only; it does not change the current Auth API response shape.
+`AGENT` is a recognized runtime membership level, but Operational Access is not shipped in this API. Agent Groups, Person Exceptions, Managed People, Effective Access resolution, module-level Agent/User data differences, and the future Agent invite group requirement are not implemented by the Auth API in this step.
 
 ---
 
@@ -113,7 +113,7 @@ Several auth endpoints return the shared `AuthResult` shape.
   }
   membership: {
     id: string;
-    role: 'ADMIN' | 'MEMBER';
+    role: 'ADMIN' | 'AGENT' | 'USER';
   }
 }
 ```
@@ -160,7 +160,7 @@ None.
   }
   membership: {
     id: string;
-    role: 'ADMIN' | 'MEMBER';
+    role: 'ADMIN' | 'AGENT' | 'USER';
   }
   tenant: {
     id: string;
@@ -177,7 +177,7 @@ None.
 
 ### Guarantees
 
-- Current role values here are intentionally `ADMIN | MEMBER`; future `Admin / Agent / User` terminology is not part of this response yet.
+- Current canonical role values here are `ADMIN | AGENT | USER`; legacy `MEMBER` is normalized to `USER`.
 - session is already tenant-bound
 - tenant mismatch does not authenticate the user
 - response contains no raw secrets or tokens

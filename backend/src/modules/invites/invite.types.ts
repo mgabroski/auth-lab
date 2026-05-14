@@ -7,13 +7,18 @@
  *
  * RULES:
  * - Keep aligned with DB schema (invites.used_at is the acceptance timestamp).
+ * - InviteRole is canonical ADMIN / AGENT / USER.
+ * - MEMBER remains accepted only as a legacy input/read alias and normalizes to USER.
  * - Avoid leaking DB naming (snake_case) outside DAL/queries.
  * - InviteSummary is the safe API-facing DTO — tokenHash is always excluded.
  */
 
+import type { MembershipRole, MembershipRoleInput } from '../memberships/membership.types';
+
 export type InviteStatus = 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
 
-export type InviteRole = 'ADMIN' | 'MEMBER';
+export type InviteRole = MembershipRole;
+export type InviteRoleInput = MembershipRoleInput;
 
 export type InviteId = string;
 

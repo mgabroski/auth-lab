@@ -4,8 +4,8 @@
  * WHY:
  * - Defines the backend-owned DTO and domain vocabulary for the People & Teams
  *   foundation.
- * - Group level is classification only. It does not mutate the current
- *   ADMIN/MEMBER membership runtime contract.
+ * - Group level is classification only. It does not mutate canonical
+ *   ADMIN/AGENT/USER runtime membership roles.
  *
  * RULES:
  * - Pure types/constants only.

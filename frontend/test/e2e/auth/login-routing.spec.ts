@@ -105,7 +105,7 @@ test.describe('auth smoke: login, logout, routing, and tenant isolation', () => 
   // Proves the workspace setup banner contract (ADR 0003):
   // - /admin/settings route exists and is reachable (not 404)
   // - unauthenticated access to /admin/settings is redirected, not 500
-  // - NONE + MEMBER routes to /app (role-aware routing fix)
+  // - NONE + USER routes to /app (role-aware routing fix)
   // - NONE + ADMIN routes to /admin (role-aware routing fix)
   // - members are redirected away from /admin (role gate enforced)
   //
@@ -144,7 +144,7 @@ test.describe('auth smoke: login, logout, routing, and tenant isolation', () => 
     ).not.toBe(404);
   });
 
-  test('phase-9: member login lands on /app, not /admin (NONE + MEMBER role-aware routing)', async ({
+  test('phase-9: member login lands on /app, not /admin (NONE + USER role-aware routing)', async ({
     page,
   }) => {
     await page.goto(`${AUTH_E2E.OPEN_ORIGIN}/auth/login`);
@@ -152,7 +152,7 @@ test.describe('auth smoke: login, logout, routing, and tenant isolation', () => 
     await page.getByLabel('Password').fill(AUTH_E2E.MEMBER_PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    // NONE + MEMBER → /app (not /admin, not /admin/settings)
+    // NONE + USER → /app (not /admin, not /admin/settings)
     await expect(page).toHaveURL(`${AUTH_E2E.OPEN_ORIGIN}/app`);
     await expect(page.getByRole('heading', { name: 'Member app' })).toBeVisible();
     await expect(page.getByText('Authenticated handoff complete')).toBeVisible();

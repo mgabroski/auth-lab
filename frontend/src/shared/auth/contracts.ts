@@ -26,13 +26,23 @@
  * - Current `/admin` and `/admin/settings` pages do not read this field for
  *   live Settings progress. They now use `GET /settings/bootstrap` and
  *   `GET /settings/overview` instead.
+ *
+ * ROLE COMPATIBILITY NOTE:
+ * - Backend canonical runtime roles are ADMIN / AGENT / USER.
+ * - MEMBER remains accepted by the frontend as a legacy alias for USER while
+ *   old mocks and the current invite UI are still compatible.
+ * - AGENT currently routes as a non-admin shell user; Operational Access is not
+ *   implemented in this frontend contract.
+ *
  * - AuthNextAction is NOT extended — workspace setup is tenant state, not auth
  *   continuation state. See ADR 0003 and the Settings bootstrap ADR.
  */
 
 export type AuthProvider = 'password' | 'google' | 'microsoft';
 export type PublicSsoProvider = Exclude<AuthProvider, 'password'>;
-export type MembershipRole = 'ADMIN' | 'MEMBER';
+export type CanonicalMembershipRole = 'ADMIN' | 'AGENT' | 'USER';
+export type LegacyMembershipRole = 'MEMBER';
+export type MembershipRole = CanonicalMembershipRole | LegacyMembershipRole;
 export type InviteRole = MembershipRole;
 export type InviteStatus = 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
 

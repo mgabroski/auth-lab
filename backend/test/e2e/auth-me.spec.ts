@@ -68,7 +68,7 @@ async function seedUserWithPassword(opts: {
   tenantId: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER';
   name?: string;
   emailVerified?: boolean;
 }) {
@@ -141,7 +141,7 @@ describe('GET /auth/me', () => {
         tenantId: tenant.id,
         email,
         password,
-        role: 'MEMBER',
+        role: 'USER',
         name: 'Member User',
       });
 
@@ -172,7 +172,7 @@ describe('GET /auth/me', () => {
         },
         membership: {
           id: membership.id,
-          role: 'MEMBER',
+          role: 'USER',
         },
         tenant: {
           id: tenant.id,
@@ -190,7 +190,7 @@ describe('GET /auth/me', () => {
     }
   });
 
-  it('returns nextAction NONE for MEMBER when MFA is not required', async () => {
+  it('returns nextAction NONE for USER when MFA is not required', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
     const host = hostForTenant(tenantKey);
@@ -206,7 +206,7 @@ describe('GET /auth/me', () => {
         tenantId: tenant.id,
         email,
         password,
-        role: 'MEMBER',
+        role: 'USER',
       });
 
       const loginRes = await app.inject({
@@ -341,7 +341,7 @@ describe('GET /auth/me', () => {
         tenantId: tenant.id,
         email,
         password: 'MemberPass123!',
-        role: 'MEMBER',
+        role: 'USER',
         emailVerified: false,
       });
 
@@ -350,7 +350,7 @@ describe('GET /auth/me', () => {
         tenantId: tenant.id,
         tenantKey,
         membershipId: membership.id,
-        role: 'MEMBER',
+        role: 'USER',
         mfaVerified: false,
         emailVerified: false,
         createdAt: new Date().toISOString(),
@@ -389,7 +389,7 @@ describe('GET /auth/me', () => {
         tenantId: tenantA.id,
         email,
         password,
-        role: 'MEMBER',
+        role: 'USER',
       });
 
       const loginRes = await app.inject({

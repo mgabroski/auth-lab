@@ -102,7 +102,7 @@ describe('dev seed', () => {
         .execute();
 
       expect(memberships).toHaveLength(1);
-      expect(memberships[0]).toMatchObject({ role: 'MEMBER', status: 'ACTIVE' });
+      expect(memberships[0]).toMatchObject({ role: 'USER', status: 'ACTIVE' });
     } finally {
       await close();
     }

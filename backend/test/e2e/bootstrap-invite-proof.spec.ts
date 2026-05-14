@@ -20,7 +20,7 @@ const RegisterResponseSchema = z.object({
   }),
   membership: z.object({
     id: z.string().uuid(),
-    role: z.enum(['ADMIN', 'MEMBER']),
+    role: z.enum(['ADMIN', 'AGENT', 'USER']),
   }),
 });
 
@@ -32,7 +32,7 @@ const AuthMeResponseSchema = z.object({
   }),
   membership: z.object({
     id: z.string().uuid(),
-    role: z.enum(['ADMIN', 'MEMBER']),
+    role: z.enum(['ADMIN', 'AGENT', 'USER']),
   }),
   tenant: z.object({
     id: z.string().uuid(),

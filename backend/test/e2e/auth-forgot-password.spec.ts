@@ -93,7 +93,7 @@ async function seedUserWithPassword(opts: {
     .values({
       tenant_id: opts.tenantId,
       user_id: user.id,
-      role: 'MEMBER',
+      role: 'USER',
       status: 'ACTIVE',
     })
     .execute();
@@ -123,7 +123,7 @@ async function seedSsoOnlyUser(opts: { db: DbExecutor; tenantId: string; email: 
     .values({
       tenant_id: opts.tenantId,
       user_id: user.id,
-      role: 'MEMBER',
+      role: 'USER',
       status: 'ACTIVE',
     })
     .execute();

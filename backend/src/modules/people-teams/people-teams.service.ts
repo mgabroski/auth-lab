@@ -8,13 +8,14 @@
  *
  * RULES:
  * - No Operational Access grants, scopes, Person Exceptions, or resolver work.
- * - Group level is classification only and does not affect runtime auth roles.
+ * - Group level is classification only and does not mutate runtime membership roles.
  */
 
 import type { AuditRepo } from '../../shared/audit/audit.repo';
 import { AuditWriter } from '../../shared/audit/audit.writer';
 import type { DbExecutor } from '../../shared/db/db';
-import type { MembershipRole, MembershipStatus } from '../memberships/membership.types';
+import type { MembershipStatus } from '../memberships/membership.types';
+import { requireMembershipRole } from '../memberships';
 import {
   auditPeopleTeamGroupArchived,
   auditPeopleTeamGroupCreated,
@@ -120,7 +121,7 @@ function rowToPersonDto(row: PeopleTeamPersonRow): PeopleTeamPersonDto {
     userId: row.user_id,
     email: row.email,
     name: row.name,
-    role: row.role as MembershipRole,
+    role: requireMembershipRole(row.role),
     status: row.status as Extract<MembershipStatus, 'ACTIVE'>,
   };
 }
@@ -131,7 +132,7 @@ function rowToGroupMemberDto(row: PeopleTeamGroupMemberRow): PeopleTeamGroupMemb
     userId: row.user_id,
     email: row.email,
     name: row.name,
-    role: row.role as MembershipRole,
+    role: requireMembershipRole(row.role),
     status: row.status as MembershipStatus,
     addedAt: row.created_at.toISOString(),
   };
@@ -144,7 +145,7 @@ function membershipToAuditSummary(groupId: string, row: PeopleTeamMembershipRow)
     userId: row.user_id,
     email: row.email,
     name: row.name,
-    role: row.role as MembershipRole,
+    role: requireMembershipRole(row.role),
     status: row.status as MembershipStatus,
   };
 }

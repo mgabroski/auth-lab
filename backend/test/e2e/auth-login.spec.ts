@@ -16,7 +16,7 @@ type AuthenticatedResponseBody = {
   status: 'AUTHENTICATED';
   nextAction: 'NONE' | 'MFA_SETUP_REQUIRED';
   user: { id: string; email: string; name: string };
-  membership: { id: string; role: 'ADMIN' | 'MEMBER' };
+  membership: { id: string; role: 'ADMIN' | 'AGENT' | 'USER' };
 };
 
 type ErrorResponseBody = {
@@ -53,7 +53,7 @@ async function seedUserWithPassword(opts: {
   tenantId: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER';
   membershipStatus?: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
 }) {
   const user = await opts.db
@@ -139,7 +139,7 @@ describe('POST /auth/login', () => {
         tenantId: tenant.id,
         email,
         password: 'CorrectPass123!',
-        role: 'MEMBER',
+        role: 'USER',
       });
 
       const res = await app.inject({
@@ -189,7 +189,7 @@ describe('POST /auth/login', () => {
         tenantId: tenant.id,
         email,
         password,
-        role: 'MEMBER',
+        role: 'USER',
         membershipStatus: 'INVITED',
       });
 
@@ -223,7 +223,7 @@ describe('POST /auth/login', () => {
         tenantId: tenant.id,
         email,
         password,
-        role: 'MEMBER',
+        role: 'USER',
         membershipStatus: 'SUSPENDED',
       });
 
@@ -257,7 +257,7 @@ describe('POST /auth/login', () => {
         tenantId: tenant.id,
         email,
         password,
-        role: 'MEMBER',
+        role: 'USER',
       });
 
       const res = await app.inject({
@@ -271,7 +271,7 @@ describe('POST /auth/login', () => {
       const body = readJson<AuthenticatedResponseBody>(res);
       expect(body.nextAction).toBe('NONE');
       expect(body.user.email).toBe(email.toLowerCase());
-      expect(body.membership.role).toBe('MEMBER');
+      expect(body.membership.role).toBe('USER');
     } finally {
       await close();
     }

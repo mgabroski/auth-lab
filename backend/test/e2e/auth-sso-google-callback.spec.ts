@@ -62,7 +62,7 @@ describe('GET /auth/sso/google/callback', () => {
         db: deps.db,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
       });
 
@@ -102,7 +102,7 @@ describe('GET /auth/sso/google/callback', () => {
         tenantId: tenant.id,
         tenantKey,
         membershipId: created.membership.id,
-        role: 'MEMBER',
+        role: 'USER',
         mfaVerified: true,
         emailVerified: true,
       });
@@ -245,7 +245,7 @@ describe('GET /auth/sso/google/callback', () => {
         db: deps.db,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'INVITED',
       });
 
@@ -578,7 +578,7 @@ describe('GET /auth/sso/google/callback', () => {
         db: deps.db,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'PENDING',
         expiresAt: new Date(Date.now() - 60_000),
       });
@@ -676,7 +676,7 @@ describe('GET /auth/sso/google/callback', () => {
         db: deps.db,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'SUSPENDED',
       });
 
@@ -723,7 +723,7 @@ describe('GET /auth/sso/google/callback', () => {
         db: deps.db,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         status: 'ACTIVE',
       });
 

@@ -3,6 +3,7 @@ import type { Response } from 'light-my-request';
 import { sql } from 'kysely';
 
 import type { DbExecutor } from '../../src/shared/db/db';
+import { normalizeMembershipRole } from '../../src/modules/memberships/membership-role';
 
 /**
  * Creates a tenant specifically configured for SSO testing.
@@ -42,7 +43,7 @@ export async function createUserWithMembership(opts: {
   tenantId: string;
   email: string;
   name?: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER' | 'MEMBER';
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
 }) {
   const user = await opts.db
@@ -59,7 +60,7 @@ export async function createUserWithMembership(opts: {
     .values({
       tenant_id: opts.tenantId,
       user_id: user.id,
-      role: opts.role,
+      role: normalizeMembershipRole(opts.role),
       status: opts.status,
       invited_at: new Date(),
       ...(opts.status === 'ACTIVE' ? { accepted_at: new Date() } : {}),
@@ -78,7 +79,7 @@ export async function createInvite(opts: {
   db: DbExecutor;
   tenantId: string;
   email: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER' | 'MEMBER';
   status?: 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
   expiresAt?: Date;
   usedAt?: Date | null;
@@ -88,7 +89,7 @@ export async function createInvite(opts: {
     .values({
       tenant_id: opts.tenantId,
       email: opts.email.toLowerCase(),
-      role: opts.role,
+      role: normalizeMembershipRole(opts.role),
       status: opts.status ?? 'PENDING',
       token_hash: `token-${Math.random().toString(36).slice(2)}`,
       expires_at: opts.expiresAt ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),

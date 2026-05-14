@@ -12,7 +12,9 @@
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
-export type Role = 'ADMIN' | 'MEMBER';
+import type { MembershipRole } from '../../modules/memberships/membership.types';
+
+export type Role = MembershipRole;
 
 export type AuthContext = {
   userId: string | null;

@@ -71,14 +71,14 @@ Creates a new tenant-scoped invite and queues invite email delivery.
 ```ts
 {
   email: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER' | 'MEMBER';
 }
 ```
 
 Validation notes:
 
 - `email` must be a valid email address
-- `role` must be `ADMIN` or `MEMBER`
+- `role` must be `ADMIN`, `AGENT`, `USER`, or legacy `MEMBER`
 - invalid payloads return `400 VALIDATION_ERROR`
 
 ### Success response
@@ -91,7 +91,7 @@ Status: `201 Created`
     id: string;
     tenantId: string;
     email: string;
-    role: 'ADMIN' | 'MEMBER';
+    role: 'ADMIN' | 'AGENT' | 'USER';
     status: 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
     expiresAt: string;
     usedAt: string | null;
@@ -104,9 +104,11 @@ Status: `201 Created`
 ### Notes
 
 - email is normalized to lowercase
+- legacy `MEMBER` input normalizes to canonical `USER`
 - response DTO never includes `tokenHash`
 - success writes `invite.created` audit data
 - success enqueues outbox delivery for the invite email
+- `AGENT` is accepted as a runtime membership level only; Agent group assignment and Operational Access are not implemented here
 
 ### Common business failures
 
@@ -145,7 +147,7 @@ Status: `200 OK`
     id: string;
     tenantId: string;
     email: string;
-    role: 'ADMIN' | 'MEMBER';
+    role: 'ADMIN' | 'AGENT' | 'USER';
     status: 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
     expiresAt: string;
     usedAt: string | null;
@@ -190,7 +192,7 @@ Status: `200 OK`
     id: string;
     tenantId: string;
     email: string;
-    role: 'ADMIN' | 'MEMBER';
+    role: 'ADMIN' | 'AGENT' | 'USER';
     status: 'PENDING' | 'ACCEPTED' | 'CANCELLED' | 'EXPIRED';
     expiresAt: string;
     usedAt: string | null;

@@ -60,7 +60,7 @@ async function seedUserWithPassword(opts: {
   tenantId: string;
   email: string;
   password: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER';
   emailVerified?: boolean;
   hasVerifiedMfaSecret?: boolean;
   name?: string;
@@ -119,7 +119,7 @@ async function createAcceptedInvite(opts: {
   tokenHasher: { hash(input: string): string };
   tenantId: string;
   email: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER';
   tokenRaw: string;
 }) {
   return opts.db
@@ -139,7 +139,7 @@ async function createAcceptedInvite(opts: {
 
 type LoginScenario = {
   name: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER';
   memberMfaRequired: boolean;
   emailVerified: boolean;
   hasVerifiedMfaSecret: boolean;
@@ -149,7 +149,7 @@ type LoginScenario = {
 const LOGIN_MATRIX: LoginScenario[] = [
   {
     name: 'member with no tenant MFA requirement resolves to NONE',
-    role: 'MEMBER',
+    role: 'USER',
     memberMfaRequired: false,
     emailVerified: true,
     hasVerifiedMfaSecret: false,
@@ -157,7 +157,7 @@ const LOGIN_MATRIX: LoginScenario[] = [
   },
   {
     name: 'member with tenant MFA requirement and no verified secret resolves to MFA_SETUP_REQUIRED',
-    role: 'MEMBER',
+    role: 'USER',
     memberMfaRequired: true,
     emailVerified: true,
     hasVerifiedMfaSecret: false,
@@ -165,7 +165,7 @@ const LOGIN_MATRIX: LoginScenario[] = [
   },
   {
     name: 'member with tenant MFA requirement and a verified secret resolves to MFA_REQUIRED',
-    role: 'MEMBER',
+    role: 'USER',
     memberMfaRequired: true,
     emailVerified: true,
     hasVerifiedMfaSecret: true,
@@ -307,7 +307,7 @@ describe('NextAction contract matrix', () => {
     }
   });
 
-  it('POST /auth/register resolves MEMBER invite registration to NONE', async () => {
+  it('POST /auth/register resolves USER invite registration to NONE', async () => {
     const { app, deps, close } = await buildTestApp();
     const tenantKey = `tenant-${randomUUID().slice(0, 8)}`;
     const host = hostForTenant(tenantKey, 'localhost:3000');
@@ -321,7 +321,7 @@ describe('NextAction contract matrix', () => {
         tokenHasher: deps.tokenHasher,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         tokenRaw: inviteToken,
       });
 

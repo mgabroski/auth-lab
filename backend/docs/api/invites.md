@@ -34,13 +34,13 @@ That surface is documented in `backend/docs/api/admin.md`.
 
 ---
 
-## 1.1 Current invite role contract and Operational Access roadmap note
+## 1.1 Current invite role contract and Operational Access boundary
 
-The current invite/membership role contract remains `ADMIN | MEMBER`.
+The current canonical invite/membership role contract is `ADMIN | AGENT | USER`.
 
-Future Operational Access planning moves toward `Admin / Agent / User`, with current `MEMBER` acting as the compatibility alias for future `User`. Future Agent invitations must require at least one Agent Group so an Agent is operationally meaningful.
+Legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled input/read boundaries during the backend compatibility window. New canonical invite writes normalize `MEMBER` to `USER`.
 
-That future behavior is not implemented in the current invite acceptance endpoint. This document must not imply Agent invites, Agent Groups, Person Exceptions, or Operational Access are executable today.
+`AGENT` is a recognized runtime membership level, but this endpoint does not implement Agent group assignment, Agent operational access, Person Exceptions, Managed People, Effective Access resolution, or module-level Agent/User data differences. The future Agent invite group requirement is not implemented here.
 
 ---
 

@@ -30,17 +30,13 @@ import {
   countInvitesByTenantSql,
   findLatestInviteByTenantAndEmailSql,
 } from '../dal/invite.query-sql';
-import type { Invite, InviteRole, InviteStatus, InviteSummary } from '../invite.types';
+import type { Invite, InviteStatus, InviteSummary } from '../invite.types';
+import { requireMembershipRole } from '../../memberships';
 
 function parseInviteStatus(value: string): InviteStatus {
   if (value === 'PENDING' || value === 'ACCEPTED' || value === 'CANCELLED' || value === 'EXPIRED')
     return value;
   return 'EXPIRED';
-}
-
-function parseInviteRole(value: string): InviteRole {
-  if (value === 'ADMIN' || value === 'MEMBER') return value;
-  return 'MEMBER';
 }
 
 /**
@@ -62,7 +58,7 @@ export function rowToInviteSummary(row: {
     id: row.id,
     tenantId: row.tenant_id,
     email: row.email,
-    role: parseInviteRole(row.role),
+    role: requireMembershipRole(row.role),
     status: parseInviteStatus(row.status),
     expiresAt: row.expires_at,
     usedAt: row.used_at ?? null,
@@ -83,7 +79,7 @@ export async function getInviteByTenantAndTokenHash(
     tenantId: row.tenant_id,
 
     email: row.email,
-    role: parseInviteRole(row.role),
+    role: requireMembershipRole(row.role),
     status: parseInviteStatus(row.status),
 
     tokenHash: row.token_hash,
@@ -126,7 +122,7 @@ export async function getLatestInviteByTenantAndEmail(
     id: row.id,
     tenantId: row.tenant_id,
     email: row.email,
-    role: parseInviteRole(row.role),
+    role: requireMembershipRole(row.role),
     status: parseInviteStatus(row.status),
     tokenHash: row.token_hash,
     expiresAt: row.expires_at,

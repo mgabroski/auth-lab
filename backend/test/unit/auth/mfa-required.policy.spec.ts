@@ -7,8 +7,13 @@ describe('isMfaRequiredForLogin', () => {
     expect(isMfaRequiredForLogin({ role: 'ADMIN', tenantMemberMfaRequired: true })).toBe(true);
   });
 
-  it('requires MFA for MEMBER only when tenant setting enforces it', () => {
-    expect(isMfaRequiredForLogin({ role: 'MEMBER', tenantMemberMfaRequired: false })).toBe(false);
-    expect(isMfaRequiredForLogin({ role: 'MEMBER', tenantMemberMfaRequired: true })).toBe(true);
+  it('requires MFA for AGENT only when tenant non-admin policy enforces it', () => {
+    expect(isMfaRequiredForLogin({ role: 'AGENT', tenantMemberMfaRequired: false })).toBe(false);
+    expect(isMfaRequiredForLogin({ role: 'AGENT', tenantMemberMfaRequired: true })).toBe(true);
+  });
+
+  it('requires MFA for USER only when tenant non-admin policy enforces it', () => {
+    expect(isMfaRequiredForLogin({ role: 'USER', tenantMemberMfaRequired: false })).toBe(false);
+    expect(isMfaRequiredForLogin({ role: 'USER', tenantMemberMfaRequired: true })).toBe(true);
   });
 });

@@ -37,6 +37,8 @@
  *   auth continuation state.
  */
 
+import type { MembershipRole } from '../memberships/membership.types';
+
 export type AuthProvider = 'password' | 'google' | 'microsoft';
 
 export type AuthIdentity = {
@@ -79,7 +81,7 @@ export type EmailVerificationToken = {
  * Precedence (Decision 3, Brick 11 — locked):
  *   EMAIL_VERIFICATION_REQUIRED  — always wins when email is unverified
  *   MFA_SETUP_REQUIRED           — admin who hasn't set up MFA yet
- *   MFA_REQUIRED                 — admin/member must verify MFA
+ *   MFA_REQUIRED                 — admin/non-admin must verify MFA
  *   NONE                         — fully authenticated
  *
  * Workspace setup state is NOT represented here.
@@ -103,7 +105,7 @@ export type AuthResult = {
   };
   membership: {
     id: string;
-    role: 'ADMIN' | 'MEMBER';
+    role: MembershipRole;
   };
 };
 
@@ -120,7 +122,7 @@ export type MeResponse = {
   };
   membership: {
     id: string;
-    role: 'ADMIN' | 'MEMBER';
+    role: MembershipRole;
   };
   tenant: {
     id: string;

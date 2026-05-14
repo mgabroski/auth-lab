@@ -40,7 +40,7 @@ async function createPendingInvite(opts: {
   tokenHasher: { hash(input: string): string };
   tenantId: string;
   email: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: 'ADMIN' | 'AGENT' | 'USER';
   tokenRaw: string;
 }) {
   return opts.db
@@ -116,7 +116,7 @@ describe('Continuation-flow contracts', () => {
         tokenHasher: deps.tokenHasher,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         tokenRaw: token,
       });
 
@@ -158,7 +158,7 @@ describe('Continuation-flow contracts', () => {
         tokenHasher: deps.tokenHasher,
         tenantId: tenant.id,
         email,
-        role: 'MEMBER',
+        role: 'USER',
         tokenRaw: token,
       });
 

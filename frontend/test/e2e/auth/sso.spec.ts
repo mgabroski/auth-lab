@@ -223,8 +223,8 @@ test.describe('auth smoke: topology and SSO', () => {
     expect(meBody.user.email.toLowerCase(), 'Session must be for the SSO email').toBe(
       ssoEmail.toLowerCase(),
     );
-    expect(meBody.membership.role, 'New SSO member in goodwill-open must have MEMBER role').toBe(
-      'MEMBER',
+    expect(meBody.membership.role, 'New SSO member in goodwill-open must have USER role').toBe(
+      'USER',
     );
     // WHY true: when MFA is not required for this membership, the SSO callback
     // creates the session as fully authenticated. mfaVerified=false means
@@ -349,6 +349,6 @@ test.describe('auth smoke: topology and SSO', () => {
       membership: { role: string };
     };
     expect(meBody.user.email.toLowerCase()).toBe(ssoEmail.toLowerCase());
-    expect(meBody.membership.role).toBe('MEMBER');
+    expect(meBody.membership.role).toBe('USER');
   });
 });
