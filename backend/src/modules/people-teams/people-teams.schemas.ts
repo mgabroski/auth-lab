@@ -6,8 +6,9 @@
  *
  * RULES:
  * - Group lifecycle writes manage tenant groups only.
- * - No member add/remove, Operational Access grants, scopes, Person Exceptions,
- *   or resolver request shapes live here.
+ * - Group member writes only attach/detach active tenant memberships.
+ * - No Operational Access grants, scopes, Person Exceptions, or resolver request
+ *   shapes live here.
  */
 
 import { z } from 'zod';

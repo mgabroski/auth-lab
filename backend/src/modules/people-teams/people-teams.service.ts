@@ -59,8 +59,33 @@ function parseCount(value: string | number | bigint): number {
   return Number.parseInt(value, 10);
 }
 
+const GROUP_NORMALIZED_NAME_UNIQUE_CONSTRAINT = 'tenant_groups_tenant_normalized_name_unique';
+
 function normalizeGroupName(name: string): string {
   return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function getErrorStringField(error: unknown, fieldName: string): string | undefined {
+  if (isRecord(error) && typeof error[fieldName] === 'string') {
+    return error[fieldName];
+  }
+
+  if (isRecord(error) && isRecord(error.cause) && typeof error.cause[fieldName] === 'string') {
+    return error.cause[fieldName];
+  }
+
+  return undefined;
+}
+
+function isPgUniqueConstraintViolation(error: unknown, constraintName: string): boolean {
+  return (
+    getErrorStringField(error, 'code') === '23505' &&
+    getErrorStringField(error, 'constraint') === constraintName
+  );
 }
 
 function rowToGroupDto(row: PeopleTeamGroupRow): PeopleTeamGroupDto {
@@ -250,14 +275,23 @@ export class PeopleTeamsService {
       const normalizedName = normalizeGroupName(input.name);
       await this.assertGroupNameAvailable(repo, auth.tenantId, normalizedName);
 
-      const created = await repo.createGroup({
-        tenantId: auth.tenantId,
-        name: input.name,
-        normalizedName,
-        description: input.description,
-        level: input.level,
-        actorMembershipId: auth.membershipId,
-      });
+      let created: PeopleTeamStoredGroupRow;
+      try {
+        created = await repo.createGroup({
+          tenantId: auth.tenantId,
+          name: input.name,
+          normalizedName,
+          description: input.description,
+          level: input.level,
+          actorMembershipId: auth.membershipId,
+        });
+      } catch (error: unknown) {
+        if (isPgUniqueConstraintViolation(error, GROUP_NORMALIZED_NAME_UNIQUE_CONSTRAINT)) {
+          throw PeopleTeamsErrors.duplicateGroupName(normalizedName);
+        }
+
+        throw error;
+      }
 
       const writer = this.buildAuditWriter(trx, auth);
       await auditPeopleTeamGroupCreated(writer, {
@@ -286,15 +320,24 @@ export class PeopleTeamsService {
       const normalizedName = normalizeGroupName(input.name);
       await this.assertGroupNameAvailable(repo, auth.tenantId, normalizedName, groupId);
 
-      const updated = await repo.updateActiveGroup({
-        tenantId: auth.tenantId,
-        groupId,
-        name: input.name,
-        normalizedName,
-        description: input.description,
-        level: input.level,
-        actorMembershipId: auth.membershipId,
-      });
+      let updated: PeopleTeamStoredGroupRow | undefined;
+      try {
+        updated = await repo.updateActiveGroup({
+          tenantId: auth.tenantId,
+          groupId,
+          name: input.name,
+          normalizedName,
+          description: input.description,
+          level: input.level,
+          actorMembershipId: auth.membershipId,
+        });
+      } catch (error: unknown) {
+        if (isPgUniqueConstraintViolation(error, GROUP_NORMALIZED_NAME_UNIQUE_CONSTRAINT)) {
+          throw PeopleTeamsErrors.duplicateGroupName(normalizedName);
+        }
+
+        throw error;
+      }
 
       if (!updated) throw PeopleTeamsErrors.groupNotFound(groupId);
 

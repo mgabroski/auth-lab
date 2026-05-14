@@ -92,8 +92,13 @@ test.describe('settings tenant-admin proof', () => {
     await expect(page.getByRole('heading', { name: 'People & Teams' })).toBeVisible();
     await expect(page.getByText('Group level is classification only for now')).toBeVisible();
     await expect(page.getByText('Operational Access will be configured later')).toBeVisible();
+    await expect(page.getByText('Access Grants')).toHaveCount(0);
+    await expect(page.getByText('Can see')).toHaveCount(0);
+    await expect(page.getByText('Can do')).toHaveCount(0);
+    await expect(page.getByText('Where')).toHaveCount(0);
     await expect(page.getByText('Person Exceptions')).toHaveCount(0);
     await expect(page.getByText('Managed People')).toHaveCount(0);
+    await expect(page.getByText('Effective Access')).toHaveCount(0);
 
     const groupName = `E2E People Team ${Date.now()}`;
     const updatedGroupName = `${groupName} Updated`;
@@ -126,6 +131,8 @@ test.describe('settings tenant-admin proof', () => {
     await page.getByRole('button', { name: 'Archive group' }).last().click();
     await expect(page.getByText('Group archived.')).toBeVisible();
     await expect(page.getByRole('heading', { name: updatedGroupName })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /restore/i })).toHaveCount(0);
+    await expect(page.getByText(/restore group/i)).toHaveCount(0);
 
     await page.goto(`${OPEN_ORIGIN}/admin/settings/access`);
     await expect(page.getByRole('heading', { name: 'Access & Security' })).toBeVisible();

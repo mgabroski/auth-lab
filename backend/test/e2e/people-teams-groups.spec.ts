@@ -287,6 +287,56 @@ describe('people-teams group lifecycle writes', () => {
     }
   });
 
+  it('returns a clean conflict if duplicate group creation races the pre-check', async () => {
+    const { app, deps, close, reset } = await buildTestApp();
+
+    try {
+      await reset();
+      await upPeopleTeamsMigration(deps.db);
+
+      const tenant = await createTenant(deps);
+      const admin = await createSession({
+        deps,
+        tenantId: tenant.id,
+        tenantKey: tenant.key,
+        role: 'ADMIN',
+      });
+
+      const requests = await Promise.all([
+        app.inject({
+          method: 'POST',
+          url: '/people-teams/groups',
+          headers: { host: hostForTenant(tenant.key), cookie: admin.cookie },
+          payload: { name: 'Concurrent HR Agents', level: 'AGENT' },
+        }),
+        app.inject({
+          method: 'POST',
+          url: '/people-teams/groups',
+          headers: { host: hostForTenant(tenant.key), cookie: admin.cookie },
+          payload: { name: ' concurrent   hr agents ', level: 'AGENT' },
+        }),
+      ]);
+
+      expect(requests.map((res) => res.statusCode).sort()).toEqual([201, 409]);
+      const conflict = requests.find((res) => res.statusCode === 409);
+      if (!conflict) throw new Error('Expected one concurrent create request to return 409');
+      expect(readJson<ErrorResponseBody>(conflict).error.message).toBe(
+        'A People & Teams group with this name already exists.',
+      );
+
+      const groups = await deps.db
+        .selectFrom('tenant_groups')
+        .select(['id'])
+        .where('tenant_id', '=', tenant.id)
+        .where('normalized_name', '=', 'concurrent hr agents')
+        .execute();
+
+      expect(groups).toHaveLength(1);
+    } finally {
+      await close();
+    }
+  });
+
   it('allows ADMIN to update an active group and rejects duplicate or cross-tenant updates', async () => {
     const { app, deps, close, reset } = await buildTestApp();
 

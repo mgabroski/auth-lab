@@ -49,12 +49,13 @@ describe('PeopleTeamsView', () => {
     expect(html).toContain('does not change a user&#x27;s login role');
     expect(html).toContain('does not grant module access');
     expect(html).toContain('Operational Access will be configured later');
+    expect(html).not.toContain('Access Grants');
     expect(html).not.toContain('Can see');
     expect(html).not.toContain('Can do');
+    expect(html).not.toContain('Where');
     expect(html).not.toContain('Person Exceptions');
     expect(html).not.toContain('Managed People');
-    expect(html).not.toContain('Where');
-    expect(html).not.toContain('Access grants');
+    expect(html).not.toContain('Effective Access');
   });
 
   it('renders empty group and member states', () => {
