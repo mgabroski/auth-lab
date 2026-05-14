@@ -2,7 +2,7 @@
  * backend/src/modules/people-teams/dal/people-teams.query-sql.ts
  *
  * WHY:
- * - Raw Kysely read implementations for People & Teams.
+ * - Raw Kysely implementations for People & Teams.
  * - Keeps tenant scoping at the query boundary.
  *
  * RULES:
@@ -13,6 +13,7 @@
  */
 
 import type { DbExecutor } from '../../../shared/db/db';
+import type { PeopleTeamGroupLevel } from '../people-teams.types';
 
 export type PeopleTeamGroupRow = {
   id: string;
@@ -26,6 +27,32 @@ export type PeopleTeamGroupRow = {
   updated_at: Date;
   archived_at: Date | null;
 };
+
+export type PeopleTeamStoredGroupRow = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  normalized_name: string;
+  description: string | null;
+  level: string;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+  archived_at: Date | null;
+};
+
+const GROUP_SELECT_COLUMNS = [
+  'id',
+  'tenant_id',
+  'name',
+  'normalized_name',
+  'description',
+  'level',
+  'status',
+  'created_at',
+  'updated_at',
+  'archived_at',
+] as const;
 
 export async function selectActiveGroupsByTenantSql(
   db: DbExecutor,
@@ -65,6 +92,154 @@ export async function selectActiveGroupsByTenantSql(
     ])
     .orderBy('tenant_groups.normalized_name', 'asc')
     .execute() as Promise<PeopleTeamGroupRow[]>;
+}
+
+export async function selectGroupByIdForTenantSql(
+  db: DbExecutor,
+  tenantId: string,
+  groupId: string,
+): Promise<PeopleTeamGroupRow | undefined> {
+  return db
+    .selectFrom('tenant_groups')
+    .leftJoin('tenant_group_members', (join) =>
+      join
+        .onRef('tenant_group_members.group_id', '=', 'tenant_groups.id')
+        .onRef('tenant_group_members.tenant_id', '=', 'tenant_groups.tenant_id'),
+    )
+    .select((eb) => [
+      'tenant_groups.id as id',
+      'tenant_groups.name as name',
+      'tenant_groups.normalized_name as normalized_name',
+      'tenant_groups.description as description',
+      'tenant_groups.level as level',
+      'tenant_groups.status as status',
+      eb.fn.count<string>('tenant_group_members.membership_id').as('member_count'),
+      'tenant_groups.created_at as created_at',
+      'tenant_groups.updated_at as updated_at',
+      'tenant_groups.archived_at as archived_at',
+    ])
+    .where('tenant_groups.tenant_id', '=', tenantId)
+    .where('tenant_groups.id', '=', groupId)
+    .groupBy([
+      'tenant_groups.id',
+      'tenant_groups.name',
+      'tenant_groups.normalized_name',
+      'tenant_groups.description',
+      'tenant_groups.level',
+      'tenant_groups.status',
+      'tenant_groups.created_at',
+      'tenant_groups.updated_at',
+      'tenant_groups.archived_at',
+    ])
+    .executeTakeFirst() as Promise<PeopleTeamGroupRow | undefined>;
+}
+
+export async function selectStoredGroupByIdForTenantSql(
+  db: DbExecutor,
+  tenantId: string,
+  groupId: string,
+): Promise<PeopleTeamStoredGroupRow | undefined> {
+  return db
+    .selectFrom('tenant_groups')
+    .select(GROUP_SELECT_COLUMNS)
+    .where('tenant_id', '=', tenantId)
+    .where('id', '=', groupId)
+    .executeTakeFirst() as Promise<PeopleTeamStoredGroupRow | undefined>;
+}
+
+export async function selectGroupByNormalizedNameSql(
+  db: DbExecutor,
+  tenantId: string,
+  normalizedName: string,
+): Promise<{ id: string } | undefined> {
+  return db
+    .selectFrom('tenant_groups')
+    .select(['id'])
+    .where('tenant_id', '=', tenantId)
+    .where('normalized_name', '=', normalizedName)
+    .executeTakeFirst();
+}
+
+export async function insertGroupSql(
+  db: DbExecutor,
+  input: {
+    tenantId: string;
+    name: string;
+    normalizedName: string;
+    description: string | null;
+    level: PeopleTeamGroupLevel;
+    actorMembershipId: string;
+  },
+): Promise<PeopleTeamStoredGroupRow> {
+  return db
+    .insertInto('tenant_groups')
+    .values({
+      tenant_id: input.tenantId,
+      name: input.name,
+      normalized_name: input.normalizedName,
+      description: input.description,
+      level: input.level,
+      status: 'ACTIVE',
+      created_by_membership_id: input.actorMembershipId,
+      updated_by_membership_id: input.actorMembershipId,
+    })
+    .returning(GROUP_SELECT_COLUMNS)
+    .executeTakeFirstOrThrow() as Promise<PeopleTeamStoredGroupRow>;
+}
+
+export async function updateActiveGroupSql(
+  db: DbExecutor,
+  input: {
+    tenantId: string;
+    groupId: string;
+    name: string;
+    normalizedName: string;
+    description: string | null;
+    level: PeopleTeamGroupLevel;
+    actorMembershipId: string;
+  },
+): Promise<PeopleTeamStoredGroupRow | undefined> {
+  return db
+    .updateTable('tenant_groups')
+    .set({
+      name: input.name,
+      normalized_name: input.normalizedName,
+      description: input.description,
+      level: input.level,
+      updated_by_membership_id: input.actorMembershipId,
+      updated_at: new Date(),
+    })
+    .where('tenant_id', '=', input.tenantId)
+    .where('id', '=', input.groupId)
+    .where('status', '=', 'ACTIVE')
+    .returning(GROUP_SELECT_COLUMNS)
+    .executeTakeFirst() as Promise<PeopleTeamStoredGroupRow | undefined>;
+}
+
+export async function archiveActiveGroupSql(
+  db: DbExecutor,
+  input: {
+    tenantId: string;
+    groupId: string;
+    actorMembershipId: string;
+  },
+): Promise<PeopleTeamStoredGroupRow | undefined> {
+  const now = new Date();
+
+  return db
+    .updateTable('tenant_groups')
+    .set({
+      status: 'ARCHIVED',
+      archived_at: now,
+      archived_by_membership_id: input.actorMembershipId,
+      updated_by_membership_id: input.actorMembershipId,
+      updated_at: now,
+    })
+    .where('tenant_id', '=', input.tenantId)
+    .where('id', '=', input.groupId)
+    .where('status', '=', 'ACTIVE')
+    .returning(GROUP_SELECT_COLUMNS)
+    .executeTakeFirst() as Promise<PeopleTeamStoredGroupRow | undefined>;
 }
 
 export type PeopleTeamPersonRow = {

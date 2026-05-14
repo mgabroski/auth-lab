@@ -20,6 +20,15 @@ export type PeopleTeamGroupLevel = (typeof PEOPLE_TEAM_GROUP_LEVELS)[number];
 export const PEOPLE_TEAM_GROUP_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
 export type PeopleTeamGroupStatus = (typeof PEOPLE_TEAM_GROUP_STATUSES)[number];
 
+export type PeopleTeamAuditContext = {
+  requestId: string | null;
+  ip: string | null;
+  userAgent: string | null;
+  tenantId: string;
+  userId: string;
+  membershipId: string;
+};
+
 export type PeopleTeamGroupDto = {
   id: string;
   name: string;
@@ -35,6 +44,10 @@ export type PeopleTeamGroupDto = {
 
 export type PeopleTeamGroupsResponse = {
   groups: PeopleTeamGroupDto[];
+};
+
+export type PeopleTeamGroupResponse = {
+  group: PeopleTeamGroupDto;
 };
 
 export type PeopleTeamPersonDto = {

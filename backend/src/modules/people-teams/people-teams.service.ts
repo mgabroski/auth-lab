@@ -2,25 +2,45 @@
  * backend/src/modules/people-teams/people-teams.service.ts
  *
  * WHY:
- * - Read-only application service for the People & Teams foundation.
- * - Shapes tenant-scoped repo rows into backend-owned DTO contracts.
+ * - Application service for the People & Teams foundation.
+ * - Shapes tenant-scoped repo rows into backend-owned DTO contracts and owns
+ *   group lifecycle write transactions.
  *
  * RULES:
  * - No Operational Access grants, scopes, Person Exceptions, or resolver work.
  * - Group level is classification only and does not affect runtime auth roles.
  */
 
+import type { AuditRepo } from '../../shared/audit/audit.repo';
+import { AuditWriter } from '../../shared/audit/audit.writer';
+import type { DbExecutor } from '../../shared/db/db';
 import type { MembershipRole, MembershipStatus } from '../memberships/membership.types';
+import {
+  auditPeopleTeamGroupArchived,
+  auditPeopleTeamGroupCreated,
+  auditPeopleTeamGroupUpdated,
+} from './people-teams.audit';
 import type {
+  CreatePeopleTeamGroupInput,
+  UpdatePeopleTeamGroupInput,
+} from './people-teams.schemas';
+import type {
+  PeopleTeamAuditContext,
   PeopleTeamGroupDto,
   PeopleTeamGroupLevel,
+  PeopleTeamGroupResponse,
   PeopleTeamGroupsResponse,
   PeopleTeamGroupStatus,
   PeopleTeamPeopleResponse,
   PeopleTeamPersonDto,
 } from './people-teams.types';
 import type { PeopleTeamsRepo } from './dal/people-teams.repo';
-import type { PeopleTeamGroupRow, PeopleTeamPersonRow } from './dal/people-teams.query-sql';
+import type {
+  PeopleTeamGroupRow,
+  PeopleTeamPersonRow,
+  PeopleTeamStoredGroupRow,
+} from './dal/people-teams.query-sql';
+import { PeopleTeamsErrors } from './people-teams.errors';
 
 function toIso(value: Date | null): string | null {
   return value ? value.toISOString() : null;
@@ -30,6 +50,10 @@ function parseCount(value: string | number | bigint): number {
   if (typeof value === 'number') return value;
   if (typeof value === 'bigint') return Number(value);
   return Number.parseInt(value, 10);
+}
+
+function normalizeGroupName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function rowToGroupDto(row: PeopleTeamGroupRow): PeopleTeamGroupDto {
@@ -47,6 +71,17 @@ function rowToGroupDto(row: PeopleTeamGroupRow): PeopleTeamGroupDto {
   };
 }
 
+function storedGroupToAuditSummary(row: PeopleTeamStoredGroupRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    normalizedName: row.normalized_name,
+    description: row.description,
+    level: row.level as PeopleTeamGroupLevel,
+    status: row.status,
+  };
+}
+
 function rowToPersonDto(row: PeopleTeamPersonRow): PeopleTeamPersonDto {
   return {
     membershipId: row.membership_id,
@@ -59,15 +94,153 @@ function rowToPersonDto(row: PeopleTeamPersonRow): PeopleTeamPersonDto {
 }
 
 export class PeopleTeamsService {
-  constructor(private readonly repo: PeopleTeamsRepo) {}
+  constructor(
+    private readonly deps: {
+      db: DbExecutor;
+      auditRepo: AuditRepo;
+      repo: PeopleTeamsRepo;
+    },
+  ) {}
 
   async listGroups(tenantId: string): Promise<PeopleTeamGroupsResponse> {
-    const rows = await this.repo.listActiveGroups(tenantId);
+    const rows = await this.deps.repo.listActiveGroups(tenantId);
     return { groups: rows.map(rowToGroupDto) };
   }
 
+  async getGroup(tenantId: string, groupId: string): Promise<PeopleTeamGroupResponse> {
+    const row = await this.deps.repo.getGroup(tenantId, groupId);
+    if (!row) throw PeopleTeamsErrors.groupNotFound(groupId);
+    return { group: rowToGroupDto(row) };
+  }
+
   async listPeople(tenantId: string): Promise<PeopleTeamPeopleResponse> {
-    const rows = await this.repo.listActivePeople(tenantId);
+    const rows = await this.deps.repo.listActivePeople(tenantId);
     return { people: rows.map(rowToPersonDto) };
+  }
+
+  async createGroup(
+    auth: PeopleTeamAuditContext,
+    input: CreatePeopleTeamGroupInput,
+  ): Promise<PeopleTeamGroupResponse> {
+    return this.deps.db.transaction().execute(async (trx) => {
+      const repo = this.deps.repo.withDb(trx);
+      const normalizedName = normalizeGroupName(input.name);
+      await this.assertGroupNameAvailable(repo, auth.tenantId, normalizedName);
+
+      const created = await repo.createGroup({
+        tenantId: auth.tenantId,
+        name: input.name,
+        normalizedName,
+        description: input.description,
+        level: input.level,
+        actorMembershipId: auth.membershipId,
+      });
+
+      const writer = this.buildAuditWriter(trx, auth);
+      await auditPeopleTeamGroupCreated(writer, {
+        group: storedGroupToAuditSummary(created),
+        source: 'PeopleTeamsService.createGroup',
+      });
+
+      const group = await repo.getGroup(auth.tenantId, created.id);
+      if (!group) throw PeopleTeamsErrors.groupNotFound(created.id);
+      return { group: rowToGroupDto(group) };
+    });
+  }
+
+  async updateGroup(
+    auth: PeopleTeamAuditContext,
+    groupId: string,
+    input: UpdatePeopleTeamGroupInput,
+  ): Promise<PeopleTeamGroupResponse> {
+    return this.deps.db.transaction().execute(async (trx) => {
+      const repo = this.deps.repo.withDb(trx);
+      const existing = await repo.getStoredGroup(auth.tenantId, groupId);
+
+      if (!existing) throw PeopleTeamsErrors.groupNotFound(groupId);
+      if (existing.status === 'ARCHIVED') throw PeopleTeamsErrors.archivedGroupReadOnly(groupId);
+
+      const normalizedName = normalizeGroupName(input.name);
+      await this.assertGroupNameAvailable(repo, auth.tenantId, normalizedName, groupId);
+
+      const updated = await repo.updateActiveGroup({
+        tenantId: auth.tenantId,
+        groupId,
+        name: input.name,
+        normalizedName,
+        description: input.description,
+        level: input.level,
+        actorMembershipId: auth.membershipId,
+      });
+
+      if (!updated) throw PeopleTeamsErrors.groupNotFound(groupId);
+
+      const writer = this.buildAuditWriter(trx, auth);
+      await auditPeopleTeamGroupUpdated(writer, {
+        before: storedGroupToAuditSummary(existing),
+        after: storedGroupToAuditSummary(updated),
+        source: 'PeopleTeamsService.updateGroup',
+      });
+
+      const group = await repo.getGroup(auth.tenantId, groupId);
+      if (!group) throw PeopleTeamsErrors.groupNotFound(groupId);
+      return { group: rowToGroupDto(group) };
+    });
+  }
+
+  async archiveGroup(
+    auth: PeopleTeamAuditContext,
+    groupId: string,
+  ): Promise<PeopleTeamGroupResponse> {
+    return this.deps.db.transaction().execute(async (trx) => {
+      const repo = this.deps.repo.withDb(trx);
+      const existing = await repo.getStoredGroup(auth.tenantId, groupId);
+
+      if (!existing) throw PeopleTeamsErrors.groupNotFound(groupId);
+      if (existing.status === 'ARCHIVED') throw PeopleTeamsErrors.archivedGroupReadOnly(groupId);
+
+      const archived = await repo.archiveActiveGroup({
+        tenantId: auth.tenantId,
+        groupId,
+        actorMembershipId: auth.membershipId,
+      });
+
+      if (!archived) throw PeopleTeamsErrors.groupNotFound(groupId);
+
+      const writer = this.buildAuditWriter(trx, auth);
+      await auditPeopleTeamGroupArchived(writer, {
+        before: storedGroupToAuditSummary(existing),
+        after: storedGroupToAuditSummary(archived),
+        source: 'PeopleTeamsService.archiveGroup',
+      });
+
+      const group = await repo.getGroup(auth.tenantId, groupId);
+      if (!group) throw PeopleTeamsErrors.groupNotFound(groupId);
+      return { group: rowToGroupDto(group) };
+    });
+  }
+
+  private async assertGroupNameAvailable(
+    repo: PeopleTeamsRepo,
+    tenantId: string,
+    normalizedName: string,
+    currentGroupId?: string,
+  ): Promise<void> {
+    const duplicate = await repo.findByNormalizedName(tenantId, normalizedName);
+
+    if (duplicate && duplicate.id !== currentGroupId) {
+      throw PeopleTeamsErrors.duplicateGroupName(normalizedName);
+    }
+  }
+
+  private buildAuditWriter(db: DbExecutor, context: PeopleTeamAuditContext): AuditWriter {
+    return new AuditWriter(this.deps.auditRepo.withDb(db), {
+      requestId: context.requestId,
+      ip: context.ip,
+      userAgent: context.userAgent,
+      tenantId: context.tenantId,
+      userId: context.userId,
+      membershipId: context.membershipId,
+    });
   }
 }

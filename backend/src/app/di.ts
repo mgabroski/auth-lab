@@ -459,7 +459,7 @@ export async function buildDeps(
   // No rate-limiter or outbox. CP access mode is enforced by CP_AUTH_MODE/host boundary.
   const controlPlane = createControlPlaneModule({ db, logger, auditRepo });
 
-  const peopleTeams = createPeopleTeamsModule({ db });
+  const peopleTeams = createPeopleTeamsModule({ db, auditRepo });
 
   const settings = createSettingsModule({
     db,

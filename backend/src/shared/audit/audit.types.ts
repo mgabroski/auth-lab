@@ -67,7 +67,10 @@ export type KnownAuditAction =
   | 'settings.account.org_structure.saved'
   | 'settings.account.org_structure.save.failed'
   | 'settings.account.calendar.saved'
-  | 'settings.account.calendar.save.failed';
+  | 'settings.account.calendar.save.failed'
+  | 'people_teams.group_created'
+  | 'people_teams.group_updated'
+  | 'people_teams.group_archived';
 
 // Escape hatch: allows new actions without updating this file every time.
 // Remove the escape hatch once all modules are stable.
