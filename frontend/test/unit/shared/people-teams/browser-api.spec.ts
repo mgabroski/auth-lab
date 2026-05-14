@@ -81,6 +81,32 @@ describe('people teams browser api', () => {
     });
   });
 
+  it('returns backend validation errors for duplicate group names without frontend-derived permission truth', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: {
+            code: 'PEOPLE_TEAMS_DUPLICATE_GROUP_NAME',
+            message: 'A group with this name already exists.',
+          },
+        },
+        { status: 409 },
+      ),
+    );
+
+    const result = await createPeopleTeamGroup({
+      name: 'HR Agents',
+      description: null,
+      level: 'AGENT',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(409);
+      expect(result.error.message).toBe('A group with this name already exists.');
+    }
+  });
+
   it('calls group membership write endpoints without changing runtime roles', async () => {
     apiFetchMock
       .mockResolvedValueOnce(

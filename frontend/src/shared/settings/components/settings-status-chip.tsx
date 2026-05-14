@@ -5,7 +5,7 @@ import type {
   SettingsSetupStatus,
 } from '@/shared/settings/contracts';
 
-type DisplayStatus = SettingsSetupStatus | 'PLACEHOLDER';
+type DisplayStatus = SettingsSetupStatus | 'PLACEHOLDER' | 'MANAGEMENT';
 
 const baseStyle: CSSProperties = {
   display: 'inline-flex',
@@ -46,6 +46,11 @@ const statusStyles: Record<DisplayStatus, CSSProperties> = {
     backgroundColor: '#f3e8ff',
     borderColor: '#d8b4fe',
   },
+  MANAGEMENT: {
+    color: '#0f766e',
+    backgroundColor: '#ccfbf1',
+    borderColor: '#5eead4',
+  },
 };
 
 function getLabel(status: DisplayStatus): string {
@@ -60,6 +65,8 @@ function getLabel(status: DisplayStatus): string {
       return 'Needs review';
     case 'PLACEHOLDER':
       return 'Placeholder';
+    case 'MANAGEMENT':
+      return 'Management';
     default: {
       const exhaustiveCheck: never = status;
       return String(exhaustiveCheck);

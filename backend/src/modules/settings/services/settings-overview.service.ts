@@ -132,7 +132,7 @@ export class SettingsOverviewService {
         description: SETTINGS_SECTION_ROUTES.peopleTeams.description,
         href: SETTINGS_SECTION_ROUTES.peopleTeams.href,
         classification: SETTINGS_SECTION_ROUTES.peopleTeams.classification,
-        status: 'COMPLETE',
+        status: 'MANAGEMENT',
         warnings: [],
         isRequired: false,
         requiredReason: null,

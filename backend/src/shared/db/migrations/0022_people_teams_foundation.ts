@@ -11,6 +11,8 @@
  * - Current runtime membership roles remain ADMIN / MEMBER.
  * - Group level is classification only: ADMIN / AGENT / USER.
  * - Group membership anchors to tenant memberships, not global users alone.
+ * - The migration owns only constraints prefixed for tenant_group_members so
+ *   rollback does not remove pre-existing membership constraints from older work.
  * - Archive-only lifecycle in MVP; no hard-delete workflow is introduced here.
  */
 
@@ -23,10 +25,11 @@ export async function up(db: Kysely<any>): Promise<void> {
     DO $$
     BEGIN
       IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'memberships_id_tenant_unique'
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'tenant_group_members_memberships_id_tenant_unique'
       ) THEN
         ALTER TABLE memberships
-          ADD CONSTRAINT memberships_id_tenant_unique UNIQUE (id, tenant_id);
+          ADD CONSTRAINT tenant_group_members_memberships_id_tenant_unique UNIQUE (id, tenant_id);
       END IF;
     END $$;
   `.execute(db);
@@ -127,6 +130,6 @@ export async function down(db: Kysely<any>): Promise<void> {
     DROP TABLE IF EXISTS tenant_groups;
 
     ALTER TABLE memberships
-      DROP CONSTRAINT IF EXISTS memberships_id_tenant_unique;
+      DROP CONSTRAINT IF EXISTS tenant_group_members_memberships_id_tenant_unique;
   `.execute(db);
 }

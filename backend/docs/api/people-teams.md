@@ -39,7 +39,7 @@ Current `MEMBER` sessions are denied. All reads and writes are scoped to the aut
 
 Returns active groups for the authenticated tenant.
 
-Archived groups are excluded from this normal list. They remain persisted for history and future remediation behavior, but they are not returned by the foundation read surface.
+Archived groups are excluded from this normal list. They remain persisted for history and future remediation behavior, but they are not returned by the foundation read surface. There is no restore endpoint in the current foundation.
 
 ### Response
 
@@ -126,6 +126,7 @@ Archives an active tenant group. This is the only lifecycle removal path in the 
 - archived groups are excluded from normal active group lists.
 - no hard delete is implemented.
 - no restore is implemented.
+- the archived group is removed from normal active group lists.
 - no resolver behavior is implemented yet.
 - writes `people_teams.group_archived` audit event.
 

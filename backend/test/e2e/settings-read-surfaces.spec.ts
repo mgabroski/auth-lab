@@ -299,7 +299,7 @@ describe('settings read surfaces', () => {
 
       expect(peopleTeamsCard).toMatchObject({
         classification: 'LIVE_NON_GATING',
-        status: 'COMPLETE',
+        status: 'MANAGEMENT',
         isRequired: false,
         href: '/admin/settings/people-teams',
       });

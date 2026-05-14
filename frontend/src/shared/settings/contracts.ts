@@ -52,13 +52,15 @@ export type SettingsBootstrapResponse = {
   nextAction: SettingsNextAction | null;
 };
 
+export type SettingsOverviewCardStatus = SettingsSetupStatus | 'PLACEHOLDER' | 'MANAGEMENT';
+
 export type SettingsOverviewCardResponse = {
   key: SettingsOverviewCardKey;
   title: string;
   description: string;
   href: string | null;
   classification: SettingsSectionClassification;
-  status: SettingsSetupStatus | 'PLACEHOLDER';
+  status: SettingsOverviewCardStatus;
   warnings: string[];
   isRequired: boolean;
   requiredReason: string | null;
@@ -192,7 +194,7 @@ export type ModulesHubModuleCardResponse = {
   description: string;
   classification: 'LIVE' | 'PLACEHOLDER';
   href: string | null;
-  status: SettingsSetupStatus | 'PLACEHOLDER';
+  status: SettingsOverviewCardStatus;
   warnings: string[];
   ctaLabel: string | null;
 };

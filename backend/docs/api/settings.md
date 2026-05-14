@@ -182,12 +182,12 @@ Each card reports:
 - `description`
 - `href`
 - `classification`
-- `status`
+- `status` (`NOT_STARTED`, `IN_PROGRESS`, `COMPLETE`, `NEEDS_REVIEW`, `PLACEHOLDER`, or `MANAGEMENT`)
 - `warnings[]`
 - `isRequired`
 - `requiredReason`
 
-`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account, Integrations, and People & Teams remain live but non-gating; Communications and Workspace Experience are placeholder-only; Permissions remains absent. People & Teams is group/membership management only and is not Operational Access.
+`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account and Integrations remain live but non-gating setup cards; People & Teams is a live non-gating management card with `status = MANAGEMENT`; Communications and Workspace Experience are placeholder-only; Permissions remains absent. People & Teams is group/membership management only and is not Operational Access.
 
 ### `GET /settings/access`
 

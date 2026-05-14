@@ -125,6 +125,7 @@ test.describe('settings tenant-admin proof', () => {
 
     await page.getByRole('button', { name: 'Archive group' }).last().click();
     await expect(page.getByText('Group archived.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: updatedGroupName })).toHaveCount(0);
 
     await page.goto(`${OPEN_ORIGIN}/admin/settings/access`);
     await expect(page.getByRole('heading', { name: 'Access & Security' })).toBeVisible();

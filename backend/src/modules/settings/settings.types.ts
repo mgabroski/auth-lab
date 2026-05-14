@@ -219,13 +219,15 @@ export type SettingsBootstrapDto = {
   nextAction: SettingsNextAction | null;
 };
 
+export type SettingsOverviewCardStatus = SettingsSetupStatus | 'PLACEHOLDER' | 'MANAGEMENT';
+
 export type SettingsOverviewCardDto = {
   key: SettingsOverviewCardKey;
   title: string;
   description: string;
   href: string | null;
   classification: SettingsSectionClassification;
-  status: SettingsSetupStatus | 'PLACEHOLDER';
+  status: SettingsOverviewCardStatus;
   warnings: string[];
   isRequired: boolean;
   requiredReason: string | null;
@@ -369,7 +371,7 @@ export type ModulesHubModuleCardDto = {
   description: string;
   classification: 'LIVE' | 'PLACEHOLDER';
   href: string | null;
-  status: SettingsSetupStatus | 'PLACEHOLDER';
+  status: SettingsOverviewCardStatus;
   warnings: string[];
   ctaLabel: string | null;
 };

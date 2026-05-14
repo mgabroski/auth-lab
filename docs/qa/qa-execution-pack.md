@@ -296,11 +296,15 @@ Steps:
 6. Add an active tenant member to the selected group.
 7. Remove that member from the group.
 8. Archive the group.
-9. Confirm no Operational Access grants, Person Exceptions, Managed People, `Can see`, `Can do`, or `Where` UI appears.
+9. Confirm the archived group disappears from the normal active group list.
+10. Confirm there is no restore action in the current foundation.
+11. Confirm no Operational Access grants, Person Exceptions, Managed People, `Can see`, `Can do`, or `Where` UI appears.
 
 Expected results:
 
 - Admin can create, edit, archive, add member, and remove member.
+- Archived groups disappear from the normal active group list.
+- Restore is not shipped in the current foundation.
 - Member management uses active tenant memberships only.
 - The page remains a non-gating Settings management surface.
 - Group membership does not change runtime role and does not grant module access.
@@ -310,7 +314,8 @@ Evidence:
 
 - screenshot of People & Teams page after create
 - screenshot after member add/remove
-- screenshot or note confirming no Operational Access controls are visible
+- screenshot after archive showing the group is no longer in the active list
+- screenshot or note confirming no restore action or Operational Access controls are visible
 
 ---
 

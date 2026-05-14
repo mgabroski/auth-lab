@@ -84,6 +84,7 @@ Current shipped truth remains:
 - the current Access & Security page is not future tenant Operational Access
 - Permissions UI is absent in v1: no card, no route, no API surface
 - People & Teams foundation groups and group membership management are implemented as a tenant-admin Settings surface
+- People & Teams is a live non-gating management card, not a setup-completion section; its overview status is management-only and does not affect setup completion or banner lifecycle
 - People & Teams group levels `ADMIN / AGENT / USER` are classification only and do not change current runtime membership role behavior
 - Agent Groups as Operational Access grant subjects are not implemented
 - Person Exceptions are not implemented

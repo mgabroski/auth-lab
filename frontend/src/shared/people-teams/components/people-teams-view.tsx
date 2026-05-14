@@ -31,8 +31,9 @@ import type {
   PeopleTeamPerson,
   PeopleTeamsFoundationResponse,
 } from '../contracts';
+import { PEOPLE_TEAM_GROUP_LEVELS, validatePeopleTeamGroupDraft } from '../validation';
 
-const GROUP_LEVELS: PeopleTeamGroupLevel[] = ['ADMIN', 'AGENT', 'USER'];
+const GROUP_LEVELS = PEOPLE_TEAM_GROUP_LEVELS;
 
 const pageGridStyle: CSSProperties = {
   display: 'grid',
@@ -303,8 +304,9 @@ export function PeopleTeamsView({ initialData }: PeopleTeamsViewProps) {
   }
 
   async function submitGroup() {
-    if (!draft.name.trim()) {
-      setFeedback({ type: 'error', message: 'Group name is required.' });
+    const validationError = validatePeopleTeamGroupDraft(draft);
+    if (validationError) {
+      setFeedback({ type: 'error', message: validationError });
       return;
     }
 

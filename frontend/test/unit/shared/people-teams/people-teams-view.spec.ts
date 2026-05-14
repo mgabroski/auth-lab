@@ -53,6 +53,8 @@ describe('PeopleTeamsView', () => {
     expect(html).not.toContain('Can do');
     expect(html).not.toContain('Person Exceptions');
     expect(html).not.toContain('Managed People');
+    expect(html).not.toContain('Where');
+    expect(html).not.toContain('Access grants');
   });
 
   it('renders empty group and member states', () => {

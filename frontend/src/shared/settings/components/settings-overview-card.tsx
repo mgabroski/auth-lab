@@ -66,6 +66,10 @@ const actionLinkStyle: CSSProperties = {
 };
 
 function getClassificationLabel(card: SettingsOverviewCardResponse): string {
+  if (card.status === 'MANAGEMENT') {
+    return 'Management surface';
+  }
+
   if (card.isRequired) {
     return 'Required section';
   }

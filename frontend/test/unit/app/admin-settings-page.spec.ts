@@ -122,7 +122,7 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         description: 'Manage reusable groups.',
         href: '/admin/settings/people-teams',
         classification: 'LIVE_NON_GATING',
-        status: 'COMPLETE',
+        status: 'MANAGEMENT',
         warnings: [],
         isRequired: false,
         requiredReason: null,
