@@ -41,6 +41,14 @@ CP routes are on the same backend process as all other routes. They are prefixed
 
 **Internal non-public no-auth**: CP routes carry no authentication in this phase only for bounded internal environments such as local development and CI. This is a deliberate prerequisite-track shortcut. CP authentication will be added in a later phase, and this posture must not be exposed publicly.
 
+## 2.1 Access, Identity & Security naming boundary
+
+The CP Step 2 group named **Access, Identity & Security** is a provisioning/allowance surface for login methods, MFA policy, signup policy, invite policy, allowed domains, and SSO dependency rules.
+
+It is not tenant Operational Access. It does not create People & Teams groups, Agent Groups, Person Exceptions, Personal Card runtime grants, module action grants, Managed People scopes, branch/regional-manager scopes, or Effective Access resolver decisions.
+
+Future Operational Access planning may eventually reserve tenant Settings access terminology for People & Teams / Operational Access, but this CP contract must continue to describe only the current CP allowance group until code changes.
+
 **Boundary hardening now enforced**:
 
 - CP routes are registered only when `CP_NO_AUTH_ALLOWED=true`
@@ -484,7 +492,7 @@ When the requested key is a reserved namespace:
 
 ### 4.5 `PUT /cp/accounts/:accountKey/access`
 
-Persists the Access, Identity & Security group and marks it configured.
+Persists the Access, Identity & Security group and marks it configured. This endpoint does not configure tenant Operational Access.
 
 **Request body**
 
@@ -513,6 +521,7 @@ Persists the Access, Identity & Security group and marks it configured.
 - Microsoft login method cannot be saved unless Microsoft SSO Integration is already allowed.
 - `adminRequired` is persisted as `true` in this phase.
 - Allowed domains are normalized to trimmed lowercase unique values on save.
+- No People & Teams, Agent Groups, Person Exceptions, module grants, or Effective Access rules are created by this endpoint.
 
 **Response — 200 OK**
 

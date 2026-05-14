@@ -83,8 +83,50 @@ Out of scope:
 - CP operator RBAC
 - CP audit viewer UI
 - production load/performance testing
+- Operational Access runtime QA, Agent Groups, Person Exceptions, Managed People scope, branch/regional-manager scope, sensitive-field conflict runtime proof, and Effective Access explanation proof
 
 When a future surface is intentionally absent or placeholder-only, missing configuration UI is not a bug.
+
+---
+
+## Future Operational Access QA Planning — Not Executable Yet
+
+This section is planning guidance only. These scenarios are **future / not executable** in the current repo.
+
+Current shipped truth remains:
+
+- runtime roles are `ADMIN | MEMBER`
+- `Agent` and distinct runtime `User` are future target concepts
+- People & Teams operational groups are not implemented
+- Agent Groups are not implemented
+- Person Exceptions are not implemented
+- a reusable Effective Access Resolver is not implemented
+- current `/admin/settings/access` is Access & Security, not Operational Access
+- Permissions / Operational Access tenant UI remains absent
+
+Do not add the scenarios below to the current executable checklist until implementation exists and the API/UI/test fixtures are real.
+
+| Future ID | Scenario                                  | Future proof intent                                                                                                        | Current status |
+| --------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| OA-FUT-01 | Admin full tenant access by level         | Admin sees allowed operational records without needing Agent Groups or Person Exceptions.                                  | Not executable |
+| OA-FUT-02 | User own/self-service access              | User sees only own/self-service data and cannot access cross-person operational records.                                   | Not executable |
+| OA-FUT-03 | Agent access through Agent Group          | Agent sees only actions and target records granted through active Agent Group access.                                      | Not executable |
+| OA-FUT-04 | Agent with no operational access          | Agent with no active Agent Groups and no Person Exceptions lands in a safe no-access state.                                | Not executable |
+| OA-FUT-05 | Agent Groups archive/fail-closed behavior | Archiving the group that granted access immediately removes effective access and keeps remediation/audit truth.            | Not executable |
+| OA-FUT-06 | Managed People exact-person scope         | Agent can operate only for explicitly managed people, not a whole employer, location, or group.                            | Not executable |
+| OA-FUT-07 | Person Exception extra access             | Rare person-specific access requires reason, review/expiry discipline, audit, and explanation visibility.                  | Not executable |
+| OA-FUT-08 | Branch manager scope                      | Branch Manager group with `Own Employer + Own Location` sees only matching target records.                                 | Not executable |
+| OA-FUT-09 | Regional manager scope                    | Regional Manager group with selected employer/location pairs sees only those explicit pairs.                               | Not executable |
+| OA-FUT-10 | Sensitive-field conflict                  | Sensitive fields stay masked/hidden when grants conflict unless explicit sensitive visibility applies.                     | Not executable |
+| OA-FUT-11 | Direct API denial                         | Backend denies access directly even if a future UI button or link is hidden.                                               | Not executable |
+| OA-FUT-12 | Effective Access explanation              | Support/admin explanation view accurately states why a card, field, action, or record is shown, masked, hidden, or denied. | Not executable |
+| OA-FUT-13 | Group + scope audience targeting          | Agent-created audiences are limited by the Agent’s own effective access scope.                                             | Not executable |
+| OA-FUT-14 | Personal Cards consumption                | Module renders backend-resolved Personal Cards and does not raw-read fields outside active cards.                          | Not executable |
+| OA-FUT-15 | Orphaned target behavior                  | Removed action/card/field/scope target grants nothing, fails closed, and remains auditable/remediable.                     | Not executable |
+
+Execution rule:
+
+> Operational Access QA moves from this future-planning section into executable QA only after People & Teams, Agent Groups, Person Exceptions, backend Effective Access resolution, and at least one consuming module are implemented and documented as shipped truth.
 
 ---
 

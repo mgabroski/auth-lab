@@ -67,6 +67,47 @@ What this means today:
 
 ---
 
+## Operational Access Alignment (Current vs Future)
+
+The accepted future planning truth for Operational Access is `hubins-operational-access-alignment-roadmap.md`.
+That roadmap is accepted as the product and architecture direction for future module planning, not as shipped runtime behavior.
+
+Current shipped truth remains:
+
+- runtime membership roles are still `ADMIN` and `MEMBER`
+- `MEMBER` is the current shipped runtime role, not a shipped `USER` enum
+- `AGENT` is not implemented
+- public signup and member invite flows still create the current member-style account
+- `/admin/settings/access` is the current **Access & Security** Settings page
+- the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
+- the current Access & Security page is not future tenant Operational Access
+- Permissions UI is absent in v1: no card, no route, no API surface
+- People & Teams operational groups are not implemented
+- Agent Groups are not implemented
+- Person Exceptions are not implemented
+- a reusable backend Effective Access Resolver is not implemented
+- no shipped module may claim to consume Operational Access today
+
+Accepted future target truth is:
+
+- the long-range tenant user model moves toward `Admin / Agent / User`
+- current `MEMBER` remains a compatibility alias for future `User` until a real migration is designed and implemented
+- Admin has full tenant-wide access by level
+- User has own/self-service data access by default
+- Agent receives operational access through Agent Groups and rare Person Exceptions
+- reusable tenant-level groups combine with explicit Where/scope instead of creating employer/location-specific group explosions
+- backend/service-layer Effective Access becomes the future platform authorization truth
+- future operational modules must consume shared Operational Access instead of inventing module-specific visibility systems
+- sensitive fields require explicit, auditable, scope-bound visibility and fail to the safer/more restrictive result when grants conflict
+
+Documentation and QA rule:
+
+> Operational Access scenarios may be planned now, but they are future / not executable until the underlying People & Teams, Agent Groups, Person Exceptions, Effective Access Resolver, and module consumers exist in code.
+
+This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, Integrations, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
+
+---
+
 ## Canonical Current-Truth Documents
 
 These are the active current-truth docs for the repo as it exists today.

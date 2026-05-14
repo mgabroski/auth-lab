@@ -71,6 +71,11 @@ Do not write ADRs for:
 | ADR-0017 | CP → Settings Cascade Uses One Synchronous Revision-Based Contract Once The Settings Engine Exists                          | LOCKED | CP / Settings boundary        |
 | ADR-0018 | Settings Bootstrap Semantics Move Out Of Auth Bootstrap Through A Controlled Rollout Bridge                                 | LOCKED | auth / settings boundary      |
 | ADR-0019 | Settings Readiness Gate Retires Auth-Owned Setup Acknowledgement                                                            | LOCKED | auth / settings boundary      |
+| ADR-0020 | Operational Access Target Levels Are Admin, Agent, And User With MEMBER Compatibility Alias                                 | LOCKED | access / auth migration       |
+| ADR-0021 | Sensitive Field Conflicts Resolve To The Most Restrictive Effective Result                                                  | LOCKED | access / security             |
+| ADR-0022 | Current Access & Security Route Must Not Be Confused With Future Operational Access                                         | LOCKED | settings / access routing     |
+| ADR-0023 | Backend-Owned Effective Access Resolver Is Future Platform Authorization Truth                                              | LOCKED | authorization / architecture  |
+| ADR-0024 | Reusable Groups Combine With Where Scope To Avoid Employer/Location-Specific Group Explosion                                | LOCKED | access / People & Teams       |
 
 ---
 
@@ -702,6 +707,172 @@ The Settings v1 readiness gate requires one authoritative Settings bootstrap tru
 ### Supersedes
 
 Any interpretation of ADR-0003 or ADR-0018 that treats auth bootstrap or an auth acknowledgement route as current owner of Settings setup semantics.
+
+## ADR-0020 — Operational Access Target Levels Are Admin, Agent, And User With MEMBER Compatibility Alias
+
+### Status
+
+LOCKED
+
+### Decision
+
+The future Operational Access model uses three tenant user levels: `Admin`, `Agent`, and `User`.
+
+The current shipped runtime contract remains `ADMIN | MEMBER`. `MEMBER` is treated as the compatibility alias for future `User` until a real migration changes code, data, API contracts, and QA evidence together.
+
+Future behavior target:
+
+- `Admin` sees everything tenant-wide by level.
+- `User` sees own/self-service data by default.
+- `Agent` receives operational access through Agent Groups or rare Person Exceptions.
+- Public signup creates the current member-style account today and maps conceptually to future `User`.
+- HRIS/imported users map conceptually to future `User` unless explicitly promoted later.
+- Future Agent invitations require at least one Agent Group.
+
+### Why
+
+The repo currently has a simple `ADMIN | MEMBER` runtime contract. The future product needs a clearer distinction between self-service users and operational workers without pretending that distinction exists today.
+
+### Consequences
+
+- API docs must keep the current `ADMIN | MEMBER` contract until runtime code changes.
+- Future docs may describe `Admin / Agent / User` only as target truth.
+- QA must not test Agent/User runtime behavior until it exists.
+- Migration work must preserve MEMBER compatibility and must not be performed as a documentation-only change.
+
+### Supersedes
+
+Any wording that implies `Agent` or a distinct runtime `User` role is already shipped.
+
+## ADR-0021 — Sensitive Field Conflicts Resolve To The Most Restrictive Effective Result
+
+### Status
+
+LOCKED
+
+### Decision
+
+Future Operational Access must treat sensitive-field visibility as intentional, explicit, auditable, and scope-bound.
+
+When multiple group grants, scopes, or exceptions conflict for a sensitive field, the safer/more restrictive result wins by default unless there is an explicit sensitive-field visibility grant that applies to the target field and target scope.
+
+Sensitive fields must not become visible merely because one broader group grants general access. Masked or hidden treatment must remain in effect when explicit sensitive visibility is absent, orphaned, expired, or outside scope.
+
+### Why
+
+Operational Access combines groups, scopes, cards, fields, and rare person-level exceptions. Additive access is useful for non-sensitive actions, but sensitive data needs a stricter default to avoid accidental exposure.
+
+### Consequences
+
+- Future Effective Access resolution must carry sensitive-field rules explicitly.
+- Future module action catalogs must separate broad actions such as `Manage` from sensitive-field visibility.
+- Future QA must prove conflict cases where a user belongs to multiple groups with different sensitive-field outcomes.
+- Current Settings v1 Personal masking configuration is not a runtime Operational Access grant.
+
+### Supersedes
+
+Any interpretation that broad module access or broad card access automatically reveals sensitive fields.
+
+## ADR-0022 — Current Access & Security Route Must Not Be Confused With Future Operational Access
+
+### Status
+
+LOCKED
+
+### Decision
+
+The current `/admin/settings/access` and backend `/settings/access` surface is **Access & Security** for Settings v1. It covers read-only / acknowledge-only tenant review of login methods, MFA policy, signup policy, invite policy, and SSO dependency readiness.
+
+It is not the future Operational Access / People & Teams surface.
+
+The future route strategy is a planned migration decision:
+
+- current Access & Security should move toward clearer Security/Login & Security naming when a real migration is designed
+- `/admin/settings/access` can later be reserved for tenant Operational Access only after a non-breaking route/content migration is planned, implemented, and tested
+- no documentation-only change renames the live route, backend API, or current page semantics
+
+### Why
+
+The word “Access” is overloaded. The repo already ships Access & Security. The future roadmap needs Operational Access. Treating both as the same surface would cause product, QA, and implementation drift.
+
+### Consequences
+
+- Current API docs must state that `/settings/access` is Access & Security.
+- Future Operational Access docs must not claim the current route already implements group/person/module access.
+- QA must keep future Operational Access tests separate from executable Settings v1 Access & Security tests.
+- Any route rename requires a real implementation task, not only docs.
+
+### Supersedes
+
+Any wording that treats the shipped Settings Access page as tenant Operational Access.
+
+## ADR-0023 — Backend-Owned Effective Access Resolver Is Future Platform Authorization Truth
+
+### Status
+
+LOCKED
+
+### Decision
+
+Future Operational Access must be resolved by backend/service-layer Effective Access, not by React/frontend code and not by module-local permission systems.
+
+The future resolver is the reusable platform authorization truth after tenant resolution, membership level, Agent Group membership, Person Exceptions, CP allowance, tenant configuration, target record context, Where/scope, Personal Card configuration, sensitive-field rules, orphan pruning, and fail-closed behavior are applied.
+
+Frontend code may render backend-returned access outcomes, blockers, warnings, explanations, and resolved card/field states. It must not compute effective permission truth independently.
+
+### Why
+
+Operational access depends on tenant, actor, target record, target person placement, groups, exceptions, cards, fields, masking, and sensitivity. Computing that in each module or in the frontend would produce drift and security bugs.
+
+### Consequences
+
+- Future modules must define action catalogs, target objects, and resolver target-context requirements before implementation.
+- Future QA must prove direct API denial, not only hidden buttons.
+- Effective Access explanation views are explanations of backend decisions, not simulators that can create alternate truth.
+- Current repo does not yet ship this resolver.
+
+### Supersedes
+
+Any module-specific visibility model that bypasses the shared future resolver.
+
+## ADR-0024 — Reusable Groups Combine With Where Scope To Avoid Employer/Location-Specific Group Explosion
+
+### Status
+
+LOCKED
+
+### Decision
+
+Future People & Teams groups are reusable tenant-level teams/audiences. They define who receives access or who is targeted. They should not be employer/location-specific by default.
+
+Operational Access combines:
+
+```text
+Group = who
+Access = what they can see/do
+Where = where that access or audience applies
+```
+
+Branch manager behavior should use a reusable group such as `Branch Managers` with `Where: Own Employer + Own Location`.
+
+Regional or multi-location manager behavior should use a reusable group such as `Regional Managers` with `Where: Selected Employer/Location pairs`.
+
+Selected employer/location responsibility must use explicit pairs, not independent employer lists plus independent location lists, because independent lists can accidentally create unintended combinations.
+
+### Why
+
+Creating separate groups such as `IT Dallas`, `IT Chicago`, and `IT Miami` for every operational scope would explode group count, make access hard to audit, and confuse tenant admins.
+
+### Consequences
+
+- Future module discovery must define supported Where/scope options.
+- Future audience targeting must combine group + scope and must limit Agent-created audiences to the Agent’s own effective scope.
+- Group archive/delete must fail closed and retain orphan/remediation/audit references.
+- Current repo does not yet implement People & Teams operational groups.
+
+### Supersedes
+
+Any default model that solves access by requiring location-specific groups.
 
 ## Maintenance Rules
 

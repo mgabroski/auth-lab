@@ -47,6 +47,20 @@ Current route surface:
 
 ---
 
+## 1.1 Current role contract and Operational Access roadmap note
+
+The current Auth API role contract remains:
+
+```ts
+'ADMIN' | 'MEMBER';
+```
+
+This file must not describe `AGENT` or a distinct runtime `USER` role as shipped until backend code, migrations, tests, and API contracts actually change.
+
+Future Operational Access planning uses `Admin / Agent / User` as target terminology. In that future model, current `MEMBER` is the compatibility alias for future `User`, and `Agent` will require explicit operational access through Agent Groups or rare Person Exceptions. That is roadmap truth only; it does not change the current Auth API response shape.
+
+---
+
 ## 2. Topology assumptions
 
 This contract is designed for the locked Hubins topology.
@@ -163,6 +177,7 @@ None.
 
 ### Guarantees
 
+- Current role values here are intentionally `ADMIN | MEMBER`; future `Admin / Agent / User` terminology is not part of this response yet.
 - session is already tenant-bound
 - tenant mismatch does not authenticate the user
 - response contains no raw secrets or tokens

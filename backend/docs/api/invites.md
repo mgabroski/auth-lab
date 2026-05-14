@@ -34,6 +34,16 @@ That surface is documented in `backend/docs/api/admin.md`.
 
 ---
 
+## 1.1 Current invite role contract and Operational Access roadmap note
+
+The current invite/membership role contract remains `ADMIN | MEMBER`.
+
+Future Operational Access planning moves toward `Admin / Agent / User`, with current `MEMBER` acting as the compatibility alias for future `User`. Future Agent invitations must require at least one Agent Group so an Agent is operationally meaningful.
+
+That future behavior is not implemented in the current invite acceptance endpoint. This document must not imply Agent invites, Agent Groups, Person Exceptions, or Operational Access are executable today.
+
+---
+
 ## 2. Topology assumptions
 
 ### Browser path
@@ -116,6 +126,7 @@ Validation notes:
 - success writes an `invite.accepted` audit event inside the same transaction
 - the endpoint never returns the raw token or token hash
 - acceptance does **not** expose whether a token existed in another tenant
+- Agent invite validation does not exist in this endpoint yet; future Agent invites require at least one Agent Group before invite creation/acceptance can become valid.
 
 ---
 

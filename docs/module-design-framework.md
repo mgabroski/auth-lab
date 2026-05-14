@@ -17,6 +17,8 @@ That means every new module must be analyzed through six connected lenses:
 5. Communications
 6. Fail-Closed / Removal / Orphan Behavior
 
+Operational Access discovery is now a required overlay on the Permission & Policy Management lens for every future module that exposes cross-person data, scoped operations, Personal Cards, audience targeting, or sensitive fields. This file is the repo home for that reusable discovery guidance; do not create a second duplicate checklist unless a later repo-level documentation decision explicitly creates a new canonical target.
+
 This framework is reusable, project-level, and intentionally strict. It is designed for both human readers and LLM readers.
 
 ---
@@ -389,6 +391,167 @@ Answer:
 
 If the team cannot explain what a future policy would point at inside this module, then permission thinking is incomplete.
 
+### 7.9 Operational Access discovery overlay
+
+Every future module must pass this overlay before implementation if it is operational, mixed operational/self-service, audience-targeting, Personal Card-consuming, or sensitive-field-consuming.
+
+Current repo truth:
+
+- current runtime roles are still `ADMIN | MEMBER`
+- future `Admin / Agent / User` is target roadmap truth, not shipped behavior
+- current `/admin/settings/access` is Access & Security, not Operational Access
+- People & Teams operational groups, Agent Groups, Person Exceptions, and a reusable Effective Access Resolver are not implemented yet
+
+#### 7.9.1 Module action catalog
+
+Define the product-owned action catalog before technical planning.
+
+For every action, answer:
+
+- What friendly tenant-facing label is shown?
+- What exactly does the action allow?
+- Is it read-only, mutating, state-changing, sensitive, or destructive?
+- Is it included in a broader `Manage` action?
+- If `Manage` exists, what does it explicitly include and exclude?
+- What happens when a new sensitive/destructive action is added later?
+
+Tenant admins must select from product-defined actions. They must not invent action names.
+
+#### 7.9.2 Target objects and resolver context
+
+List every target object the module exposes, such as document, published document, task, checklist instance, benefit enrollment, personal card, personal field, person, dependent, notification, or approval request.
+
+For each target, define:
+
+- whether the module owns the target or consumes it
+- whether the target has person context
+- whether the target has employer/location context
+- whether the target has department/group/managed-people context
+- whether the target contains sensitive fields
+- whether masking is supported
+- what target record context the backend resolver needs
+
+Resolver decisions that depend on Where/scope must include target record context. User/session context alone is not enough for scoped operational access.
+
+#### 7.9.3 Supported Where / scope
+
+Evaluate the module against the MVP Where options:
+
+- Tenant-wide
+- Own Employer + Own Location
+- Selected Employer/Location pairs
+- Managed People
+- Own data only for User self-service behavior
+
+Evaluate deferred options only when needed:
+
+- Department
+- Group as target
+- Direct reports / reporting tree
+- Custom combinations
+
+Selected employer/location responsibility must use explicit pairs. Do not model selected employers and selected locations as independent lists that accidentally create invalid combinations.
+
+#### 7.9.4 Branch manager, regional manager, and managed people behavior
+
+Every operational module must explicitly answer:
+
+- Does branch-manager behavior use `Own Employer + Own Location`?
+- Does regional-manager behavior use selected employer/location pairs?
+- Does the module support multi-employer or multi-location responsibility?
+- Does the module support exact-person responsibility through Managed People?
+- What safe empty state appears when an Agent has no effective operational access?
+
+Reusable groups plus Where/scope must be preferred over employer/location-specific group explosions.
+
+#### 7.9.5 Group + scope audience targeting
+
+If the module targets people or audiences, define how group + scope targeting works.
+
+Required questions:
+
+- Does the module target people, groups, employer/location audiences, or selected people?
+- Can an Agent target an audience?
+- Must the target audience be a subset of the Agent’s own effective access scope?
+- Can Users target anyone, or only themselves?
+- Can Admin target everyone?
+- Does the module distinguish operational access scope from audience-targeting scope?
+
+Actor-created audiences must be limited by the actor’s backend-resolved effective scope.
+
+#### 7.9.6 Personal Cards consumption
+
+If the module displays or edits Personal data, define whether it consumes resolved Personal Cards.
+
+Required rules:
+
+- do not raw-read Personal fields around Personal Cards
+- a field not assigned to an active Personal Card is hidden at runtime by default
+- if a module requires a missing field, surface an admin-facing blocker or warning and keep User/Agent runtime safe
+- Personal Cards carry field grouping/configuration only; workflow state belongs to the consuming module
+
+Define whether the module needs card visibility, card label/order, field visibility, masking, edit/read-only state, required/optional state, and explanation source.
+
+#### 7.9.7 Sensitive fields and masking
+
+List sensitive data the module exposes or consumes.
+
+Sensitive visibility must be intentional, explicit, auditable, and scope-bound. If one group grants broad access and another grant masks or hides a sensitive field, the safer/more restrictive result wins unless explicit sensitive-field visibility applies to the target field and scope.
+
+The module must define:
+
+- which fields are sensitive
+- which actions expose sensitive data
+- whether `Manage` includes or excludes sensitive visibility
+- what masking means in list, detail, export, email, document, and API contexts
+- what explanation support/admin views need when sensitive access is denied or masked
+
+#### 7.9.8 Backend resolver expectations
+
+Future modules must consume backend-resolved Effective Access.
+
+The module discovery output must define:
+
+- actor context needed by the resolver
+- target context needed by the resolver
+- action keys the resolver checks
+- scope facts needed for tenant-wide, own employer/location, selected pairs, and Managed People decisions
+- resolved output shape needed by the UI
+- blockers, warnings, and explanation fields needed by support/admin views
+
+Frontend code may render backend-returned decisions. It must not calculate effective access independently.
+
+#### 7.9.9 Fail-closed and orphan behavior
+
+For every group, action, target, Personal Card, field, scope, or exception the module relies on, define what happens when it is removed, archived, no longer CP-allowed, no longer tenant-configured, expired, or orphaned.
+
+Required default:
+
+- effective access fails closed
+- removed targets grant nothing
+- normal UI hides inactive targets
+- remediation/audit references remain available for admins where appropriate
+- removal may reduce or block access, but must never silently widen access
+
+#### 7.9.10 Future QA expectations
+
+Operational Access QA planning for a module must stay future/not executable until the supporting runtime surfaces exist.
+
+Future QA must cover:
+
+- Admin full access by level
+- User own-data/self-service behavior
+- Agent access through Agent Groups
+- Agent with no group / no access safe empty state
+- Managed People exact-person scope
+- branch manager own employer/location scope
+- regional manager selected employer/location pairs
+- Person Exceptions with reason/review/expiry behavior
+- sensitive-field conflict and masking behavior
+- direct API denial when UI buttons are hidden
+- Effective Access explanation accuracy
+- orphan/fail-closed behavior after group/action/target/card removal
+
 ---
 
 ## 8. Workspace Experience Lens
@@ -622,6 +785,25 @@ A module is not allowed to pass design review unless all of the following questi
 - What unresolved questions still block calling the module fully designed?
 - What proof would later be required before the module is called implemented and ready?
 
+### 11.8 Operational Access discovery
+
+For every future module with operational, audience-targeting, Personal Card, or sensitive-field behavior, answer:
+
+- What is the module action catalog?
+- Which actions are sensitive, destructive, or excluded from broad `Manage`?
+- What target objects does the module expose?
+- What target person, employer, location, department, group, managed-people, owner, assignee, status, or audience context does the backend resolver need?
+- Which Where/scope options are supported: tenant-wide, own employer/location, selected employer/location pairs, Managed People, own data only, or later department/group/direct-report scopes?
+- How are branch managers, regional managers, multi-employer managers, multi-location managers, and exact Managed People handled?
+- How does group + scope audience targeting work?
+- Are actor-created audiences limited by the actor’s own effective access scope?
+- Does the module consume resolved Personal Cards?
+- What happens when a required field is not in any active Personal Card?
+- What sensitive fields or sensitive data can be shown, masked, exported, emailed, or embedded in generated documents?
+- How does sensitive-field conflict resolution choose the safer/more restrictive result?
+- What effective-access explanation does support/admin UX need?
+- What direct API denial and fail-closed cases must future QA prove?
+
 ---
 
 ## 12. Required Output Shape for Every Future Module Design Artifact
@@ -639,12 +821,13 @@ Every future module design artifact must use this output shape.
 7. Tenant Module Settings Surface
 8. Setup / Completion Rules
 9. Permission & Policy Targets
-10. Workspace Experience Impact
-11. Communications Impact
-12. Fail-Closed / Removal / Orphan Rules
-13. Explicit Exclusions
-14. Anti-Drift Rules
-15. Open Questions / Final Closure Verdict
+10. Operational Access Discovery
+11. Workspace Experience Impact
+12. Communications Impact
+13. Fail-Closed / Removal / Orphan Rules
+14. Explicit Exclusions
+15. Anti-Drift Rules
+16. Open Questions / Final Closure Verdict
 
 ### 12.2 Standard writing rule
 
@@ -677,6 +860,7 @@ The artifact covers:
 - Module Truth
 - Module Settings
 - Permission & Policy Management
+- Operational Access discovery overlay when the module exposes operational/scoped data
 - Workspace Experience
 - Communications
 - Fail-Closed / Removal / Orphan Behavior
@@ -833,6 +1017,7 @@ The module is not fully designed until all six lenses below are complete.
 - Policy is not CP-owned.
 - Required-removal changes may trigger Needs Review.
 - Optional removals orphan quietly and fail closed where needed.
+- Operational Access discovery is part of the Permission & Policy Management lens when a module exposes operational or scoped data.
 
 ## The Six Mandatory Lenses
 
@@ -869,6 +1054,7 @@ Answer:
 - what scopes matter
 - whether field/item-level exceptions matter
 - how future group/policy assignment would point at this module
+- what module action catalog, target objects, Where/scope, Personal Card consumption, sensitive-field behavior, backend resolver input, and fail-closed behavior the future Operational Access model requires
 
 ### 4. Workspace Experience
 
@@ -929,12 +1115,13 @@ Every future module design artifact must contain:
 7. Tenant Module Settings Surface
 8. Setup / Completion Rules
 9. Permission & Policy Targets
-10. Workspace Experience Impact
-11. Communications Impact
-12. Fail-Closed / Removal / Orphan Rules
-13. Explicit Exclusions
-14. Anti-Drift Rules
-15. Final Closure Verdict
+10. Operational Access Discovery
+11. Workspace Experience Impact
+12. Communications Impact
+13. Fail-Closed / Removal / Orphan Rules
+14. Explicit Exclusions
+15. Anti-Drift Rules
+16. Final Closure Verdict
 
 ## Completion Rule
 
@@ -945,6 +1132,7 @@ A module is not fully designed unless:
 - boundaries are explicit
 - runtime surfaces are explicit
 - policy targets are explicit
+- Operational Access requirements are explicit when the module exposes operational/scoped data
 - communications moments are explicit
 - removal/orphan behavior is explicit
 - exclusions are explicit

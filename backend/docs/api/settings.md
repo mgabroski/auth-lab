@@ -45,6 +45,14 @@ It establishes:
 
 It does **not** mean the full long-range Settings roadmap is complete.
 
+## Access naming warning
+
+`/settings/access` is the current **Access & Security** API surface.
+
+It is not future tenant Operational Access. It does not manage People & Teams, Agent Groups, Person Exceptions, module action grants, Managed People, branch/regional manager scopes, Personal Card runtime visibility, or Effective Access explanations.
+
+The future Operational Access route/content strategy requires a real non-breaking migration plan. Do not rename this route or reinterpret this contract through documentation alone.
+
 ## Authoritative bootstrap and route-treatment truth
 
 `GET /settings/bootstrap` is the only active bootstrap source for Settings setup semantics. Auth bootstrap may expose compatibility metadata, but it must not be used for Settings banner visibility, aggregate setup state, section status, Needs Review state, or next recommended action.
@@ -183,7 +191,7 @@ Each card reports:
 
 ### `GET /settings/access`
 
-Returns the Access & Security review page DTO.
+Returns the Access & Security review page DTO. This is not Operational Access.
 
 Response shape:
 
