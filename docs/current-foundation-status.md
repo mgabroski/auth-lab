@@ -88,6 +88,8 @@ Current shipped truth remains:
 - a reusable backend Effective Access Resolver is not implemented
 - no shipped module may claim to consume Operational Access today
 
+Accepted future target truth is formally locked in `docs/decision-log.md` ADR-0020 through ADR-0029. Those ADRs are planning constraints for future People & Teams, provisioning, Personal Cards, Person Exceptions, Effective Access, and operational-module work. They are not evidence of shipped runtime behavior.
+
 Accepted future target truth is:
 
 - the long-range tenant user model moves toward `Admin / Agent / User`
@@ -95,10 +97,21 @@ Accepted future target truth is:
 - Admin has full tenant-wide access by level
 - User has own/self-service data access by default
 - Agent receives operational access through Agent Groups and rare Person Exceptions
+- public signup and HRIS import map to future `User` in the target model
+- future admin invitation must support Admin / Agent / User, and Agent invite acceptance requires at least one still-active Agent Group
 - reusable tenant-level groups combine with explicit Where/scope instead of creating employer/location-specific group explosions
-- backend/service-layer Effective Access becomes the future platform authorization truth
-- future operational modules must consume shared Operational Access instead of inventing module-specific visibility systems
+- MVP operational grants go through Agent Groups, with Person Exceptions as the rare direct-user exception path
+- User Groups do not receive operational grants in MVP, and Admin Groups do not restrict Admin access
+- MVP Where/scope options are Tenant-wide, Own Employer + Own Location, Selected Employer/Location pairs, Managed People, and Own data only for User default behavior
+- selected employer/location responsibility uses explicit pairs, not separate employer and location lists
+- backend/service-layer Effective Access becomes the future platform authorization truth and must be target-record-aware where scope matters
+- Effective Access explanation views explain backend decisions; they are not simulators
+- Personal Cards are reusable field groupings, not form builders, workflow owners, or module lifecycle state
+- one field belongs to one active Personal Card in MVP, and fields outside active Personal Cards are hidden at runtime
+- future operational modules must consume shared Operational Access and resolved Personal Card output instead of inventing module-specific visibility systems
 - sensitive fields require explicit, auditable, scope-bound visibility and fail to the safer/more restrictive result when grants conflict
+- Person Exceptions require reason and review date, and require expiry for temporary extra access and sensitive-field exceptions
+- first runtime proof must start with Personal Cards resolver behavior, then Published Documents as the first real operational module proof
 
 Documentation and QA rule:
 
@@ -325,7 +338,7 @@ Current truthful boundary:
 
 ### Future modules and later-scope surfaces
 
-The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork.
+The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork. Operational Access foundation decisions are now locked in ADR-0020 through ADR-0029, but technical planning must not start as implementation until People & Teams operational groups, provisioning migration, Personal Cards runtime resolver, Person Exceptions, Effective Access resolver contracts, and first module-consumer proof are designed against those decisions.
 
 ---
 

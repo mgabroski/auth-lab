@@ -76,6 +76,11 @@ Do not write ADRs for:
 | ADR-0022 | Current Access & Security Route Must Not Be Confused With Future Operational Access                                         | LOCKED | settings / access routing     |
 | ADR-0023 | Backend-Owned Effective Access Resolver Is Future Platform Authorization Truth                                              | LOCKED | authorization / architecture  |
 | ADR-0024 | Reusable Groups Combine With Where Scope To Avoid Employer/Location-Specific Group Explosion                                | LOCKED | access / People & Teams       |
+| ADR-0025 | Operational Access Provisioning Target Behavior Keeps Current ADMIN/MEMBER APIs Honest                                      | LOCKED | provisioning / access target  |
+| ADR-0026 | Operational Access MVP Grants Use Agent Groups, Rare Person Exceptions, And Explicit Where Scope                            | LOCKED | access / People & Teams       |
+| ADR-0027 | Personal Cards Are Reusable Field Groupings, Not Workflow Or Module State                                                   | LOCKED | Personal / access             |
+| ADR-0028 | Person Exceptions Are Rare, Reviewed, Audited, And Scope-Bound Access Exceptions                                            | LOCKED | access / security             |
+| ADR-0029 | Operational Access Runtime Proof Starts With Personal Cards, Then Published Documents                                       | LOCKED | access / rollout proof        |
 
 ---
 
@@ -818,7 +823,11 @@ Future Operational Access must be resolved by backend/service-layer Effective Ac
 
 The future resolver is the reusable platform authorization truth after tenant resolution, membership level, Agent Group membership, Person Exceptions, CP allowance, tenant configuration, target record context, Where/scope, Personal Card configuration, sensitive-field rules, orphan pruning, and fail-closed behavior are applied.
 
+Where/scope-aware decisions must be target-record-aware. User/session context alone is not enough when the answer depends on the target person, employer, location, selected employer/location pair, Managed People relationship, Personal Card, field, sensitivity class, document audience, task participant, or similar module-owned target context.
+
 Frontend code may render backend-returned access outcomes, blockers, warnings, explanations, and resolved card/field states. It must not compute effective permission truth independently.
+
+The future explanation view explains the backend decision that already happened. It is not a simulator, not a separate permission calculator, and not an alternate source of truth. Admin explanation may be simple: `Full tenant access by Admin level`. Agent and User explanations should show source group, Person Exception, scope, card, field, and fail-closed/orphan reason where applicable and safe to expose.
 
 ### Why
 
@@ -873,6 +882,192 @@ Creating separate groups such as `IT Dallas`, `IT Chicago`, and `IT Miami` for e
 ### Supersedes
 
 Any default model that solves access by requiring location-specific groups.
+
+## ADR-0025 — Operational Access Provisioning Target Behavior Keeps Current ADMIN/MEMBER APIs Honest
+
+### Status
+
+LOCKED
+
+### Decision
+
+The future provisioning target for Operational Access is:
+
+- Public signup creates `User` in the target model.
+- HRIS import creates `User` only in the MVP target model.
+- Admin invitation must later support `Admin`, `Agent`, and `User`.
+- Agent invitation requires at least one active Agent Group.
+- If every selected Agent Group is archived, deleted, orphaned, or otherwise inactive before invite acceptance, invite acceptance must fail closed and require an admin to update/resend the invitation.
+- Existing invite and provisioning APIs remain current-runtime `ADMIN | MEMBER` surfaces until a real implementation migration changes code, contracts, tests, QA, and docs together.
+
+### Why
+
+Provisioning is the entry point into tenant access. The repo needs the future target locked now so People & Teams, invite UX, HRIS import, and Effective Access planning do not invent incompatible models. At the same time, documentation must not pretend the current runtime already supports Agent/User.
+
+### Consequences
+
+- Current API docs must continue to describe `ADMIN | MEMBER` until implementation changes.
+- Future invite design must validate Agent Group selection at invitation creation and again at acceptance.
+- Agent invite acceptance must not silently activate an Agent with ghost access from archived groups.
+- HRIS import planning must not create operational Agents in MVP without a later explicit promotion/admin action path.
+- QA for Agent invite behavior is future/not executable until People & Teams Agent Groups and the new invite role model are implemented.
+
+### Supersedes
+
+Any design that treats public signup, HRIS import, or current member invitation as already creating a shipped `User` enum, or any design that allows Agent activation without an active Agent Group.
+
+## ADR-0026 — Operational Access MVP Grants Use Agent Groups, Rare Person Exceptions, And Explicit Where Scope
+
+### Status
+
+LOCKED
+
+### Decision
+
+Future Operational Access MVP subjects are limited and intentional:
+
+- `Admin` receives full tenant access by level and does not need operational grants.
+- Agent Groups are the primary subject for operational grants.
+- Person Exceptions are a rare direct-user exception path, not the normal grant path.
+- User Groups may exist for audience/self-service segmentation, but they do not receive operational grants in MVP.
+- Admin Groups may exist for organization/audience purposes, but they do not restrict or reduce Admin access.
+
+MVP Where/scope options are:
+
+- Tenant-wide
+- Own Employer + Own Location
+- Selected Employer/Location pairs
+- Managed People
+- Own data only for User default behavior
+
+Selected Employer/Location scope must use explicit pairs, not independent employer lists plus independent location lists.
+
+Department, Group-as-target scope, direct reports/reporting tree, and custom combinations are deferred unless a later module design proves they are needed and safe.
+
+### Why
+
+The platform needs enough scope power for real operational hierarchy without creating an arbitrary policy builder or exploding group counts. Agent Groups plus explicit Where scope give reusable access patterns while keeping the tenant admin model understandable.
+
+### Consequences
+
+- New module discovery must define which MVP Where options apply before technical planning starts.
+- Future modules must not invent module-local visibility systems, location-specific default groups, or custom scope builders.
+- Future resolver planning must include target-record context for every selected Where option.
+- Future User Groups must not become a stealth path for cross-person operational access in MVP.
+- Any later Department, reporting-tree, or custom-scope implementation needs a separate design/ADR because it widens the platform access model.
+
+### Supersedes
+
+Any MVP design that gives operational grants to User Groups, treats Admin Groups as restrictions on Admins, or models selected employer/location responsibility as independent lists that can create unintended combinations.
+
+## ADR-0027 — Personal Cards Are Reusable Field Groupings, Not Workflow Or Module State
+
+### Status
+
+LOCKED
+
+### Decision
+
+Personal Cards are the future reusable grouping mechanism for allowed Personal fields.
+
+Personal Cards:
+
+- group Personal fields into tenant-admin-configured cards
+- provide the runtime field/card layout consumed by modules
+- carry card/field visibility, masking, editability, required/optional output after backend resolution
+- are separate from workflow, approval, task, enrollment, document, or module lifecycle state
+
+MVP rules:
+
+- one field belongs to one active Personal Card
+- a field not assigned to an active Personal Card is hidden at runtime
+- consuming modules must request backend-resolved Personal Card output and must not raw-read Personal fields around Personal Cards
+- if a consuming module needs a field that is unavailable through active Personal Cards, it must surface an admin-facing warning/blocker or fail closed safely; it must not silently expose the raw field or invent a module-local field layout
+
+### Why
+
+Personal data will be reused by many modules. Without a single resolved Personal Card contract, each module would recreate field layouts, masking, and sensitive-field behavior differently.
+
+### Consequences
+
+- Future module discovery must state whether the module consumes Personal Cards and which card/field output it needs.
+- Future Personal Card resolver proof must happen before modules rely on Personal field visibility.
+- Workflow state belongs to the consuming module, not to Personal Cards.
+- Benefits, Documents, Tasks, Checklists, and similar modules must not bypass Personal Cards for Personal field display.
+- Multiple-card field assignment is deferred beyond MVP because it creates conflict and explanation complexity.
+
+### Supersedes
+
+Any design that treats Personal Cards as a form builder, workflow engine, approval-state owner, or optional frontend-only layout while modules continue reading Personal fields directly.
+
+## ADR-0028 — Person Exceptions Are Rare, Reviewed, Audited, And Scope-Bound Access Exceptions
+
+### Status
+
+LOCKED
+
+### Decision
+
+Future Person Exceptions are rare direct user-specific access records used when group-based access cannot model a legitimate operational need.
+
+MVP Person Exception rules:
+
+- reason is required
+- review date is required
+- expiry is required for temporary extra access and sensitive-field exceptions
+- MVP mainly supports extra access
+- sensitive-field restriction exceptions are allowed only for safety/privacy cases
+- general deny-style exceptions are not a broad MVP feature
+- exceptions must be scope-bound, auditable, explainable, and fail closed when expired, orphaned, or outside scope
+- Hubins does not automatically validate the reason category in MVP; accountability comes from the required reason, review/expiry discipline, explanation visibility, and audit trail
+
+### Why
+
+Real tenants need a narrow escape hatch for unusual person-specific access. Without strict review, expiry, and audit rules, direct-user grants become an unmanageable shadow permission system.
+
+### Consequences
+
+- Future implementation must not use direct-user grants as the normal operational access path.
+- Future admin UI must present Person Exceptions as exception management, not as a second primary permission editor.
+- Future Effective Access explanation must identify applicable exception sources where safe and useful.
+- Future QA must cover expired, orphaned, sensitive, and out-of-scope Person Exceptions.
+- Sensitive-field exception behavior must remain intentional and auditable.
+
+### Supersedes
+
+Any broad MVP design for direct-user grants, permanent unexplained exceptions, or general deny-style exceptions as a full policy feature.
+
+## ADR-0029 — Operational Access Runtime Proof Starts With Personal Cards, Then Published Documents
+
+### Status
+
+LOCKED
+
+### Decision
+
+The first runtime proof of the future Operational Access model must be staged:
+
+1. Personal Cards runtime resolver proof comes first.
+2. Published Documents comes after as the first real operational module proof.
+
+Personal Cards prove field/card resolution, masking, sensitive-field behavior, field-not-in-card fail-closed behavior, and backend-resolved card output.
+
+Published Documents then prove that a real operational module consumes shared Operational Access rather than inventing module-local visibility.
+
+### Why
+
+Operational Access is cross-cutting and security-sensitive. Proving it first at the field/card resolution layer keeps the first proof narrow. Proving it next in Published Documents validates the module-consumer contract without letting every future module design its own resolver.
+
+### Consequences
+
+- Do not start broad Operational Access admin UI or multiple module integrations before the Personal Cards resolver proof is planned and implemented.
+- Published Documents technical planning must consume the shared resolver contract and the module-discovery answers, not create a Documents-only permission system.
+- QA sequencing must distinguish resolver proof from operational-module proof.
+- Current repo docs must continue to say this is not implemented until code, tests, and QA evidence exist.
+
+### Supersedes
+
+Any rollout plan that starts with a giant permissions table, module-specific Documents access, or frontend-only visibility hiding before the backend resolver is proven.
 
 ## Maintenance Rules
 
