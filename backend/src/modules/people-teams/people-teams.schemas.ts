@@ -21,6 +21,13 @@ export const peopleTeamsGroupIdParamSchema = z
   })
   .strict();
 
+export const peopleTeamsGroupMemberParamSchema = z
+  .object({
+    groupId: z.string().uuid(),
+    membershipId: z.string().uuid(),
+  })
+  .strict();
+
 const groupNameSchema = z.string().trim().min(1, 'Group name is required').max(120);
 const groupDescriptionSchema = z
   .string()
@@ -49,5 +56,12 @@ export const updatePeopleTeamGroupSchema = z
   })
   .strict();
 
+export const addPeopleTeamGroupMemberSchema = z
+  .object({
+    membershipId: z.string().uuid(),
+  })
+  .strict();
+
 export type CreatePeopleTeamGroupInput = z.infer<typeof createPeopleTeamGroupSchema>;
 export type UpdatePeopleTeamGroupInput = z.infer<typeof updatePeopleTeamGroupSchema>;
+export type AddPeopleTeamGroupMemberInput = z.infer<typeof addPeopleTeamGroupMemberSchema>;

@@ -15,9 +15,11 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from '../../shared/http/errors';
 import { requireSession } from '../../shared/http/require-auth-context';
 import {
+  addPeopleTeamGroupMemberSchema,
   createPeopleTeamGroupSchema,
   peopleTeamsEmptyQuerySchema,
   peopleTeamsGroupIdParamSchema,
+  peopleTeamsGroupMemberParamSchema,
   updatePeopleTeamGroupSchema,
 } from './people-teams.schemas';
 import type { PeopleTeamsService } from './people-teams.service';
@@ -83,6 +85,66 @@ export class PeopleTeamsController {
     }
 
     const dto = await this.peopleTeamsService.listPeople(auth.tenantId);
+    return reply.status(200).send(dto);
+  }
+
+  async listGroupMembers(
+    req: FastifyRequest<{ Params: { groupId: string } }>,
+    reply: FastifyReply,
+  ) {
+    const auth = this.requireAdmin(req);
+    const parsed = peopleTeamsGroupIdParamSchema.safeParse(req.params);
+
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid groupId', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const dto = await this.peopleTeamsService.listGroupMembers(auth.tenantId, parsed.data.groupId);
+    return reply.status(200).send(dto);
+  }
+
+  async addGroupMember(req: FastifyRequest<{ Params: { groupId: string } }>, reply: FastifyReply) {
+    const auth = this.requireAdmin(req);
+    const parsedParams = peopleTeamsGroupIdParamSchema.safeParse(req.params);
+    const parsedBody = addPeopleTeamGroupMemberSchema.safeParse(req.body);
+
+    if (!parsedParams.success || !parsedBody.success) {
+      throw AppError.validationError('Invalid request body', {
+        issues: [
+          ...(parsedParams.success ? [] : parsedParams.error.issues),
+          ...(parsedBody.success ? [] : parsedBody.error.issues),
+        ],
+      });
+    }
+
+    const dto = await this.peopleTeamsService.addGroupMember(
+      auth,
+      parsedParams.data.groupId,
+      parsedBody.data.membershipId,
+    );
+    return reply.status(201).send(dto);
+  }
+
+  async removeGroupMember(
+    req: FastifyRequest<{ Params: { groupId: string; membershipId: string } }>,
+    reply: FastifyReply,
+  ) {
+    const auth = this.requireAdmin(req);
+    const parsed = peopleTeamsGroupMemberParamSchema.safeParse(req.params);
+
+    if (!parsed.success) {
+      throw AppError.validationError('Invalid groupId or membershipId', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const dto = await this.peopleTeamsService.removeGroupMember(
+      auth,
+      parsed.data.groupId,
+      parsed.data.membershipId,
+    );
     return reply.status(200).send(dto);
   }
 

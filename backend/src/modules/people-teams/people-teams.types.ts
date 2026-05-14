@@ -50,6 +50,24 @@ export type PeopleTeamGroupResponse = {
   group: PeopleTeamGroupDto;
 };
 
+export type PeopleTeamGroupMemberDto = {
+  membershipId: string;
+  userId: string;
+  email: string;
+  name: string | null;
+  role: MembershipRole;
+  status: MembershipStatus;
+  addedAt: string;
+};
+
+export type PeopleTeamGroupMembersResponse = {
+  members: PeopleTeamGroupMemberDto[];
+};
+
+export type PeopleTeamGroupMemberResponse = {
+  member: PeopleTeamGroupMemberDto;
+};
+
 export type PeopleTeamPersonDto = {
   membershipId: string;
   userId: string;

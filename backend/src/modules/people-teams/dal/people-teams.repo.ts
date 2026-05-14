@@ -15,14 +15,22 @@ import type { DbExecutor } from '../../../shared/db/db';
 import type { PeopleTeamGroupLevel } from '../people-teams.types';
 import {
   archiveActiveGroupSql,
+  deleteGroupMemberSql,
+  insertGroupMemberSql,
   insertGroupSql,
   selectActiveGroupsByTenantSql,
   selectActivePeopleByTenantSql,
   selectGroupByIdForTenantSql,
+  selectExistingGroupMemberSql,
   selectGroupByNormalizedNameSql,
+  selectGroupMemberSql,
+  selectGroupMembersSql,
+  selectMembershipByTenantSql,
   selectStoredGroupByIdForTenantSql,
   updateActiveGroupSql,
+  type PeopleTeamGroupMemberRow,
   type PeopleTeamGroupRow,
+  type PeopleTeamMembershipRow,
   type PeopleTeamPersonRow,
   type PeopleTeamStoredGroupRow,
 } from './people-teams.query-sql';
@@ -82,6 +90,53 @@ export class PeopleTeamsRepo {
     actorMembershipId: string;
   }): Promise<PeopleTeamStoredGroupRow | undefined> {
     return archiveActiveGroupSql(this.db, input);
+  }
+
+  listGroupMembers(input: {
+    tenantId: string;
+    groupId: string;
+  }): Promise<PeopleTeamGroupMemberRow[]> {
+    return selectGroupMembersSql(this.db, input);
+  }
+
+  getGroupMember(input: {
+    tenantId: string;
+    groupId: string;
+    membershipId: string;
+  }): Promise<PeopleTeamGroupMemberRow | undefined> {
+    return selectGroupMemberSql(this.db, input);
+  }
+
+  getMembership(input: {
+    tenantId: string;
+    membershipId: string;
+  }): Promise<PeopleTeamMembershipRow | undefined> {
+    return selectMembershipByTenantSql(this.db, input);
+  }
+
+  findExistingGroupMember(input: {
+    tenantId: string;
+    groupId: string;
+    membershipId: string;
+  }): Promise<{ membership_id: string } | undefined> {
+    return selectExistingGroupMemberSql(this.db, input);
+  }
+
+  async addGroupMember(input: {
+    tenantId: string;
+    groupId: string;
+    membershipId: string;
+    actorMembershipId: string;
+  }): Promise<void> {
+    await insertGroupMemberSql(this.db, input);
+  }
+
+  removeGroupMember(input: {
+    tenantId: string;
+    groupId: string;
+    membershipId: string;
+  }): Promise<{ membership_id: string } | undefined> {
+    return deleteGroupMemberSql(this.db, input);
   }
 
   listActivePeople(tenantId: string): Promise<PeopleTeamPersonRow[]> {

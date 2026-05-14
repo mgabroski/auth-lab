@@ -5,9 +5,9 @@
  * - Declares the People & Teams backend foundation routes.
  *
  * RULES:
- * - Group lifecycle writes are limited to create/update/archive.
- * - No group member writes, Operational Access grants, Person Exceptions,
- *   Managed People, or resolver routes.
+ * - Routes remain limited to group lifecycle and group membership management.
+ * - No Operational Access grants, Person Exceptions, Managed People,
+ *   or resolver routes.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -20,6 +20,12 @@ export function registerPeopleTeamsRoutes(
   app.get('/people-teams/groups', controller.listGroups.bind(controller));
   app.post('/people-teams/groups', controller.createGroup.bind(controller));
   app.get('/people-teams/groups/:groupId', controller.getGroup.bind(controller));
+  app.get('/people-teams/groups/:groupId/members', controller.listGroupMembers.bind(controller));
+  app.post('/people-teams/groups/:groupId/members', controller.addGroupMember.bind(controller));
+  app.delete(
+    '/people-teams/groups/:groupId/members/:membershipId',
+    controller.removeGroupMember.bind(controller),
+  );
   app.put('/people-teams/groups/:groupId', controller.updateGroup.bind(controller));
   app.post('/people-teams/groups/:groupId/archive', controller.archiveGroup.bind(controller));
   app.get('/people-teams/people', controller.listPeople.bind(controller));

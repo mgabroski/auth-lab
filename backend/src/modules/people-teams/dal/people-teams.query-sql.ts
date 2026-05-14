@@ -271,3 +271,142 @@ export async function selectActivePeopleByTenantSql(
     .orderBy('users.email', 'asc')
     .execute() as Promise<PeopleTeamPersonRow[]>;
 }
+
+export type PeopleTeamGroupMemberRow = {
+  membership_id: string;
+  user_id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  status: string;
+  created_at: Date;
+};
+
+export async function selectGroupMembersSql(
+  db: DbExecutor,
+  input: { tenantId: string; groupId: string },
+): Promise<PeopleTeamGroupMemberRow[]> {
+  return db
+    .selectFrom('tenant_group_members')
+    .innerJoin('memberships', (join) =>
+      join
+        .onRef('memberships.id', '=', 'tenant_group_members.membership_id')
+        .onRef('memberships.tenant_id', '=', 'tenant_group_members.tenant_id'),
+    )
+    .innerJoin('users', 'users.id', 'memberships.user_id')
+    .select([
+      'memberships.id as membership_id',
+      'users.id as user_id',
+      'users.email as email',
+      'users.name as name',
+      'memberships.role as role',
+      'memberships.status as status',
+      'tenant_group_members.created_at as created_at',
+    ])
+    .where('tenant_group_members.tenant_id', '=', input.tenantId)
+    .where('tenant_group_members.group_id', '=', input.groupId)
+    .orderBy('users.email', 'asc')
+    .execute() as Promise<PeopleTeamGroupMemberRow[]>;
+}
+
+export async function selectGroupMemberSql(
+  db: DbExecutor,
+  input: { tenantId: string; groupId: string; membershipId: string },
+): Promise<PeopleTeamGroupMemberRow | undefined> {
+  return db
+    .selectFrom('tenant_group_members')
+    .innerJoin('memberships', (join) =>
+      join
+        .onRef('memberships.id', '=', 'tenant_group_members.membership_id')
+        .onRef('memberships.tenant_id', '=', 'tenant_group_members.tenant_id'),
+    )
+    .innerJoin('users', 'users.id', 'memberships.user_id')
+    .select([
+      'memberships.id as membership_id',
+      'users.id as user_id',
+      'users.email as email',
+      'users.name as name',
+      'memberships.role as role',
+      'memberships.status as status',
+      'tenant_group_members.created_at as created_at',
+    ])
+    .where('tenant_group_members.tenant_id', '=', input.tenantId)
+    .where('tenant_group_members.group_id', '=', input.groupId)
+    .where('tenant_group_members.membership_id', '=', input.membershipId)
+    .executeTakeFirst() as Promise<PeopleTeamGroupMemberRow | undefined>;
+}
+
+export type PeopleTeamMembershipRow = {
+  membership_id: string;
+  user_id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  status: string;
+};
+
+export async function selectMembershipByTenantSql(
+  db: DbExecutor,
+  input: { tenantId: string; membershipId: string },
+): Promise<PeopleTeamMembershipRow | undefined> {
+  return db
+    .selectFrom('memberships')
+    .innerJoin('users', 'users.id', 'memberships.user_id')
+    .select([
+      'memberships.id as membership_id',
+      'users.id as user_id',
+      'users.email as email',
+      'users.name as name',
+      'memberships.role as role',
+      'memberships.status as status',
+    ])
+    .where('memberships.tenant_id', '=', input.tenantId)
+    .where('memberships.id', '=', input.membershipId)
+    .executeTakeFirst() as Promise<PeopleTeamMembershipRow | undefined>;
+}
+
+export async function selectExistingGroupMemberSql(
+  db: DbExecutor,
+  input: { tenantId: string; groupId: string; membershipId: string },
+): Promise<{ membership_id: string } | undefined> {
+  return db
+    .selectFrom('tenant_group_members')
+    .select(['membership_id'])
+    .where('tenant_id', '=', input.tenantId)
+    .where('group_id', '=', input.groupId)
+    .where('membership_id', '=', input.membershipId)
+    .executeTakeFirst();
+}
+
+export async function insertGroupMemberSql(
+  db: DbExecutor,
+  input: {
+    tenantId: string;
+    groupId: string;
+    membershipId: string;
+    actorMembershipId: string;
+  },
+): Promise<void> {
+  await db
+    .insertInto('tenant_group_members')
+    .values({
+      tenant_id: input.tenantId,
+      group_id: input.groupId,
+      membership_id: input.membershipId,
+      added_by_membership_id: input.actorMembershipId,
+    })
+    .execute();
+}
+
+export async function deleteGroupMemberSql(
+  db: DbExecutor,
+  input: { tenantId: string; groupId: string; membershipId: string },
+): Promise<{ membership_id: string } | undefined> {
+  return db
+    .deleteFrom('tenant_group_members')
+    .where('tenant_id', '=', input.tenantId)
+    .where('group_id', '=', input.groupId)
+    .where('membership_id', '=', input.membershipId)
+    .returning(['membership_id'])
+    .executeTakeFirst();
+}

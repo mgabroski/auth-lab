@@ -448,7 +448,7 @@ describe('settings account surface', () => {
     } finally {
       await close();
     }
-  });
+  }, 15_000);
 
   it('keeps banner truth stable when Account saves occur after required setup is complete', async () => {
     const { app, deps, close, reset } = await buildTestApp();

@@ -20,4 +20,28 @@ export const PeopleTeamsErrors = {
   archivedGroupReadOnly(groupId: string) {
     return AppError.conflict('Archived People & Teams groups cannot be modified.', { groupId });
   },
+
+  membershipNotFound(membershipId: string) {
+    return AppError.notFound('Tenant membership not found.', { membershipId });
+  },
+
+  inactiveMembership(membershipId: string) {
+    return AppError.conflict('Only active tenant memberships can be added to a group.', {
+      membershipId,
+    });
+  },
+
+  duplicateGroupMember(groupId: string, membershipId: string) {
+    return AppError.conflict('This tenant membership is already in the group.', {
+      groupId,
+      membershipId,
+    });
+  },
+
+  groupMemberNotFound(groupId: string, membershipId: string) {
+    return AppError.notFound('People & Teams group member not found.', {
+      groupId,
+      membershipId,
+    });
+  },
 } as const;

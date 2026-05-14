@@ -19,6 +19,8 @@ import {
   auditPeopleTeamGroupArchived,
   auditPeopleTeamGroupCreated,
   auditPeopleTeamGroupUpdated,
+  auditPeopleTeamMemberAdded,
+  auditPeopleTeamMemberRemoved,
 } from './people-teams.audit';
 import type {
   CreatePeopleTeamGroupInput,
@@ -28,6 +30,9 @@ import type {
   PeopleTeamAuditContext,
   PeopleTeamGroupDto,
   PeopleTeamGroupLevel,
+  PeopleTeamGroupMemberDto,
+  PeopleTeamGroupMemberResponse,
+  PeopleTeamGroupMembersResponse,
   PeopleTeamGroupResponse,
   PeopleTeamGroupsResponse,
   PeopleTeamGroupStatus,
@@ -36,7 +41,9 @@ import type {
 } from './people-teams.types';
 import type { PeopleTeamsRepo } from './dal/people-teams.repo';
 import type {
+  PeopleTeamGroupMemberRow,
   PeopleTeamGroupRow,
+  PeopleTeamMembershipRow,
   PeopleTeamPersonRow,
   PeopleTeamStoredGroupRow,
 } from './dal/people-teams.query-sql';
@@ -93,6 +100,30 @@ function rowToPersonDto(row: PeopleTeamPersonRow): PeopleTeamPersonDto {
   };
 }
 
+function rowToGroupMemberDto(row: PeopleTeamGroupMemberRow): PeopleTeamGroupMemberDto {
+  return {
+    membershipId: row.membership_id,
+    userId: row.user_id,
+    email: row.email,
+    name: row.name,
+    role: row.role as MembershipRole,
+    status: row.status as MembershipStatus,
+    addedAt: row.created_at.toISOString(),
+  };
+}
+
+function membershipToAuditSummary(groupId: string, row: PeopleTeamMembershipRow) {
+  return {
+    groupId,
+    membershipId: row.membership_id,
+    userId: row.user_id,
+    email: row.email,
+    name: row.name,
+    role: row.role as MembershipRole,
+    status: row.status as MembershipStatus,
+  };
+}
+
 export class PeopleTeamsService {
   constructor(
     private readonly deps: {
@@ -116,6 +147,98 @@ export class PeopleTeamsService {
   async listPeople(tenantId: string): Promise<PeopleTeamPeopleResponse> {
     const rows = await this.deps.repo.listActivePeople(tenantId);
     return { people: rows.map(rowToPersonDto) };
+  }
+
+  async listGroupMembers(
+    tenantId: string,
+    groupId: string,
+  ): Promise<PeopleTeamGroupMembersResponse> {
+    const group = await this.deps.repo.getStoredGroup(tenantId, groupId);
+    if (!group) throw PeopleTeamsErrors.groupNotFound(groupId);
+
+    const rows = await this.deps.repo.listGroupMembers({ tenantId, groupId });
+    return { members: rows.map(rowToGroupMemberDto) };
+  }
+
+  async addGroupMember(
+    auth: PeopleTeamAuditContext,
+    groupId: string,
+    membershipId: string,
+  ): Promise<PeopleTeamGroupMemberResponse> {
+    return this.deps.db.transaction().execute(async (trx) => {
+      const repo = this.deps.repo.withDb(trx);
+      const group = await repo.getStoredGroup(auth.tenantId, groupId);
+
+      if (!group) throw PeopleTeamsErrors.groupNotFound(groupId);
+      if (group.status === 'ARCHIVED') throw PeopleTeamsErrors.archivedGroupReadOnly(groupId);
+
+      const membership = await repo.getMembership({ tenantId: auth.tenantId, membershipId });
+      if (!membership) throw PeopleTeamsErrors.membershipNotFound(membershipId);
+      if (membership.status !== 'ACTIVE') throw PeopleTeamsErrors.inactiveMembership(membershipId);
+
+      const existing = await repo.findExistingGroupMember({
+        tenantId: auth.tenantId,
+        groupId,
+        membershipId,
+      });
+      if (existing) throw PeopleTeamsErrors.duplicateGroupMember(groupId, membershipId);
+
+      await repo.addGroupMember({
+        tenantId: auth.tenantId,
+        groupId,
+        membershipId,
+        actorMembershipId: auth.membershipId,
+      });
+
+      const writer = this.buildAuditWriter(trx, auth);
+      await auditPeopleTeamMemberAdded(writer, {
+        member: membershipToAuditSummary(groupId, membership),
+        source: 'PeopleTeamsService.addGroupMember',
+      });
+
+      const added = await repo.getGroupMember({ tenantId: auth.tenantId, groupId, membershipId });
+      if (!added) throw PeopleTeamsErrors.groupMemberNotFound(groupId, membershipId);
+      return { member: rowToGroupMemberDto(added) };
+    });
+  }
+
+  async removeGroupMember(
+    auth: PeopleTeamAuditContext,
+    groupId: string,
+    membershipId: string,
+  ): Promise<PeopleTeamGroupMemberResponse> {
+    return this.deps.db.transaction().execute(async (trx) => {
+      const repo = this.deps.repo.withDb(trx);
+      const group = await repo.getStoredGroup(auth.tenantId, groupId);
+
+      if (!group) throw PeopleTeamsErrors.groupNotFound(groupId);
+      if (group.status === 'ARCHIVED') throw PeopleTeamsErrors.archivedGroupReadOnly(groupId);
+
+      const membership = await repo.getMembership({ tenantId: auth.tenantId, membershipId });
+      if (!membership) throw PeopleTeamsErrors.membershipNotFound(membershipId);
+
+      const existing = await repo.getGroupMember({
+        tenantId: auth.tenantId,
+        groupId,
+        membershipId,
+      });
+      if (!existing) throw PeopleTeamsErrors.groupMemberNotFound(groupId, membershipId);
+
+      const removed = await repo.removeGroupMember({
+        tenantId: auth.tenantId,
+        groupId,
+        membershipId,
+      });
+      if (!removed) throw PeopleTeamsErrors.groupMemberNotFound(groupId, membershipId);
+
+      const writer = this.buildAuditWriter(trx, auth);
+      await auditPeopleTeamMemberRemoved(writer, {
+        member: membershipToAuditSummary(groupId, membership),
+        source: 'PeopleTeamsService.removeGroupMember',
+      });
+
+      return { member: rowToGroupMemberDto(existing) };
+    });
   }
 
   async createGroup(

@@ -6,7 +6,7 @@
 
 ## Scope
 
-This API is the tenant-level People & Teams group foundation. It supports the future Operational Access model by creating a clean place for reusable tenant groups and active tenant people selection.
+This API is the tenant-level People & Teams group foundation. It supports the future Operational Access model by creating a clean place for reusable tenant groups and tenant-local group membership management.
 
 This API is **not** Operational Access.
 
@@ -18,11 +18,10 @@ It does not implement:
 - Managed People
 - Effective Access Resolver
 - Agent invite group requirements
-- group member add/remove writes
 - runtime role migration from `ADMIN | MEMBER`
 - permissions UI
 
-Current runtime membership roles remain `ADMIN | MEMBER`. Group levels are classification only: `ADMIN`, `AGENT`, `USER`. Changing a group level does not change login routing, session role, or membership runtime behavior.
+Current runtime membership roles remain `ADMIN | MEMBER`. Group levels are classification only: `ADMIN`, `AGENT`, `USER`. Changing a group level does not change login routing, session role, or membership runtime behavior. Adding a person to a group does not grant module access yet.
 
 ## Security
 
@@ -67,25 +66,6 @@ Archived groups are excluded from this normal list. They remain persisted for hi
 
 Returns one group for the authenticated tenant. Cross-tenant group IDs fail closed as not found.
 
-### Response
-
-```json
-{
-  "group": {
-    "id": "uuid",
-    "name": "HR Agents",
-    "normalizedName": "hr agents",
-    "description": "Tenant-local operational team",
-    "level": "AGENT",
-    "status": "ACTIVE",
-    "memberCount": 0,
-    "createdAt": "2026-05-14T00:00:00.000Z",
-    "updatedAt": "2026-05-14T00:00:00.000Z",
-    "archivedAt": null
-  }
-}
-```
-
 ## POST `/people-teams/groups`
 
 Creates an active tenant group. No access grants are created.
@@ -109,25 +89,6 @@ Creates an active tenant group. No access grants are created.
 - normalized group name is unique per tenant.
 - status starts as `ACTIVE`.
 - writes `people_teams.group_created` audit event.
-
-### Response
-
-```json
-{
-  "group": {
-    "id": "uuid",
-    "name": "Branch Managers",
-    "normalizedName": "branch managers",
-    "description": "Regional operations group",
-    "level": "AGENT",
-    "status": "ACTIVE",
-    "memberCount": 0,
-    "createdAt": "2026-05-14T00:00:00.000Z",
-    "updatedAt": "2026-05-14T00:00:00.000Z",
-    "archivedAt": null
-  }
-}
-```
 
 ## PUT `/people-teams/groups/:groupId`
 
@@ -168,9 +129,70 @@ Archives an active tenant group. This is the only lifecycle removal path in the 
 - no resolver behavior is implemented yet.
 - writes `people_teams.group_archived` audit event.
 
+## GET `/people-teams/groups/:groupId/members`
+
+Returns safe identifying data for members of one tenant-local group. Cross-tenant group IDs fail closed as not found.
+
+### Response
+
+```json
+{
+  "members": [
+    {
+      "membershipId": "uuid",
+      "userId": "uuid",
+      "email": "person@example.com",
+      "name": "Person Name",
+      "role": "MEMBER",
+      "status": "ACTIVE",
+      "addedAt": "2026-05-14T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+## POST `/people-teams/groups/:groupId/members`
+
+Adds an active tenant membership to an active tenant group.
+
+### Request
+
+```json
+{
+  "membershipId": "uuid"
+}
+```
+
+### Rules
+
+- group must belong to the authenticated tenant.
+- group must be `ACTIVE`.
+- membership must belong to the same tenant.
+- membership must be `ACTIVE`.
+- `INVITED` and `SUSPENDED` memberships cannot be added.
+- duplicate member adds return a clean conflict and do not create duplicate rows.
+- adding a member does not change that user's runtime role.
+- adding a member does not create Operational Access grants.
+- writes `people_teams.member_added` audit event.
+
+## DELETE `/people-teams/groups/:groupId/members/:membershipId`
+
+Removes a tenant membership from an active tenant group.
+
+### Rules
+
+- group must belong to the authenticated tenant.
+- group must be `ACTIVE`.
+- archived groups cannot be mutated.
+- membership must belong to the same tenant.
+- removing a group member does not delete the user or tenant membership.
+- removing a group member does not affect runtime auth role.
+- removing a group member does not compute future effective access.
+- writes `people_teams.member_removed` audit event.
+
 ## GET `/people-teams/people`
 
-Returns safe identifying data for active tenant memberships. This endpoint exists to support a future group member picker. It is not a full People/Profile module and does not expose sensitive Personal fields.
+Returns safe identifying data for active tenant memberships. This endpoint exists to support a group member picker. It is not a full People/Profile module and does not expose sensitive Personal fields.
 
 Only `ACTIVE` memberships for the authenticated tenant are returned.
 
@@ -196,5 +218,7 @@ Only `ACTIVE` memberships for the authenticated tenant are returned.
 - Groups are tenant-scoped.
 - Group names are normalized and unique per tenant.
 - Group membership anchors to tenant membership, not global user alone.
-- Archive is the MVP lifecycle path; hard delete is not part of this foundation.
+- Only active tenant memberships can be added to groups.
+- Archive is the MVP group lifecycle path; hard delete is not part of this foundation.
 - Archived groups must later fail closed when Operational Access consumes them.
+- Group membership is tenant-local and does not grant Operational Access yet.

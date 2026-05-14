@@ -2,7 +2,7 @@
  * backend/src/modules/people-teams/people-teams.audit.ts
  *
  * WHY:
- * - Typed audit helpers for People & Teams group lifecycle writes.
+ * - Typed audit helpers for People & Teams group lifecycle and membership writes.
  * - Keeps audit action names and payload shape consistent while the shared
  *   AuditWriter remains generic.
  *
@@ -13,6 +13,7 @@
  */
 
 import type { AuditWriter } from '../../shared/audit/audit.writer';
+import type { MembershipRole, MembershipStatus } from '../memberships/membership.types';
 import type { PeopleTeamGroupLevel } from './people-teams.types';
 
 type GroupAuditSummary = {
@@ -22,6 +23,16 @@ type GroupAuditSummary = {
   description: string | null;
   level: PeopleTeamGroupLevel;
   status: string;
+};
+
+type MemberAuditSummary = {
+  groupId: string;
+  membershipId: string;
+  userId: string;
+  email: string;
+  name: string | null;
+  role: MembershipRole;
+  status: MembershipStatus;
 };
 
 export function auditPeopleTeamGroupCreated(
@@ -53,5 +64,25 @@ export function auditPeopleTeamGroupArchived(
     source: data.source,
     before: data.before,
     after: data.after,
+  });
+}
+
+export function auditPeopleTeamMemberAdded(
+  writer: AuditWriter,
+  data: { member: MemberAuditSummary; source: string },
+): Promise<void> {
+  return writer.append('people_teams.member_added', {
+    source: data.source,
+    member: data.member,
+  });
+}
+
+export function auditPeopleTeamMemberRemoved(
+  writer: AuditWriter,
+  data: { member: MemberAuditSummary; source: string },
+): Promise<void> {
+  return writer.append('people_teams.member_removed', {
+    source: data.source,
+    member: data.member,
   });
 }
