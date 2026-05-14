@@ -1,14 +1,14 @@
 # People & Teams API
 
-**Status:** Backend foundation only  
-**Surface:** Tenant admin API  
+**Status:** Shipped group and membership foundation  
+**Surface:** Tenant admin API and Settings UI (`/admin/settings/people-teams`)  
 **Route prefix:** `/people-teams/*`
 
 ## Scope
 
-This API is the tenant-level People & Teams group foundation. It supports the future Operational Access model by creating a clean place for reusable tenant groups and tenant-local group membership management.
+This API is the tenant-level People & Teams group foundation. The tenant admin UI at `/admin/settings/people-teams` uses this API to manage reusable tenant groups and tenant-local group membership management. It supports the future Operational Access model by creating a clean People & Teams foundation first.
 
-This API is **not** Operational Access.
+This API and UI are **not** Operational Access.
 
 It does not implement:
 

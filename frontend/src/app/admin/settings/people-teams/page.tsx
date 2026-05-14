@@ -1,0 +1,102 @@
+/**
+ * frontend/src/app/admin/settings/people-teams/page.tsx
+ *
+ * WHY:
+ * - Exposes the People & Teams backend foundation in tenant Settings IA.
+ * - Keeps the surface management-only and non-gating: reusable groups and
+ *   group memberships, not Operational Access.
+ */
+
+import React from 'react';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+
+import { loadAuthBootstrap } from '@/shared/auth/bootstrap.server';
+import { AuthenticatedShell } from '@/shared/auth/components/authenticated-shell';
+import {
+  ADMIN_SETTINGS_PATH,
+  AUTHENTICATED_ADMIN_ENTRY_PATH,
+  getRouteStateRedirectPath,
+} from '@/shared/auth/redirects';
+import { PeopleTeamsView } from '@/shared/people-teams/components/people-teams-view';
+import { loadPeopleTeamsFoundation } from '@/shared/people-teams/loaders';
+
+const navLinkStyle = {
+  color: '#0f172a',
+  fontSize: '14px',
+  fontWeight: 600,
+  textDecoration: 'none',
+} as const;
+
+const errorCardStyle = {
+  display: 'grid',
+  gap: '8px',
+  padding: '18px 20px',
+  borderRadius: '20px',
+  border: '1px solid #fecaca',
+  backgroundColor: '#fef2f2',
+  color: '#991b1b',
+} as const;
+
+export const dynamic = 'force-dynamic';
+
+export default async function AdminSettingsPeopleTeamsPage() {
+  const bootstrap = await loadAuthBootstrap();
+
+  if (!bootstrap.ok) {
+    return (
+      <main>
+        <h1>Hubins — People &amp; Teams</h1>
+        <p>Bootstrap failed while loading the settings route.</p>
+        <p>
+          <strong>Error:</strong> {bootstrap.error.message}
+        </p>
+      </main>
+    );
+  }
+
+  const routeState = bootstrap.routeState;
+
+  if (routeState.kind !== 'AUTHENTICATED_ADMIN') {
+    redirect(getRouteStateRedirectPath(routeState));
+  }
+
+  const peopleTeams = await loadPeopleTeamsFoundation();
+
+  return (
+    <AuthenticatedShell
+      eyebrow="Hubins admin workspace"
+      title="People & Teams"
+      subtitle="Manage reusable tenant groups and memberships. This foundation does not grant module access or change runtime roles."
+      me={routeState.me}
+    >
+      <div style={{ display: 'grid', gap: '16px' }}>
+        <div style={{ display: 'grid', gap: '10px' }}>
+          <Link href={ADMIN_SETTINGS_PATH} style={navLinkStyle}>
+            ← Back to workspace settings
+          </Link>
+          <Link href={AUTHENTICATED_ADMIN_ENTRY_PATH} style={navLinkStyle}>
+            ← Back to admin dashboard
+          </Link>
+        </div>
+
+        {peopleTeams.ok ? (
+          <PeopleTeamsView initialData={peopleTeams.data} />
+        ) : (
+          <section style={errorCardStyle}>
+            <h2 style={{ margin: 0, fontSize: '20px', lineHeight: 1.2 }}>
+              People &amp; Teams is unavailable
+            </h2>
+            <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7 }}>
+              The frontend could not load <code>GET /people-teams/groups</code> and{' '}
+              <code>GET /people-teams/people</code>, so it is not rendering fallback group truth.
+            </p>
+            <p style={{ margin: 0, fontSize: '14px', lineHeight: 1.7 }}>
+              {peopleTeams.error.message}
+            </p>
+          </section>
+        )}
+      </div>
+    </AuthenticatedShell>
+  );
+}

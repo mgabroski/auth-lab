@@ -54,6 +54,7 @@ This pack covers QA execution for the current shipped repo slice:
 - `/admin/settings/account` non-gating per-card save behavior
 - `/admin/settings/modules` navigation hub behavior
 - `/admin/settings/modules/personal` family review, field configuration, section builder, and full-replacement save behavior
+- `/admin/settings/people-teams` reusable group and membership management behavior
 - `/admin/settings/integrations` informational SSO and deferred integration behavior
 - `/admin/settings/communications` placeholder-only route behavior
 - absent Permissions treatment
@@ -78,12 +79,13 @@ Out of scope:
 - Communications live configuration
 - Workspace Experience live configuration
 - Permissions / Permission & Policy Management tenant surface
+- Operational Access grants, Person Exceptions, Managed People, Agent invite requirements, runtime role migration, and Effective Access Resolver behavior
 - documents, benefits, payments, marketplace tenant modules
 - CP authentication
 - CP operator RBAC
 - CP audit viewer UI
 - production load/performance testing
-- Operational Access runtime QA, Agent Groups, Person Exceptions, Managed People scope, branch/regional-manager scope, sensitive-field conflict runtime proof, and Effective Access explanation proof
+- Operational Access runtime QA, Agent Groups as grant subjects, Person Exceptions, Managed People scope, branch/regional-manager scope, sensitive-field conflict runtime proof, and Effective Access explanation proof
 
 When a future surface is intentionally absent or placeholder-only, missing configuration UI is not a bug.
 
@@ -97,8 +99,9 @@ Current shipped truth remains:
 
 - runtime roles are `ADMIN | MEMBER`
 - `Agent` and distinct runtime `User` are future target concepts
-- People & Teams operational groups are not implemented
-- Agent Groups are not implemented
+- People & Teams foundation groups and group memberships are implemented
+- group levels `ADMIN / AGENT / USER` are classification only and do not change runtime roles
+- Agent Groups as Operational Access grant subjects are not implemented
 - Person Exceptions are not implemented
 - a reusable Effective Access Resolver is not implemented
 - current `/admin/settings/access` is Access & Security, not Operational Access
@@ -126,7 +129,7 @@ Do not add the scenarios below to the current executable checklist until impleme
 
 Execution rule:
 
-> Operational Access QA moves from this future-planning section into executable QA only after People & Teams, Agent Groups, Person Exceptions, backend Effective Access resolution, and at least one consuming module are implemented and documented as shipped truth.
+> Operational Access QA moves from this future-planning section into executable QA only after Agent Groups as grant subjects, Person Exceptions, backend Effective Access resolution, and at least one consuming module are implemented and documented as shipped truth. The current People & Teams executable QA covers group and membership management only.
 
 ---
 
@@ -202,7 +205,7 @@ Run cases in this order unless a focused bug task explicitly needs a smaller sub
 4. MFA
 5. Invite lifecycle
 6. Control Plane create/setup/review/publish/re-entry/status-toggle
-7. Settings banner, overview, required setup, Personal completion, placeholders, absent route
+7. Settings banner, overview, required setup, People & Teams management, Personal completion, placeholders, absent route
 8. Settings conflict and CP cascade proof
 9. Boundary and tenant isolation proof
 10. Staging-only SSO proof
@@ -258,12 +261,13 @@ Steps:
 1. Open `/admin/settings`.
 2. Confirm `Required sections` is visible.
 3. Confirm `Optional sections` is visible.
-4. Confirm cards for Access & Security, Modules, Account Settings, Integrations, Communications, and Workspace Experience.
+4. Confirm cards for Access & Security, Modules, Account Settings, Integrations, People & Teams, Communications, and Workspace Experience.
 5. Look for `Permissions`.
 
 Expected results:
 
 - Access and Modules/Personal are required setup paths.
+- People & Teams is visible as a live, non-gating management surface.
 - Communications is placeholder-only.
 - Workspace Experience is overview-only placeholder.
 - Permissions is absent: no card, no CTA, no placeholder.
@@ -272,6 +276,41 @@ Evidence:
 
 - screenshot of overview required sections
 - screenshot of overview optional sections
+
+### SET-02B — People & Teams group and membership management
+
+| Field         | Value               |
+| ------------- | ------------------- |
+| Environment   | Local host-run      |
+| Persona       | authenticated admin |
+| Fixture       | same as SET-01      |
+| Preconditions | SET-01 completed    |
+
+Steps:
+
+1. Open `/admin/settings/people-teams`.
+2. Confirm the page title is `People & Teams`.
+3. Confirm the helper copy says group level is classification only and does not grant module access.
+4. Create a group with a unique name and level `AGENT`.
+5. Edit the group name or description.
+6. Add an active tenant member to the selected group.
+7. Remove that member from the group.
+8. Archive the group.
+9. Confirm no Operational Access grants, Person Exceptions, Managed People, `Can see`, `Can do`, or `Where` UI appears.
+
+Expected results:
+
+- Admin can create, edit, archive, add member, and remove member.
+- Member management uses active tenant memberships only.
+- The page remains a non-gating Settings management surface.
+- Group membership does not change runtime role and does not grant module access.
+- No Operational Access UI appears.
+
+Evidence:
+
+- screenshot of People & Teams page after create
+- screenshot after member add/remove
+- screenshot or note confirming no Operational Access controls are visible
 
 ---
 
@@ -551,13 +590,14 @@ Evidence:
 
 Run these from the repo root unless noted.
 
-| Proof                        | Command                                                                                                                                                                                                                                                                                                                                        | What it proves                                                                                                                                                                               |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend Settings proof suite | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-concurrency.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts` | migration/backfill and retired-scaffold removal, required/optional CP cascade, account/personal concurrency, conflicts, placeholder/absent behavior, account non-gating, personal completion |
-| Frontend Settings unit proof | `yarn workspace frontend test:unit -- admin-settings`                                                                                                                                                                                                                                                                                          | SSR page loaders and component rendering contract for Settings pages                                                                                                                         |
-| Browser Settings proof       | `yarn workspace frontend test:e2e test/e2e/settings.spec.ts`                                                                                                                                                                                                                                                                                   | real browser admin journey through `/admin`, Settings overview, Access acknowledge, Personal save, placeholders, and tenant isolation                                                        |
-| CP full-stack proof          | `yarn workspace frontend test:e2e:cp`                                                                                                                                                                                                                                                                                                          | CP host create/publish/re-entry/status and tenant-host boundary in full-stack mode                                                                                                           |
-| Proxy conformance            | `./scripts/proxy-conformance.sh`                                                                                                                                                                                                                                                                                                               | Host preservation, `/api` stripping, cookie continuity, X-Forwarded headers, tenant isolation                                                                                                |
+| Proof                                           | Command                                                                                                                                                                                                                                                                                                                                        | What it proves                                                                                                                                                                               |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend Settings proof suite                    | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-concurrency.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts` | migration/backfill and retired-scaffold removal, required/optional CP cascade, account/personal concurrency, conflicts, placeholder/absent behavior, account non-gating, personal completion |
+| Backend People & Teams proof suite              | `yarn workspace @auth-lab/backend test -- people-teams-read.spec.ts people-teams-groups.spec.ts people-teams-members.spec.ts`                                                                                                                                                                                                                  | tenant-scoped group reads/writes, membership management, admin-only protection, archived-group behavior, and audit coverage                                                                  |
+| Frontend Settings and People & Teams unit proof | `yarn workspace frontend test:unit -- admin-settings people-teams`                                                                                                                                                                                                                                                                             | SSR page loaders and component rendering contract for Settings pages                                                                                                                         |
+| Browser Settings proof                          | `yarn workspace frontend test:e2e test/e2e/settings.spec.ts`                                                                                                                                                                                                                                                                                   | real browser admin journey through `/admin`, Settings overview, People & Teams create/edit/archive/member management, Access acknowledge, Personal save, placeholders, and tenant isolation  |
+| CP full-stack proof                             | `yarn workspace frontend test:e2e:cp`                                                                                                                                                                                                                                                                                                          | CP host create/publish/re-entry/status and tenant-host boundary in full-stack mode                                                                                                           |
+| Proxy conformance                               | `./scripts/proxy-conformance.sh`                                                                                                                                                                                                                                                                                                               | Host preservation, `/api` stripping, cookie continuity, X-Forwarded headers, tenant isolation                                                                                                |
 
 The browser Settings proof should start from a clean seeded local state. Run `yarn reset-db` and restart `yarn dev` before it when the admin MFA state is dirty.
 

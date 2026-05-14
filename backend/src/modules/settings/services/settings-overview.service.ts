@@ -127,6 +127,17 @@ export class SettingsOverviewService {
         requiredReason: null,
       },
       {
+        key: 'peopleTeams',
+        title: SETTINGS_SECTION_ROUTES.peopleTeams.title,
+        description: SETTINGS_SECTION_ROUTES.peopleTeams.description,
+        href: SETTINGS_SECTION_ROUTES.peopleTeams.href,
+        classification: SETTINGS_SECTION_ROUTES.peopleTeams.classification,
+        status: 'COMPLETE',
+        warnings: [],
+        isRequired: false,
+        requiredReason: null,
+      },
+      {
         key: 'communications',
         title: SETTINGS_SECTION_ROUTES.communications.title,
         description: SETTINGS_SECTION_ROUTES.communications.description,

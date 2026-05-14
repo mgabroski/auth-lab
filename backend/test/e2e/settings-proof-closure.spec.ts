@@ -55,6 +55,7 @@ describe('settings proof and QA closure', () => {
         'account',
         'modules',
         'integrations',
+        'peopleTeams',
         'communications',
         'workspaceExperience',
       ]);

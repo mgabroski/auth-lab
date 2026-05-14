@@ -33,6 +33,7 @@ export type SettingsOverviewCardKey =
   | 'account'
   | 'modules'
   | 'integrations'
+  | 'peopleTeams'
   | 'communications'
   | 'workspaceExperience';
 

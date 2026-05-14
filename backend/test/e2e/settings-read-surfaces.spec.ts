@@ -265,6 +265,7 @@ describe('settings read surfaces', () => {
       const accessCard = requireCard(overview, 'access');
       const modulesCard = requireCard(overview, 'modules');
       const integrationsCard = requireCard(overview, 'integrations');
+      const peopleTeamsCard = requireCard(overview, 'peopleTeams');
       const communicationsCard = requireCard(overview, 'communications');
       const workspaceExperienceCard = requireCard(overview, 'workspaceExperience');
 
@@ -274,6 +275,7 @@ describe('settings read surfaces', () => {
         'account',
         'modules',
         'integrations',
+        'peopleTeams',
         'communications',
         'workspaceExperience',
       ]);
@@ -294,6 +296,13 @@ describe('settings read surfaces', () => {
         status: 'NOT_STARTED',
       });
       expect(integrationsCard.warnings.join(' ')).toContain('runtime readiness is unavailable');
+
+      expect(peopleTeamsCard).toMatchObject({
+        classification: 'LIVE_NON_GATING',
+        status: 'COMPLETE',
+        isRequired: false,
+        href: '/admin/settings/people-teams',
+      });
 
       expect(communicationsCard).toMatchObject({
         classification: 'PLACEHOLDER_ONLY',

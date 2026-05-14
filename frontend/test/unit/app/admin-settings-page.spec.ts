@@ -117,6 +117,17 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         requiredReason: null,
       },
       {
+        key: 'peopleTeams',
+        title: 'People & Teams',
+        description: 'Manage reusable groups.',
+        href: '/admin/settings/people-teams',
+        classification: 'LIVE_NON_GATING',
+        status: 'COMPLETE',
+        warnings: [],
+        isRequired: false,
+        requiredReason: null,
+      },
+      {
         key: 'communications',
         title: 'Communications',
         description: 'Placeholder only.',
@@ -166,6 +177,7 @@ describe('AdminSettingsPage', () => {
     expect(html).toContain('Required sections');
     expect(html).toContain('Optional sections');
     expect(html).toContain('access:Access &amp; Security');
+    expect(html).toContain('peopleTeams:People &amp; Teams');
     expect(html).toContain('communications:Communications');
     expect(html).toContain('workspaceExperience:Workspace Experience');
     expect(html).not.toContain('Permissions');

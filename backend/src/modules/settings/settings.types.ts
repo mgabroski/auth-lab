@@ -48,6 +48,7 @@ export const SETTINGS_OVERVIEW_CARD_KEYS = [
   'account',
   'modules',
   'integrations',
+  'peopleTeams',
   'communications',
   'workspaceExperience',
 ] as const;
@@ -179,6 +180,14 @@ export const SETTINGS_SECTION_ROUTES: Record<SettingsOverviewCardKey, SettingsSe
     href: '/admin/settings/integrations',
     classification: 'LIVE_NON_GATING',
     sectionKey: 'integrations',
+  },
+  peopleTeams: {
+    key: 'peopleTeams',
+    title: 'People & Teams',
+    description: 'Manage reusable tenant groups and memberships.',
+    href: '/admin/settings/people-teams',
+    classification: 'LIVE_NON_GATING',
+    sectionKey: null,
   },
   communications: {
     key: 'communications',

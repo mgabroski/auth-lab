@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the current tenant-facing Settings slice for `/admin` and `/admin/settings`: real synchronous CP -> Settings cascade handling, `GET /settings/bootstrap`, `GET /settings/overview`, Settings-native banner consumption on `/admin`, a real Settings overview page at `/admin/settings`, a real Access page at `/admin/settings/access`, a real Account page at `/admin/settings/account` with per-card save boundaries, a real Modules hub page at `/admin/settings/modules`, a real Personal builder page at `/admin/settings/modules/personal` with backend-owned default sections and the canonical save flow, a placeholder-only Communications route backed by `GET /settings/communications`, an honest SSR-gated Integrations page, a Workspace Experience overview placeholder card with no route, and continued absence of Permissions.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the current tenant-facing Settings slice for `/admin` and `/admin/settings`: real synchronous CP -> Settings cascade handling, `GET /settings/bootstrap`, `GET /settings/overview`, Settings-native banner consumption on `/admin`, a real Settings overview page at `/admin/settings`, a real Access page at `/admin/settings/access`, a real Account page at `/admin/settings/account` with per-card save boundaries, a real Modules hub page at `/admin/settings/modules`, a real Personal builder page at `/admin/settings/modules/personal` with backend-owned default sections and the canonical save flow, a live non-gating People & Teams management page at `/admin/settings/people-teams`, a placeholder-only Communications route backed by `GET /settings/communications`, an honest SSR-gated Integrations page, a Workspace Experience overview placeholder card with no route, and continued absence of Permissions.
 
 This repo already has:
 
@@ -39,6 +39,7 @@ This repo already has:
 - real CP edit/re-entry surfaces, published-account status toggle, and practical accounts list actions
 - real CP producer-side Settings handoff snapshot on full account detail DTOs and internal backend service composition
 - CP frontend wired to real backend data for create basic-info submission, accounts list, Step 2 group saves, Step 2 progress state, required-group continuation gating, and Review & Publish
+- a live People & Teams backend and tenant-admin Settings surface for reusable tenant groups and group membership management
 
 This repo does not yet claim that the full Auth / Provisioning closure roadmap is complete.
 Roadmap closure still depends on the remaining real-environment, proof, QA, and production-readiness work tracked elsewhere.
@@ -59,9 +60,9 @@ What this means today:
 - `/admin/settings` reads `GET /settings/overview` as the real Settings overview source
 - the repo ships the real backend state engine foundation: persisted aggregate/section truth, aggregate recompute service, and synchronous CP cascade handling
 - the current CP `settingsHandoff` snapshot remains producer-shaped, but it honestly reports that the Settings engine is present and synchronous cascade wiring is active
-- the tenant Settings v1 route set is implemented exactly as locked: Access, Account, Modules, Personal, Integrations live; Communications placeholder-only; Workspace Experience overview-card-only with no route; Permissions absent
+- the tenant Settings v1 route set is implemented exactly as locked plus the new People & Teams foundation: Access, Account, Modules, Personal, Integrations, and People & Teams live; Communications placeholder-only; Workspace Experience overview-card-only with no route; Permissions absent
 - the active Settings consumer audit is closed: `/admin` consumes bootstrap; Settings overview consumes overview; section pages consume their own Settings read/write DTOs; no active Settings page consumes auth bootstrap setup truth
-- the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Account/Personal concurrency, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, failure-audit proof, a dedicated browser Settings proof path (`yarn workspace frontend playwright test test/e2e/settings.spec.ts`), and frontend unit coverage for Settings pages, loaders, browser API calls, and route shell behavior
+- the Settings proof closure layer includes deterministic CP-backed fixture helpers, backend proof coverage for banner lifecycle, Account non-gating behavior, Account/Personal concurrency, Personal completion, required/optional CP cascade behavior, placeholder/absent route treatment, scaffold-removal behavior, tenant isolation, failure-audit proof, People & Teams group/membership proof, a dedicated browser Settings proof path (`yarn workspace frontend playwright test test/e2e/settings.spec.ts`), and frontend unit coverage for Settings pages, loaders, browser API calls, People & Teams page behavior, and route shell behavior
 - final Settings lock certification is recorded in `docs/qa/settings-lock-certification.md` as a lightweight signoff record; proof remains in the normal repo quality gate, pre-push checks, CI checks, Playwright reports, and QA/runbook artifacts rather than duplicated raw logs in docs
 - the only open Settings-specific quality exception is QE-0001 in `docs/quality-exceptions.md`: production external-provider SSO readiness snapshot refresh is deferred while the v1 Integrations page remains informational-only and fail-closed
 
@@ -82,8 +83,9 @@ Current shipped truth remains:
 - the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
 - the current Access & Security page is not future tenant Operational Access
 - Permissions UI is absent in v1: no card, no route, no API surface
-- People & Teams operational groups are not implemented
-- Agent Groups are not implemented
+- People & Teams foundation groups and group membership management are implemented as a tenant-admin Settings surface
+- People & Teams group levels `ADMIN / AGENT / USER` are classification only and do not change current runtime membership role behavior
+- Agent Groups as Operational Access grant subjects are not implemented
 - Person Exceptions are not implemented
 - a reusable backend Effective Access Resolver is not implemented
 - no shipped module may claim to consume Operational Access today
@@ -115,7 +117,7 @@ Accepted future target truth is:
 
 Documentation and QA rule:
 
-> Operational Access scenarios may be planned now, but they are future / not executable until the underlying People & Teams, Agent Groups, Person Exceptions, Effective Access Resolver, and module consumers exist in code.
+> Operational Access scenarios may be planned now, but they are future / not executable until Agent Groups as grant subjects, Person Exceptions, Effective Access Resolver, and module consumers exist in code. The shipped People & Teams foundation is group and membership management only.
 
 This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, Integrations, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
 
@@ -135,6 +137,7 @@ Use them before support docs.
 7. `backend/docs/api/admin.md` — admin auth/provisioning contract surface
 8. `backend/docs/api/cp-accounts.md` — CP accounts contract surface
 9. `backend/docs/api/settings.md` — shipped Settings contract surface
+10. `backend/docs/api/people-teams.md` — shipped People & Teams group and membership contract surface
 
 ### Supporting but non-canonical-by-default docs
 

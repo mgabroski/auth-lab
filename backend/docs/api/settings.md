@@ -59,7 +59,7 @@ The future Operational Access route/content strategy requires a real non-breakin
 
 Route treatment is locked as follows:
 
-- Live v1 Settings surfaces: `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/account`, `/settings/modules`, `/settings/modules/personal`, and `/settings/integrations`.
+- Live v1 Settings surfaces: `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/account`, `/settings/modules`, `/settings/modules/personal`, `/settings/integrations`, and the People & Teams management surface backed by `/people-teams/*`.
 - Placeholder-only v1 surface: `/settings/communications`. It returns a minimal placeholder DTO and exposes no live configuration or mutation behavior.
 - Overview-card-only v1 surface: Workspace Experience. It appears only as an overview card and has no backend route.
 - Absent v1 surface: Permissions. It has no overview card, no backend route, and no tenant configuration API.
@@ -187,7 +187,7 @@ Each card reports:
 - `isRequired`
 - `requiredReason`
 
-`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account and Integrations remain live but non-gating; Communications and Workspace Experience are placeholder-only; Permissions remains absent.
+`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account, Integrations, and People & Teams remain live but non-gating; Communications and Workspace Experience are placeholder-only; Permissions remains absent. People & Teams is group/membership management only and is not Operational Access.
 
 ### `GET /settings/access`
 

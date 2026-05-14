@@ -85,7 +85,46 @@ test.describe('settings tenant-admin proof', () => {
     await expect(page.getByRole('heading', { name: 'Modules' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Communications' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Workspace Experience' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'People & Teams' })).toBeVisible();
     await expect(page.getByText('Permissions')).toHaveCount(0);
+
+    await page.goto(`${OPEN_ORIGIN}/admin/settings/people-teams`);
+    await expect(page.getByRole('heading', { name: 'People & Teams' })).toBeVisible();
+    await expect(page.getByText('Group level is classification only for now')).toBeVisible();
+    await expect(page.getByText('Operational Access will be configured later')).toBeVisible();
+    await expect(page.getByText('Person Exceptions')).toHaveCount(0);
+    await expect(page.getByText('Managed People')).toHaveCount(0);
+
+    const groupName = `E2E People Team ${Date.now()}`;
+    const updatedGroupName = `${groupName} Updated`;
+    await page.getByLabel('Group name').fill(groupName);
+    await page.getByLabel('Description').fill('Created by the Settings browser proof.');
+    await page.getByLabel('Level').selectOption('AGENT');
+    await page.getByRole('button', { name: 'Create group' }).click();
+    await expect(page.getByText('Group created.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: groupName })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Edit group' }).last().click();
+    await page.getByLabel('Group name').fill(updatedGroupName);
+    await page.getByRole('button', { name: 'Save group' }).click();
+    await expect(page.getByText('Group updated.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: updatedGroupName })).toBeVisible();
+
+    const personSelect = page.getByLabel('Person to add');
+    await expect(personSelect).toBeVisible();
+    const firstPersonValue = await personSelect.locator('option').nth(1).getAttribute('value');
+    if (!firstPersonValue) {
+      throw new Error('People selector should expose at least one active tenant membership');
+    }
+    await personSelect.selectOption(firstPersonValue);
+    await page.getByRole('button', { name: 'Add member' }).click();
+    await expect(page.getByText('Member added.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Remove member' })).toBeVisible();
+    await page.getByRole('button', { name: 'Remove member' }).first().click();
+    await expect(page.getByText('Member removed.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Archive group' }).last().click();
+    await expect(page.getByText('Group archived.')).toBeVisible();
 
     await page.goto(`${OPEN_ORIGIN}/admin/settings/access`);
     await expect(page.getByRole('heading', { name: 'Access & Security' })).toBeVisible();
