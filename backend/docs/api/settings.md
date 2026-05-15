@@ -49,7 +49,7 @@ It does **not** mean the full long-range Settings roadmap is complete.
 
 `/settings/access` is the current **Access & Security** API surface.
 
-It is not future tenant Operational Access. It does not manage People & Teams, Agent Groups, Person Exceptions, module action grants, Managed People, branch/regional manager scopes, Personal Card runtime visibility, or Effective Access explanations.
+It is not future tenant Operational Access. It does not manage People & Teams, Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, Responsible For person coverage, Assigned Areas, Oversight, Temporary Coverage, module action grants, Personal Card runtime visibility, or Effective Access explanations.
 
 The future Operational Access route/content strategy requires a real non-breaking migration plan. Do not rename this route or reinterpret this contract through documentation alone.
 

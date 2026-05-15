@@ -57,7 +57,7 @@ The current Auth API canonical role contract is:
 
 Legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled input/read boundaries during the backend compatibility window. New default self-service provisioning writes `USER`.
 
-`AGENT` is a recognized runtime membership level, but Operational Access is not shipped in this API. Agent invite registration/SSO activation revalidates provisioning-only Agent group assignment before creating or activating an Agent membership. Agent Groups as Operational Access grant subjects, Person Exceptions, Managed People, Effective Access resolution, and module-level Agent/User data differences are not implemented by the Auth API.
+`AGENT` is a recognized runtime membership level, but Operational Access is not shipped in this API. Agent invite registration/SSO activation revalidates provisioning-only Agent group assignment before creating or activating an Agent membership. Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, Responsible For person coverage, Assigned Areas, Oversight, Temporary Coverage, Effective Access resolution, and module-level Agent/User data differences are not implemented by the Auth API.
 
 ---
 

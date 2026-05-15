@@ -45,7 +45,7 @@ CP routes are on the same backend process as all other routes. They are prefixed
 
 The CP Step 2 group named **Access, Identity & Security** is a provisioning/allowance surface for login methods, MFA policy, signup policy, invite policy, allowed domains, and SSO dependency rules.
 
-It is not tenant Operational Access. It does not create People & Teams groups, Agent Groups, Person Exceptions, Personal Card runtime grants, module action grants, Managed People scopes, branch/regional-manager scopes, or Effective Access resolver decisions.
+It is not tenant Operational Access. It does not create People & Teams groups, Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, Responsible For person coverage, Assigned Areas, Oversight, Temporary Coverage, Personal Card runtime grants, module action grants, or Effective Access resolver decisions.
 
 Future Operational Access planning may eventually reserve tenant Settings access terminology for People & Teams / Operational Access, but this CP contract must continue to describe only the current CP allowance group until code changes.
 
@@ -521,7 +521,7 @@ Persists the Access, Identity & Security group and marks it configured. This end
 - Microsoft login method cannot be saved unless Microsoft SSO Integration is already allowed.
 - `adminRequired` is persisted as `true` in this phase.
 - Allowed domains are normalized to trimmed lowercase unique values on save.
-- No People & Teams, Agent Groups, Person Exceptions, module grants, or Effective Access rules are created by this endpoint.
+- No People & Teams groups, Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, module grants, or Effective Access rules are created by this endpoint.
 
 **Response — 200 OK**
 

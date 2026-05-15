@@ -40,7 +40,7 @@ The current canonical invite/membership role contract is `ADMIN | AGENT | USER`.
 
 Legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled input/read boundaries during the backend compatibility window. New canonical invite writes normalize `MEMBER` to `USER`.
 
-`AGENT` is a recognized runtime membership level. Agent invite group assignment is created by the admin invite API and revalidated by this endpoint before an Agent invite is consumed. This is provisioning-only: it does not implement Agent operational access, Person Exceptions, Managed People, Effective Access resolution, or module-level Agent/User data differences.
+`AGENT` is a recognized runtime membership level. Agent invite group assignment is created by the admin invite API and revalidated by this endpoint before an Agent invite is consumed. This is provisioning-only: it does not implement Agent operational access, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, Responsible For person coverage, Assigned Areas, Oversight, Temporary Coverage, Effective Access resolution, or module-level Agent/User data differences.
 
 ---
 

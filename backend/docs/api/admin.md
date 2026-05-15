@@ -121,7 +121,7 @@ Status: `201 Created`
 - success writes `invite.created` audit data
 - success enqueues outbox delivery for the invite email
 - `AGENT` is a runtime membership level and requires at least one active Agent group assignment at invite creation time
-- Agent invite group assignment is provisioning-only; it creates no Operational Access grants, scopes, Person Exceptions, Managed People links, or module visibility
+- Agent invite group assignment is provisioning-only; it creates no Operational Access grants, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, Responsible For person coverage links, Assigned Areas, Oversight, Temporary Coverage, or module visibility
 - accepted Agent invite activation creates/activates an `AGENT` membership and attaches that membership to the selected Agent group(s)
 - `/admin/settings/access` remains Access & Security; this endpoint does not create the future Operational Access surface
 

@@ -13,9 +13,9 @@ This API and UI are **not** Operational Access.
 It does not implement:
 
 - access grants
-- scopes / Where rules
-- Person Exceptions
-- Managed People
+- Primary Where / Which Records / Additional Coverage rules
+- Special Access / Access Exceptions
+- Responsible For person coverage
 - Effective Access Resolver
 - Operational Access role grants
 - permissions UI
