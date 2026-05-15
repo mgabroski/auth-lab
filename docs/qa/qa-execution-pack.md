@@ -78,14 +78,14 @@ Out of scope:
 - tenant secret entry for integrations
 - Communications live configuration
 - Workspace Experience live configuration
-- Permissions / Permission & Policy Management tenant surface
-- Operational Access grants, Person Exceptions, Managed People, and Effective Access Resolver behavior
+- Permissions / Operational Access tenant surface
+- Operational Access grants, Primary Where, Which Records, Additional Coverage, Special Access, and Effective Access Resolver behavior
 - documents, benefits, payments, marketplace tenant modules
 - CP authentication
 - CP operator RBAC
 - CP audit viewer UI
 - production load/performance testing
-- Operational Access runtime QA, Agent Groups as grant subjects, Person Exceptions, Managed People scope, branch/regional-manager scope, sensitive-field conflict runtime proof, and Effective Access explanation proof
+- Operational Access runtime QA, Agent Groups as grant subjects, Primary Where, Which Records, Assigned Areas, Responsible For, Oversight, Temporary Coverage, Special Access, sensitive-field conflict runtime proof, search/export/notification leak proof, Benefits high-sensitivity proof, and Effective Access explanation proof
 
 When a future surface is intentionally absent or placeholder-only, missing configuration UI is not a bug.
 
@@ -95,41 +95,54 @@ When a future surface is intentionally absent or placeholder-only, missing confi
 
 This section is planning guidance only. These scenarios are **future / not executable** in the current repo.
 
+Active planning source:
+
+```text
+hubins-operational-access-9_5-source-of-truth-guide-final.md
+```
+
 Current shipped truth remains:
 
 - backend runtime roles are `ADMIN | AGENT | USER`
-- `MEMBER` is a legacy alias for `USER`; Agent operational access remains future work
+- `MEMBER` is a legacy alias for `USER`
+- Agent operational access remains future work
 - People & Teams foundation groups and group memberships are implemented
 - group levels `ADMIN / AGENT / USER` do not grant Operational Access
 - Agent Groups as Operational Access grant subjects are not implemented
-- Person Exceptions are not implemented
-- a reusable Effective Access Resolver is not implemented
+- Primary Where, Which Records, Assigned Areas, Responsible For, Oversight, Temporary Coverage, Special Access, and the Effective Access Resolver are not implemented
 - current `/admin/settings/access` is Access & Security, not Operational Access
 - Permissions / Operational Access tenant UI remains absent
 
 Do not add the scenarios below to the current executable checklist until implementation exists and the API/UI/test fixtures are real.
 
-| Future ID | Scenario                                  | Future proof intent                                                                                                        | Current status |
-| --------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| OA-FUT-01 | Admin full tenant access by level         | Admin sees allowed operational records without needing Agent Groups or Person Exceptions.                                  | Not executable |
-| OA-FUT-02 | User own/self-service access              | User sees only own/self-service data and cannot access cross-person operational records.                                   | Not executable |
-| OA-FUT-03 | Agent access through Agent Group          | Agent sees only actions and target records granted through active Agent Group access.                                      | Not executable |
-| OA-FUT-04 | Agent with no operational access          | Agent with no active Agent Groups and no Person Exceptions lands in a safe no-access state.                                | Not executable |
-| OA-FUT-05 | Agent Groups archive/fail-closed behavior | Archiving the group that granted access immediately removes effective access and keeps remediation/audit truth.            | Not executable |
-| OA-FUT-06 | Managed People exact-person scope         | Agent can operate only for explicitly managed people, not a whole employer, location, or group.                            | Not executable |
-| OA-FUT-07 | Person Exception extra access             | Rare person-specific access requires reason, review/expiry discipline, audit, and explanation visibility.                  | Not executable |
-| OA-FUT-08 | Branch manager scope                      | Branch Manager group with `Own Employer + Own Location` sees only matching target records.                                 | Not executable |
-| OA-FUT-09 | Regional manager scope                    | Regional Manager group with selected employer/location pairs sees only those explicit pairs.                               | Not executable |
-| OA-FUT-10 | Sensitive-field conflict                  | Sensitive fields stay masked/hidden when grants conflict unless explicit sensitive visibility applies.                     | Not executable |
-| OA-FUT-11 | Direct API denial                         | Backend denies access directly even if a future UI button or link is hidden.                                               | Not executable |
-| OA-FUT-12 | Effective Access explanation              | Support/admin explanation view accurately states why a card, field, action, or record is shown, masked, hidden, or denied. | Not executable |
-| OA-FUT-13 | Group + scope audience targeting          | Agent-created audiences are limited by the Agent’s own effective access scope.                                             | Not executable |
-| OA-FUT-14 | Personal Cards consumption                | Module renders backend-resolved Personal Cards and does not raw-read fields outside active cards.                          | Not executable |
-| OA-FUT-15 | Orphaned target behavior                  | Removed action/card/field/scope target grants nothing, fails closed, and remains auditable/remediable.                     | Not executable |
+| Future ID | Scenario                           | Future proof intent                                                                                                                       | Current status |
+| --------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| OA-FUT-01 | Admin full tenant access by level  | Admin sees allowed operational records without needing Agent Groups, coverage keys, or Special Access. Explanation source is Admin level. | Not executable |
+| OA-FUT-02 | User own/self-service access       | User sees only own/self-service data and cannot access cross-person operational records.                                                  | Not executable |
+| OA-FUT-03 | Agent with no operational access   | Agent with no active operational grants lands in a safe no-access state, not a broken page or Admin-like view.                            | Not executable |
+| OA-FUT-04 | Agent group toolbox                | Agent receives only product-defined actions granted through active Agent Group toolbox.                                                   | Not executable |
+| OA-FUT-05 | Primary Where — Tenant-wide        | Tenant-wide operational group can see permitted module records across the tenant without gaining Admin settings authority.                | Not executable |
+| OA-FUT-06 | Primary Where — Assigned Areas     | Agent can operate only inside explicit employer/location pairs or module-equivalent area keys.                                            | Not executable |
+| OA-FUT-07 | Primary Where — Responsible For    | Agent can operate only for explicitly responsible people, not the whole employer, location, or group.                                     | Not executable |
+| OA-FUT-08 | Primary Where — Review Queue       | Agent can operate only inside product-defined queue/status records such as documents requiring review.                                    | Not executable |
+| OA-FUT-09 | Which Records filter               | Product-defined record choices narrow visibility inside Primary Where.                                                                    | Not executable |
+| OA-FUT-10 | Oversight non-reciprocal           | If A oversees B/C, B/C do not see A unless explicitly granted.                                                                            | Not executable |
+| OA-FUT-11 | Oversight include-team = No        | A sees B/C as oversight targets only and does not automatically see B/C's responsible people/work.                                        | Not executable |
+| OA-FUT-12 | Oversight include-team = Yes       | A sees B/C and their responsible people/work, still with masking/sensitive rules.                                                         | Not executable |
+| OA-FUT-13 | Oversight single-hop               | If A oversees B and B oversees C, A does not automatically see C's team in MVP.                                                           | Not executable |
+| OA-FUT-14 | Temporary Coverage                 | Time-bound backup starts, grants the intended coverage, expires automatically, and is audited.                                            | Not executable |
+| OA-FUT-15 | Special Access                     | Rare one-person extra capability requires reason/review/expiry where applicable and appears in Why explanation.                           | Not executable |
+| OA-FUT-16 | Group archive/fail-closed behavior | Archiving the group that granted access immediately removes effective access and keeps remediation/audit truth.                           | Not executable |
+| OA-FUT-17 | Sensitive field conflict           | Conflicting grants resolve to masked/hidden unless explicit sensitive visibility exists for the field and scope.                          | Not executable |
+| OA-FUT-18 | Search leak prevention             | Hidden records and sensitive fields do not leak through counts, suggestions, autocomplete, or snippets.                                   | Not executable |
+| OA-FUT-19 | Notification leak prevention       | In-app/email/push notifications do not include sensitive hidden content.                                                                  | Not executable |
+| OA-FUT-20 | Export/generated output masking    | CSV, PDF, email attachments, and reports obey backend-resolved visibility and masking.                                                    | Not executable |
+| OA-FUT-21 | Benefits high-sensitivity access   | Enrollment/benefit-sensitive records require explicit high-sensitivity access; broad Manage does not imply unmasked access.               | Not executable |
+| OA-FUT-22 | Direct API denial                  | Backend denies unauthorized record/action access even if UI buttons are hidden.                                                           | Not executable |
+| OA-FUT-23 | Why explanation                    | Explanation matches backend decision source path without leaking sensitive values.                                                        | Not executable |
+| OA-FUT-24 | Cross-tenant target denial         | Operational Access cannot cross tenant boundary by read, write, search, notification, or export.                                          | Not executable |
 
-Execution rule:
-
-> Operational Access QA moves from this future-planning section into executable QA only after Agent Groups as grant subjects, Person Exceptions, backend Effective Access resolution, and at least one consuming module are implemented and documented as shipped truth. The current People & Teams executable QA covers group and membership management only.
+Operational Access QA remains planning-only until code, tests, fixtures, source docs, and the manual QA guide are updated together.
 
 ---
 
@@ -298,7 +311,7 @@ Steps:
 8. Archive the group.
 9. Confirm the archived group disappears from the normal active group list.
 10. Confirm there is no restore action in the current foundation.
-11. Confirm no Operational Access grants, Person Exceptions, Managed People, `Can see`, `Can do`, or `Where` UI appears.
+11. Confirm no Operational Access grants, Primary Where, Which Records, Additional Coverage, Special Access, Responsible For, Oversight, Temporary Coverage, `Can see`, or `Can do` UI appears.
 
 Expected results:
 

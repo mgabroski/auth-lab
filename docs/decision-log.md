@@ -75,12 +75,17 @@ Do not write ADRs for:
 | ADR-0021 | Sensitive Field Conflicts Resolve To The Most Restrictive Effective Result                                                  | LOCKED | access / security             |
 | ADR-0022 | Current Access & Security Route Must Not Be Confused With Future Operational Access                                         | LOCKED | settings / access routing     |
 | ADR-0023 | Backend-Owned Effective Access Resolver Is Future Platform Authorization Truth                                              | LOCKED | authorization / architecture  |
-| ADR-0024 | Reusable Groups Combine With Where Scope To Avoid Employer/Location-Specific Group Explosion                                | LOCKED | access / People & Teams       |
+| ADR-0024 | Reusable Groups Combine With Coverage Keys To Avoid Employer/Location-Specific Group Explosion                              | LOCKED | access / People & Teams       |
 | ADR-0025 | Operational Access Provisioning Target Behavior Preserves Role Compatibility                                                | LOCKED | provisioning / access target  |
-| ADR-0026 | Operational Access MVP Grants Use Agent Groups, Rare Person Exceptions, And Explicit Where Scope                            | LOCKED | access / People & Teams       |
+| ADR-0026 | Operational Access MVP Grants Use Agent Groups, Primary Where, Which Records, And Optional Coverage                         | LOCKED | access / People & Teams       |
 | ADR-0027 | Personal Cards Are Reusable Field Groupings, Not Workflow Or Module State                                                   | LOCKED | Personal / access             |
-| ADR-0028 | Person Exceptions Are Rare, Reviewed, Audited, And Scope-Bound Access Exceptions                                            | LOCKED | access / security             |
+| ADR-0028 | Special Access Is Rare, Reviewed, Audited, And Scope-Bound                                                                  | LOCKED | access / security             |
 | ADR-0029 | Operational Access Runtime Proof Starts With Personal Cards, Then Published Documents                                       | LOCKED | access / rollout proof        |
+| ADR-0030 | Operational Access 9.5 Source-of-Truth Model Replaces Older Operational Access Drafts                                       | LOCKED | access / documentation        |
+| ADR-0031 | Operational Access Setup Splits Primary Where, Which Records, Additional Coverage, And Special Access                       | LOCKED | access / UX / architecture    |
+| ADR-0032 | Oversight Is Directed, Single-Hop, And Dynamically Resolved                                                                 | LOCKED | access / hierarchy            |
+| ADR-0033 | Operational Access Tenant Surface Is Guarded By `operational_access_enabled`                                                | LOCKED | CP / settings / access        |
+| ADR-0034 | Search, Notifications, Exports, And High-Sensitivity Domains Must Consume Resolver Output                                   | LOCKED | access / security / modules   |
 
 ---
 
@@ -729,7 +734,7 @@ Future behavior target:
 
 - `Admin` sees everything tenant-wide by level.
 - `User` sees own/self-service data by default.
-- `Agent` receives operational access through Agent Groups or rare Person Exceptions.
+- `Agent` receives operational access through group toolbox + coverage keys, with rare Special Access for one-person extra capabilities.
 - Public signup creates canonical `User`.
 - HRIS/imported users map conceptually to future `User` unless explicitly promoted later.
 - Future Agent invitations require at least one Agent Group; that group-selection requirement is not implemented by the backend role foundation alone.
@@ -743,11 +748,11 @@ The product needs a clear distinction between tenant administrators, operational
 - API docs must describe canonical `ADMIN | AGENT | USER` where backend responses/inputs now expose those values.
 - Legacy `MEMBER` must remain documented only as a compatibility alias for `USER`.
 - QA may test role parsing, session carrying, admin-only guards, and non-admin MFA policy for `AGENT`/`USER`.
-- QA must not test Agent operational access, Agent Groups, Person Exceptions, or module-level Agent/User data differences until those surfaces exist.
+- QA must not test Agent operational access, Agent Groups as operational grant subjects, Primary Where, Which Records, Additional Coverage, Special Access, or module-level Agent/User data differences until those surfaces exist.
 
 ### Supersedes
 
-Any wording that implies Agent operational access, Agent Group invite assignment, Person Exceptions, or module-level Agent/User data differences are already shipped.
+Any wording that implies Agent operational access, Agent Group invite assignment, Primary Where, Which Records, Additional Coverage, Special Access, or module-level Agent/User data differences are already shipped.
 
 ## ADR-0021 — Sensitive Field Conflicts Resolve To The Most Restrictive Effective Result
 
@@ -821,9 +826,9 @@ LOCKED
 
 Future Operational Access must be resolved by backend/service-layer Effective Access, not by React/frontend code and not by module-local permission systems.
 
-The future resolver is the reusable platform authorization truth after tenant resolution, membership level, Agent Group membership, Person Exceptions, CP allowance, tenant configuration, target record context, Where/scope, Personal Card configuration, sensitive-field rules, orphan pruning, and fail-closed behavior are applied.
+The future resolver is the reusable platform authorization truth after tenant resolution, membership level, Agent Group membership, Primary Where, Which Records, Additional Coverage, Special Access, CP allowance, tenant configuration, target record context, Personal Card configuration, sensitive-field rules, orphan pruning, and fail-closed behavior are applied.
 
-Where/scope-aware decisions must be target-record-aware. User/session context alone is not enough when the answer depends on the target person, employer, location, selected employer/location pair, Managed People relationship, Personal Card, field, sensitivity class, document audience, task participant, or similar module-owned target context.
+Primary Where and Which Records decisions must be target-record-aware. User/session context alone is not enough when the answer depends on the target person, employer, location, assigned area pair, Responsible For relationship, review queue, Personal Card, field, sensitivity class, document audience, task participant, or similar module-owned target context.
 
 Frontend code may render backend-returned access outcomes, blockers, warnings, explanations, and resolved card/field states. It must not compute effective permission truth independently.
 
@@ -844,7 +849,7 @@ Operational access depends on tenant, actor, target record, target person placem
 
 Any module-specific visibility model that bypasses the shared future resolver.
 
-## ADR-0024 — Reusable Groups Combine With Where Scope To Avoid Employer/Location-Specific Group Explosion
+## ADR-0024 — Reusable Groups Combine With Coverage Keys To Avoid Employer/Location-Specific Group Explosion
 
 ### Status
 
@@ -852,32 +857,41 @@ LOCKED
 
 ### Decision
 
-Future People & Teams groups are reusable tenant-level teams/audiences. They define who receives access or who is targeted. They should not be employer/location-specific by default.
+Future People & Teams groups are reusable tenant-level teams/audiences. They define the **toolbox**: who commonly receives access and what kind of work they can do. They should not be employer/location-specific by default.
 
 Operational Access combines:
 
 ```text
-Group = who
-Access = what they can see/do
-Where = where that access or audience applies
+Group = toolbox
+Coverage = keys
 ```
 
-Branch manager behavior should use a reusable group such as `Branch Managers` with `Where: Own Employer + Own Location`.
+The tenant-admin setup model is:
 
-Regional or multi-location manager behavior should use a reusable group such as `Regional Managers` with `Where: Selected Employer/Location pairs`.
+```text
+Who + What + Primary Where + Which Records + Optional Coverage + Why
+```
+
+Branch, regional, billing, reviewer, and manager patterns should use reusable groups plus coverage keys, not a new group for every employer/location combination.
+
+Examples:
+
+- `Billing Agents` group + Assigned Areas coverage per member.
+- `Managers` group + Responsible For people per manager.
+- `Document Reviewers` group + Assigned Areas plus Which Records = Documents requiring review.
 
 Selected employer/location responsibility must use explicit pairs, not independent employer lists plus independent location lists, because independent lists can accidentally create unintended combinations.
 
 ### Why
 
-Creating separate groups such as `IT Dallas`, `IT Chicago`, and `IT Miami` for every operational scope would explode group count, make access hard to audit, and confuse tenant admins.
+Creating separate groups such as `IT Dallas`, `IT Chicago`, and `IT Miami` for every operational scope would explode group count, make access hard to audit, and confuse tenant admins. The 9.5 model keeps groups reusable and puts variance in coverage keys.
 
 ### Consequences
 
-- Future module discovery must define supported Where/scope options.
-- Future audience targeting must combine group + scope and must limit Agent-created audiences to the Agent’s own effective scope.
+- Future module discovery must define supported Primary Where and Which Records choices.
+- Future audience targeting must combine group + coverage and must limit Agent-created audiences to the Agent's own effective access scope.
 - Group archive/delete must fail closed and retain orphan/remediation/audit references.
-- Current repo does not yet implement People & Teams operational groups.
+- Current repo does not yet implement People & Teams operational groups or runtime coverage keys.
 
 ### Supersedes
 
@@ -916,7 +930,7 @@ Provisioning is the entry point into tenant access. The backend role foundation 
 
 Any design that treats public signup, HRIS import, or current member invitation as already creating a shipped `User` enum, or any design that allows Agent activation without an active Agent Group.
 
-## ADR-0026 — Operational Access MVP Grants Use Agent Groups, Rare Person Exceptions, And Explicit Where Scope
+## ADR-0026 — Operational Access MVP Grants Use Agent Groups, Primary Where, Which Records, And Optional Coverage
 
 ### Status
 
@@ -928,37 +942,52 @@ Future Operational Access MVP subjects are limited and intentional:
 
 - `Admin` receives full tenant access by level and does not need operational grants.
 - Agent Groups are the primary subject for operational grants.
-- Person Exceptions are a rare direct-user exception path, not the normal grant path.
-- User Groups may exist for audience/self-service segmentation, but they do not receive operational grants in MVP.
+- `User` receives own/self-service behavior and does not receive cross-person operational grants in MVP.
+- Special Access / Access Exceptions are rare direct-user paths for unusual one-person extra capability, not the normal grant path.
 - Admin Groups may exist for organization/audience purposes, but they do not restrict or reduce Admin access.
 
-MVP Where/scope options are:
+The MVP setup split is:
+
+```text
+Primary Where — pick one normal operating model
+Which Records — product-defined filter/queue inside that Where
+Additional Coverage — optional Oversight or Temporary Coverage
+Special Access — advanced, separate area
+```
+
+MVP Primary Where options are:
 
 - Tenant-wide
-- Own Employer + Own Location
-- Selected Employer/Location pairs
-- Managed People
-- Own data only for User default behavior
+- Assigned Areas
+- Responsible For
+- Review Queue
 
-Selected Employer/Location scope must use explicit pairs, not independent employer lists plus independent location lists.
+Which Records choices are module-defined, product-owned choices such as Documents requiring review, Open tasks, Billing records for assigned areas, Active checklist instances, or Benefits enrollment records requiring explicit high-sensitivity access.
 
-Department, Group-as-target scope, direct reports/reporting tree, and custom combinations are deferred unless a later module design proves they are needed and safe.
+Additional Coverage is optional and limited to:
+
+- Oversight
+- Temporary Coverage
+
+Special Access is separate from Primary Where and Additional Coverage. It is an advanced review area for rare one-person extra capabilities.
+
+Department, arbitrary group-as-target scope, reporting-tree expansion, and custom combinations are deferred unless a later module design proves they are needed and safe.
 
 ### Why
 
-The platform needs enough scope power for real operational hierarchy without creating an arbitrary policy builder or exploding group counts. Agent Groups plus explicit Where scope give reusable access patterns while keeping the tenant admin model understandable.
+The platform needs enough access power for real Goodwill-style hierarchy, review queues, billing agents, temporary backup, and sensitive Personal/Benefits data without becoming an arbitrary policy builder. The Primary Where / Which Records / Additional Coverage split keeps the tenant-admin mental model understandable.
 
 ### Consequences
 
-- New module discovery must define which MVP Where options apply before technical planning starts.
+- New module discovery must define which Primary Where options and Which Records choices apply before technical planning starts.
 - Future modules must not invent module-local visibility systems, location-specific default groups, or custom scope builders.
-- Future resolver planning must include target-record context for every selected Where option.
+- Future resolver planning must include target-record context for every selected Primary Where and Which Records choice.
 - Future User Groups must not become a stealth path for cross-person operational access in MVP.
 - Any later Department, reporting-tree, or custom-scope implementation needs a separate design/ADR because it widens the platform access model.
 
 ### Supersedes
 
-Any MVP design that gives operational grants to User Groups, treats Admin Groups as restrictions on Admins, or models selected employer/location responsibility as independent lists that can create unintended combinations.
+Any MVP design that gives operational grants to User Groups, treats Admin Groups as restrictions on Admins, collapses Oversight/Temporary Coverage into normal Primary Where, or models selected employer/location responsibility as independent lists that can create unintended combinations.
 
 ## ADR-0027 — Personal Cards Are Reusable Field Groupings, Not Workflow Or Module State
 
@@ -1000,7 +1029,7 @@ Personal data will be reused by many modules. Without a single resolved Personal
 
 Any design that treats Personal Cards as a form builder, workflow engine, approval-state owner, or optional frontend-only layout while modules continue reading Personal fields directly.
 
-## ADR-0028 — Person Exceptions Are Rare, Reviewed, Audited, And Scope-Bound Access Exceptions
+## ADR-0028 — Special Access Is Rare, Reviewed, Audited, And Scope-Bound
 
 ### Status
 
@@ -1008,30 +1037,36 @@ LOCKED
 
 ### Decision
 
-Future Person Exceptions are rare direct user-specific access records used when group-based access cannot model a legitimate operational need.
+Future Special Access / Access Exceptions are rare direct user-specific access records used when normal group toolbox + coverage keys cannot model a legitimate operational need.
 
-MVP Person Exception rules:
+Special Access is not Primary Where and is not Additional Coverage. It lives in a separate advanced review area.
+
+MVP Special Access rules:
 
 - reason is required
 - review date is required
-- expiry is required for temporary extra access and sensitive-field exceptions
-- MVP mainly supports extra access
-- sensitive-field restriction exceptions are allowed only for safety/privacy cases
-- general deny-style exceptions are not a broad MVP feature
-- exceptions must be scope-bound, auditable, explainable, and fail closed when expired, orphaned, or outside scope
+- expiry is required for temporary extra access and sensitive-field access
+- MVP mainly supports rare extra capability
+- Special Access must be scope-bound, auditable, explainable, and fail closed when expired, orphaned, or outside scope
 - Hubins does not automatically validate the reason category in MVP; accountability comes from the required reason, review/expiry discipline, explanation visibility, and audit trail
+
+Examples:
+
+- Mary can temporarily approve billing exports.
+- John can temporarily manage documents tenant-wide.
+- Lisa can temporarily run a sensitive report.
 
 ### Why
 
-Real tenants need a narrow escape hatch for unusual person-specific access. Without strict review, expiry, and audit rules, direct-user grants become an unmanageable shadow permission system.
+Real tenants need a narrow escape hatch for unusual one-person access. Without strict review, expiry, and audit rules, direct-user grants become an unmanageable shadow permission system.
 
 ### Consequences
 
 - Future implementation must not use direct-user grants as the normal operational access path.
-- Future admin UI must present Person Exceptions as exception management, not as a second primary permission editor.
-- Future Effective Access explanation must identify applicable exception sources where safe and useful.
-- Future QA must cover expired, orphaned, sensitive, and out-of-scope Person Exceptions.
-- Sensitive-field exception behavior must remain intentional and auditable.
+- Future admin UI must present Special Access as exception management, not as a second primary permission editor.
+- Future Effective Access explanation must identify applicable Special Access sources where safe and useful.
+- Future QA must cover expired, orphaned, sensitive, and out-of-scope Special Access.
+- Sensitive-field Special Access must remain intentional and auditable.
 
 ### Supersedes
 
@@ -1068,6 +1103,182 @@ Operational Access is cross-cutting and security-sensitive. Proving it first at 
 ### Supersedes
 
 Any rollout plan that starts with a giant permissions table, module-specific Documents access, or frontend-only visibility hiding before the backend resolver is proven.
+
+## ADR-0030 — Operational Access 9.5 Source-of-Truth Model Replaces Older Operational Access Drafts
+
+### Status
+
+LOCKED
+
+### Decision
+
+`hubins-operational-access-9_5-source-of-truth-guide-final.md` is the active Operational Access product/architecture source for future planning.
+
+Older Operational Access roadmap/model/UX drafts are superseded for active implementation planning. They may remain in history only if clearly marked as superseded.
+
+This decision does not claim Operational Access is shipped. It only locks the planning source and anti-drift rule.
+
+### Why
+
+Operational Access had multiple overlapping drafts. The 9.5 guide resolves the final Admin/User/Agent model, group toolbox + coverage keys metaphor, Primary Where / Which Records / Additional Coverage split, Goodwill-style oversight behavior, and not-shipped boundaries.
+
+### Consequences
+
+- Future LLM implementation chats must load the 9.5 guide, not older Operational Access drafts.
+- Current foundation status, module discovery, QA planning, and Account Settings Section 19 language must align to the 9.5 guide.
+- If any older Operational Access document conflicts with the 9.5 guide, the 9.5 guide wins.
+
+### Supersedes
+
+Older Operational Access roadmap/model/UX drafts as active source-of-truth documents.
+
+## ADR-0031 — Operational Access Setup Splits Primary Where, Which Records, Additional Coverage, And Special Access
+
+### Status
+
+LOCKED
+
+### Decision
+
+The future tenant-admin Operational Access setup must not present one confusing generic scope list. It must split access into these layers:
+
+```text
+Primary Where — pick one normal operating model
+Which Records — product-defined filter/queue inside that Where
+Additional Coverage — optional Oversight or Temporary Coverage
+Special Access — advanced, separate area
+```
+
+Primary Where options are Tenant-wide, Assigned Areas, Responsible For, and Review Queue.
+
+Which Records choices are published by each module and must remain product-defined.
+
+Additional Coverage is optional and includes Oversight and Temporary Coverage.
+
+Special Access is separate from group coverage setup and is reserved for rare one-person extra capabilities.
+
+### Why
+
+Tenant admins should not feel like they are operating a permission engine. The split maps to normal business questions: where does this group work, which records does it touch, and whether anyone needs extra coverage.
+
+### Consequences
+
+- Module discovery must answer Primary Where and Which Records separately.
+- UX must not put Oversight, Temporary Coverage, or Special Access in the Primary Where list.
+- Technical planning must preserve the distinction even if implementation uses shared internal tables/services later.
+- QA must test the layers independently once shipped.
+
+### Supersedes
+
+Any seven-option or generic scope list that mixes normal operating model, review queues, oversight, temporary coverage, and special exceptions together.
+
+## ADR-0032 — Oversight Is Directed, Single-Hop, And Dynamically Resolved
+
+### Status
+
+LOCKED
+
+### Decision
+
+Future Oversight is directed, not reciprocal, and single-hop in MVP.
+
+If Manager A oversees Manager B and Manager C:
+
+- B/C do not see A unless explicitly granted.
+- A sees B/C as oversight targets.
+- A sees B/C's responsible people/work only when `Includes their responsible people/work` is explicitly enabled.
+- If enabled, the inclusion is dynamically resolved from B/C's current Responsible For coverage.
+- If A oversees B and B oversees C, A does not automatically see C's team in MVP.
+
+Sensitive fields remain governed by masking/unmasking rules and do not become visible merely because oversight exists.
+
+### Why
+
+Goodwill-style tenants need real manager/reviewer oversight without creating accidental reporting-tree expansion or reciprocal access. Single-hop directed resolution is powerful enough for MVP and easier to explain, audit, and test.
+
+### Consequences
+
+- Future resolver design must represent oversight direction and include-team behavior explicitly.
+- Future UI must show the include-team decision clearly.
+- Future QA must prove include-team yes/no, non-reciprocity, and single-hop behavior.
+- Future implementation must not materialize broad static copies that drift from current Responsible For coverage.
+
+### Supersedes
+
+Any implicit reporting-tree expansion, reciprocal oversight, or multi-hop oversight behavior in MVP.
+
+## ADR-0033 — Operational Access Tenant Surface Is Guarded By `operational_access_enabled`
+
+### Status
+
+LOCKED
+
+### Decision
+
+Future advanced Operational Access setup is gated by a tenant capability:
+
+```text
+operational_access_enabled
+```
+
+When false, simple Admin/User tenants must not see advanced Operational Access setup.
+
+When true, Agents, Agent Groups as operational grant subjects, Primary Where, Which Records, Additional Coverage, Special Access, and resolver-backed access can be made available according to implementation readiness.
+
+This capability is future target planning. It is not currently shipped as a live Operational Access feature flag in this repo.
+
+### Why
+
+Many tenants need only Admins and Users. Showing operational-grant setup to simple tenants would create confusion and unnecessary setup burden.
+
+### Consequences
+
+- CP/tenant planning must include a future capability boundary for Operational Access.
+- Settings/People & Teams UX must not expose advanced Operational Access controls for simple tenants.
+- Docs and QA must continue to mark Operational Access not shipped until the capability, UI, resolver, and module consumers exist.
+
+### Supersedes
+
+Any design that forces every tenant through advanced Agent/coverage setup.
+
+## ADR-0034 — Search, Notifications, Exports, And High-Sensitivity Domains Must Consume Resolver Output
+
+### Status
+
+LOCKED
+
+### Decision
+
+Future modules must not apply Operational Access only to detail pages. The same backend-resolved visibility must govern:
+
+- list pages
+- search results
+- autocomplete/suggestions
+- notification titles and bodies
+- email digests
+- CSV exports
+- PDF/generated documents
+- report results
+- background recipient selection
+
+Sensitive and high-sensitivity domains, especially Benefits and Personal data, require explicit scope-bound access. Broad group membership or broad Manage actions do not imply unmasked sensitive export, notification, search, or generated-output access.
+
+For sensitive-field conflicts, the safer/more restrictive result wins by default unless an explicit sensitive visibility grant applies to the field, target, channel, and scope.
+
+### Why
+
+Search, notifications, exports, generated PDFs, and emails are common data-leak paths. A module is not secure if only its UI detail page respects Effective Access.
+
+### Consequences
+
+- New module discovery must include search/export/notification leak checks.
+- Future resolver planning must include set-shape decisions for list/search/export and decision-shape decisions for detail/action/field behavior.
+- Benefits and similar high-sensitivity modules need explicit high-sensitivity access decisions before implementation.
+- QA must prove that hidden records do not leak through counts, snippets, notifications, or exports.
+
+### Supersedes
+
+Any module design where search, notifications, exports, generated documents, or high-sensitivity records bypass backend Effective Access.
 
 ## Maintenance Rules
 

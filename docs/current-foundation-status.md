@@ -70,12 +70,17 @@ What this means today:
 
 ## Operational Access Alignment (Current vs Future)
 
-The accepted future planning truth for Operational Access is `hubins-operational-access-alignment-roadmap.md`.
-That roadmap is accepted as the product and architecture direction for future module planning, not as shipped runtime behavior.
+The accepted future planning truth for Operational Access is now:
+
+```text
+hubins-operational-access-9_5-source-of-truth-guide-final.md
+```
+
+That guide replaces older Operational Access roadmap/model/UX drafts as the active product and architecture foundation for future planning. It is not proof that Operational Access is shipped.
 
 Current shipped truth remains:
 
-- backend runtime membership roles are now canonical `ADMIN`, `AGENT`, and `USER`
+- backend runtime membership roles are canonical `ADMIN`, `AGENT`, and `USER`
 - legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled API/input/read boundaries
 - existing `MEMBER` membership and invite rows are backfilled to `USER` by the runtime role migration
 - public signup and default self-service provisioning create canonical `USER`; public/self-service SSO provisioning also creates `USER`
@@ -85,53 +90,62 @@ Current shipped truth remains:
 - the shared `/app` shell does not make AGENT and USER equivalent product behaviors
 - AGENT sessions render a safe no-operational-areas state until backend-resolved operational module access exists
 - admin invite API and UI support canonical `ADMIN / AGENT / USER`; legacy `MEMBER` invite input/read compatibility normalizes to `USER`
-- the admin invite form now uses `Level` with visible `User / Agent / Admin` choices and does not expose `MEMBER` as a selectable option
+- the admin invite form uses `Level` with visible `User / Agent / Admin` choices and does not expose `MEMBER` as a selectable option
 - `AGENT` admin invites require at least one currently active People & Teams Agent group
 - the admin invite form requires active Agent group selection for Agent invites and links to People & Teams when no active Agent groups exist
 - Agent invite group assignment is provisioning-only: successful invite activation adds the user to the selected Agent group(s), but creates no Operational Access grants
 - `/admin/settings/access` is the current **Access & Security** Settings page
 - the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
 - the current Access & Security page is not future tenant Operational Access
-- Permissions UI is absent in v1: no card, no route, no API surface
+- Permissions / Operational Access UI is absent in v1: no card, no route, no API surface
 - People & Teams foundation groups and group membership management are implemented as a tenant-admin Settings surface
 - People & Teams is a live non-gating management card, not a setup-completion section; its overview status is management-only and does not affect setup completion or banner lifecycle
 - People & Teams group levels `ADMIN / AGENT / USER` remain classification for groups and do not grant Operational Access
 - Agent Groups as Operational Access grant subjects are not implemented
-- Person Exceptions are not implemented
-- Managed People is not implemented
+- Primary Where / Assigned Areas are not implemented
+- Responsible For / People Coverage is not implemented
+- Oversight is not implemented
+- Temporary Coverage is not implemented
+- Special Access / Access Exceptions are not implemented
 - a reusable backend Effective Access Resolver is not implemented
 - no shipped module may claim to consume Operational Access today
 
-Accepted future target truth is formally locked in `docs/decision-log.md` ADR-0020 through ADR-0029. Those ADRs are planning constraints for future People & Teams, provisioning, Personal Cards, Person Exceptions, Effective Access, and operational-module work. They are not evidence of shipped runtime behavior.
+Accepted future target truth is formally locked in `docs/decision-log.md` ADR-0020 through ADR-0034. Those ADRs are planning constraints for future People & Teams, provisioning, Personal Cards, Additional Coverage, Special Access, Effective Access, and operational-module work. They are not evidence of shipped runtime behavior.
 
 Accepted future target truth is:
 
-- the long-range tenant user model moves toward `Admin / Agent / User`
+- the tenant user model is `Admin / Agent / User`
 - legacy `MEMBER` remains a compatibility alias for `User` during the backend compatibility window
-- Admin has full tenant-wide access by level
-- User has own/self-service data access by default
-- Agent receives operational access through Agent Groups and rare Person Exceptions
-- public signup and HRIS import map to future `User` in the target model
+- Admin has full tenant access by level
+- User has own/self-service data access by level
+- Agent receives operational access through **group toolbox + coverage keys**
+- public signup and HRIS import map to `User` unless explicitly promoted later
 - admin invitation supports Admin / Agent / User in the backend contract and admin invite UI, and Agent invite activation requires at least one still-active Agent Group
-- reusable tenant-level groups combine with explicit Where/scope instead of creating employer/location-specific group explosions
-- MVP operational grants go through Agent Groups, with Person Exceptions as the rare direct-user exception path
-- User Groups do not receive operational grants in MVP, and Admin Groups do not restrict Admin access
-- MVP Where/scope options are Tenant-wide, Own Employer + Own Location, Selected Employer/Location pairs, Managed People, and Own data only for User default behavior
-- selected employer/location responsibility uses explicit pairs, not separate employer and location lists
-- backend/service-layer Effective Access becomes the future platform authorization truth and must be target-record-aware where scope matters
+- reusable tenant-level groups define the toolbox; coverage defines the keys
+- normal Operational Access setup is split into `Primary Where`, `Which Records`, and optional `Additional Coverage`
+- `Primary Where` options are Tenant-wide, Assigned Areas, Responsible For, and Review Queue
+- `Which Records` choices are product-defined by each module and may include queues/statuses such as documents requiring review, open tasks, active checklist instances, billing records, or high-sensitivity enrollment records
+- `Additional Coverage` is optional and currently means Oversight or Temporary Coverage
+- Oversight is directed, not reciprocal, and single-hop in MVP
+- Oversight includes another manager/person's responsible people/work only when explicitly enabled
+- Temporary Coverage is time-bound, audited, and expires automatically
+- Special Access is a separate advanced area for rare one-person extra capabilities; it is not Primary Where and not normal coverage
+- selected employer/location responsibility uses explicit pairs under Assigned Areas, not independent employer and location lists
+- backend/service-layer Effective Access becomes the future platform authorization truth and must be target-record-aware where Primary Where, Which Records, fields, queues, or coverage matter
 - Effective Access explanation views explain backend decisions; they are not simulators
 - Personal Cards are reusable field groupings, not form builders, workflow owners, or module lifecycle state
 - one field belongs to one active Personal Card in MVP, and fields outside active Personal Cards are hidden at runtime
 - future operational modules must consume shared Operational Access and resolved Personal Card output instead of inventing module-specific visibility systems
 - sensitive fields require explicit, auditable, scope-bound visibility and fail to the safer/more restrictive result when grants conflict
-- Person Exceptions require reason and review date, and require expiry for temporary extra access and sensitive-field exceptions
-- first runtime proof must start with Personal Cards resolver behavior, then Published Documents as the first real operational module proof
+- search, notifications, exports, generated PDFs, and email digests must consume backend-resolved visibility and must not leak hidden/sensitive data
+- Benefits and other high-sensitivity domains require explicit high-sensitivity access; broad Manage or broad group membership must not imply unmasked sensitive access
+- future activation of the tenant surface is controlled by a future `operational_access_enabled` capability; simple Admin/User tenants must not see advanced Operational Access setup
 
 Documentation and QA rule:
 
-> Operational Access scenarios may be planned now, but they are future / not executable until Agent Groups as Operational Access grant subjects, Person Exceptions, Effective Access Resolver, and module consumers exist in code. The shipped People & Teams foundation plus Agent invite group assignment is provisioning and group-membership management only.
+> Operational Access scenarios may be planned now, but they are future / not executable until Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access, Effective Access Resolver, and module consumers exist in code. The shipped People & Teams foundation plus Agent invite group assignment is provisioning and group-membership management only.
 
-This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, Integrations, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
+This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, People & Teams, Integrations, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
 
 ---
 
@@ -353,7 +367,7 @@ Current truthful boundary:
 
 ### Future modules and later-scope surfaces
 
-The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork. Operational Access foundation decisions are now locked in ADR-0020 through ADR-0029, but technical planning must not start as implementation until People & Teams operational groups, provisioning migration, Personal Cards runtime resolver, Person Exceptions, Effective Access resolver contracts, and first module-consumer proof are designed against those decisions.
+The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork. Operational Access foundation decisions are now locked in ADR-0020 through ADR-0034 and aligned to `hubins-operational-access-9_5-source-of-truth-guide-final.md`, but technical planning must not start as implementation until People & Teams operational groups, Primary Where / Which Records, Additional Coverage, Special Access, Personal Cards runtime resolution, Effective Access resolver contracts, and first module-consumer proof are designed against those decisions.
 
 ---
 
