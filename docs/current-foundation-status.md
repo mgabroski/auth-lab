@@ -81,7 +81,9 @@ Current shipped truth remains:
 - public signup and default self-service provisioning create canonical `USER`; public/self-service SSO provisioning also creates `USER`
 - `AGENT` is recognized as a membership level, but Agent operational access is not implemented yet
 - AGENT and USER are distinct membership levels, but both currently land in the authenticated workspace shell at `/app`
+- the shared `/app` shell uses neutral workspace language and does not describe itself as Member-only or User-only
 - the shared `/app` shell does not make AGENT and USER equivalent product behaviors
+- AGENT sessions render a safe no-operational-areas state until backend-resolved operational module access exists
 - admin invite API and UI support canonical `ADMIN / AGENT / USER`; legacy `MEMBER` invite input/read compatibility normalizes to `USER`
 - the admin invite form now uses `Level` with visible `User / Agent / Admin` choices and does not expose `MEMBER` as a selectable option
 - `AGENT` admin invites require at least one currently active People & Teams Agent group

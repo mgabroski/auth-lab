@@ -150,18 +150,18 @@ Local host-run starts with `yarn dev`. Local full-stack proxy starts with `yarn 
 
 ### Seeded local personas
 
-| Persona                                         | Tenant          | Role   | Use                                              |
-| ----------------------------------------------- | --------------- | ------ | ------------------------------------------------ |
-| `member@example.com / Password123!`             | `goodwill-open` | Member | member login, logout, member routing             |
-| `e2e-admin@example.com / Password123!`          | `goodwill-open` | Admin  | admin landing, MFA setup, Settings browser proof |
-| `e2e-recovery-admin@example.com / Password123!` | `goodwill-open` | Admin  | MFA recovery proof                               |
-| `e2e-reset-member@example.com / Password123!`   | `goodwill-open` | Member | password reset proof                             |
+| Persona                                         | Tenant          | Role  | Use                                              |
+| ----------------------------------------------- | --------------- | ----- | ------------------------------------------------ |
+| `member@example.com / Password123!`             | `goodwill-open` | User  | user login, logout, workspace routing            |
+| `e2e-admin@example.com / Password123!`          | `goodwill-open` | Admin | admin landing, MFA setup, Settings browser proof |
+| `e2e-recovery-admin@example.com / Password123!` | `goodwill-open` | Admin | MFA recovery proof                               |
+| `e2e-reset-member@example.com / Password123!`   | `goodwill-open` | User  | password reset proof                             |
 
 ### Tenant fixtures
 
 | Fixture              | URL                                | Purpose                                                 |
 | -------------------- | ---------------------------------- | ------------------------------------------------------- |
-| GoodWill Open        | `http://goodwill-open.lvh.me:3000` | public signup enabled, seeded member/admin personas     |
+| GoodWill Open        | `http://goodwill-open.lvh.me:3000` | public signup enabled, seeded User/Admin personas       |
 | GoodWill CA          | `http://goodwill-ca.lvh.me:3000`   | invite-only tenant, cross-tenant boundary checks        |
 | CP-created QA tenant | generated account key              | CP publish, Settings cascade, and fixture-builder proof |
 
@@ -183,13 +183,13 @@ This fixture is intentionally not hidden DB magic. It uses direct DB reads only 
 
 Run before every QA session.
 
-| ID   | Action                                             | Expected result        | Evidence                      |
-| ---- | -------------------------------------------------- | ---------------------- | ----------------------------- |
-| HC-1 | Open `http://goodwill-ca.lvh.me:3000/api/health`   | healthy response       | screenshot or copied response |
-| HC-2 | Open `http://goodwill-open.lvh.me:3000/auth/login` | login page loads       | screenshot                    |
-| HC-3 | Open `http://localhost:3002/accounts`              | CP Accounts page loads | screenshot                    |
-| HC-4 | Open `http://localhost:8025`                       | Mailpit loads          | screenshot                    |
-| HC-5 | Log in as `member@example.com` on GoodWill Open    | reaches `/app`         | screenshot                    |
+| ID   | Action                                                      | Expected result        | Evidence                      |
+| ---- | ----------------------------------------------------------- | ---------------------- | ----------------------------- |
+| HC-1 | Open `http://goodwill-ca.lvh.me:3000/api/health`            | healthy response       | screenshot or copied response |
+| HC-2 | Open `http://goodwill-open.lvh.me:3000/auth/login`          | login page loads       | screenshot                    |
+| HC-3 | Open `http://localhost:3002/accounts`                       | CP Accounts page loads | screenshot                    |
+| HC-4 | Open `http://localhost:8025`                                | Mailpit loads          | screenshot                    |
+| HC-5 | Log in as seeded User `member@example.com` on GoodWill Open | reaches `/app`         | screenshot                    |
 
 Stop immediately if any health check fails.
 
@@ -293,8 +293,8 @@ Steps:
 3. Confirm the helper copy says group level is classification only and does not grant module access.
 4. Create a group with a unique name and level `AGENT`.
 5. Edit the group name or description.
-6. Add an active tenant member to the selected group.
-7. Remove that member from the group.
+6. Add an active tenant user to the selected group.
+7. Remove that user from the group.
 8. Archive the group.
 9. Confirm the archived group disappears from the normal active group list.
 10. Confirm there is no restore action in the current foundation.
@@ -305,7 +305,7 @@ Expected results:
 - Admin can create, edit, archive, add member, and remove member.
 - Archived groups disappear from the normal active group list.
 - Restore is not shipped in the current foundation.
-- Member management uses active tenant memberships only.
+- Group membership management uses active tenant memberships only.
 - The page remains a non-gating Settings management surface.
 - Group membership does not change runtime role and does not grant module access.
 - No Operational Access UI appears.
@@ -313,7 +313,7 @@ Expected results:
 Evidence:
 
 - screenshot of People & Teams page after create
-- screenshot after member add/remove
+- screenshot after group member add/remove
 - screenshot after archive showing the group is no longer in the active list
 - screenshot or note confirming no restore action or Operational Access controls are visible
 
@@ -511,7 +511,7 @@ Steps:
 
 1. Remove an optional Personal field from CP allowance truth.
 2. Read Settings bootstrap and Personal DTO.
-3. Change a required Access setting from CP, such as Member MFA policy.
+3. Change a required Access setting from CP, such as the self-service MFA policy.
 4. Read Settings bootstrap again.
 5. Acknowledge Access under the new CP truth.
 
