@@ -12,14 +12,36 @@ That means every new module must be analyzed through six connected lenses:
 
 1. Module Truth
 2. Module Settings
-3. Permission & Policy Management
+3. Operational Access / Permission & Policy Management
 4. Workspace Experience
 5. Communications
 6. Fail-Closed / Removal / Orphan Behavior
 
-Operational Access discovery is now a required overlay on the Permission & Policy Management lens for every future module that exposes cross-person data, scoped operations, Personal Cards, audience targeting, or sensitive fields. This file is the repo home for that reusable discovery guidance; do not create a second duplicate checklist unless a later repo-level documentation decision explicitly creates a new canonical target.
+Operational Access discovery is now a required overlay on the Operational Access / Permission & Policy Management lens for every future module that exposes cross-person data, scoped operations, Personal Cards, audience targeting, or sensitive fields. This framework must use the 9.5 Operational Access language: Admin, Agent, User; group toolbox; coverage keys; Primary Where; Which Records; Additional Coverage; Special Access; and Why explanations. This file is the repo home for that reusable discovery guidance; do not create a second duplicate checklist unless a later repo-level documentation decision explicitly creates a new canonical target.
 
 This framework is reusable, project-level, and intentionally strict. It is designed for both human readers and LLM readers.
+
+---
+
+## 1.1 Source-of-Truth Rule for Operational Access
+
+This framework is not the primary Operational Access source of truth.
+
+For future Operational Access product and architecture language, use:
+
+```text
+hubins-operational-access-9_5-source-of-truth-guide-final.md
+```
+
+If this framework conflicts with that guide, the 9.5 guide wins.
+
+Current shipped truth must remain explicit:
+
+- Operational Access is future target work, not currently shipped.
+- Agent operational grants are not shipped.
+- Primary Where, Which Records, Additional Coverage, Special Access, Why explanations, and the Effective Access Resolver are not shipped.
+- Current `/admin/settings/access` is Access & Security, not future Operational Access.
+- People & Teams groups are currently management/provisioning foundations, not runtime operational grants.
 
 ---
 
@@ -132,7 +154,7 @@ Confirm:
 - what saves at section level vs artifact level
 - what is management-only vs setup-blocking
 
-### Step 5 — Pass the Permission & Policy Management lens
+### Step 5 — Pass the Operational Access / Permission & Policy Management lens
 
 Describe how the module becomes a policy target.
 
@@ -141,10 +163,13 @@ Confirm:
 - whole-module permissions
 - sub-surface permissions
 - action permissions
-- target scopes
-- grouping behavior
+- Primary Where options
+- Which Records choices
+- Additional Coverage cases
+- Special Access cases
+- grouping/toolbox behavior
 - whether field/item-level special cases exist
-- whether hidden, excluded, inactive, archived, or orphaned targets remain policy-visible for remediation
+- whether hidden, excluded, inactive, archived, or orphaned targets remain access-visible for remediation
 
 ### Step 6 — Pass the Workspace Experience lens
 
@@ -328,7 +353,7 @@ If the tenant surface still feels like “we will decide later how the tenant us
 
 ---
 
-## 7. Permission & Policy Management Lens
+## 7. Operational Access / Permission & Policy Management Lens
 
 Every new module must be evaluated as a future policy surface, even if policy UI for that module ships later.
 
@@ -363,19 +388,22 @@ Answer:
 - If yes, are they first-class policy targets or exceptions only?
 - If not, explicitly say they are not part of v1 policy design for this module.
 
-### 7.5 Scope model
+### 7.5 Operational access shape model
 
 Answer:
 
-- What scopes matter: tenant-wide, workspace-specific, object-specific, role-specific, responsibility-specific?
+- Which Primary Where options matter: Tenant-wide, Assigned Areas, Responsible For, Review Queue, or User own-data only?
+- Which module-owned Which Records choices exist inside those Primary Where options?
+- Does the module need Additional Coverage through Oversight or Temporary Coverage?
+- Does the module need rare one-person Special Access?
 - Does the module produce targets that can be grouped meaningfully?
 
 ### 7.6 Assignment model
 
 Answer:
 
-- How would group/policy/assignment logic apply to this module?
-- What types of groups would realistically need access?
+- How would group/toolbox and coverage-key logic apply to this module?
+- What types of Agent groups would realistically need access?
 - What does deny/absence of grant mean for the module?
 
 ### 7.7 Policy failure behavior
@@ -395,12 +423,32 @@ If the team cannot explain what a future policy would point at inside this modul
 
 Every future module must pass this overlay before implementation if it is operational, mixed operational/self-service, audience-targeting, Personal Card-consuming, or sensitive-field-consuming.
 
+Authoritative source:
+
+```text
+hubins-operational-access-9_5-source-of-truth-guide-final.md
+```
+
 Current repo truth:
 
 - current backend runtime roles are `ADMIN | AGENT | USER`
 - legacy `MEMBER` is a compatibility alias for `USER`
-- current `/admin/settings/access` is Access & Security, not Operational Access
-- People & Teams operational groups, Agent Groups, Person Exceptions, and a reusable Effective Access Resolver are not implemented yet
+- current `/admin/settings/access` is Access & Security, not future Operational Access
+- future Agent operational groups, coverage keys, Primary Where, Which Records, Additional Coverage, Special Access, Why explanations, and the Effective Access Resolver are not implemented yet
+- People & Teams groups are currently management/provisioning foundations, not runtime operational grants
+
+Locked 9.5 mental model:
+
+```text
+Admin = full access by level.
+User = own data by level.
+Agent = group toolbox + coverage keys.
+```
+
+```text
+Group = toolbox.
+Coverage = keys.
+```
 
 #### 7.9.1 Module action catalog
 
@@ -419,67 +467,145 @@ Tenant admins must select from product-defined actions. They must not invent act
 
 #### 7.9.2 Target objects and resolver context
 
-List every target object the module exposes, such as document, published document, task, checklist instance, benefit enrollment, personal card, personal field, person, dependent, notification, or approval request.
+List every target object the module exposes, such as document, published document, task, checklist instance, benefit enrollment, personal card, personal field, person, dependent, notification, approval request, report, search result, or export job.
 
 For each target, define:
 
 - whether the module owns the target or consumes it
 - whether the target has person context
 - whether the target has employer/location context
-- whether the target has department/group/managed-people context
+- whether the target has status, owner, assignee, reviewer, queue, or audience context
 - whether the target contains sensitive fields
 - whether masking is supported
 - what target record context the backend resolver needs
 
-Resolver decisions that depend on Where/scope must include target record context. User/session context alone is not enough for scoped operational access.
+Resolver decisions that depend on Primary Where, Which Records, Additional Coverage, or Special Access must include target record context. User/session context alone is not enough for scoped operational access.
 
-#### 7.9.3 Supported Where / scope
+#### 7.9.3 Primary Where
 
-Evaluate the module against the MVP Where options:
+Primary Where answers:
+
+```text
+Where does this group normally work?
+```
+
+Evaluate the module against the MVP Primary Where options:
 
 - Tenant-wide
-- Own Employer + Own Location
-- Selected Employer/Location pairs
-- Managed People
-- Own data only for User self-service behavior
+- Assigned Areas — explicit employer/location pairs or module-equivalent area keys
+- Responsible For — exact people per Agent / manager
+- Review Queue — product-defined queue/status model
 
-Evaluate deferred options only when needed:
+Evaluate deferred options only when a later implementation explicitly requires them:
 
 - Department
 - Group as target
 - Direct reports / reporting tree
 - Custom combinations
 
-Selected employer/location responsibility must use explicit pairs. Do not model selected employers and selected locations as independent lists that accidentally create invalid combinations.
+Assigned Areas must use explicit pairs. Do not model selected employers and selected locations as independent lists that accidentally create invalid combinations.
 
-#### 7.9.4 Branch manager, regional manager, and managed people behavior
+Do not put Oversight, Temporary Coverage, or Special Access in Primary Where.
+
+#### 7.9.4 Which Records
+
+Which Records answers:
+
+```text
+Inside that Primary Where, which records does this group touch?
+```
+
+Every operational module must define product-owned Which Records choices.
+
+Examples:
+
+- documents requiring review
+- open tasks
+- billing records for assigned areas
+- active checklist instances
+- benefit enrollment records requiring explicit high-sensitivity access
+- reports for assigned areas
+
+Tenant admins must not write arbitrary record rules. Each module publishes product-defined choices only.
+
+#### 7.9.5 Manager, regional manager, multi-employer, and multi-location behavior
 
 Every operational module must explicitly answer:
 
-- Does branch-manager behavior use `Own Employer + Own Location`?
-- Does regional-manager behavior use selected employer/location pairs?
+- Does manager behavior use Responsible For exact-person coverage?
+- Does branch or location-based behavior use Assigned Areas?
+- Does regional-manager behavior use multiple Assigned Areas?
 - Does the module support multi-employer or multi-location responsibility?
-- Does the module support exact-person responsibility through Managed People?
+- Does oversight over another manager include only that manager, or also that manager's responsible people/work?
 - What safe empty state appears when an Agent has no effective operational access?
 
-Reusable groups plus Where/scope must be preferred over employer/location-specific group explosions.
+Reusable groups plus coverage keys must be preferred over employer/location-specific group explosions.
 
-#### 7.9.5 Group + scope audience targeting
+#### 7.9.6 Additional Coverage
 
-If the module targets people or audiences, define how group + scope targeting works.
+Additional Coverage answers:
+
+```text
+Does a person need extra visibility or temporary backup beyond their normal keys?
+```
+
+Evaluate whether the module needs:
+
+- Oversight — durable review visibility over another person/manager
+- Temporary Coverage — time-bound backup/replacement
+
+Oversight questions:
+
+- Who can oversee whom?
+- Does oversight include only the manager/person, or also their responsible people/work?
+- Is `Includes their responsible people/work` needed for this module?
+- Should oversight be view-only?
+- Which sensitive fields remain masked?
+
+Temporary Coverage questions:
+
+- What start/end dates are required?
+- What happens when coverage expires?
+- Does it copy the covered person's normal keys only, or selected module-specific work?
+- What is the audit/explanation text?
+
+Locked platform rule:
+
+```text
+Oversight is directed, not reciprocal, and single-hop in MVP.
+```
+
+#### 7.9.7 Special Access
+
+Special Access is an advanced, separate area for rare one-person extra capabilities.
+
+For this module, answer:
+
+- What rare one-person extra capabilities are legitimate?
+- Is a reason required? Default: yes.
+- Is a review date required? Default: yes.
+- Is expiry required? Default: yes for temporary or sensitive extra access.
+- Can Special Access include sensitive-field visibility?
+- How does it appear in the Why explanation?
+
+Special Access must not become the normal access path. If many people need the same Special Access, the module likely needs a group/toolbox design instead.
+
+#### 7.9.8 Group + coverage audience targeting
+
+If the module targets people or audiences, define how group + coverage targeting works.
 
 Required questions:
 
-- Does the module target people, groups, employer/location audiences, or selected people?
+- Does the module target people, groups, employer/location audiences, review queues, or selected people?
 - Can an Agent target an audience?
-- Must the target audience be a subset of the Agent’s own effective access scope?
+- Must the target audience be a subset of the Agent’s own backend-resolved effective access?
 - Can Users target anyone, or only themselves?
 - Can Admin target everyone?
-- Does the module distinguish operational access scope from audience-targeting scope?
+- Does the module distinguish operational access coverage from audience-targeting coverage?
 
-Actor-created audiences must be limited by the actor’s backend-resolved effective scope.
+Actor-created audiences must be limited by the actor’s backend-resolved effective access.
 
-#### 7.9.6 Personal Cards consumption
+#### 7.9.9 Personal Cards consumption
 
 If the module displays or edits Personal data, define whether it consumes resolved Personal Cards.
 
@@ -492,21 +618,21 @@ Required rules:
 
 Define whether the module needs card visibility, card label/order, field visibility, masking, edit/read-only state, required/optional state, and explanation source.
 
-#### 7.9.7 Sensitive fields and masking
+#### 7.9.10 Sensitive fields and masking
 
 List sensitive data the module exposes or consumes.
 
-Sensitive visibility must be intentional, explicit, auditable, and scope-bound. If one group grants broad access and another grant masks or hides a sensitive field, the safer/more restrictive result wins unless explicit sensitive-field visibility applies to the target field and scope.
+Sensitive visibility must be intentional, explicit, auditable, and coverage-bound. If one group grants broad access and another grant masks or hides a sensitive field, the safer/more restrictive result wins unless explicit sensitive-field visibility applies to the target field and coverage.
 
 The module must define:
 
 - which fields are sensitive
 - which actions expose sensitive data
 - whether `Manage` includes or excludes sensitive visibility
-- what masking means in list, detail, export, email, document, and API contexts
+- what masking means in list, detail, search, export, email, notification, generated PDF, document, and API contexts
 - what explanation support/admin views need when sensitive access is denied or masked
 
-#### 7.9.8 Backend resolver expectations
+#### 7.9.11 Backend resolver expectations
 
 Future modules must consume backend-resolved Effective Access.
 
@@ -515,15 +641,18 @@ The module discovery output must define:
 - actor context needed by the resolver
 - target context needed by the resolver
 - action keys the resolver checks
-- scope facts needed for tenant-wide, own employer/location, selected pairs, and Managed People decisions
+- Primary Where facts needed for Tenant-wide, Assigned Areas, Responsible For, and Review Queue decisions
+- Which Records facts needed by the module
+- Additional Coverage facts needed for Oversight and Temporary Coverage
+- Special Access facts needed for rare one-person extra capabilities
 - resolved output shape needed by the UI
 - blockers, warnings, and explanation fields needed by support/admin views
 
 Frontend code may render backend-returned decisions. It must not calculate effective access independently.
 
-#### 7.9.9 Fail-closed and orphan behavior
+#### 7.9.12 Fail-closed and orphan behavior
 
-For every group, action, target, Personal Card, field, scope, or exception the module relies on, define what happens when it is removed, archived, no longer CP-allowed, no longer tenant-configured, expired, or orphaned.
+For every group, action, target, Personal Card, field, Primary Where choice, Which Records choice, coverage key, Additional Coverage entry, or Special Access entry the module relies on, define what happens when it is removed, archived, no longer CP-allowed, no longer tenant-configured, expired, or orphaned.
 
 Required default:
 
@@ -533,7 +662,19 @@ Required default:
 - remediation/audit references remain available for admins where appropriate
 - removal may reduce or block access, but must never silently widen access
 
-#### 7.9.10 Future QA expectations
+#### 7.9.13 Search, export, notification, and generated-output safety
+
+For every module, explicitly evaluate whether hidden records or sensitive fields can leak through non-page outputs.
+
+Required checks:
+
+- Search results must consume backend-resolved visibility and masking.
+- Exports must consume backend-resolved visibility and masking.
+- Notifications and email digests must select recipients through backend-resolved access.
+- Generated PDFs/documents must apply masking and visibility rules.
+- Background jobs must not bypass Effective Access because they run server-side.
+
+#### 7.9.14 Future QA expectations
 
 Operational Access QA planning for a module must stay future/not executable until the supporting runtime surfaces exist.
 
@@ -541,16 +682,20 @@ Future QA must cover:
 
 - Admin full access by level
 - User own-data/self-service behavior
-- Agent access through Agent Groups
+- Agent access through group toolbox + coverage keys
 - Agent with no group / no access safe empty state
-- Managed People exact-person scope
-- branch manager own employer/location scope
-- regional manager selected employer/location pairs
-- Person Exceptions with reason/review/expiry behavior
+- Tenant-wide Primary Where
+- Assigned Areas coverage
+- Responsible For exact-person coverage
+- Review Queue record filtering
+- Oversight, including `Includes their responsible people/work = Yes/No`
+- Temporary Coverage with start/end and expiry behavior
+- Special Access with reason/review/expiry behavior
 - sensitive-field conflict and masking behavior
 - direct API denial when UI buttons are hidden
 - Effective Access explanation accuracy
-- orphan/fail-closed behavior after group/action/target/card removal
+- search/export/notification/generated-output leak prevention
+- orphan/fail-closed behavior after group/action/target/card/coverage removal
 
 ---
 
@@ -573,7 +718,7 @@ Answer:
 
 - What pages, cards, menus, buttons, tables, detail views, dashboards, or panels does this module create?
 - Which are admin-facing?
-- Which are member-facing?
+- Which are User-facing?
 - Which are operator/reviewer/manager-facing?
 
 ### 8.3 Responsibility-specific experience
@@ -742,15 +887,17 @@ A module is not allowed to pass design review unless all of the following questi
 - What is hidden, excluded, or deferred?
 - What is setup-blocking vs management-only?
 
-### 11.3 Permission & policy
+### 11.3 Operational Access / permission & policy
 
 - What module-level permissions exist?
 - What sub-targets exist?
 - What action permissions exist?
-- What scopes matter?
-- What future group/policy assignments would point at?
+- What Primary Where options matter?
+- What Which Records choices does the module publish?
+- What Additional Coverage or Special Access cases exist?
+- What future group/toolbox and coverage-key assignments would point at?
 - Are there special item/field-level cases?
-- How do removed targets affect policy behavior?
+- How do removed targets affect access and policy behavior?
 
 ### 11.4 Workspace experience
 
@@ -792,17 +939,21 @@ For every future module with operational, audience-targeting, Personal Card, or 
 - What is the module action catalog?
 - Which actions are sensitive, destructive, or excluded from broad `Manage`?
 - What target objects does the module expose?
-- What target person, employer, location, department, group, managed-people, owner, assignee, status, or audience context does the backend resolver need?
-- Which Where/scope options are supported: tenant-wide, own employer/location, selected employer/location pairs, Managed People, own data only, or later department/group/direct-report scopes?
-- How are branch managers, regional managers, multi-employer managers, multi-location managers, and exact Managed People handled?
-- How does group + scope audience targeting work?
-- Are actor-created audiences limited by the actor’s own effective access scope?
+- What target person, employer/location, owner, assignee, reviewer, status, queue, or audience context does the backend resolver need?
+- Which Primary Where options are supported: Tenant-wide, Assigned Areas, Responsible For, Review Queue, User own-data only, or deferred options?
+- Which module-owned Which Records choices are available inside each Primary Where?
+- How are managers, regional managers, multi-employer managers, multi-location managers, and Responsible For exact-person coverage handled?
+- Does Oversight include only the target manager/person, or also that person's responsible people/work?
+- Does the module need Temporary Coverage?
+- Does the module need rare one-person Special Access?
+- How does group + coverage audience targeting work?
+- Are actor-created audiences limited by the actor’s own backend-resolved effective access?
 - Does the module consume resolved Personal Cards?
 - What happens when a required field is not in any active Personal Card?
-- What sensitive fields or sensitive data can be shown, masked, exported, emailed, or embedded in generated documents?
-- How does sensitive-field conflict resolution choose the safer/more restrictive result?
+- What sensitive fields or sensitive data can be shown, masked, searched, exported, emailed, included in notifications, or embedded in generated documents?
+- How does sensitive-field conflict resolution choose the safer/more-restrictive result?
 - What effective-access explanation does support/admin UX need?
-- What direct API denial and fail-closed cases must future QA prove?
+- What direct API denial, search/export/notification leak, and fail-closed cases must future QA prove?
 
 ---
 
@@ -820,7 +971,7 @@ Every future module design artifact must use this output shape.
 6. CP Grant Surface
 7. Tenant Module Settings Surface
 8. Setup / Completion Rules
-9. Permission & Policy Targets
+9. Operational Access / Permission & Policy Targets
 10. Operational Access Discovery
 11. Workspace Experience Impact
 12. Communications Impact
@@ -859,7 +1010,7 @@ The artifact covers:
 
 - Module Truth
 - Module Settings
-- Permission & Policy Management
+- Operational Access / Permission & Policy Management
 - Operational Access discovery overlay when the module exposes operational/scoped data
 - Workspace Experience
 - Communications
@@ -1017,7 +1168,7 @@ The module is not fully designed until all six lenses below are complete.
 - Policy is not CP-owned.
 - Required-removal changes may trigger Needs Review.
 - Optional removals orphan quietly and fail closed where needed.
-- Operational Access discovery is part of the Permission & Policy Management lens when a module exposes operational or scoped data.
+- Operational Access discovery is part of the Operational Access / Permission & Policy Management lens when a module exposes operational or scoped data, and it must use the 9.5 language: Admin, Agent, User; group toolbox; coverage keys; Primary Where; Which Records; Additional Coverage; Special Access; and Why explanations.
 
 ## The Six Mandatory Lenses
 
@@ -1044,17 +1195,19 @@ Answer:
 - what is hidden vs excluded vs deferred
 - what is setup-blocking vs management-only
 
-### 3. Permission & Policy Management
+### 3. Operational Access / Permission & Policy Management
 
 Answer:
 
 - what whole-module permissions exist
 - what middle-layer targets exist
 - what action permissions exist
-- what scopes matter
+- what Primary Where options matter
+- what Which Records choices exist
+- whether Additional Coverage or Special Access matters
 - whether field/item-level exceptions matter
-- how future group/policy assignment would point at this module
-- what module action catalog, target objects, Where/scope, Personal Card consumption, sensitive-field behavior, backend resolver input, and fail-closed behavior the future Operational Access model requires
+- how future group/toolbox and coverage-key assignments would point at this module
+- what module action catalog, target objects, Primary Where, Which Records, Additional Coverage, Special Access, Personal Card consumption, sensitive-field behavior, backend resolver input, and fail-closed behavior the future Operational Access model requires
 
 ### 4. Workspace Experience
 
@@ -1114,7 +1267,7 @@ Every future module design artifact must contain:
 6. CP Grant Surface
 7. Tenant Module Settings Surface
 8. Setup / Completion Rules
-9. Permission & Policy Targets
+9. Operational Access / Permission & Policy Targets
 10. Operational Access Discovery
 11. Workspace Experience Impact
 12. Communications Impact
