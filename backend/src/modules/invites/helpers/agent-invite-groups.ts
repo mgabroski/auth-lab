@@ -47,6 +47,11 @@ function uniqueGroupIds(groupIds: readonly string[] | undefined): string[] {
   return [...new Set(groupIds)];
 }
 
+function hasDuplicateGroupIds(groupIds: readonly string[] | undefined): boolean {
+  if (!groupIds) return false;
+  return new Set(groupIds).size !== groupIds.length;
+}
+
 function rowToSafeSummary(row: InviteAgentGroupRow): AgentInviteGroupSummary {
   return {
     id: row.id,
@@ -129,6 +134,10 @@ export async function validateAgentGroupSelectionForAdminInvite(
 
   if (normalizedGroupIds.length === 0) {
     throw AdminInviteErrors.agentGroupsRequired();
+  }
+
+  if (hasDuplicateGroupIds(input.agentGroupIds)) {
+    throw AdminInviteErrors.invalidAgentGroups();
   }
 
   const rows = await selectInviteAgentGroupsByIdsSql(db, {

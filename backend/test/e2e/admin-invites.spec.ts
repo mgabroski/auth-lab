@@ -318,6 +318,44 @@ describe('POST /admin/invites', () => {
     expect(emptyGroups.statusCode).toBe(400);
   });
 
+  it('AGENT invite rejects duplicate Agent group IDs without creating an invite', async () => {
+    const tk = tenantKey();
+    const tenant = await createTenant({ db: deps.db, tenantKey: tk });
+    const agentGroup = await createGroup({ db: deps.db, tenantId: tenant.id, level: 'AGENT' });
+    const { cookie } = await createAdminSession({
+      app,
+      deps,
+      tenantId: tenant.id,
+      tenantKey: tk,
+      email: uniqueEmail('admin'),
+      password: 'Password123!',
+    });
+    const invitedEmail = uniqueEmail('duplicate-agent-group');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/admin/invites',
+      headers: { host: `${tk}.hubins.com`, cookie },
+      body: {
+        email: invitedEmail,
+        role: 'AGENT',
+        agentGroupIds: [agentGroup.id, agentGroup.id],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const parsed = ErrorBodySchema.parse(res.json());
+    expect(parsed.error.message).toContain('active Agent group');
+
+    const inviteRows = await deps.db
+      .selectFrom('invites')
+      .select(['id'])
+      .where('tenant_id', '=', tenant.id)
+      .where('email', '=', invitedEmail.toLowerCase())
+      .execute();
+    expect(inviteRows).toHaveLength(0);
+  });
+
   it('AGENT invite rejects archived, wrong-level, and cross-tenant groups safely', async () => {
     const tk = tenantKey();
     const tenant = await createTenant({ db: deps.db, tenantKey: tk });

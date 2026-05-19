@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
 import { buildTestApp } from '../helpers/build-test-app';
+import type { DbExecutor } from '../../src/shared/db/db';
 import {
   buildFakeIdToken,
   createInvite,
@@ -46,6 +47,48 @@ function expectSsoCallbackCookies(setCookieHeader: string | string[] | undefined
         cookie.includes('SameSite=Lax'),
     ),
   ).toBe(true);
+}
+
+async function createAgentGroup(opts: {
+  db: DbExecutor;
+  tenantId: string;
+  status?: 'ACTIVE' | 'ARCHIVED';
+}): Promise<{ id: string }> {
+  const name = `Agent Group ${randomUUID().slice(0, 8)}`;
+  const status = opts.status ?? 'ACTIVE';
+
+  return opts.db
+    .insertInto('tenant_groups')
+    .values({
+      tenant_id: opts.tenantId,
+      name,
+      normalized_name: name.toLowerCase(),
+      description: null,
+      level: 'AGENT',
+      status,
+      created_by_membership_id: null,
+      updated_by_membership_id: null,
+      archived_at: status === 'ARCHIVED' ? new Date() : null,
+      archived_by_membership_id: null,
+    })
+    .returning(['id'])
+    .executeTakeFirstOrThrow();
+}
+
+async function attachInviteAgentGroup(opts: {
+  db: DbExecutor;
+  tenantId: string;
+  inviteId: string;
+  groupId: string;
+}): Promise<void> {
+  await opts.db
+    .insertInto('invite_agent_groups')
+    .values({
+      tenant_id: opts.tenantId,
+      invite_id: opts.inviteId,
+      group_id: opts.groupId,
+    })
+    .execute();
 }
 
 describe('GET /auth/sso/google/callback', () => {
@@ -415,6 +458,190 @@ describe('GET /auth/sso/google/callback', () => {
         .executeTakeFirstOrThrow();
 
       expect(membership.status).toBe('ACTIVE');
+    } finally {
+      await close();
+    }
+  });
+
+  it('success: AGENT invite via SSO activates canonical AGENT membership and attaches Agent groups', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `agent-invite-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['google'],
+        publicSignupEnabled: false,
+        adminInviteRequired: true,
+      });
+      const agentGroup = await createAgentGroup({ db: deps.db, tenantId: tenant.id });
+      const invite = await createInvite({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'AGENT',
+      });
+      await attachInviteAgentGroup({
+        db: deps.db,
+        tenantId: tenant.id,
+        inviteId: invite.id,
+        groupId: agentGroup.id,
+      });
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`,
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
+
+      const user = await deps.db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+      const membership = await deps.db
+        .selectFrom('memberships')
+        .select(['id', 'role', 'status'])
+        .where('tenant_id', '=', tenant.id)
+        .where('user_id', '=', user.id)
+        .executeTakeFirstOrThrow();
+      expect(membership.role).toBe('AGENT');
+      expect(membership.status).toBe('ACTIVE');
+
+      const groupMembership = await deps.db
+        .selectFrom('tenant_group_members')
+        .select(['group_id', 'membership_id'])
+        .where('tenant_id', '=', tenant.id)
+        .where('group_id', '=', agentGroup.id)
+        .where('membership_id', '=', membership.id)
+        .executeTakeFirstOrThrow();
+      expect(groupMembership).toEqual({
+        group_id: agentGroup.id,
+        membership_id: membership.id,
+      });
+
+      const sessionId = extractSessionIdFromSetCookie(res.headers['set-cookie']);
+      const session = await deps.sessionStore.get(sessionId);
+      expect(session).toMatchObject({
+        userId: user.id,
+        tenantId: tenant.id,
+        tenantKey,
+        membershipId: membership.id,
+        role: 'AGENT',
+        mfaVerified: true,
+        emailVerified: true,
+      });
+    } finally {
+      await close();
+    }
+  });
+
+  it('409 when SSO Agent invite group revalidation fails and token remains pending', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `agent-archived-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['google'],
+        publicSignupEnabled: false,
+        adminInviteRequired: true,
+      });
+      const agentGroup = await createAgentGroup({ db: deps.db, tenantId: tenant.id });
+      const invite = await createInvite({
+        db: deps.db,
+        tenantId: tenant.id,
+        email,
+        role: 'AGENT',
+      });
+      await attachInviteAgentGroup({
+        db: deps.db,
+        tenantId: tenant.id,
+        inviteId: invite.id,
+        groupId: agentGroup.id,
+      });
+      await deps.db
+        .updateTable('tenant_groups')
+        .set({ status: 'ARCHIVED', archived_at: new Date() })
+        .where('id', '=', agentGroup.id)
+        .execute();
+
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'google',
+      });
+
+      sso.googleAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          iss: 'https://accounts.google.com',
+          aud: GOOGLE_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `g-sub-${randomUUID()}`,
+          email,
+          email_verified: true,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/google/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toContain('This Agent invitation no longer has an active Agent group');
+
+      const inviteRow = await deps.db
+        .selectFrom('invites')
+        .select(['status', 'used_at'])
+        .where('id', '=', invite.id)
+        .executeTakeFirstOrThrow();
+      expect(inviteRow.status).toBe('PENDING');
+      expect(inviteRow.used_at).toBeNull();
+
+      const users = await deps.db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email)
+        .execute();
+      expect(users).toHaveLength(0);
+
+      const groupMembers = await deps.db
+        .selectFrom('tenant_group_members')
+        .select(['group_id'])
+        .where('tenant_id', '=', tenant.id)
+        .where('group_id', '=', agentGroup.id)
+        .execute();
+      expect(groupMembers).toHaveLength(0);
     } finally {
       await close();
     }

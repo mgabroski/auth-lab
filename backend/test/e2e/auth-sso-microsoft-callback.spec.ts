@@ -446,6 +446,68 @@ describe('GET /auth/sso/microsoft/callback', () => {
     }
   });
 
+  it('success: public-signup-allowed new SSO user creates canonical USER membership', async () => {
+    const { app, deps, sso, close } = await buildTestApp();
+    const tenantKey = `t-${randomUUID().slice(0, 10)}`;
+    const host = `${tenantKey}.localhost:3000`;
+    const email = `signup-${randomUUID().slice(0, 8)}@example.com`;
+
+    try {
+      const tenant = await createSsoTenant({
+        db: deps.db,
+        tenantKey,
+        allowedSso: ['microsoft'],
+        publicSignupEnabled: true,
+      });
+      const { state, nonce, cookieHeader } = await getSsoStateFromStart({
+        app,
+        host,
+        provider: 'microsoft',
+      });
+      const tid = `tenant-${randomUUID().slice(0, 8)}`;
+
+      sso.microsoftAdapter.willSucceed({
+        idToken: buildFakeIdToken({
+          tid,
+          iss: msIssuer(tid),
+          aud: MICROSOFT_CLIENT_ID,
+          exp: Math.floor(Date.now() / 1000) + 60,
+          nonce,
+          sub: `ms-sub-${randomUUID()}`,
+          preferred_username: email,
+        }),
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: `/auth/sso/microsoft/callback?code=fake-code&state=${encodeURIComponent(state)}`,
+        headers: { host, cookie: cookieHeader },
+      });
+
+      expect(res.statusCode).toBe(302);
+      expect(String(res.headers.location)).toContain('/auth/sso/done?nextAction=NONE');
+
+      const user = await deps.db
+        .selectFrom('users')
+        .select(['id'])
+        .where('email', '=', email)
+        .executeTakeFirstOrThrow();
+      const membership = await deps.db
+        .selectFrom('memberships')
+        .select(['tenant_id', 'role', 'status'])
+        .where('user_id', '=', user.id)
+        .executeTakeFirstOrThrow();
+
+      expect(membership).toEqual({
+        tenant_id: tenant.id,
+        role: 'USER',
+        status: 'ACTIVE',
+      });
+    } finally {
+      await close();
+    }
+  });
+
   it('403 when no membership for tenant', async () => {
     const { app, deps, sso, close } = await buildTestApp();
     const tenantKey = `t-${randomUUID().slice(0, 10)}`;
