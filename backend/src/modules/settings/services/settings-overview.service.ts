@@ -43,6 +43,11 @@ export class SettingsOverviewService {
       throw new Error(`Tenant not found for settings overview: ${tenantId}`);
     }
 
+    const operationalAccessEnabled =
+      cpHandoff?.allowances.capabilities.operationalAccessEnabled ??
+      tenant.operationalAccessEnabled ??
+      false;
+
     const accessModel = this.accessQuery.build({ tenant, cpHandoff });
     const accountModel = this.accountQuery.build({ cpHandoff });
     const modulesModel = this.modulesQuery.build({
@@ -137,6 +142,23 @@ export class SettingsOverviewService {
         isRequired: false,
         requiredReason: null,
       },
+      ...(operationalAccessEnabled
+        ? [
+            {
+              key: 'operationalAccess' as const,
+              title: SETTINGS_SECTION_ROUTES.operationalAccess.title,
+              description: SETTINGS_SECTION_ROUTES.operationalAccess.description,
+              href: SETTINGS_SECTION_ROUTES.operationalAccess.href,
+              classification: SETTINGS_SECTION_ROUTES.operationalAccess.classification,
+              status: 'MANAGEMENT' as const,
+              warnings: [
+                'Operational Access is enabled for this tenant, but grants, coverage, resolver behavior, and runtime Agent visibility are not shipped yet.',
+              ],
+              isRequired: false,
+              requiredReason: null,
+            },
+          ]
+        : []),
       {
         key: 'communications',
         title: SETTINGS_SECTION_ROUTES.communications.title,

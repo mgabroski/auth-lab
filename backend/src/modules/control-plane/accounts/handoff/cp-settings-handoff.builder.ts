@@ -87,6 +87,9 @@ export function buildCpSettingsHandoffSnapshot(params: {
       publishedAt: provisioning.publishedAt,
     },
     allowances: {
+      capabilities: {
+        operationalAccessEnabled: account.moduleSettings.operationalAccessEnabled,
+      },
       access: {
         loginMethods: { ...account.access.loginMethods },
         mfaPolicy: { ...account.access.mfaPolicy },

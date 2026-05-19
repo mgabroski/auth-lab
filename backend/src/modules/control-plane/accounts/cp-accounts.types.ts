@@ -86,6 +86,7 @@ export type CpModuleSettingsConfig = {
   configured: boolean;
   moduleDecisionsSaved: boolean;
   personalSubpageSaved: boolean;
+  operationalAccessEnabled: boolean;
   modules: {
     personal: boolean;
     documents: boolean;

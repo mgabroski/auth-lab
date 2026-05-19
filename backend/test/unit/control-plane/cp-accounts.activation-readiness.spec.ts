@@ -57,6 +57,7 @@ function makeBaseAccount(): CpAccountDetail {
       configured: true,
       moduleDecisionsSaved: true,
       personalSubpageSaved: false,
+      operationalAccessEnabled: false,
       modules: {
         personal: false,
         documents: false,
@@ -111,6 +112,7 @@ function makeBaseAccount(): CpAccountDetail {
         publishedAt: null,
       },
       allowances: {
+        capabilities: { operationalAccessEnabled: false },
         access: {
           loginMethods: {
             password: true,
@@ -200,6 +202,7 @@ describe('evaluateCpActivationReadiness', () => {
       configured: false,
       moduleDecisionsSaved: true,
       personalSubpageSaved: false,
+      operationalAccessEnabled: false,
       modules: {
         personal: true,
         documents: false,

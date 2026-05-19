@@ -34,6 +34,7 @@ export type SettingsOverviewCardKey =
   | 'modules'
   | 'integrations'
   | 'peopleTeams'
+  | 'operationalAccess'
   | 'communications'
   | 'workspaceExperience';
 

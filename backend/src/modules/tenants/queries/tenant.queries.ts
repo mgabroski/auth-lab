@@ -71,6 +71,7 @@ function rowToTenant(row: Awaited<ReturnType<typeof findTenantByKeySql>>): Tenan
     publicSignupEnabled: row.public_signup_enabled,
     adminInviteRequired: row.admin_invite_required,
     memberMfaRequired: row.member_mfa_required,
+    operationalAccessEnabled: row.operational_access_enabled,
     allowedEmailDomains: parseAllowedEmailDomains(row.allowed_email_domains),
     allowedSso: parseAllowedSso(row.allowed_sso),
 

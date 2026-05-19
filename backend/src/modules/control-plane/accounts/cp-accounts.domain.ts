@@ -85,6 +85,7 @@ export type AccountSnapshot = {
 
 export type ProvisionableTenantConfig = {
   isActive: boolean;
+  operationalAccessEnabled: boolean;
   publicSignupEnabled: boolean;
   adminInviteRequired: boolean;
   memberMfaRequired: boolean;
@@ -233,11 +234,13 @@ export function buildAccountSettingsConfig(
 export function buildModuleSettingsConfig(
   row: CpModuleConfigRow | undefined,
   configured: boolean,
+  operationalAccessEnabled = false,
 ): CpModuleSettingsConfig {
   return {
     configured,
     moduleDecisionsSaved: row?.decisions_saved ?? false,
     personalSubpageSaved: row?.personal_subpage_saved ?? false,
+    operationalAccessEnabled,
     modules: {
       personal: row?.personal_enabled ?? true,
       documents: row?.documents_enabled ?? false,
@@ -423,7 +426,11 @@ export function snapshotToAccountDetail(snapshot: AccountSnapshot): CpAccountDet
       snapshot.accountSettingsRow,
       snapshot.account.account_settings_configured,
     ),
-    moduleSettings: buildModuleSettingsConfig(snapshot.moduleRow, moduleConfigured),
+    moduleSettings: buildModuleSettingsConfig(
+      snapshot.moduleRow,
+      moduleConfigured,
+      snapshot.account.operational_access_enabled,
+    ),
     personal: buildPersonalConfig(
       snapshot.personalFamilyRows,
       snapshot.personalFieldRows,
@@ -549,6 +556,12 @@ function buildReviewSections(account: CpAccountDetail): CpReviewSection[] {
       title: 'Module Settings',
       lines: [
         { label: 'Configured', value: yesNo(account.moduleSettings.configured) },
+        {
+          label: 'Operational Access Capability',
+          value: account.moduleSettings.operationalAccessEnabled
+            ? 'Enabled — safe shell only'
+            : 'Disabled',
+        },
         {
           label: 'Enabled Modules',
           value: enabledLabels([
@@ -754,6 +767,7 @@ export function deriveProvisionableTenantConfig(
 
   return {
     isActive: targetStatus === 'Active',
+    operationalAccessEnabled: account.moduleSettings.operationalAccessEnabled,
     publicSignupEnabled,
     adminInviteRequired,
     memberMfaRequired: account.access.configured ? account.access.mfaPolicy.memberRequired : false,

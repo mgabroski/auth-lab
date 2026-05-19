@@ -319,6 +319,114 @@ describe('settings read surfaces', () => {
     }
   });
 
+  it('shows the safe Operational Access shell card only when the tenant capability is enabled', async () => {
+    const { app, deps, close, reset } = await buildTestApp();
+
+    try {
+      await reset();
+      await upSettingsFoundationMigration(deps.db);
+      await upSettingsAccountMigration(deps.db);
+
+      const disabledTenant = await deps.db
+        .insertInto('tenants')
+        .values({
+          key: `settings-disabled-${randomUUID().slice(0, 8)}`,
+          name: 'Operational Access Disabled Tenant',
+          is_active: true,
+          public_signup_enabled: false,
+          admin_invite_required: false,
+          member_mfa_required: false,
+          allowed_email_domains: [],
+          allowed_sso: [],
+          setup_completed_at: null,
+        })
+        .returning(['id', 'key'])
+        .executeTakeFirstOrThrow();
+
+      const enabledTenant = await deps.db
+        .insertInto('tenants')
+        .values({
+          key: `settings-enabled-${randomUUID().slice(0, 8)}`,
+          name: 'Operational Access Enabled Tenant',
+          is_active: true,
+          public_signup_enabled: false,
+          admin_invite_required: false,
+          member_mfa_required: false,
+          operational_access_enabled: true,
+          allowed_email_domains: [],
+          allowed_sso: [],
+          setup_completed_at: null,
+        })
+        .returning(['id', 'key'])
+        .executeTakeFirstOrThrow();
+
+      for (const tenant of [disabledTenant, enabledTenant]) {
+        await deps.settings.foundationRepo.ensureFoundationRows({
+          tenantId: tenant.id,
+          appliedCpRevision: 0,
+          creationReasonCode: 'FOUNDATION_INITIALIZED',
+          transitionAt: new Date('2026-05-19T10:00:00.000Z'),
+        });
+      }
+
+      const disabledAdmin = await createAdminSession({
+        app,
+        deps,
+        tenantId: disabledTenant.id,
+        tenantKey: disabledTenant.key,
+        email: `admin-disabled-${randomUUID().slice(0, 8)}@example.com`,
+        password: 'Password123!',
+      });
+      const enabledAdmin = await createAdminSession({
+        app,
+        deps,
+        tenantId: enabledTenant.id,
+        tenantKey: enabledTenant.key,
+        email: `admin-enabled-${randomUUID().slice(0, 8)}@example.com`,
+        password: 'Password123!',
+      });
+
+      const disabledOverviewRes = await app.inject({
+        method: 'GET',
+        url: '/settings/overview',
+        headers: {
+          host: hostForTenant(disabledTenant.key),
+          cookie: disabledAdmin.cookie,
+        },
+      });
+      const enabledOverviewRes = await app.inject({
+        method: 'GET',
+        url: '/settings/overview',
+        headers: {
+          host: hostForTenant(enabledTenant.key),
+          cookie: enabledAdmin.cookie,
+        },
+      });
+
+      expect(disabledOverviewRes.statusCode).toBe(200);
+      expect(enabledOverviewRes.statusCode).toBe(200);
+
+      const disabledOverview = readJson<SettingsOverviewResponse>(disabledOverviewRes);
+      const enabledOverview = readJson<SettingsOverviewResponse>(enabledOverviewRes);
+
+      expect(disabledOverview.cards.map((card) => card.key)).not.toContain('operationalAccess');
+
+      const operationalAccessCard = requireCard(enabledOverview, 'operationalAccess');
+      expect(operationalAccessCard).toMatchObject({
+        title: 'Operational Access',
+        href: '/admin/settings/operational-access',
+        classification: 'LIVE_NON_GATING',
+        status: 'MANAGEMENT',
+        isRequired: false,
+      });
+      expect(operationalAccessCard.warnings.join(' ')).toContain(
+        'grants, coverage, resolver behavior, and runtime Agent visibility are not shipped yet',
+      );
+    } finally {
+      await close();
+    }
+  });
+
   it('serves only the Communications placeholder read route and keeps Workspace Experience plus Permissions route-absent', async () => {
     const { app, deps, close, reset } = await buildTestApp();
 

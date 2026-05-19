@@ -39,7 +39,11 @@ describe('cp accounts settings handoff integration boundary', () => {
         `Account "${accountKey}" is not provisioned to a tenant yet. Publish the account before any future Settings cascade can become eligible.`,
       ]);
       expect(created.settingsHandoff.account.cpRevision).toBe(0);
+      expect(created.moduleSettings.operationalAccessEnabled).toBe(false);
       expect(created.settingsHandoff.provisioning.isProvisioned).toBe(false);
+      expect(created.settingsHandoff.allowances.capabilities).toEqual({
+        operationalAccessEnabled: false,
+      });
       expect(created.settingsHandoff.allowances.access).not.toHaveProperty('configured');
       expect(created.settingsHandoff.allowances.account).not.toHaveProperty('configured');
 
@@ -195,6 +199,7 @@ describe('cp accounts settings handoff integration boundary', () => {
         method: 'PUT',
         url: `/cp/accounts/${accountKey}/modules`,
         payload: {
+          operationalAccessEnabled: true,
           modules: {
             personal: false,
             documents: false,
@@ -207,6 +212,10 @@ describe('cp accounts settings handoff integration boundary', () => {
       expect(modulesRes.statusCode).toBe(200);
       const modulesAccount = readJson<CpAccountDetail>(modulesRes);
       expect(modulesAccount.cpRevision).toBe(4);
+      expect(modulesAccount.moduleSettings.operationalAccessEnabled).toBe(true);
+      expect(modulesAccount.settingsHandoff.allowances.capabilities).toEqual({
+        operationalAccessEnabled: true,
+      });
       expect(modulesAccount.settingsHandoff.allowances.modules).toEqual({
         modules: {
           personal: false,
@@ -265,6 +274,17 @@ describe('cp accounts settings handoff integration boundary', () => {
       expect(internalHandoff.provisioning.tenantName).toBe('QA Phase 6 Tenant');
       expect(internalHandoff.provisioning.tenantState).toBe('ACTIVE');
       expect(internalHandoff.provisioning.publishedAt).toBeInstanceOf(Date);
+      expect(internalHandoff.allowances.capabilities).toEqual({
+        operationalAccessEnabled: true,
+      });
+
+      const tenantCapability = await deps.db
+        .selectFrom('tenants')
+        .select(['operational_access_enabled'])
+        .where('key', '=', accountKey)
+        .executeTakeFirstOrThrow();
+
+      expect(tenantCapability.operational_access_enabled).toBe(true);
       expect(internalHandoff.allowances.access).toEqual({
         loginMethods: {
           password: true,

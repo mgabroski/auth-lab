@@ -31,6 +31,7 @@ function buildHandoff(overrides?: Partial<CpSettingsHandoffSnapshot>): CpSetting
       publishedAt: new Date('2026-04-22T00:00:00.000Z'),
     },
     allowances: {
+      capabilities: { operationalAccessEnabled: false },
       access: {
         loginMethods: { password: true, google: false, microsoft: false },
         mfaPolicy: { adminRequired: true, memberRequired: false },

@@ -81,6 +81,7 @@ export interface CpAccounts {
   id: Generated<string>;
   integrations_configured: Generated<boolean>;
   module_settings_configured: Generated<boolean>;
+  operational_access_enabled: Generated<boolean>;
   updated_at: Generated<Timestamp>;
 }
 
@@ -314,6 +315,7 @@ export interface Tenants {
   key: string;
   member_mfa_required: Generated<boolean>;
   name: string;
+  operational_access_enabled: Generated<boolean>;
   public_signup_enabled: Generated<boolean>;
   setup_completed_at: Timestamp | null;
   updated_at: Generated<Timestamp>;

@@ -15,7 +15,7 @@ If this file conflicts with support docs, folder maps, prompt docs, or temporary
 
 ## Current Repo Phase
 
-The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the current tenant-facing Settings slice for `/admin` and `/admin/settings`: real synchronous CP -> Settings cascade handling, `GET /settings/bootstrap`, `GET /settings/overview`, Settings-native banner consumption on `/admin`, a real Settings overview page at `/admin/settings`, a real Access page at `/admin/settings/access`, a real Account page at `/admin/settings/account` with per-card save boundaries, a real Modules hub page at `/admin/settings/modules`, a real Personal builder page at `/admin/settings/modules/personal` with backend-owned default sections and the canonical save flow, a live non-gating People & Teams management page at `/admin/settings/people-teams`, a placeholder-only Communications route backed by `GET /settings/communications`, an honest SSR-gated Integrations page, a Workspace Experience overview placeholder card with no route, and continued absence of Permissions.
+The repo is in the Auth / Provisioning foundation stage with topology, security model, current auth flows, and documentation routing substantially locked. The shipped Control Plane now includes create/setup/review/publish/re-entry/status-toggle behavior, producer-side Settings handoff output, dedicated route-level integrity coverage, and a real browser smoke in CI. The repo now also ships the current tenant-facing Settings slice for `/admin` and `/admin/settings`: real synchronous CP -> Settings cascade handling, `GET /settings/bootstrap`, `GET /settings/overview`, Settings-native banner consumption on `/admin`, a real Settings overview page at `/admin/settings`, a real Access page at `/admin/settings/access`, a real Account page at `/admin/settings/account` with per-card save boundaries, a real Modules hub page at `/admin/settings/modules`, a real Personal builder page at `/admin/settings/modules/personal` with backend-owned default sections and the canonical save flow, a live non-gating People & Teams management page at `/admin/settings/people-teams`, a placeholder-only Communications route backed by `GET /settings/communications`, an honest SSR-gated Integrations page, a fail-closed `operational_access_enabled` capability boundary with a capability-gated safe `/admin/settings/operational-access` shell, a Workspace Experience overview placeholder card with no route, and continued absence of Permissions.
 
 This repo already has:
 
@@ -98,7 +98,9 @@ Current shipped truth remains:
 - `/admin/settings/access` is the current **Access & Security** Settings page
 - the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
 - the current Access & Security page is not future tenant Operational Access
-- Permissions / Operational Access UI is absent in v1: no card, no route, no API surface
+- the `operational_access_enabled` capability boundary is shipped and defaults fail-closed to `false` for existing/simple tenants
+- when `operational_access_enabled = true`, `/admin/settings/operational-access` may appear as an admin-only safe shell with no grants, coverage, resolver, or runtime visibility behavior
+- Permissions UI is still absent in v1: no card, no route, no API surface
 - People & Teams foundation groups and group membership management are implemented as a tenant-admin Settings surface
 - People & Teams is a live non-gating management card, not a setup-completion section; its overview status is management-only and does not affect setup completion or banner lifecycle
 - People & Teams group levels `ADMIN / AGENT / USER` remain classification for groups and do not grant Operational Access
@@ -140,13 +142,13 @@ Accepted future target truth is:
 - sensitive fields require explicit, auditable, scope-bound visibility and fail to the safer/more restrictive result when grants conflict
 - search, notifications, exports, generated PDFs, and email digests must consume backend-resolved visibility and must not leak hidden/sensitive data
 - Benefits and other high-sensitivity domains require explicit high-sensitivity access; broad Manage or broad group membership must not imply unmasked sensitive access
-- future activation of the tenant surface is controlled by a future `operational_access_enabled` capability; simple Admin/User tenants must not see advanced Operational Access setup
+- tenant surface activation is controlled by the now-shipped `operational_access_enabled` capability boundary; simple Admin/User tenants with the default `false` value must not see the Operational Access shell or advanced setup
 
 Documentation and QA rule:
 
-> Operational Access scenarios may be planned now, but they are future / not executable until Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access, Effective Access Resolver, and module consumers exist in code. The shipped People & Teams foundation plus Agent invite group assignment is provisioning and group-membership management only.
+> Operational Access runtime scenarios may be planned now, but they are future / not executable until Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access, Effective Access Resolver, and module consumers exist in code. The shipped People & Teams foundation plus Agent invite group assignment is provisioning and group-membership management only. The shipped `operational_access_enabled` capability boundary exposes only a safe admin shell when enabled.
 
-This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, People & Teams, Integrations, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
+This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, People & Teams, Integrations, the capability-gated safe Operational Access shell, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
 
 ---
 
@@ -348,7 +350,7 @@ The Control Plane now ships its current internal create/setup/review/publish/re-
 
 ### Settings v1 closure
 
-The repo now ships the locked Settings v1 surface and has passed the implementation-level readiness gate in code and documentation. This does not claim post-v1 surfaces are built. Communications remains placeholder-only, Workspace Experience remains overview-card-only, Permissions remains absent, and tenant secret-bearing integrations remain deferred.
+The repo now ships the locked Settings v1 surface and has passed the implementation-level readiness gate in code and documentation. This does not claim post-v1 surfaces are built. Communications remains placeholder-only, Workspace Experience remains overview-card-only, Permissions remains absent, the Operational Access route is only a capability-gated safe shell, and tenant secret-bearing integrations remain deferred.
 
 Current truthful boundary:
 
@@ -361,6 +363,7 @@ Current truthful boundary:
 - `/admin/settings/modules/personal` is backed by `GET /settings/modules/personal` and `PUT /settings/modules/personal` with the canonical full-replacement save contract
 - `/admin/settings/integrations` is backed by `GET /settings/integrations`; Google/Microsoft SSO show truthful readiness states, HRIS/Stripe stay deferred, Marketplace stays placeholder-only, and no tenant credential entry or fake Connected flow exists
 - `/admin/settings/communications` remains placeholder-only and is backed by `GET /settings/communications`
+- `/admin/settings/operational-access` is admin-only, hidden unless `operational_access_enabled = true`, and renders only safe not-configured copy; it has no backend Operational Access endpoint, grants, coverage, resolver behavior, or runtime Agent visibility
 - Workspace Experience remains an overview-card-only placeholder with no route
 - Permissions remains absent: no overview card, no frontend route, no backend API surface
 - CP `settingsHandoff` remains producer-shaped but honestly reports live Settings engine presence and active synchronous cascade wiring
@@ -368,7 +371,7 @@ Current truthful boundary:
 
 ### Future modules and later-scope surfaces
 
-The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork. Operational Access foundation decisions are now locked in ADR-0020 through ADR-0034 and aligned to `hubins-operational-access-9_5-source-of-truth-guide-final.md`, but technical planning must not start as implementation until People & Teams operational groups, Primary Where / Which Records, Additional Coverage, Special Access, Personal Cards runtime resolution, Effective Access resolver contracts, and first module-consumer proof are designed against those decisions.
+The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork. Operational Access foundation decisions are now locked in ADR-0020 through ADR-0034 and aligned to `hubins-operational-access-9_5-source-of-truth-guide-final.md`. The capability boundary and safe shell are now implemented, but runtime implementation must not start until People & Teams operational groups, Primary Where / Which Records, Additional Coverage, Special Access, Personal Cards runtime resolution, Effective Access resolver contracts, and first module-consumer proof are designed against those decisions.
 
 ---
 

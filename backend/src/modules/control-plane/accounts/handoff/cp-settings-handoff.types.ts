@@ -127,7 +127,12 @@ export type CpSettingsIntegrationAllowanceSnapshot = {
   integrations: CpSettingsIntegrationAllowance[];
 };
 
+export type CpSettingsCapabilityAllowance = {
+  operationalAccessEnabled: boolean;
+};
+
 export type CpSettingsAllowanceSnapshot = {
+  capabilities: CpSettingsCapabilityAllowance;
   access: CpSettingsAccessAllowance;
   account: CpSettingsAccountAllowance;
   modules: CpSettingsModuleAllowance;

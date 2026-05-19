@@ -109,6 +109,7 @@ export type CpModuleSettingsConfig = {
   configured: boolean;
   moduleDecisionsSaved: boolean;
   personalSubpageSaved: boolean;
+  operationalAccessEnabled: boolean;
   modules: {
     personal: boolean;
     documents: boolean;
@@ -164,8 +165,8 @@ export type CpSettingsHandoffSnapshot = {
   mode: 'PRODUCER_ONLY';
   eligibility: 'READY_FOR_FUTURE_SETTINGS_CONSUMER' | 'BLOCKED_UNPUBLISHED_ACCOUNT';
   consumer: {
-    settingsEnginePresent: false;
-    cascadeStatus: 'NOT_WIRED';
+    settingsEnginePresent: boolean;
+    cascadeStatus: 'NOT_WIRED' | 'SYNC_ACTIVE';
     blockingReasons: string[];
   };
   account: {
@@ -184,6 +185,9 @@ export type CpSettingsHandoffSnapshot = {
     publishedAt: string | null;
   };
   allowances: {
+    capabilities: {
+      operationalAccessEnabled: boolean;
+    };
     access: Omit<CpAccessConfig, 'configured'>;
     account: Omit<CpAccountSettingsConfig, 'configured'>;
     modules: {
@@ -251,6 +255,7 @@ export type SaveCpAccountSettingsInput = {
 };
 
 export type SaveCpModuleSettingsInput = {
+  operationalAccessEnabled: boolean;
   modules: CpModuleSettingsConfig['modules'];
 };
 

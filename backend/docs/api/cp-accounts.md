@@ -176,6 +176,7 @@ All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accou
     "configured": false,
     "moduleDecisionsSaved": true,
     "personalSubpageSaved": false,
+    "operationalAccessEnabled": false,
     "modules": {
       "personal": true,
       "documents": false,
@@ -234,6 +235,9 @@ All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accou
       "publishedAt": null
     },
     "allowances": {
+      "capabilities": {
+        "operationalAccessEnabled": false
+      },
       "access": {
         "loginMethods": {
           "password": true,
@@ -266,6 +270,7 @@ All read and write endpoints except `GET /cp/accounts`, `GET /cp/accounts/:accou
         }
       },
       "modules": {
+        "operationalAccessEnabled": false,
         "modules": {
           "personal": true,
           "documents": false,
@@ -317,6 +322,7 @@ Current truthful behavior:
 - `consumer.settingsEnginePresent` is now `true`
 - `consumer.cascadeStatus` is now `SYNC_ACTIVE`
 - `blockingReasons` are now used only for real current blockers such as unpublished accounts
+- `allowances.capabilities.operationalAccessEnabled` carries the CP-owned Operational Access capability boundary, defaulting fail-closed to `false`
 - `allowances` carries allowance truth only — not CP Step 2 progress/configured flags
 - unpublished accounts remain `BLOCKED_UNPUBLISHED_ACCOUNT`
 - published accounts become `READY_FOR_FUTURE_SETTINGS_CONSUMER` and are eligible for the synchronous backend Settings cascade
@@ -572,6 +578,7 @@ Persists the Module Settings group decisions.
 
 ```json
 {
+  "operationalAccessEnabled": false,
   "modules": {
     "personal": true,
     "documents": false,
@@ -584,6 +591,9 @@ Persists the Module Settings group decisions.
 **Important rules**
 
 - Explicit module save marks `moduleDecisionsSaved = true`.
+- `operationalAccessEnabled` is the CP-owned fail-closed capability boundary for the future Operational Access tenant shell.
+- If omitted by older clients, `operationalAccessEnabled` defaults to `false`.
+- Enabling `operationalAccessEnabled` exposes only the safe tenant admin shell when Settings overview is read; it does not create Agent grants, Primary Where, Which Records, coverage, Special Access, resolver behavior, or runtime visibility.
 - If `personal` is enabled, Module Settings is not treated as configured until the Personal CP sub-page is explicitly saved.
 - If `personal` is disabled, Module Settings becomes configured immediately on save.
 
@@ -808,7 +818,7 @@ Boundary that must remain true:
 - CP does not expose a tenant-facing Settings status UI.
 - CP does not fake Settings completion, section state, or setup progress in the `settingsHandoff` snapshot.
 - CP provisioning truth remains separate from tenant configuration truth.
-- CP allowance changes may affect Settings state, but they do not create Operational Access grants, People & Teams runtime visibility, Primary Where, Which Records, Assigned Areas, Responsible For coverage, Oversight, Temporary Coverage, Special Access, or Effective Access resolver decisions.
+- CP allowance changes may affect Settings state and can expose the safe Operational Access shell when `operationalAccessEnabled = true`, but they do not create Operational Access grants, People & Teams runtime visibility, Primary Where, Which Records, Assigned Areas, Responsible For coverage, Oversight, Temporary Coverage, Special Access, or Effective Access resolver decisions.
 
 ---
 

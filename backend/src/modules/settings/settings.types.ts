@@ -49,6 +49,7 @@ export const SETTINGS_OVERVIEW_CARD_KEYS = [
   'modules',
   'integrations',
   'peopleTeams',
+  'operationalAccess',
   'communications',
   'workspaceExperience',
 ] as const;
@@ -186,6 +187,15 @@ export const SETTINGS_SECTION_ROUTES: Record<SettingsOverviewCardKey, SettingsSe
     title: 'People & Teams',
     description: 'Manage reusable tenant groups and memberships.',
     href: '/admin/settings/people-teams',
+    classification: 'LIVE_NON_GATING',
+    sectionKey: null,
+  },
+  operationalAccess: {
+    key: 'operationalAccess',
+    title: 'Operational Access',
+    description:
+      'Safe admin shell for future Agent grants and coverage. No runtime access grants are shipped yet.',
+    href: '/admin/settings/operational-access',
     classification: 'LIVE_NON_GATING',
     sectionKey: null,
   },

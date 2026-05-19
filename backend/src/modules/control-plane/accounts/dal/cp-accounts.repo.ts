@@ -47,6 +47,7 @@ export class CpAccountsRepo {
         account_key: params.accountKey,
         cp_status: 'Draft',
         cp_revision: 0,
+        operational_access_enabled: false,
       })
       .returning(['id', 'account_key', 'created_at'])
       .executeTakeFirstOrThrow();
@@ -62,6 +63,7 @@ export class CpAccountsRepo {
     accountId: string;
     progressPatch: CpAccountProgressPatch;
     incrementRevision: boolean;
+    operationalAccessEnabled?: boolean;
   }): Promise<void> {
     const update: Record<string, unknown> = {};
 
@@ -76,6 +78,9 @@ export class CpAccountsRepo {
     }
     if (params.progressPatch.integrationsConfigured !== undefined) {
       update['integrations_configured'] = params.progressPatch.integrationsConfigured;
+    }
+    if (params.operationalAccessEnabled !== undefined) {
+      update['operational_access_enabled'] = params.operationalAccessEnabled;
     }
 
     update['updated_at'] = new Date();
@@ -309,6 +314,7 @@ export class CpAccountsRepo {
     memberMfaRequired: boolean;
     allowedEmailDomains: string[];
     allowedSso: string[];
+    operationalAccessEnabled: boolean;
   }): Promise<{ tenantId: string }> {
     const row = await this.db
       .insertInto('tenants')
@@ -321,6 +327,7 @@ export class CpAccountsRepo {
         member_mfa_required: params.memberMfaRequired,
         allowed_email_domains: sql`${JSON.stringify(params.allowedEmailDomains)}::jsonb`,
         allowed_sso: params.allowedSso,
+        operational_access_enabled: params.operationalAccessEnabled,
       })
       .returning(['id'])
       .executeTakeFirstOrThrow();
@@ -337,6 +344,7 @@ export class CpAccountsRepo {
     memberMfaRequired: boolean;
     allowedEmailDomains: string[];
     allowedSso: string[];
+    operationalAccessEnabled: boolean;
   }): Promise<void> {
     await this.db
       .updateTable('tenants')
@@ -348,6 +356,7 @@ export class CpAccountsRepo {
         member_mfa_required: params.memberMfaRequired,
         allowed_email_domains: sql`${JSON.stringify(params.allowedEmailDomains)}::jsonb`,
         allowed_sso: params.allowedSso,
+        operational_access_enabled: params.operationalAccessEnabled,
         updated_at: new Date(),
       })
       .where('id', '=', params.tenantId)

@@ -20,6 +20,7 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     memberMfaRequired: false,
     allowedEmailDomains: ['acme.com'],
     allowedSso: ['google'],
+    operationalAccessEnabled: overrides.operationalAccessEnabled ?? false,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,

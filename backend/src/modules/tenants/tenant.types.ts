@@ -30,6 +30,7 @@ export type Tenant = {
   publicSignupEnabled: boolean;
   adminInviteRequired: boolean;
   memberMfaRequired: boolean;
+  operationalAccessEnabled: boolean;
 
   allowedEmailDomains: TenantAllowedEmailDomains;
   allowedSso: TenantAllowedSso;

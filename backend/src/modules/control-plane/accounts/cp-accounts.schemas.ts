@@ -66,6 +66,7 @@ export const saveCpAccountSettingsSchema = z.object({
 });
 
 export const saveCpModuleSettingsSchema = z.object({
+  operationalAccessEnabled: z.boolean().default(false),
   modules: z.object({
     personal: z.boolean(),
     documents: z.boolean(),

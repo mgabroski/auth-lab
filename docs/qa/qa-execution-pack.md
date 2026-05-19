@@ -56,6 +56,7 @@ This pack covers QA execution for the current shipped repo slice:
 - `/admin/settings/modules/personal` family review, field configuration, section builder, and full-replacement save behavior
 - `/admin/settings/people-teams` reusable group and membership management behavior
 - `/admin/settings/integrations` informational SSO and deferred integration behavior
+- `/admin/settings/operational-access` safe shell behavior when the CP-owned capability is enabled
 - `/admin/settings/communications` placeholder-only route behavior
 - absent Permissions treatment
 - version conflict and CP revision conflict proof
@@ -78,8 +79,8 @@ Out of scope:
 - tenant secret entry for integrations
 - Communications live configuration
 - Workspace Experience live configuration
-- Permissions / Operational Access tenant surface
-- Operational Access grants, Primary Where, Which Records, Additional Coverage, Special Access, and Effective Access Resolver behavior
+- Permissions tenant surface
+- Operational Access runtime grants, Primary Where, Which Records, Additional Coverage, Special Access, and Effective Access Resolver behavior
 - documents, benefits, payments, marketplace tenant modules
 - CP authentication
 - CP operator RBAC
@@ -111,7 +112,7 @@ Current shipped truth remains:
 - Agent Groups as Operational Access grant subjects are not implemented
 - Primary Where, Which Records, Assigned Areas, Responsible For, Oversight, Temporary Coverage, Special Access, and the Effective Access Resolver are not implemented
 - current `/admin/settings/access` is Access & Security, not Operational Access
-- Permissions / Operational Access tenant UI remains absent
+- the safe `/admin/settings/operational-access` shell is executable only when the CP-owned `operational_access_enabled` capability is enabled
 
 Do not add the scenarios below to the current executable checklist until implementation exists and the API/UI/test fixtures are real.
 
@@ -142,7 +143,7 @@ Do not add the scenarios below to the current executable checklist until impleme
 | OA-FUT-23 | Why explanation                    | Explanation matches backend decision source path without leaking sensitive values.                                                        | Not executable |
 | OA-FUT-24 | Cross-tenant target denial         | Operational Access cannot cross tenant boundary by read, write, search, notification, or export.                                          | Not executable |
 
-Operational Access QA remains planning-only until code, tests, fixtures, source docs, and the manual QA guide are updated together.
+Operational Access runtime QA remains planning-only until code, tests, fixtures, source docs, and the manual QA guide are updated together. The only currently executable Operational Access QA in this pack is the capability-gated safe shell proof that confirms no grants, coverage, resolver behavior, or runtime Agent visibility is present.
 
 ---
 
@@ -297,7 +298,8 @@ Steps:
 2. Confirm `Required sections` is visible.
 3. Confirm `Optional sections` is visible.
 4. Confirm cards for Access & Security, Modules, Account Settings, Integrations, People & Teams, Communications, and Workspace Experience.
-5. Look for `Permissions`.
+5. Confirm `Operational Access` is not shown for the default disabled capability tenant.
+6. Look for `Permissions`.
 
 Expected results:
 
@@ -305,12 +307,49 @@ Expected results:
 - People & Teams is visible as a live, non-gating management surface.
 - Communications is placeholder-only.
 - Workspace Experience is overview-only placeholder.
+- Operational Access is hidden by default unless `operational_access_enabled` is enabled for the tenant.
 - Permissions is absent: no card, no CTA, no placeholder.
 
 Evidence:
 
 - screenshot of overview required sections
 - screenshot of overview optional sections
+
+### SET-02A — Operational Access safe shell is capability-gated
+
+| Field         | Value                                                                             |
+| ------------- | --------------------------------------------------------------------------------- |
+| Environment   | Local host-run                                                                    |
+| Persona       | authenticated admin                                                               |
+| Fixture       | tenant with CP-owned `operational_access_enabled = true`; default disabled tenant |
+| Preconditions | admin session established                                                         |
+
+Steps:
+
+1. Open `/admin/settings` on a tenant where `operational_access_enabled = false`.
+2. Confirm no `Operational Access` card appears.
+3. Open `/admin/settings/operational-access` on that disabled tenant.
+4. Open `/admin/settings` on a tenant where `operational_access_enabled = true`.
+5. Click the `Operational Access` card.
+6. Read the shell content.
+7. Sign in as Agent/User or use an Agent/User fixture and type `/admin/settings/operational-access` directly.
+
+Expected results:
+
+- Disabled tenants do not show the Operational Access card.
+- Disabled tenants cannot access the shell route; the route returns not found or redirects through normal admin route handling.
+- Enabled tenants show a live non-gating `Operational Access` card.
+- Enabled admin users see only safe not-configured copy.
+- The shell explicitly confirms no Operational Access grants, Assigned Areas, Responsible For, Oversight, Temporary Coverage, Special Access, Effective Access Resolver, or runtime Agent visibility are shipped.
+- Agent/User cannot access the admin shell.
+- `/admin/settings/access` remains Access & Security and is unchanged.
+
+Evidence:
+
+- screenshot of disabled tenant overview without Operational Access card
+- screenshot of enabled tenant overview with Operational Access card
+- screenshot of safe shell copy
+- screenshot of Agent/User route denial or redirect
 
 ### SET-02B — People & Teams group and membership management
 
@@ -343,7 +382,7 @@ Expected results:
 - Group membership management uses active tenant memberships only.
 - The page remains a non-gating Settings management surface.
 - Group membership does not change runtime role and does not grant module access.
-- No Operational Access UI appears.
+- No Operational Access grant/configuration UI appears inside People & Teams.
 
 Evidence:
 
@@ -463,6 +502,7 @@ Steps:
 2. Confirm page says live configuration is not available and mutation endpoints are not available.
 3. Open `/admin/settings/workspace-experience`.
 4. Open `/admin/settings/permissions`.
+5. Confirm this case is separate from `/admin/settings/operational-access`, which is covered by SET-02A and is capability-gated.
 
 Expected results:
 

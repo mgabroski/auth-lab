@@ -167,6 +167,7 @@ export function AccountSetupGroupScreen({
   });
 
   const [moduleState, setModuleState] = useState<SaveCpModuleSettingsInput>({
+    operationalAccessEnabled: initialAccount.moduleSettings.operationalAccessEnabled,
     modules: { ...initialAccount.moduleSettings.modules },
   });
 
@@ -264,7 +265,10 @@ export function AccountSetupGroupScreen({
         organizationStructure: { ...nextAccount.accountSettings.organizationStructure },
         companyCalendar: { ...nextAccount.accountSettings.companyCalendar },
       });
-      setModuleState({ modules: { ...nextAccount.moduleSettings.modules } });
+      setModuleState({
+        operationalAccessEnabled: nextAccount.moduleSettings.operationalAccessEnabled,
+        modules: { ...nextAccount.moduleSettings.modules },
+      });
       setIntegrationsState({
         integrations: nextAccount.integrations.integrations.map((integration) => ({
           integrationKey: integration.integrationKey,
@@ -636,6 +640,23 @@ export function AccountSetupGroupScreen({
     return (
       <>
         <article style={contentPanelStyle}>
+          <h2 style={sectionTitleStyle}>Tenant Capability Boundary</h2>
+          <div style={formSectionStyle}>
+            {renderCheckboxRow({
+              label: 'Operational Access',
+              description:
+                'Enable only the future Operational Access admin shell. This does not create grants, coverage, resolver behavior, or Agent runtime visibility.',
+              checked: moduleState.operationalAccessEnabled,
+              onChange: (checked) =>
+                setModuleState((current) => ({
+                  ...current,
+                  operationalAccessEnabled: checked,
+                })),
+            })}
+          </div>
+        </article>
+
+        <article style={contentPanelStyle}>
           <h2 style={sectionTitleStyle}>Available Modules</h2>
           <div style={formSectionStyle}>
             {renderCheckboxRow({
@@ -645,6 +666,7 @@ export function AccountSetupGroupScreen({
               checked: moduleState.modules.personal,
               onChange: (checked) =>
                 setModuleState((current) => ({
+                  ...current,
                   modules: { ...current.modules, personal: checked },
                 })),
             })}
@@ -655,6 +677,7 @@ export function AccountSetupGroupScreen({
               checked: moduleState.modules.documents,
               onChange: (checked) =>
                 setModuleState((current) => ({
+                  ...current,
                   modules: { ...current.modules, documents: checked },
                 })),
             })}
@@ -665,6 +688,7 @@ export function AccountSetupGroupScreen({
               checked: moduleState.modules.benefits,
               onChange: (checked) =>
                 setModuleState((current) => ({
+                  ...current,
                   modules: { ...current.modules, benefits: checked },
                 })),
             })}
@@ -675,6 +699,7 @@ export function AccountSetupGroupScreen({
               checked: moduleState.modules.payments,
               onChange: (checked) =>
                 setModuleState((current) => ({
+                  ...current,
                   modules: { ...current.modules, payments: checked },
                 })),
             })}

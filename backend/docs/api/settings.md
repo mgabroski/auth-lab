@@ -29,6 +29,7 @@ This is the real Settings-native tenant surface used by:
 - `/admin/settings/modules`
 - `/admin/settings/modules/personal`
 - `/admin/settings/integrations`
+- `/admin/settings/operational-access` when the CP-owned `operational_access_enabled` capability is enabled
 - `/admin/settings/communications`
 
 It establishes:
@@ -41,6 +42,7 @@ It establishes:
 - the final v1 Personal builder read surface
 - the canonical Personal full-replacement save contract
 - the real v1 Integrations informational read surface
+- the safe Operational Access overview-card gate for tenants whose CP-owned `operational_access_enabled` capability is enabled
 - the minimal Communications placeholder read route
 
 It does **not** mean the full long-range Settings roadmap is complete.
@@ -51,7 +53,7 @@ It does **not** mean the full long-range Settings roadmap is complete.
 
 It is not future tenant Operational Access. It does not manage People & Teams, Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, Responsible For person coverage, Assigned Areas, Oversight, Temporary Coverage, module action grants, Personal Card runtime visibility, or Effective Access explanations.
 
-The future Operational Access route/content strategy requires a real non-breaking migration plan. Do not rename this route or reinterpret this contract through documentation alone.
+The separate future Operational Access shell, when enabled by CP capability, is served by the frontend at `/admin/settings/operational-access` and is discovered through `GET /settings/overview`. There is no shipped `/settings/operational-access` backend endpoint and no runtime Operational Access grant API.
 
 ## Authoritative bootstrap and route-treatment truth
 
@@ -60,6 +62,7 @@ The future Operational Access route/content strategy requires a real non-breakin
 Route treatment is locked as follows:
 
 - Live v1 Settings surfaces: `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/account`, `/settings/modules`, `/settings/modules/personal`, `/settings/integrations`, and the People & Teams management surface backed by `/people-teams/*`.
+- Capability-gated frontend-only shell: `/admin/settings/operational-access` appears only when `GET /settings/overview` returns the `operationalAccess` card because the CP-owned `operational_access_enabled` capability is true. It has no backend `/settings/operational-access` endpoint and no grants, coverage, resolver, or runtime visibility behavior.
 - Placeholder-only v1 surface: `/settings/communications`. It returns a minimal placeholder DTO and exposes no live configuration or mutation behavior.
 - Overview-card-only v1 surface: Workspace Experience. It appears only as an overview card and has no backend route.
 - Absent v1 surface: Permissions. It has no overview card, no backend route, and no tenant configuration API.
@@ -187,7 +190,7 @@ Each card reports:
 - `isRequired`
 - `requiredReason`
 
-`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account and Integrations remain live but non-gating setup cards; People & Teams is a live non-gating management card with `status = MANAGEMENT`; Communications and Workspace Experience are placeholder-only; Permissions remains absent. People & Teams is group/membership management only and is not Operational Access.
+`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account and Integrations remain live but non-gating setup cards; People & Teams is a live non-gating management card with `status = MANAGEMENT`; Operational Access is a capability-gated live non-gating safe shell card with `status = MANAGEMENT` only when `operational_access_enabled` is true; Communications and Workspace Experience are placeholder-only; Permissions remains absent. People & Teams is group/membership management only and is not Operational Access.
 
 ### `GET /settings/access`
 
@@ -612,6 +615,8 @@ The following remain intentionally unimplemented in the current repo state:
 - Integrations credential-entry routes
 - Integrations provider connection/recovery routes
 - Integrations sync or mapping routes
+- Operational Access backend read/write routes
+- Operational Access grant, coverage, resolver, or runtime visibility routes
 - Permissions routes
 - Communications write routes
 - Communications template-library routes

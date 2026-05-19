@@ -243,6 +243,7 @@ export class CpAccountsService {
         publicSignupEnabled: tenantConfig.publicSignupEnabled,
         adminInviteRequired: tenantConfig.adminInviteRequired,
         memberMfaRequired: tenantConfig.memberMfaRequired,
+        operationalAccessEnabled: tenantConfig.operationalAccessEnabled,
         allowedEmailDomains: tenantConfig.allowedEmailDomains,
         allowedSso: tenantConfig.allowedSso,
       });
@@ -255,6 +256,7 @@ export class CpAccountsService {
         publicSignupEnabled: tenantConfig.publicSignupEnabled,
         adminInviteRequired: tenantConfig.adminInviteRequired,
         memberMfaRequired: tenantConfig.memberMfaRequired,
+        operationalAccessEnabled: tenantConfig.operationalAccessEnabled,
         allowedEmailDomains: tenantConfig.allowedEmailDomains,
         allowedSso: tenantConfig.allowedSso,
       });
@@ -266,6 +268,7 @@ export class CpAccountsService {
         publicSignupEnabled: tenantConfig.publicSignupEnabled,
         adminInviteRequired: tenantConfig.adminInviteRequired,
         memberMfaRequired: tenantConfig.memberMfaRequired,
+        operationalAccessEnabled: tenantConfig.operationalAccessEnabled,
         allowedEmailDomains: tenantConfig.allowedEmailDomains,
         allowedSso: tenantConfig.allowedSso,
       });
@@ -554,6 +557,7 @@ export class CpAccountsService {
         const previous = buildModuleSettingsConfig(
           snapshot.moduleRow,
           moduleGroupConfigured(snapshot.moduleRow),
+          snapshot.account.operational_access_enabled,
         );
 
         const existingPersonalSubpageSaved = input.modules.personal
@@ -565,6 +569,7 @@ export class CpAccountsService {
           configured: nextConfigured,
           moduleDecisionsSaved: true,
           personalSubpageSaved: existingPersonalSubpageSaved,
+          operationalAccessEnabled: input.operationalAccessEnabled,
           modules: input.modules,
         };
         const changed = stableStringify(previous) !== stableStringify(next);
@@ -583,6 +588,7 @@ export class CpAccountsService {
           accountId: snapshot.account.id,
           progressPatch: { moduleSettingsConfigured: nextConfigured },
           incrementRevision: changed,
+          operationalAccessEnabled: input.operationalAccessEnabled,
         });
 
         const updatedSnapshot = await loadAccountSnapshot(trx, accountKey);
