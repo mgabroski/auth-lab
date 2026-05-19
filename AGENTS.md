@@ -118,6 +118,7 @@ They grow as the repo evolves.
 * `backend/docs/api/admin.md`
 * `backend/docs/api/cp-accounts.md`
 * `backend/docs/api/settings.md`
+* `backend/docs/api/people-teams.md`
 * `code_review.md`
 
 ### Tier 3 — Support, execution, and secondary reference

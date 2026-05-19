@@ -59,16 +59,20 @@ Today this repository concretely implements:
 - backend bootstrap / DI / route registration foundation
 - backend Auth + User Provisioning surface
 - frontend Auth + User Provisioning route/UI surface for the current module scope
+- separate internal Control Plane app for account provisioning, setup, review, publish, re-entry, and status toggles
+- Settings-native `/admin` and `/admin/settings` surfaces for setup bootstrap, overview, Access & Security, Account, Modules/Personal, Integrations, Communications placeholder, and People & Teams group management
+- synchronous CP-to-Settings cascade handling for eligible published-account allowance changes
 
 ### Broader product work that is intentionally not complete yet
 
-- broader member product modules beyond the current auth/provisioning landing surface
-- broader admin product modules beyond the current invite-management surface
-- non-auth business modules beyond Auth + User Provisioning
-- later confidence/test hardening phases for the already-shipped auth/provisioning slice
+- broader Agent/User product modules beyond the current authenticated workspace shell
+- broader admin product modules beyond current invite management, Settings v1, and People & Teams foundation
+- non-auth operational business modules beyond the current foundation surfaces
+- future Operational Access runtime grants, coverage, resolver, and module consumers
+- later confidence/test hardening phases for already-shipped slices where tracked by QA/readiness docs
 
 So this repo is not "the whole Hubins platform."
-It is the **foundation plus Auth + User Provisioning slice** that must be correct before the rest of Hubins expands.
+It is the **foundation plus Auth / Provisioning, Control Plane, Settings v1, and People & Teams foundation slices** that must stay correct before the rest of Hubins expands.
 
 ---
 
@@ -311,6 +315,8 @@ The following are real and shipped as part of the Auth + User Provisioning slice
 - topology smoke page (`/topology-check`)
 - full auth/provisioning UI route surface — login, signup, register, forgot/reset password, email verification, MFA setup, MFA verify, SSO completion, invite acceptance
 - admin shell and invite management UI
+- `/app` authenticated workspace shell for Agent and User sessions
+- Settings v1 route surfaces for `/admin`, `/admin/settings`, Access & Security, Account, Modules/Personal, Integrations, Communications placeholder, and People & Teams
 - logout flow
 
 ### What the frontend preserves as law
@@ -325,9 +331,9 @@ The frontend must maintain these topology rules:
 
 ### What is not yet implemented
 
-- broader member product modules beyond the authenticated landing surface
-- broader admin product modules beyond current invite management
-- non-auth business modules
+- broader Agent/User product modules beyond the authenticated workspace shell
+- future Operational Access runtime grants, Primary Where, Which Records, coverage, Special Access, Effective Access Resolver, and module consumers
+- broader operational business modules
 - broader product navigation across future modules
 
 ---

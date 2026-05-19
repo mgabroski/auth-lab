@@ -139,7 +139,7 @@ Do not introduce frontend shortcuts that weaken tenant isolation, tenant-sensiti
 
 ### 5. Preserve route-state clarity
 
-Public auth pages, admin pages, member pages, setup pages, and transition pages should remain easy to reason about.
+Public auth pages, admin pages, Agent/User workspace pages, setup pages, and transition pages should remain easy to reason about.
 
 Do not hide important route behavior inside scattered helpers or UI-only abstractions.
 
@@ -157,7 +157,7 @@ Do not casually rewrite user-visible messages if those messages are contract-mea
 
 ### 8. Do not casually redesign auth flow behavior
 
-Login, logout, signup, invite acceptance, MFA, reset-password, verification, SSO initiation, SSO completion, and admin/member landing behavior are not generic UX playgrounds.
+Login, logout, signup, invite acceptance, MFA, reset-password, verification, SSO initiation, SSO completion, and Admin/Agent/User landing behavior are not generic UX playgrounds.
 
 Treat them as behaviorally coupled to backend truth and documented flow rules.
 
@@ -182,7 +182,7 @@ When reviewing frontend work, check these explicitly when relevant:
 
 * Is the page using the correct route model?
 * Is auth gating or redirect behavior still correct?
-* Are admin and member landing paths still aligned with backend truth?
+* Are Admin, Agent, and User landing paths still aligned with backend truth?
 
 ### Contract correctness
 
@@ -221,7 +221,7 @@ When reviewing frontend work, check these explicitly when relevant:
 Treat frontend work as high-risk when it touches any of the following:
 
 * auth pages and auth routing
-* admin/member landing behavior
+* Admin/Agent/User landing behavior
 * protected route gating
 * SSR bootstrap or SSR API client behavior
 * browser API client behavior

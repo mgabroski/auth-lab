@@ -737,7 +737,7 @@ Future behavior target:
 - `Agent` receives operational access through group toolbox + coverage keys, with rare Special Access for one-person extra capabilities.
 - Public signup creates canonical `User`.
 - HRIS/imported users map conceptually to future `User` unless explicitly promoted later.
-- Future Agent invitations require at least one Agent Group; that group-selection requirement is not implemented by the backend role foundation alone.
+- Current Agent invitations require at least one active Agent Group; that assignment is provisioning-only and does not grant runtime Operational Access.
 
 ### Why
 
@@ -748,11 +748,12 @@ The product needs a clear distinction between tenant administrators, operational
 - API docs must describe canonical `ADMIN | AGENT | USER` where backend responses/inputs now expose those values.
 - Legacy `MEMBER` must remain documented only as a compatibility alias for `USER`.
 - QA may test role parsing, session carrying, admin-only guards, and non-admin MFA policy for `AGENT`/`USER`.
-- QA must not test Agent operational access, Agent Groups as operational grant subjects, Primary Where, Which Records, Additional Coverage, Special Access, or module-level Agent/User data differences until those surfaces exist.
+- QA may test Agent invite group validation and group membership management as provisioning behavior.
+- QA must not test Agent operational access, Agent Groups as operational grant subjects, Primary Where, Which Records, Additional Coverage, Special Access, Effective Access Resolver behavior, or module-level Agent/User data differences until those surfaces exist.
 
 ### Supersedes
 
-Any wording that implies Agent operational access, Agent Group invite assignment, Primary Where, Which Records, Additional Coverage, Special Access, or module-level Agent/User data differences are already shipped.
+Any wording that implies Agent operational access, Agent Group membership as a runtime grant, Primary Where, Which Records, Additional Coverage, Special Access, Effective Access Resolver behavior, or module-level Agent/User data differences are already shipped.
 
 ## ADR-0021 — Sensitive Field Conflicts Resolve To The Most Restrictive Effective Result
 
@@ -909,20 +910,22 @@ The future provisioning target for Operational Access is:
 
 - Public signup creates `User` in the target model.
 - HRIS import creates `User` only in the MVP target model.
-- Admin invitation must later support `Admin`, `Agent`, and `User`.
+- Admin invitation supports `Admin`, `Agent`, and `User`.
 - Agent invitation requires at least one active Agent Group.
+- Agent Group assignment created during invite flow is provisioning-only group membership until Operational Access grants, coverage, resolver, and module consumers ship.
 - If every selected Agent Group is archived, deleted, orphaned, or otherwise inactive before invite acceptance, invite acceptance must fail closed and require an admin to update/resend the invitation.
 - Backend invite and provisioning APIs recognize canonical runtime roles `ADMIN | AGENT | USER`; legacy `MEMBER` input is normalized to `USER` during compatibility.
 
 ### Why
 
-Provisioning is the entry point into tenant access. The backend role foundation now supports the canonical runtime vocabulary while still preventing documentation from pretending Agent operational access or Agent Group invite assignment is implemented.
+Provisioning is the entry point into tenant access. The backend role foundation and invite flow now support the canonical runtime vocabulary and Agent Group assignment while still preventing documentation from pretending that group membership grants runtime Operational Access.
 
 ### Consequences
 
 - Current API docs must describe canonical `ADMIN | AGENT | USER` where backend contracts changed, with `MEMBER` only as a legacy alias.
-- Future invite design must validate Agent Group selection at invitation creation and again at acceptance.
-- Agent invite acceptance must not silently activate an Agent with ghost access from archived groups.
+- Current invite design validates Agent Group selection at invitation creation and again at acceptance.
+- Agent invite acceptance must not silently activate an Agent with ghost group membership from archived groups.
+- People & Teams group membership remains provisioning-only until Operational Access grants, coverage, resolver, and module consumers ship.
 - HRIS import planning must not create operational Agents in MVP without a later explicit promotion/admin action path.
 - QA for Agent group invite behavior is executable for provisioning-only Agent group selection and invite acceptance. Operational Access QA remains future/not executable until Agent Groups become grant subjects, coverage, resolver contracts, and module consumers are implemented.
 

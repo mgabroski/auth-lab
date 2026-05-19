@@ -788,27 +788,27 @@ New accounts are always created with `cpStatus: "Draft"`.
 
 ---
 
-## 7. CP → Settings producer boundary (current repo state)
+## 7. CP → Settings cascade and producer boundary (current repo state)
 
-The current repo is still in **State A** for the Control Plane prerequisite roadmap:
+The current repo has moved beyond the old Control Plane prerequisite **State A** handoff-only boundary. The backend Settings state engine now exists, and published CP allowance mutations can synchronously cascade into Settings through the in-process Settings services.
 
-- the real Settings state engine does not exist yet
-- there is no `SettingsStateService`
-- there is no `SettingsCpCascadeService`
-- CP does **not** fake a synchronous cascade, webhook, queue handoff, or success flag
+Current shipped behavior:
 
-What is shipped now:
+- `SettingsStateService` exists and owns persisted Settings aggregate/section recompute.
+- `SettingsCpCascadeService` exists and applies eligible CP allowance changes to Settings inside the CP write transaction.
+- CP Step 2 allowance mutations call the cascade path only when the account is already provisioned to a tenant.
+- Draft/unpublished accounts still return blocking reasons because no tenant exists yet for Settings consumption.
+- `settingsHandoff.mode` remains `PRODUCER_ONLY` because the DTO is still producer-shaped allowance/provisioning truth, not a tenant Settings status surface.
+- `settingsHandoff.consumer.settingsEnginePresent` is `true`.
+- `settingsHandoff.consumer.cascadeStatus` is `SYNC_ACTIVE`.
+- CP still maintains honest `cpRevision` behavior for allowance mutations.
 
-- CP persists real allowance truth in `cp_*` tables
-- CP maintains honest `cpRevision` behavior for allowance mutations
-- CP returns the canonical `settingsHandoff` producer snapshot on full account detail DTOs
-- CP exposes the same producer snapshot through an internal backend service contract for the future Settings module to consume in-process
+Boundary that must remain true:
 
-What is intentionally not shipped yet:
-
-- no live cascade call from CP writes into Settings
-- no fake “synced to Settings” UI or API field
-- no Settings-side tables, section state, aggregate state, or reconciliation behavior
+- CP does not expose a tenant-facing Settings status UI.
+- CP does not fake Settings completion, section state, or setup progress in the `settingsHandoff` snapshot.
+- CP provisioning truth remains separate from tenant configuration truth.
+- CP allowance changes may affect Settings state, but they do not create Operational Access grants, People & Teams runtime visibility, Primary Where, Which Records, Assigned Areas, Responsible For coverage, Oversight, Temporary Coverage, Special Access, or Effective Access resolver decisions.
 
 ---
 
