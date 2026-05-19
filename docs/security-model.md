@@ -348,11 +348,11 @@ The rule is strict:
 
 A user has one TOTP secret across the entire platform. See ADR-010 in `docs/decision-log.md` for the full rationale, multi-tenant consequences, and named re-evaluation trigger.
 
-### 9.2 MFA is mandatory for admins, configurable for members
+### 9.2 MFA is mandatory for admins, configurable for non-admin users
 
 All admin users must complete MFA setup before accessing any authenticated admin surface. The `nextAction: 'MFA_SETUP_REQUIRED'` return value from login/register/SSO callback enforces this at the protocol level.
 
-Member MFA is configurable per tenant via `tenant.memberMfaRequired`.
+Non-admin/User MFA is configurable per tenant through the existing `tenant.memberMfaRequired` configuration field. The field name is historical technical naming; current runtime membership levels are `ADMIN`, `AGENT`, and `USER`, with legacy `MEMBER` normalized to `USER`.
 
 ### 9.3 MFA-gated endpoints require email verification
 

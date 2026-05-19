@@ -127,15 +127,15 @@ Status: `201 Created`
 
 ### Common business failures
 
-| Situation                               | Status | Code               | Message                                                              |
-| --------------------------------------- | ------ | ------------------ | -------------------------------------------------------------------- |
-| already active member in this tenant    | `409`  | `CONFLICT`         | `This email already has an active membership.`                       |
-| suspended account in this tenant path   | `403`  | `FORBIDDEN`        | `This user account has been suspended.`                              |
-| active pending invite already exists    | `409`  | `CONFLICT`         | `An active invite already exists for this email.`                    |
-| email domain blocked by tenant policy   | `400`  | `VALIDATION_ERROR` | `This email domain is not permitted for this workspace.`             |
-| Agent invite missing groups             | `400`  | `VALIDATION_ERROR` | `Agent invitations require at least one active Agent group.`         |
-| Agent group IDs on non-Agent invite     | `400`  | `VALIDATION_ERROR` | `Agent group IDs are only allowed for Agent invitations.`            |
-| invalid / archived / wrong-tenant group | `400`  | `VALIDATION_ERROR` | `Agent invitations require active Agent groups from this workspace.` |
+| Situation                                | Status | Code               | Message                                                              |
+| ---------------------------------------- | ------ | ------------------ | -------------------------------------------------------------------- |
+| already active user membership in tenant | `409`  | `CONFLICT`         | `This email already has an active membership.`                       |
+| suspended account in this tenant path    | `403`  | `FORBIDDEN`        | `This user account has been suspended.`                              |
+| active pending invite already exists     | `409`  | `CONFLICT`         | `An active invite already exists for this email.`                    |
+| email domain blocked by tenant policy    | `400`  | `VALIDATION_ERROR` | `This email domain is not permitted for this workspace.`             |
+| Agent invite missing groups              | `400`  | `VALIDATION_ERROR` | `Agent invitations require at least one active Agent group.`         |
+| Agent group IDs on non-Agent invite      | `400`  | `VALIDATION_ERROR` | `Agent group IDs are only allowed for Agent invitations.`            |
+| invalid / archived / wrong-tenant group  | `400`  | `VALIDATION_ERROR` | `Agent invitations require active Agent groups from this workspace.` |
 
 ---
 

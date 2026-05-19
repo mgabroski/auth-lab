@@ -924,11 +924,11 @@ Provisioning is the entry point into tenant access. The backend role foundation 
 - Future invite design must validate Agent Group selection at invitation creation and again at acceptance.
 - Agent invite acceptance must not silently activate an Agent with ghost access from archived groups.
 - HRIS import planning must not create operational Agents in MVP without a later explicit promotion/admin action path.
-- QA for Agent group invite behavior is future/not executable until Agent Group selection and Operational Access are implemented.
+- QA for Agent group invite behavior is executable for provisioning-only Agent group selection and invite acceptance. Operational Access QA remains future/not executable until Agent Groups become grant subjects, coverage, resolver contracts, and module consumers are implemented.
 
 ### Supersedes
 
-Any design that treats public signup, HRIS import, or current member invitation as already creating a shipped `User` enum, or any design that allows Agent activation without an active Agent Group.
+Any design that treats public signup, HRIS import, or legacy `MEMBER`-style invitation as creating anything other than canonical `USER`, or any design that allows Agent activation without an active Agent Group.
 
 ## ADR-0026 — Operational Access MVP Grants Use Agent Groups, Primary Where, Which Records, And Optional Coverage
 

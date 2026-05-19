@@ -255,9 +255,9 @@ Expected result:
 
 - JWKS JSON loads
 
-### 7. Baseline seeded member login
+### 7. Baseline seeded User login
 
-Use the seeded member account on GoodWill Open.
+Use the seeded User account on GoodWill Open. The fixture email remains `member@example.com` for historical compatibility, but the runtime role is canonical `USER`.
 Expected result:
 
 - login succeeds
@@ -273,14 +273,14 @@ The repo must always keep these easy to find and easy to re-create.
 
 ### Baseline personas
 
-- one member login persona
+- one User login persona
 - one admin onboarding persona
 - one invite-only tenant
 - one public-signup tenant
 
 ### Typical local examples
 
-- `member@example.com` -> seeded member on GoodWill Open
+- `member@example.com` -> seeded User on GoodWill Open; fixture name is historical and does not mean the legacy `MEMBER` role is still selectable
 - `e2e-admin@example.com` -> seeded admin on GoodWill Open, MFA setup path expected on first admin login
 - `system_admin@example.com` -> bootstrap/admin path for the invite-only workspace, when present in current seed/bootstrap flow
 

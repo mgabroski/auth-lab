@@ -100,7 +100,7 @@ Use `docs/current-foundation-status.md` before describing anything as shipped.
 - password reset and email verification flows
 - MFA setup and verify flows
 - SSO completion flow
-- member landing
+- authenticated workspace landing for User and Agent sessions
 - admin landing
 - admin invite management
 - SSR fetch wrapper

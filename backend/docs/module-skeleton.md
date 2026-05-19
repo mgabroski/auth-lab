@@ -94,7 +94,7 @@ Answer before planning files:
 - role/auth requirements
 - status/error behavior
 - anti-enumeration behavior
-- admin/member differences where applicable
+- Admin / Agent / User differences where applicable
 
 ### Step 4 — Define persistence and state changes
 
