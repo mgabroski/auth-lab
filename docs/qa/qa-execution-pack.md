@@ -80,13 +80,13 @@ Out of scope:
 - Communications live configuration
 - Workspace Experience live configuration
 - Permissions tenant surface
-- Operational Access runtime grants, Primary Where, Which Records, Additional Coverage, Special Access, and Effective Access Resolver behavior
+- Operational Access runtime grants, resolver behavior, Assigned Areas, Oversight, Temporary Coverage, Special Access, and module-consumer enforcement
 - documents, benefits, payments, marketplace tenant modules
 - CP authentication
 - CP operator RBAC
 - CP audit viewer UI
 - production load/performance testing
-- Operational Access runtime QA, Agent Groups as grant subjects, Primary Where, Which Records, Assigned Areas, Responsible For, Oversight, Temporary Coverage, Special Access, sensitive-field conflict runtime proof, search/export/notification leak proof, Benefits high-sensitivity proof, and Effective Access explanation proof
+- Operational Access runtime QA beyond the Step 3 configuration foundation, including Assigned Areas, Oversight, Temporary Coverage, Special Access, sensitive-field conflict runtime proof, search/export/notification leak proof, Benefits high-sensitivity proof, and Effective Access explanation proof
 
 When a future surface is intentionally absent or placeholder-only, missing configuration UI is not a bug.
 
@@ -106,13 +106,15 @@ Current shipped truth remains:
 
 - backend runtime roles are `ADMIN | AGENT | USER`
 - `MEMBER` is a legacy alias for `USER`
-- Agent operational access remains future work
+- Agent runtime visibility remains future work
 - People & Teams foundation groups and group memberships are implemented
 - group levels `ADMIN / AGENT / USER` do not grant Operational Access
-- Agent Groups as Operational Access grant subjects are not implemented
-- Primary Where, Which Records, Assigned Areas, Responsible For, Oversight, Temporary Coverage, Special Access, and the Effective Access Resolver are not implemented
+- Agent Groups can receive Step 3 Operational Access configuration only when the tenant capability is enabled
+- Primary Where and Which Records configuration exists for product-defined choices
+- Responsible For exact-person configuration exists using active tenant membership IDs
+- Assigned Areas, Oversight, Temporary Coverage, Special Access, and the Effective Access Resolver are not implemented
 - current `/admin/settings/access` is Access & Security, not Operational Access
-- the safe `/admin/settings/operational-access` shell is executable only when the CP-owned `operational_access_enabled` capability is enabled
+- `/admin/settings/operational-access` is executable only when the CP-owned `operational_access_enabled` capability is enabled
 
 Do not add the scenarios below to the current executable checklist until implementation exists and the API/UI/test fixtures are real.
 
@@ -143,7 +145,7 @@ Do not add the scenarios below to the current executable checklist until impleme
 | OA-FUT-23 | Why explanation                    | Explanation matches backend decision source path without leaking sensitive values.                                                        | Not executable |
 | OA-FUT-24 | Cross-tenant target denial         | Operational Access cannot cross tenant boundary by read, write, search, notification, or export.                                          | Not executable |
 
-Operational Access runtime QA remains planning-only until code, tests, fixtures, source docs, and the manual QA guide are updated together. The only currently executable Operational Access QA in this pack is the capability-gated safe shell proof that confirms no grants, coverage, resolver behavior, or runtime Agent visibility is present.
+Operational Access runtime QA remains planning-only until resolver code, module consumers, fixtures, source docs, and the manual QA guide are updated together. Current executable Operational Access QA covers the capability-gated shell plus Step 3 configuration foundation, and confirms that configuration does not create resolver behavior or runtime Agent visibility.
 
 ---
 
@@ -340,7 +342,7 @@ Expected results:
 - Disabled tenants cannot access the shell route; the route returns not found or redirects through normal admin route handling.
 - Enabled tenants show a live non-gating `Operational Access` card.
 - Enabled admin users see only safe not-configured copy.
-- The shell explicitly confirms no Operational Access grants, Assigned Areas, Responsible For, Oversight, Temporary Coverage, Special Access, Effective Access Resolver, or runtime Agent visibility are shipped.
+- The shell explicitly confirms that group grant and Responsible For configuration foundations are available, while Assigned Areas, Oversight, Temporary Coverage, Special Access, Effective Access Resolver, and runtime Agent visibility are not shipped.
 - Agent/User cannot access the admin shell.
 - `/admin/settings/access` remains Access & Security and is unchanged.
 
@@ -749,3 +751,29 @@ QA signoff for the shipped Settings proof slice requires all of the following:
 - all open bugs triaged with severity
 
 CI green alone is not a substitute for truthful QA docs and runbooks. Keep this execution pack current, but do not duplicate CI logs or screenshot evidence inside certification docs.
+
+## Operational Access Step 3 QA notes
+
+Operational Access QA is now partially executable for configuration foundation only.
+
+Executable now:
+
+- Capability disabled tenants do not expose `/admin/settings/operational-access`.
+- Capability enabled tenants expose the admin-only Operational Access settings page.
+- Agent/User sessions cannot access `/operational-access/*` or `/admin/settings/operational-access`.
+- Active Agent groups can receive valid product-defined grants.
+- Archived groups and non-Agent groups cannot receive Agent Operational Access grants.
+- Invalid action keys, invalid Primary Where values, invalid Which Records values, and invalid action/where/record combinations are rejected.
+- Oversight, Temporary Coverage, and Special Access are not accepted as Primary Where values.
+- Responsible For coverage accepts only active Agent group members and active same-tenant target memberships.
+- Cross-tenant group and membership IDs fail closed.
+- Agent group membership and configured grants still do not create runtime module visibility.
+
+Still not executable:
+
+- Assigned Areas coverage, because stable employer/location pair IDs do not exist yet.
+- Effective Access Resolver decisions.
+- Oversight.
+- Temporary Coverage.
+- Special Access / Person Exceptions.
+- Search/export/notification visibility propagation.

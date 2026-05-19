@@ -3,20 +3,26 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ConfigResponse, MeResponse } from '../../../src/shared/auth/contracts';
+import type { OperationalAccessFoundationResponse } from '../../../src/shared/operational-access/contracts';
 import type { SettingsOverviewResponse } from '../../../src/shared/settings/contracts';
 
-const { loadAuthBootstrapMock, loadSettingsOverviewMock, redirectMock, notFoundMock } = vi.hoisted(
-  () => ({
-    loadAuthBootstrapMock: vi.fn(),
-    loadSettingsOverviewMock: vi.fn(),
-    redirectMock: vi.fn((path: string) => {
-      throw new Error(`REDIRECT:${path}`);
-    }),
-    notFoundMock: vi.fn(() => {
-      throw new Error('NOT_FOUND');
-    }),
+const {
+  loadAuthBootstrapMock,
+  loadOperationalAccessFoundationMock,
+  loadSettingsOverviewMock,
+  redirectMock,
+  notFoundMock,
+} = vi.hoisted(() => ({
+  loadAuthBootstrapMock: vi.fn(),
+  loadOperationalAccessFoundationMock: vi.fn(),
+  loadSettingsOverviewMock: vi.fn(),
+  redirectMock: vi.fn((path: string) => {
+    throw new Error(`REDIRECT:${path}`);
   }),
-);
+  notFoundMock: vi.fn(() => {
+    throw new Error('NOT_FOUND');
+  }),
+}));
 
 vi.mock('next/navigation', () => ({
   redirect: redirectMock,
@@ -34,6 +40,10 @@ vi.mock('@/shared/auth/bootstrap.server', () => ({
 
 vi.mock('@/shared/settings/loaders', () => ({
   loadSettingsOverview: loadSettingsOverviewMock,
+}));
+
+vi.mock('@/shared/operational-access/loaders', () => ({
+  loadOperationalAccessFoundation: loadOperationalAccessFoundationMock,
 }));
 
 vi.mock('@/shared/auth/components/authenticated-shell', () => ({
@@ -86,6 +96,64 @@ function makeMe(overrides: Partial<MeResponse> = {}): MeResponse {
   };
 }
 
+function makeOperationalAccessFoundation(): OperationalAccessFoundationResponse {
+  return {
+    catalog: {
+      actions: [
+        {
+          key: 'tasks.manage',
+          label: 'Manage tasks',
+          description:
+            'Can work on task records that match this grant and future backend visibility checks.',
+          category: 'Tasks',
+          allowedPrimaryWhere: ['RESPONSIBLE_FOR'],
+          allowedWhichRecords: ['open_tasks'],
+        },
+      ],
+      primaryWhere: [
+        {
+          key: 'RESPONSIBLE_FOR',
+          label: 'Responsible For',
+          description: 'The group normally works for exact people each Agent is responsible for.',
+        },
+      ],
+      whichRecords: [
+        {
+          key: 'open_tasks',
+          label: 'Open tasks',
+          description: 'Only open task records inside the selected Primary Where.',
+          category: 'Tasks',
+        },
+      ],
+      coverage: {
+        assignedAreas: {
+          available: false,
+          reason: 'Assigned Areas requires stable employer/location pair IDs.',
+        },
+        responsibleFor: {
+          available: true,
+          targetType: 'tenant_membership',
+          reason: 'Responsible For can safely use active tenant membership IDs.',
+        },
+      },
+      deferred: ['Backend runtime visibility decisions and module consumers are deferred.'],
+    },
+    groups: [
+      {
+        id: 'group-1',
+        name: 'Managers',
+        description: 'Operational managers',
+        level: 'AGENT',
+        status: 'ACTIVE',
+        memberCount: 2,
+        grantCount: 1,
+        responsibleForAssignmentCount: 3,
+      },
+    ],
+    people: [],
+  };
+}
+
 function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): SettingsOverviewResponse {
   return {
     overallStatus: 'IN_PROGRESS',
@@ -100,7 +168,7 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         classification: 'LIVE_NON_GATING',
         status: 'MANAGEMENT',
         warnings: [
-          'Operational Access is enabled for this tenant, but grants, coverage, resolver behavior, and runtime Agent visibility are not shipped yet.',
+          'Operational Access is enabled for this tenant, but grants, coverage, backend runtime visibility behavior, and runtime Agent visibility are not shipped yet.',
         ],
         isRequired: false,
         requiredReason: null,
@@ -125,15 +193,26 @@ describe('OperationalAccessSettingsPage', () => {
       ok: true,
       data: makeOverview(),
     });
+    loadOperationalAccessFoundationMock.mockResolvedValue({
+      ok: true,
+      data: makeOperationalAccessFoundation(),
+    });
 
     const html = renderToStaticMarkup(await OperationalAccessSettingsPage());
 
     expect(html).toContain('Operational Access');
-    expect(html).toContain('Capability enabled — configuration not shipped');
-    expect(html).toContain('Agent group membership remains provisioning-only.');
-    expect(html).toContain(
-      'No Effective Access Resolver or runtime visibility changes are shipped.',
-    );
+    expect(html).toContain('Operational Access configuration foundation');
+    expect(html).toContain('What this group can do');
+    expect(html).toContain('Where this group normally works');
+    expect(html).toContain('Which records');
+    expect(html).toContain('Managers');
+    expect(html).toContain('Manage tasks');
+    expect(html).toContain('No runtime visibility changes are shipped.');
+    expect(html).not.toContain('Effective Access Resolver');
+    expect(html).not.toContain('resolver');
+    expect(html).not.toContain('permission engine');
+    expect(html).not.toContain('ABAC');
+    expect(html).not.toContain('IAM');
     expect(html).toContain('/admin/settings/access remains Access &amp; Security.');
   });
 
@@ -169,6 +248,34 @@ describe('OperationalAccessSettingsPage', () => {
 
     await expect(OperationalAccessSettingsPage()).rejects.toThrow('REDIRECT:/app');
     expect(redirectMock).toHaveBeenCalledWith('/app');
+  });
+
+  it('renders an explicit Operational Access read error instead of local fallback truth', async () => {
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_ADMIN',
+        config: makeConfig(),
+        me: makeMe(),
+      },
+      me: makeMe(),
+    });
+    loadSettingsOverviewMock.mockResolvedValue({
+      ok: true,
+      data: makeOverview(),
+    });
+    loadOperationalAccessFoundationMock.mockResolvedValue({
+      ok: false,
+      error: new Error('operational access failed'),
+    });
+
+    const html = renderToStaticMarkup(await OperationalAccessSettingsPage());
+
+    expect(html).toContain('Operational Access configuration is unavailable');
+    expect(html).toContain(
+      'not rendering fallback group, action, Primary Where, Which Records, or coverage truth',
+    );
+    expect(html).toContain('operational access failed');
   });
 
   it('renders an explicit backend capability-read error instead of local fallback truth', async () => {

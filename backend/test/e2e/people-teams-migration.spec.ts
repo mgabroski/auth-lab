@@ -9,6 +9,10 @@ import {
   down as downAgentInviteGroupsMigration,
   up as upAgentInviteGroupsMigration,
 } from '../../src/shared/db/migrations/0024_agent_invite_groups';
+import {
+  down as downOperationalAccessGroupGrantsMigration,
+  up as upOperationalAccessGroupGrantsMigration,
+} from '../../src/shared/db/migrations/0026_operational_access_group_grants';
 import type { DbExecutor } from '../../src/shared/db/db';
 import { buildTestApp } from '../helpers/build-test-app';
 
@@ -70,6 +74,7 @@ describe('people-teams migration safety', () => {
       await expect(tableExists(deps.db, 'tenant_groups')).resolves.toBe(true);
       await expect(tableExists(deps.db, 'tenant_group_members')).resolves.toBe(true);
 
+      await downOperationalAccessGroupGrantsMigration(deps.db);
       await downAgentInviteGroupsMigration(deps.db);
       await downPeopleTeamsMigration(deps.db);
 
@@ -88,6 +93,7 @@ describe('people-teams migration safety', () => {
     } finally {
       await upPeopleTeamsMigration(deps.db);
       await upAgentInviteGroupsMigration(deps.db);
+      await upOperationalAccessGroupGrantsMigration(deps.db);
       await close();
     }
   });

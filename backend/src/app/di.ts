@@ -104,6 +104,9 @@ import type { SettingsModule } from '../modules/settings/settings.module';
 import { createPeopleTeamsModule } from '../modules/people-teams/people-teams.module';
 import type { PeopleTeamsModule } from '../modules/people-teams/people-teams.module';
 
+import { createOperationalAccessModule } from '../modules/operational-access/operational-access.module';
+import type { OperationalAccessModule } from '../modules/operational-access/operational-access.module';
+
 import { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
 import { GoogleSsoAdapter } from '../modules/auth/sso/google/google-sso.adapter';
 import { MicrosoftSsoAdapter } from '../modules/auth/sso/microsoft/microsoft-sso.adapter';
@@ -142,6 +145,7 @@ export type AppDeps = {
   controlPlane: ControlPlaneModule;
   settings: SettingsModule;
   peopleTeams: PeopleTeamsModule;
+  operationalAccess: OperationalAccessModule;
 
   close: () => Promise<void>;
 };
@@ -460,6 +464,7 @@ export async function buildDeps(
   const controlPlane = createControlPlaneModule({ db, logger, auditRepo });
 
   const peopleTeams = createPeopleTeamsModule({ db, auditRepo });
+  const operationalAccess = createOperationalAccessModule({ db, auditRepo });
 
   const settings = createSettingsModule({
     db,
@@ -500,6 +505,7 @@ export async function buildDeps(
     controlPlane,
     settings,
     peopleTeams,
+    operationalAccess,
 
     close: async () => {
       await redis.close();

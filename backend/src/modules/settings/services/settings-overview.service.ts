@@ -152,7 +152,7 @@ export class SettingsOverviewService {
               classification: SETTINGS_SECTION_ROUTES.operationalAccess.classification,
               status: 'MANAGEMENT' as const,
               warnings: [
-                'Operational Access is enabled for this tenant, but grants, coverage, resolver behavior, and runtime Agent visibility are not shipped yet.',
+                'Operational Access is enabled for this tenant. Group grant and Responsible For configuration foundations are available, but resolver behavior and runtime Agent visibility are not shipped yet.',
               ],
               isRequired: false,
               requiredReason: null,

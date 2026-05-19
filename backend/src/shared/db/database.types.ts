@@ -294,6 +294,28 @@ export interface TenantGroups {
   updated_by_membership_id: string | null;
 }
 
+export interface TenantOaGroupGrants {
+  action_key: string;
+  created_at: Generated<Timestamp>;
+  created_by_membership_id: string | null;
+  group_id: string;
+  id: Generated<string>;
+  primary_where: string;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+  updated_by_membership_id: string | null;
+  which_records_key: string;
+}
+
+export interface TenantOaResponsibleFor {
+  agent_membership_id: string;
+  created_at: Generated<Timestamp>;
+  created_by_membership_id: string | null;
+  group_id: string;
+  target_membership_id: string;
+  tenant_id: string;
+}
+
 export interface TenantPersonalFamilyState {
   applied_cp_revision: Generated<number>;
   created_at: Generated<Timestamp>;
@@ -404,6 +426,8 @@ export interface DB {
   tenant_field_config: TenantFieldConfig;
   tenant_group_members: TenantGroupMembers;
   tenant_groups: TenantGroups;
+  tenant_oa_group_grants: TenantOaGroupGrants;
+  tenant_oa_responsible_for: TenantOaResponsibleFor;
   tenant_personal_family_state: TenantPersonalFamilyState;
   tenant_section_fields: TenantSectionFields;
   tenant_sections: TenantSections;

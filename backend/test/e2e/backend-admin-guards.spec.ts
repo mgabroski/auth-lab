@@ -92,6 +92,7 @@ describe('backend admin-only guard boundaries', () => {
           { method: 'GET' as const, url: '/settings/access' },
           { method: 'GET' as const, url: '/admin/invites?limit=20&offset=0' },
           { method: 'GET' as const, url: '/people-teams/groups' },
+          { method: 'GET' as const, url: '/operational-access/groups' },
         ];
 
         for (const route of routes) {

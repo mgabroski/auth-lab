@@ -420,7 +420,7 @@ describe('settings read surfaces', () => {
         isRequired: false,
       });
       expect(operationalAccessCard.warnings.join(' ')).toContain(
-        'grants, coverage, resolver behavior, and runtime Agent visibility are not shipped yet',
+        'Group grant and Responsible For configuration foundations are available, but resolver behavior and runtime Agent visibility are not shipped yet',
       );
     } finally {
       await close();

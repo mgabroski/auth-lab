@@ -222,3 +222,9 @@ Only `ACTIVE` memberships for the authenticated tenant are returned.
 - Archive is the MVP group lifecycle path; hard delete is not part of this foundation.
 - Archived groups must later fail closed when Operational Access consumes them.
 - Group membership is tenant-local and does not grant Operational Access yet.
+
+## Operational Access relationship after Step 3
+
+People & Teams remains the group and membership foundation. Operational Access Step 3 now consumes active `AGENT` groups through `/operational-access/*`, but group membership alone is still provisioning-only and does not grant runtime visibility.
+
+Operational Access grants are stored separately from People & Teams group records. Admin/User groups and archived groups cannot receive Agent Operational Access grants. `/admin/settings/access` remains Access & Security and is not the Operational Access surface.

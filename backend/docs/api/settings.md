@@ -626,3 +626,11 @@ The following remain intentionally unimplemented in the current repo state:
 - any giant all-settings publish route
 
 Their absence is intentional and must stay aligned with the locked roadmap.
+
+## Operational Access settings surface after Step 3
+
+When the CP-owned `operational_access_enabled` capability is true, `GET /settings/overview` includes the `operationalAccess` card linking to `/admin/settings/operational-access`.
+
+That page now renders backend-owned Operational Access configuration read models from `/operational-access/*`: product-defined actions, Primary Where choices, Which Records choices, active Agent groups, and Responsible For coverage readiness. It must not compute effective access in frontend code.
+
+`/settings/access` and `/admin/settings/access` remain Access & Security. They are not Operational Access.
