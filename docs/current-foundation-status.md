@@ -85,8 +85,8 @@ Current shipped truth remains:
 - legacy `MEMBER` is accepted only as a compatibility alias for `USER` at controlled API/input/read boundaries
 - existing `MEMBER` membership and invite rows are backfilled to `USER` by the runtime role migration
 - public signup and default self-service provisioning create canonical `USER`; public/self-service SSO provisioning also creates `USER`
-- `AGENT` is recognized as a membership level, but Agent operational access is not implemented yet
-- AGENT and USER are distinct membership levels, but both currently land in the authenticated workspace shell at `/app`
+- `AGENT` is recognized as a membership level; Agent runtime access is implemented only for the narrow backend people / Personal Card resolver proof surface when Operational Access is enabled and matching grants/coverage exist
+- AGENT and USER are distinct membership levels, but both still land in the authenticated workspace shell at `/app`
 - the shared `/app` shell uses neutral workspace language and does not describe itself as Member-only or User-only
 - the shared `/app` shell does not make AGENT and USER equivalent product behaviors
 - AGENT sessions render a safe no-operational-areas state until backend-resolved operational module access exists
@@ -99,19 +99,19 @@ Current shipped truth remains:
 - the current Access & Security page is read-only / acknowledge-only / gating for Settings v1
 - the current Access & Security page is not future tenant Operational Access
 - the `operational_access_enabled` capability boundary is shipped and defaults fail-closed to `false` for existing/simple tenants
-- when `operational_access_enabled = true`, `/admin/settings/operational-access` appears as an admin-only Operational Access configuration foundation for active Agent groups; it does not ship resolver behavior or runtime Agent visibility
+- when `operational_access_enabled = true`, `/admin/settings/operational-access` appears as an admin-only Operational Access configuration foundation for active Agent groups and documents the narrow backend people resolver proof surface
 - Permissions UI is still absent in v1: no card, no route, no API surface
 - People & Teams foundation groups and group membership management are implemented as a tenant-admin Settings surface
 - People & Teams is a live non-gating management card, not a setup-completion section; its overview status is management-only and does not affect setup completion or banner lifecycle
 - People & Teams group levels `ADMIN / AGENT / USER` remain classification for groups and do not grant Operational Access
-- Agent Groups can now be configured as Operational Access grant subjects only inside the Step 3 configuration foundation; group membership alone still grants no runtime visibility
-- Primary Where / Assigned Areas are not implemented
-- Responsible For exact-person coverage is implemented as Step 3 configuration data using active tenant membership IDs; it is not consumed by a runtime resolver yet
-- Oversight is not implemented
-- Temporary Coverage is not implemented
-- Special Access / Access Exceptions are not implemented
-- a reusable backend Effective Access Resolver is not implemented
-- no shipped module may claim to consume Operational Access today
+- Agent Groups can now be configured as Operational Access grant subjects; group membership alone still grants no runtime visibility
+- Primary Where and Which Records catalogs are implemented for Operational Access configuration; Assigned Areas coverage assignments are not implemented because stable employer/location pair IDs do not exist yet
+- Responsible For exact-person coverage is implemented using active tenant membership IDs and is consumed by the narrow backend people resolver proof surface
+- Oversight is implemented as directed, single-hop advanced coverage for the narrow backend people resolver proof surface
+- Temporary Coverage is implemented with start/end expiry behavior for the narrow backend people resolver proof surface
+- Special Access / Access Exceptions are implemented with reason, review date, and expiry for the narrow backend people resolver proof surface
+- Effective Access Resolver v1 is implemented for `personal_cards.view` only
+- no broad operational module may claim to consume Operational Access yet; only `/operational-access/runtime/people` is the selected proof consumer
 
 Accepted future target truth is formally locked in `docs/decision-log.md` ADR-0020 through ADR-0034. Those ADRs are planning constraints for future People & Teams, provisioning, Personal Cards, Additional Coverage, Special Access, Effective Access, and operational-module work. They are not evidence of shipped runtime behavior.
 
@@ -146,9 +146,9 @@ Accepted future target truth is:
 
 Documentation and QA rule:
 
-> Operational Access runtime scenarios may be planned now, but runtime visibility remains future / not executable until the Effective Access Resolver, advanced coverage, Special Access, and module consumers exist in code. The shipped People & Teams foundation plus Agent invite group assignment remains provisioning and group-membership management only. The shipped `operational_access_enabled` capability boundary now exposes the Step 3 admin-only configuration foundation when enabled.
+> Operational Access runtime scenarios are executable only for the narrow backend people / Personal Card proof surface. Broad module access, Assigned Areas, search/export/notification/PDF/generated-output visibility, and full Personal Cards UI remain future work. People & Teams group membership remains provisioning and group-membership management only unless the backend resolver finds a product-defined grant plus matching coverage or active Special Access.
 
-This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, People & Teams, Integrations, the capability-gated safe Operational Access shell, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
+This section does not change the current Settings v1 truth. Access, Account, Modules, Personal, People & Teams, Integrations, the capability-gated Operational Access configuration shell, Communications placeholder, Workspace Experience overview-card-only, and Permissions absence remain as described in the Settings baseline below.
 
 ---
 
@@ -350,7 +350,7 @@ The Control Plane now ships its current internal create/setup/review/publish/re-
 
 ### Settings v1 closure
 
-The repo now ships the locked Settings v1 surface and has passed the implementation-level readiness gate in code and documentation. This does not claim post-v1 surfaces are built. Communications remains placeholder-only, Workspace Experience remains overview-card-only, Permissions remains absent, the Operational Access route is only a capability-gated safe shell, and tenant secret-bearing integrations remain deferred.
+The repo now ships the locked Settings v1 surface and has passed the implementation-level readiness gate in code and documentation. This does not claim post-v1 surfaces are built. Communications remains placeholder-only, Workspace Experience remains overview-card-only, Permissions remains absent, the Operational Access route is capability-gated configuration plus a narrow backend people resolver proof, and tenant secret-bearing integrations remain deferred.
 
 Current truthful boundary:
 
@@ -363,7 +363,7 @@ Current truthful boundary:
 - `/admin/settings/modules/personal` is backed by `GET /settings/modules/personal` and `PUT /settings/modules/personal` with the canonical full-replacement save contract
 - `/admin/settings/integrations` is backed by `GET /settings/integrations`; Google/Microsoft SSO show truthful readiness states, HRIS/Stripe stay deferred, Marketplace stays placeholder-only, and no tenant credential entry or fake Connected flow exists
 - `/admin/settings/communications` remains placeholder-only and is backed by `GET /settings/communications`
-- `/admin/settings/operational-access` is admin-only, hidden unless `operational_access_enabled = true`, and renders the Step 3 configuration foundation for active Agent groups; it has backend Operational Access configuration endpoints for catalog, group grants, and Responsible For coverage, but no Effective Access Resolver or runtime Agent visibility
+- `/admin/settings/operational-access` is admin-only, hidden unless `operational_access_enabled = true`, and renders the Operational Access configuration foundation for active Agent groups; backend OA endpoints now include catalog, group grants, Responsible For, Oversight, Temporary Coverage, Special Access, and the narrow runtime people resolver proof surface
 - Workspace Experience remains an overview-card-only placeholder with no route
 - Permissions remains absent: no overview card, no frontend route, no backend API surface
 - CP `settingsHandoff` remains producer-shaped but honestly reports live Settings engine presence and active synchronous cascade wiring
@@ -371,7 +371,7 @@ Current truthful boundary:
 
 ### Future modules and later-scope surfaces
 
-The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork. Operational Access foundation decisions are now locked in ADR-0020 through ADR-0034 and aligned to `hubins-operational-access-9_5-source-of-truth-guide-final.md`. The capability boundary and Step 3 Operational Access configuration foundation are now implemented, but runtime visibility implementation must not start until resolver contracts, advanced coverage, Special Access, Personal Cards runtime resolution, and first module-consumer proof are designed against those decisions.
+The repo does not claim closure for later product modules outside current auth/provisioning and currently locked design groundwork. Operational Access foundation decisions are now locked in ADR-0020 through ADR-0034 and aligned to `hubins-operational-access-9_5-source-of-truth-guide-final.md`. The capability boundary, group grant foundation, advanced coverage, Special Access, and one narrow backend people resolver proof are implemented, but broad module integration must not start until each module is designed against those decisions.
 
 ---
 
@@ -435,9 +435,9 @@ Use this file when you need to answer any of the following:
 - which docs are canonical vs secondary
 - whether a support doc is allowed to overrule a higher-truth source
 
-## Operational Access Step 3 foundation status
+## Operational Access Step 4 resolver proof status
 
-Operational Access has a capability-gated configuration foundation for active Agent groups.
+Operational Access now has a capability-gated configuration foundation plus one narrow backend-enforced runtime proof surface.
 
 Shipped now:
 
@@ -447,21 +447,30 @@ Shipped now:
 - `/operational-access/groups/:groupId`
 - `/operational-access/groups/:groupId/grants`
 - `/operational-access/groups/:groupId/responsible-for`
+- `/operational-access/advanced-coverage`
+- `/operational-access/advanced-coverage/oversight`
+- `/operational-access/advanced-coverage/temporary-coverage`
+- `/operational-access/advanced-coverage/special-access`
+- `/operational-access/runtime/people`
+- `/operational-access/runtime/people/:membershipId`
 - product-defined **What this group can do** action keys
 - product-defined **Primary Where** options
 - product-defined **Which Records** choices
 - Responsible For exact-person coverage using active tenant membership IDs
-- admin-only, capability-gated `/admin/settings/operational-access` read surface
+- directed Oversight with explicit include-team behavior
+- time-bound Temporary Coverage that grants nothing after expiry
+- Special Access with reason, review date, and expiry
+- backend Effective Access Resolver v1 for `personal_cards.view`
+- set-based backend filtering for the runtime people proof surface
+- masked email output for Agents on the proof surface
 
 Still not shipped:
 
-- Effective Access Resolver
-- runtime Agent visibility
 - Assigned Areas coverage assignments, because stable employer/location pair IDs do not exist yet
-- Oversight
-- Temporary Coverage
-- Special Access / Person Exceptions
-- module consumer integration
-- search/export/notification visibility changes
+- broad operational module integration beyond the selected runtime people proof surface
+- full Personal Cards module UI
+- search/export/notification/PDF/generated-output visibility changes
+- tenant-facing Why UI beyond backend explanation fields
+- operational repair/review queues for expired or review-due advanced coverage
 
 People & Teams group membership remains provisioning-only by itself. `/admin/settings/access` remains Access & Security.

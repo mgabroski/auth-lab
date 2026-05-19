@@ -42,7 +42,7 @@ It establishes:
 - the final v1 Personal builder read surface
 - the canonical Personal full-replacement save contract
 - the real v1 Integrations informational read surface
-- the safe Operational Access overview-card gate for tenants whose CP-owned `operational_access_enabled` capability is enabled
+- the Operational Access overview-card gate for tenants whose CP-owned `operational_access_enabled` capability is enabled
 - the minimal Communications placeholder read route
 
 It does **not** mean the full long-range Settings roadmap is complete.
@@ -51,9 +51,9 @@ It does **not** mean the full long-range Settings roadmap is complete.
 
 `/settings/access` is the current **Access & Security** API surface.
 
-It is not future tenant Operational Access. It does not manage People & Teams, Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, Responsible For person coverage, Assigned Areas, Oversight, Temporary Coverage, module action grants, Personal Card runtime visibility, or Effective Access explanations.
+It is not tenant Operational Access. It does not manage People & Teams, Agent Groups as Operational Access grant subjects, Primary Where, Which Records, Additional Coverage, Special Access / Access Exceptions, Responsible For person coverage, Assigned Areas, Oversight, Temporary Coverage, module action grants, Personal Card runtime visibility, or Effective Access explanations.
 
-The separate future Operational Access shell, when enabled by CP capability, is served by the frontend at `/admin/settings/operational-access` and is discovered through `GET /settings/overview`. There is no shipped `/settings/operational-access` backend endpoint and no runtime Operational Access grant API.
+The separate Operational Access shell, when enabled by CP capability, is served by the frontend at `/admin/settings/operational-access` and is discovered through `GET /settings/overview`. There is no `/settings/operational-access` backend endpoint. Operational Access backend endpoints live under `/operational-access/*`.
 
 ## Authoritative bootstrap and route-treatment truth
 
@@ -62,7 +62,7 @@ The separate future Operational Access shell, when enabled by CP capability, is 
 Route treatment is locked as follows:
 
 - Live v1 Settings surfaces: `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/account`, `/settings/modules`, `/settings/modules/personal`, `/settings/integrations`, and the People & Teams management surface backed by `/people-teams/*`.
-- Capability-gated frontend-only shell: `/admin/settings/operational-access` appears only when `GET /settings/overview` returns the `operationalAccess` card because the CP-owned `operational_access_enabled` capability is true. It has no backend `/settings/operational-access` endpoint and no grants, coverage, resolver, or runtime visibility behavior.
+- Capability-gated Operational Access shell: `/admin/settings/operational-access` appears only when `GET /settings/overview` returns the `operationalAccess` card because the CP-owned `operational_access_enabled` capability is true. It has no backend `/settings/operational-access` endpoint; configuration and resolver-proof endpoints are under `/operational-access/*`.
 - Placeholder-only v1 surface: `/settings/communications`. It returns a minimal placeholder DTO and exposes no live configuration or mutation behavior.
 - Overview-card-only v1 surface: Workspace Experience. It appears only as an overview card and has no backend route.
 - Absent v1 surface: Permissions. It has no overview card, no backend route, and no tenant configuration API.
@@ -190,7 +190,7 @@ Each card reports:
 - `isRequired`
 - `requiredReason`
 
-`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account and Integrations remain live but non-gating setup cards; People & Teams is a live non-gating management card with `status = MANAGEMENT`; Operational Access is a capability-gated live non-gating safe shell card with `status = MANAGEMENT` only when `operational_access_enabled` is true; Communications and Workspace Experience are placeholder-only; Permissions remains absent. People & Teams is group/membership management only and is not Operational Access.
+`isRequired` is backend-owned. In v1, Access and Personal are required/gating when Personal is enabled; Account and Integrations remain live but non-gating setup cards; People & Teams is a live non-gating management card with `status = MANAGEMENT`; Operational Access is a capability-gated live non-gating configuration card with `status = MANAGEMENT` only when `operational_access_enabled` is true; Communications and Workspace Experience are placeholder-only; Permissions remains absent. People & Teams is group/membership management only and is not Operational Access.
 
 ### `GET /settings/access`
 
@@ -615,8 +615,9 @@ The following remain intentionally unimplemented in the current repo state:
 - Integrations credential-entry routes
 - Integrations provider connection/recovery routes
 - Integrations sync or mapping routes
-- Operational Access backend read/write routes
-- Operational Access grant, coverage, resolver, or runtime visibility routes
+- Assigned Areas Operational Access routes
+- broad Operational Access module-consumer routes beyond the selected runtime people proof surface
+- Operational Access search/export/notification/PDF/generated-output integrations
 - Permissions routes
 - Communications write routes
 - Communications template-library routes
@@ -627,10 +628,12 @@ The following remain intentionally unimplemented in the current repo state:
 
 Their absence is intentional and must stay aligned with the locked roadmap.
 
-## Operational Access settings surface after Step 3
+## Operational Access settings surface after Step 4
 
 When the CP-owned `operational_access_enabled` capability is true, `GET /settings/overview` includes the `operationalAccess` card linking to `/admin/settings/operational-access`.
 
-That page now renders backend-owned Operational Access configuration read models from `/operational-access/*`: product-defined actions, Primary Where choices, Which Records choices, active Agent groups, and Responsible For coverage readiness. It must not compute effective access in frontend code.
+That page renders backend-owned Operational Access configuration read models from `/operational-access/*`: product-defined actions, Primary Where choices, Which Records choices, active Agent groups, Responsible For coverage, and advanced coverage readiness. It must not compute effective access in frontend code.
+
+The selected backend resolver proof surface is `/operational-access/runtime/people`, not a Settings API endpoint.
 
 `/settings/access` and `/admin/settings/access` remain Access & Security. They are not Operational Access.

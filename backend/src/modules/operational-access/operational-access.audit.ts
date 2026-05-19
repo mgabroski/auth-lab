@@ -36,7 +36,7 @@ export function auditOperationalAccessGroupGrantsSaved(
     group: data.group,
     before: data.before,
     after: data.after,
-    runtimeVisibilityChanged: false,
+    runtimeVisibilityChanged: true,
   });
 }
 
@@ -54,6 +54,6 @@ export function auditOperationalAccessResponsibleForSaved(
     group: data.group,
     before: data.before,
     after: data.after,
-    runtimeVisibilityChanged: false,
+    runtimeVisibilityChanged: true,
   });
 }

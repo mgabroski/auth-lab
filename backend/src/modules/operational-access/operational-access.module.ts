@@ -2,9 +2,10 @@
  * backend/src/modules/operational-access/operational-access.module.ts
  *
  * WHY:
- * - Top-level module boundary for the Operational Access configuration foundation.
- * - Composes product-defined grant configuration and Responsible For coverage without
- *   implementing an Effective Access Resolver.
+ * - Top-level module boundary for Operational Access configuration plus the
+ *   narrow resolver proof surface.
+ * - Composes product-defined grant configuration, base/advanced coverage,
+ *   Special Access, and backend-owned effective access decisions.
  */
 
 import type { FastifyInstance } from 'fastify';

@@ -6,21 +6,21 @@
 
 ## Scope
 
-This API is the tenant-level People & Teams group foundation. The tenant admin UI at `/admin/settings/people-teams` uses this API to manage reusable tenant groups and tenant-local group membership management. It supports the future Operational Access model by creating a clean People & Teams foundation first.
+This API is the tenant-level People & Teams group foundation. The tenant admin UI at `/admin/settings/people-teams` uses this API to manage reusable tenant groups and tenant-local group membership management. Operational Access now consumes active Agent groups as grant subjects through separate `/operational-access/*` routes.
 
-This API and UI are **not** Operational Access.
+This API and UI are **not** the Operational Access configuration or resolver surface.
 
 It does not implement:
 
-- access grants
-- Primary Where / Which Records / Additional Coverage rules
+- Operational Access grant writes
+- Primary Where / Which Records / Additional Coverage writes
 - Special Access / Access Exceptions
 - Responsible For person coverage
-- Effective Access Resolver
-- Operational Access role grants
+- Effective Access Resolver routes
+- Operational Access runtime decisions
 - permissions UI
 
-Current runtime membership roles are canonical `ADMIN`, `AGENT`, and `USER`; legacy `MEMBER` is normalized to `USER` at compatibility boundaries. Group levels are classification only for this foundation surface. Agent invite activation may add the accepted Agent membership to selected active Agent groups as provisioning-only group membership. Adding a person to a group does not grant module access or Operational Access yet.
+Current runtime membership roles are canonical `ADMIN`, `AGENT`, and `USER`; legacy `MEMBER` is normalized to `USER` at compatibility boundaries. Group levels are classification only for this foundation surface. Agent invite activation may add the accepted Agent membership to selected active Agent groups as provisioning-only group membership. Adding a person to a group does not grant module access by itself; runtime visibility requires the backend Operational Access resolver to find a product-defined grant plus matching coverage, Admin/User source, Temporary Coverage, or Special Access.
 
 ## Security
 
@@ -126,7 +126,7 @@ Archives an active tenant group. This is the only lifecycle removal path in the 
 - no hard delete is implemented.
 - no restore is implemented.
 - the archived group is removed from normal active group lists.
-- no resolver behavior is implemented yet.
+- this People & Teams API does not run resolver behavior; resolver proof routes live under `/operational-access/runtime/*`.
 - writes `people_teams.group_archived` audit event.
 
 ## GET `/people-teams/groups/:groupId/members`
@@ -220,11 +220,11 @@ Only `ACTIVE` memberships for the authenticated tenant are returned.
 - Group membership anchors to tenant membership, not global user alone.
 - Only active tenant memberships can be added to groups.
 - Archive is the MVP group lifecycle path; hard delete is not part of this foundation.
-- Archived groups must later fail closed when Operational Access consumes them.
-- Group membership is tenant-local and does not grant Operational Access yet.
+- Archived groups fail closed when Operational Access consumes them.
+- Group membership is tenant-local and does not grant Operational Access by itself.
 
-## Operational Access relationship after Step 3
+## Operational Access relationship after Step 4
 
-People & Teams remains the group and membership foundation. Operational Access Step 3 now consumes active `AGENT` groups through `/operational-access/*`, but group membership alone is still provisioning-only and does not grant runtime visibility.
+People & Teams remains the group and membership foundation. Operational Access consumes active `AGENT` groups through `/operational-access/*`, but group membership alone is still provisioning-only and does not grant runtime visibility.
 
-Operational Access grants are stored separately from People & Teams group records. Admin/User groups and archived groups cannot receive Agent Operational Access grants. `/admin/settings/access` remains Access & Security and is not the Operational Access surface.
+Operational Access grants, Responsible For, Oversight, Temporary Coverage, Special Access, and resolver proof routes are stored and served separately from People & Teams group records. Admin/User groups and archived groups cannot receive Agent Operational Access grants. `/admin/settings/access` remains Access & Security and is not the Operational Access surface.

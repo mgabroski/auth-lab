@@ -136,7 +136,7 @@ function makeOperationalAccessFoundation(): OperationalAccessFoundationResponse 
           reason: 'Responsible For can safely use active tenant membership IDs.',
         },
       },
-      deferred: ['Backend runtime visibility decisions and module consumers are deferred.'],
+      deferred: ['The only runtime consumer is the backend people/Personal Card proof surface.'],
     },
     groups: [
       {
@@ -163,12 +163,12 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
         key: 'operationalAccess',
         title: 'Operational Access',
         description:
-          'Safe admin shell for future Agent grants and coverage. No runtime access grants are shipped yet.',
+          'Capability-gated Operational Access configuration plus the narrow backend people resolver proof surface.',
         href: '/admin/settings/operational-access',
         classification: 'LIVE_NON_GATING',
         status: 'MANAGEMENT',
         warnings: [
-          'Operational Access is enabled for this tenant, but grants, coverage, backend runtime visibility behavior, and runtime Agent visibility are not shipped yet.',
+          'Operational Access is enabled for this tenant. Group grants, Responsible For, Oversight, Temporary Coverage, and Special Access can feed the backend people resolver proof surface.',
         ],
         isRequired: false,
         requiredReason: null,
@@ -179,7 +179,7 @@ function makeOverview(overrides: Partial<SettingsOverviewResponse> = {}): Settin
 }
 
 describe('OperationalAccessSettingsPage', () => {
-  it('renders the safe shell when the backend overview exposes the capability card', async () => {
+  it('renders the configuration shell when the backend overview exposes the capability card', async () => {
     loadAuthBootstrapMock.mockResolvedValue({
       ok: true,
       routeState: {
@@ -207,9 +207,7 @@ describe('OperationalAccessSettingsPage', () => {
     expect(html).toContain('Which records');
     expect(html).toContain('Managers');
     expect(html).toContain('Manage tasks');
-    expect(html).toContain('No runtime visibility changes are shipped.');
-    expect(html).not.toContain('Effective Access Resolver');
-    expect(html).not.toContain('resolver');
+    expect(html).toContain('Backend resolver proof is active only for the narrow people surface.');
     expect(html).not.toContain('permission engine');
     expect(html).not.toContain('ABAC');
     expect(html).not.toContain('IAM');

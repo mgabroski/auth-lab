@@ -56,7 +56,7 @@ This pack covers QA execution for the current shipped repo slice:
 - `/admin/settings/modules/personal` family review, field configuration, section builder, and full-replacement save behavior
 - `/admin/settings/people-teams` reusable group and membership management behavior
 - `/admin/settings/integrations` informational SSO and deferred integration behavior
-- `/admin/settings/operational-access` safe shell behavior when the CP-owned capability is enabled
+- `/admin/settings/operational-access` configuration shell behavior when the CP-owned capability is enabled
 - `/admin/settings/communications` placeholder-only route behavior
 - absent Permissions treatment
 - version conflict and CP revision conflict proof
@@ -80,21 +80,19 @@ Out of scope:
 - Communications live configuration
 - Workspace Experience live configuration
 - Permissions tenant surface
-- Operational Access runtime grants, resolver behavior, Assigned Areas, Oversight, Temporary Coverage, Special Access, and module-consumer enforcement
+- Operational Access runtime behavior beyond the selected backend people / Personal Card resolver proof surface, including Assigned Areas and broad module-consumer enforcement
 - documents, benefits, payments, marketplace tenant modules
 - CP authentication
 - CP operator RBAC
 - CP audit viewer UI
 - production load/performance testing
-- Operational Access runtime QA beyond the Step 3 configuration foundation, including Assigned Areas, Oversight, Temporary Coverage, Special Access, sensitive-field conflict runtime proof, search/export/notification leak proof, Benefits high-sensitivity proof, and Effective Access explanation proof
+- Operational Access runtime QA beyond the selected backend people / Personal Card proof surface, including Assigned Areas, search/export/notification leak proof, Benefits high-sensitivity proof, PDFs/generated outputs, and broad module integration proof
 
 When a future surface is intentionally absent or placeholder-only, missing configuration UI is not a bug.
 
 ---
 
-## Future Operational Access QA Planning — Not Executable Yet
-
-This section is planning guidance only. These scenarios are **future / not executable** in the current repo.
+## Operational Access QA Status
 
 Active planning source:
 
@@ -102,50 +100,53 @@ Active planning source:
 hubins-operational-access-9_5-source-of-truth-guide-final.md
 ```
 
-Current shipped truth remains:
+Current shipped truth:
 
 - backend runtime roles are `ADMIN | AGENT | USER`
 - `MEMBER` is a legacy alias for `USER`
-- Agent runtime visibility remains future work
 - People & Teams foundation groups and group memberships are implemented
-- group levels `ADMIN / AGENT / USER` do not grant Operational Access
-- Agent Groups can receive Step 3 Operational Access configuration only when the tenant capability is enabled
+- group levels `ADMIN / AGENT / USER` do not grant Operational Access by themselves
+- Agent Groups can receive Operational Access configuration only when the tenant capability is enabled
 - Primary Where and Which Records configuration exists for product-defined choices
 - Responsible For exact-person configuration exists using active tenant membership IDs
-- Assigned Areas, Oversight, Temporary Coverage, Special Access, and the Effective Access Resolver are not implemented
+- Oversight, Temporary Coverage, and Special Access are implemented only for the selected backend people / Personal Card resolver proof surface
+- Effective Access Resolver v1 is implemented for `personal_cards.view` only
+- Assigned Areas are not implemented because stable employer/location pair IDs do not exist yet
 - current `/admin/settings/access` is Access & Security, not Operational Access
 - `/admin/settings/operational-access` is executable only when the CP-owned `operational_access_enabled` capability is enabled
 
-Do not add the scenarios below to the current executable checklist until implementation exists and the API/UI/test fixtures are real.
+Executable backend proof now covers the selected people / Personal Card surface:
 
-| Future ID | Scenario                           | Future proof intent                                                                                                                       | Current status |
-| --------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| OA-FUT-01 | Admin full tenant access by level  | Admin sees allowed operational records without needing Agent Groups, coverage keys, or Special Access. Explanation source is Admin level. | Not executable |
-| OA-FUT-02 | User own/self-service access       | User sees only own/self-service data and cannot access cross-person operational records.                                                  | Not executable |
-| OA-FUT-03 | Agent with no operational access   | Agent with no active operational grants lands in a safe no-access state, not a broken page or Admin-like view.                            | Not executable |
-| OA-FUT-04 | Agent group toolbox                | Agent receives only product-defined actions granted through active Agent Group toolbox.                                                   | Not executable |
-| OA-FUT-05 | Primary Where — Tenant-wide        | Tenant-wide operational group can see permitted module records across the tenant without gaining Admin settings authority.                | Not executable |
-| OA-FUT-06 | Primary Where — Assigned Areas     | Agent can operate only inside explicit employer/location pairs or module-equivalent area keys.                                            | Not executable |
-| OA-FUT-07 | Primary Where — Responsible For    | Agent can operate only for explicitly responsible people, not the whole employer, location, or group.                                     | Not executable |
-| OA-FUT-08 | Primary Where — Review Queue       | Agent can operate only inside product-defined queue/status records such as documents requiring review.                                    | Not executable |
-| OA-FUT-09 | Which Records filter               | Product-defined record choices narrow visibility inside Primary Where.                                                                    | Not executable |
-| OA-FUT-10 | Oversight non-reciprocal           | If A oversees B/C, B/C do not see A unless explicitly granted.                                                                            | Not executable |
-| OA-FUT-11 | Oversight include-team = No        | A sees B/C as oversight targets only and does not automatically see B/C's responsible people/work.                                        | Not executable |
-| OA-FUT-12 | Oversight include-team = Yes       | A sees B/C and their responsible people/work, still with masking/sensitive rules.                                                         | Not executable |
-| OA-FUT-13 | Oversight single-hop               | If A oversees B and B oversees C, A does not automatically see C's team in MVP.                                                           | Not executable |
-| OA-FUT-14 | Temporary Coverage                 | Time-bound backup starts, grants the intended coverage, expires automatically, and is audited.                                            | Not executable |
-| OA-FUT-15 | Special Access                     | Rare one-person extra capability requires reason/review/expiry where applicable and appears in Why explanation.                           | Not executable |
-| OA-FUT-16 | Group archive/fail-closed behavior | Archiving the group that granted access immediately removes effective access and keeps remediation/audit truth.                           | Not executable |
-| OA-FUT-17 | Sensitive field conflict           | Conflicting grants resolve to masked/hidden unless explicit sensitive visibility exists for the field and scope.                          | Not executable |
-| OA-FUT-18 | Search leak prevention             | Hidden records and sensitive fields do not leak through counts, suggestions, autocomplete, or snippets.                                   | Not executable |
-| OA-FUT-19 | Notification leak prevention       | In-app/email/push notifications do not include sensitive hidden content.                                                                  | Not executable |
-| OA-FUT-20 | Export/generated output masking    | CSV, PDF, email attachments, and reports obey backend-resolved visibility and masking.                                                    | Not executable |
-| OA-FUT-21 | Benefits high-sensitivity access   | Enrollment/benefit-sensitive records require explicit high-sensitivity access; broad Manage does not imply unmasked access.               | Not executable |
-| OA-FUT-22 | Direct API denial                  | Backend denies unauthorized record/action access even if UI buttons are hidden.                                                           | Not executable |
-| OA-FUT-23 | Why explanation                    | Explanation matches backend decision source path without leaking sensitive values.                                                        | Not executable |
-| OA-FUT-24 | Cross-tenant target denial         | Operational Access cannot cross tenant boundary by read, write, search, notification, or export.                                          | Not executable |
+| ID        | Scenario                          | Proof intent                                                                                                                                                            | Current status                                  |
+| --------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| OA-RUN-01 | Admin full tenant access by level | Admin sees all active tenant people through the backend set resolver without needing Agent Groups, coverage keys, or Special Access. Explanation source is Admin level. | Executable backend proof                        |
+| OA-RUN-02 | User own/self-service access      | User sees only their own people record and direct access to another person's record is denied.                                                                          | Executable backend proof                        |
+| OA-RUN-03 | Agent with no operational access  | Agent with no active operational grants receives a safe empty people set.                                                                                               | Executable backend proof                        |
+| OA-RUN-04 | Grant without coverage            | Agent with a grant but no matching coverage receives no people.                                                                                                         | Executable backend proof                        |
+| OA-RUN-05 | Grant + Responsible For coverage  | Agent sees only explicitly responsible people for `personal_cards.view`.                                                                                                | Executable backend proof                        |
+| OA-RUN-06 | Direct API denial                 | Backend denies unauthorized direct person detail access even if a URL is typed manually.                                                                                | Executable backend proof                        |
+| OA-RUN-07 | Set-based list filtering          | Runtime people list is filtered by backend-resolved ID set, not frontend filtering.                                                                                     | Executable backend proof                        |
+| OA-RUN-08 | Masking / leak check              | Agent runtime people output masks email and explanations do not contain hidden email values.                                                                            | Executable backend proof                        |
+| OA-RUN-09 | Oversight non-reciprocal          | If A oversees B, B does not see A unless explicitly granted.                                                                                                            | Executable backend proof                        |
+| OA-RUN-10 | Oversight include-team = No       | A sees B as the oversight target but not B's responsible people/work.                                                                                                   | Executable backend proof                        |
+| OA-RUN-11 | Oversight include-team = Yes      | A sees B and B's direct Responsible For people/work.                                                                                                                    | Executable backend proof                        |
+| OA-RUN-12 | Oversight single-hop              | If A oversees B and B oversees C, A does not automatically see C's team in MVP.                                                                                         | Executable backend proof                        |
+| OA-RUN-13 | Temporary Coverage                | Active Temporary Coverage grants the intended covered person's keys and expired coverage grants nothing.                                                                | Executable backend proof                        |
+| OA-RUN-14 | Special Access                    | Rare one-person extra access requires reason, review date, expiry, and appears in the source path.                                                                      | Executable backend proof                        |
+| OA-RUN-15 | Cross-tenant target denial        | Operational Access configuration and runtime reads cannot cross tenant boundaries.                                                                                      | Covered by validation/fail-closed backend proof |
 
-Operational Access runtime QA remains planning-only until resolver code, module consumers, fixtures, source docs, and the manual QA guide are updated together. Current executable Operational Access QA covers the capability-gated shell plus Step 3 configuration foundation, and confirms that configuration does not create resolver behavior or runtime Agent visibility.
+Still planning-only until future implementation exists:
+
+| Future ID | Scenario                         | Future proof intent                                                                                                         | Current status |
+| --------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| OA-FUT-01 | Assigned Areas                   | Agent can operate only inside explicit employer/location pairs or module-equivalent area keys.                              | Not executable |
+| OA-FUT-02 | Search leak prevention           | Hidden records and sensitive fields do not leak through counts, suggestions, autocomplete, or snippets.                     | Not executable |
+| OA-FUT-03 | Notification leak prevention     | In-app/email/push notifications do not include sensitive hidden content.                                                    | Not executable |
+| OA-FUT-04 | Export/generated output masking  | CSV, PDF, email attachments, and reports obey backend-resolved visibility and masking.                                      | Not executable |
+| OA-FUT-05 | Benefits high-sensitivity access | Enrollment/benefit-sensitive records require explicit high-sensitivity access; broad Manage does not imply unmasked access. | Not executable |
+| OA-FUT-06 | Full Personal Cards UI           | Tenant-facing Personal Card runtime UI consumes the backend resolver and resolved masking.                                  | Not executable |
+
+Current executable Operational Access QA covers the capability-gated shell, configuration foundation, advanced coverage writes, Special Access writes, and the selected backend runtime people resolver proof. Broad module integrations remain future work.
 
 ---
 
@@ -317,7 +318,7 @@ Evidence:
 - screenshot of overview required sections
 - screenshot of overview optional sections
 
-### SET-02A — Operational Access safe shell is capability-gated
+### SET-02A — Operational Access shell is capability-gated
 
 | Field         | Value                                                                             |
 | ------------- | --------------------------------------------------------------------------------- |
@@ -341,8 +342,8 @@ Expected results:
 - Disabled tenants do not show the Operational Access card.
 - Disabled tenants cannot access the shell route; the route returns not found or redirects through normal admin route handling.
 - Enabled tenants show a live non-gating `Operational Access` card.
-- Enabled admin users see only safe not-configured copy.
-- The shell explicitly confirms that group grant and Responsible For configuration foundations are available, while Assigned Areas, Oversight, Temporary Coverage, Special Access, Effective Access Resolver, and runtime Agent visibility are not shipped.
+- Enabled admin users see the Operational Access configuration shell.
+- The shell explicitly confirms that group grants, Responsible For, Oversight, Temporary Coverage, Special Access, and the backend people resolver proof are available, while Assigned Areas and broad module integrations remain deferred.
 - Agent/User cannot access the admin shell.
 - `/admin/settings/access` remains Access & Security and is unchanged.
 
@@ -350,7 +351,7 @@ Evidence:
 
 - screenshot of disabled tenant overview without Operational Access card
 - screenshot of enabled tenant overview with Operational Access card
-- screenshot of safe shell copy
+- screenshot of Operational Access shell copy
 - screenshot of Agent/User route denial or redirect
 
 ### SET-02B — People & Teams group and membership management
@@ -752,28 +753,34 @@ QA signoff for the shipped Settings proof slice requires all of the following:
 
 CI green alone is not a substitute for truthful QA docs and runbooks. Keep this execution pack current, but do not duplicate CI logs or screenshot evidence inside certification docs.
 
-## Operational Access Step 3 QA notes
+## Operational Access Step 4 QA notes
 
-Operational Access QA is now partially executable for configuration foundation only.
+Operational Access QA is now executable for configuration foundation, advanced coverage, Special Access, and the selected backend people / Personal Card resolver proof surface.
 
 Executable now:
 
 - Capability disabled tenants do not expose `/admin/settings/operational-access`.
 - Capability enabled tenants expose the admin-only Operational Access settings page.
-- Agent/User sessions cannot access `/operational-access/*` or `/admin/settings/operational-access`.
+- Agent/User sessions cannot access admin-only Operational Access configuration routes or `/admin/settings/operational-access`.
+- Runtime proof routes use backend-resolved access for Admin, Agent, and User actors.
 - Active Agent groups can receive valid product-defined grants.
 - Archived groups and non-Agent groups cannot receive Agent Operational Access grants.
 - Invalid action keys, invalid Primary Where values, invalid Which Records values, and invalid action/where/record combinations are rejected.
 - Oversight, Temporary Coverage, and Special Access are not accepted as Primary Where values.
 - Responsible For coverage accepts only active Agent group members and active same-tenant target memberships.
 - Cross-tenant group and membership IDs fail closed.
-- Agent group membership and configured grants still do not create runtime module visibility.
+- Agent group membership alone still does not create runtime visibility.
+- Agent with grant but no coverage receives a safe empty runtime people set.
+- Agent with grant plus Responsible For sees only matching people.
+- Oversight is directed, non-reciprocal, and single-hop.
+- Oversight include-team false versus true behavior is proven.
+- Temporary Coverage grants only during the active time window and expires automatically.
+- Special Access requires reason, review date, expiry, and exact target.
+- Runtime people output masks email for Agents and backend explanations avoid hidden field values.
 
 Still not executable:
 
 - Assigned Areas coverage, because stable employer/location pair IDs do not exist yet.
-- Effective Access Resolver decisions.
-- Oversight.
-- Temporary Coverage.
-- Special Access / Person Exceptions.
-- Search/export/notification visibility propagation.
+- Broad module integrations beyond the selected runtime people proof surface.
+- Search/export/notification/PDF/generated-output visibility propagation.
+- Full Personal Cards UI runtime flow.

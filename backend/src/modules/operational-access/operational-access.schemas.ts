@@ -2,11 +2,13 @@
  * backend/src/modules/operational-access/operational-access.schemas.ts
  *
  * WHY:
- * - Centralizes request validation for Operational Access Step 3 endpoints.
+ * - Centralizes request validation for Operational Access configuration and
+ *   resolver proof endpoints.
  *
  * RULES:
  * - Accept only product-defined action, Primary Where, and Which Records keys.
- * - No Oversight, Temporary Coverage, Special Access, or arbitrary expressions.
+ * - Advanced coverage and Special Access require explicit metadata.
+ * - No arbitrary permission expressions.
  */
 
 import { z } from 'zod';
@@ -21,6 +23,68 @@ export const operationalAccessEmptyQuerySchema = z.object({}).strict();
 export const operationalAccessGroupIdParamSchema = z
   .object({
     groupId: z.string().uuid(),
+  })
+  .strict();
+
+export const operationalAccessMembershipIdParamSchema = z
+  .object({
+    membershipId: z.string().uuid(),
+  })
+  .strict();
+
+export const saveOperationalAccessOversightSchema = z
+  .object({
+    entries: z
+      .array(
+        z
+          .object({
+            overseerMembershipId: z.string().uuid(),
+            targetMembershipId: z.string().uuid(),
+            includesResponsiblePeople: z.boolean().default(false),
+            reason: z.string().trim().min(3).max(500),
+            reviewAt: z.string().datetime({ offset: true }),
+          })
+          .strict(),
+      )
+      .max(500),
+  })
+  .strict();
+
+export const saveOperationalAccessTemporaryCoverageSchema = z
+  .object({
+    entries: z
+      .array(
+        z
+          .object({
+            coveringMembershipId: z.string().uuid(),
+            coveredMembershipId: z.string().uuid(),
+            startsAt: z.string().datetime({ offset: true }),
+            expiresAt: z.string().datetime({ offset: true }),
+            reason: z.string().trim().min(3).max(500),
+            reviewAt: z.string().datetime({ offset: true }).nullable().optional(),
+          })
+          .strict(),
+      )
+      .max(500),
+  })
+  .strict();
+
+export const saveOperationalAccessSpecialAccessSchema = z
+  .object({
+    entries: z
+      .array(
+        z
+          .object({
+            membershipId: z.string().uuid(),
+            targetMembershipId: z.string().uuid(),
+            actionKey: z.enum(OPERATIONAL_ACCESS_ACTION_KEYS),
+            reason: z.string().trim().min(3).max(500),
+            reviewAt: z.string().datetime({ offset: true }),
+            expiresAt: z.string().datetime({ offset: true }),
+          })
+          .strict(),
+      )
+      .max(500),
   })
   .strict();
 
@@ -61,4 +125,16 @@ export type SaveOperationalAccessGroupGrantsInput = z.infer<
 
 export type SaveOperationalAccessResponsibleForInput = z.infer<
   typeof saveOperationalAccessResponsibleForSchema
+>;
+
+export type SaveOperationalAccessOversightInput = z.infer<
+  typeof saveOperationalAccessOversightSchema
+>;
+
+export type SaveOperationalAccessTemporaryCoverageInput = z.infer<
+  typeof saveOperationalAccessTemporaryCoverageSchema
+>;
+
+export type SaveOperationalAccessSpecialAccessInput = z.infer<
+  typeof saveOperationalAccessSpecialAccessSchema
 >;

@@ -51,9 +51,12 @@ export const OperationalAccessErrors = {
   },
 
   unsupportedCoverage(type: string) {
-    return AppError.validationError('This Operational Access coverage type is not shipped yet.', {
-      type,
-    });
+    return AppError.validationError(
+      'This Operational Access coverage type is not available for this surface.',
+      {
+        type,
+      },
+    );
   },
 
   membershipNotFound(membershipId: string) {
@@ -92,6 +95,34 @@ export const OperationalAccessErrors = {
   selfResponsibleForNotAllowed(membershipId: string) {
     return AppError.validationError('An Agent cannot be Responsible For their own membership.', {
       membershipId,
+    });
+  },
+
+  resolverDenied() {
+    return AppError.forbidden('Operational Access denied for this target.');
+  },
+
+  invalidTimeWindow() {
+    return AppError.validationError('Temporary Coverage requires startsAt before expiresAt.');
+  },
+
+  expiryRequiredInFuture() {
+    return AppError.validationError('Special Access expiry must be in the future.');
+  },
+
+  reviewMustNotBeAfterExpiry() {
+    return AppError.validationError('Review date must not be after expiry.');
+  },
+
+  duplicateAdvancedCoverage(type: string) {
+    return AppError.conflict('Duplicate Operational Access advanced coverage entry in request.', {
+      type,
+    });
+  },
+
+  unsupportedRuntimeAction(actionKey: string) {
+    return AppError.validationError('This runtime proof surface does not support that action.', {
+      actionKey,
     });
   },
 } as const;

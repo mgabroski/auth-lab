@@ -3,15 +3,15 @@
  *
  * WHY:
  * - Provides the capability-gated Operational Access admin configuration shell.
- * - Renders backend-owned Step 3 configuration read models: product-defined
- *   actions, Primary Where, Which Records, active Agent groups, and Responsible For readiness.
+ * - Renders backend-owned configuration read models and points admins to the
+ *   narrow backend resolver proof boundary.
  *
  * RULES:
  * - Admin-only via auth bootstrap route state.
  * - Hidden/404 unless the backend Settings overview includes the operationalAccess card.
  * - Do not compute effective access in the frontend.
- * - Do not claim runtime Agent visibility, resolver behavior, Assigned Areas,
- *   Oversight, Temporary Coverage, or Special Access is shipped.
+ * - Do not claim broad runtime Agent visibility or all-module integration is shipped.
+ * - The backend resolver proof surface is narrow and backend-owned.
  */
 
 import React, { type CSSProperties } from 'react';
@@ -158,7 +158,7 @@ export default async function OperationalAccessSettingsPage() {
     <AuthenticatedShell
       eyebrow="Hubins admin workspace"
       title="Operational Access"
-      subtitle="Configure Agent group toolboxes and base coverage. Runtime Agent visibility is still not active."
+      subtitle="Configure Agent group toolboxes and coverage. Backend resolver proof is active only for the narrow people surface."
       me={routeState.me}
     >
       <div style={{ display: 'grid', gap: '16px' }}>
@@ -189,7 +189,7 @@ export default async function OperationalAccessSettingsPage() {
               Responsible For uses exact active tenant people. Assigned Areas waits for stable area
               IDs.
             </li>
-            <li>No runtime visibility changes are shipped.</li>
+            <li>Backend resolver proof is active only for the narrow people surface.</li>
             <li>/admin/settings/access remains Access &amp; Security.</li>
           </ul>
         </section>

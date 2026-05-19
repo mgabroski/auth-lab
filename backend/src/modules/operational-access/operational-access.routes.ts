@@ -2,11 +2,13 @@
  * backend/src/modules/operational-access/operational-access.routes.ts
  *
  * WHY:
- * - Declares the Operational Access Step 3 configuration foundation routes.
+ * - Declares Operational Access configuration routes and the first narrow
+ *   backend resolver proof surface.
  *
  * RULES:
- * - Routes configure future access data only.
- * - No resolver, Special Access, Oversight, Temporary Coverage, or runtime visibility routes.
+ * - Admin configuration routes remain admin-only in the controller.
+ * - Runtime proof routes delegate effective access to the backend resolver.
+ * - No frontend code computes effective access.
  */
 
 import type { FastifyInstance } from 'fastify';
@@ -27,5 +29,28 @@ export function registerOperationalAccessRoutes(
   app.put(
     '/operational-access/groups/:groupId/responsible-for',
     controller.saveResponsibleFor.bind(controller),
+  );
+
+  app.get(
+    '/operational-access/advanced-coverage',
+    controller.listAdvancedCoverage.bind(controller),
+  );
+  app.put(
+    '/operational-access/advanced-coverage/oversight',
+    controller.saveOversight.bind(controller),
+  );
+  app.put(
+    '/operational-access/advanced-coverage/temporary-coverage',
+    controller.saveTemporaryCoverage.bind(controller),
+  );
+  app.put(
+    '/operational-access/advanced-coverage/special-access',
+    controller.saveSpecialAccess.bind(controller),
+  );
+
+  app.get('/operational-access/runtime/people', controller.listRuntimePeople.bind(controller));
+  app.get(
+    '/operational-access/runtime/people/:membershipId',
+    controller.getRuntimePerson.bind(controller),
   );
 }

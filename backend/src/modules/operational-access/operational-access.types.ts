@@ -2,14 +2,15 @@
  * backend/src/modules/operational-access/operational-access.types.ts
  *
  * WHY:
- * - Defines the Step 3 Operational Access configuration vocabulary.
- * - Keeps product-defined actions, Primary Where options, and Which Records
- *   choices centralized so tenants cannot invent arbitrary permission strings.
+ * - Defines the Operational Access configuration and resolver proof vocabulary.
+ * - Keeps product-defined actions, Primary Where options, Which Records choices,
+ *   and resolver decision shapes centralized so tenants cannot invent arbitrary
+ *   permission strings.
  *
  * RULES:
- * - Configuration only. No Effective Access Resolver lives here yet.
- * - No Oversight, Temporary Coverage, or Special Access types in this step.
+ * - Backend owns effective access decisions.
  * - Frontend may render these DTOs but must not compute effective access.
+ * - Advanced coverage remains intentionally narrow for the first resolver proof.
  */
 
 import type { PeopleTeamGroupStatus } from '../people-teams/people-teams.types';
@@ -235,8 +236,8 @@ export type OperationalAccessGroupConfigurationDto = {
   grants: OperationalAccessGroupGrantDto[];
   responsibleFor: OperationalAccessResponsibleForAssignmentDto[];
   safety: {
-    runtimeVisibilityChanged: false;
-    effectiveAccessResolverShipped: false;
+    runtimeVisibilityChanged: boolean;
+    effectiveAccessResolverShipped: boolean;
     notes: string[];
   };
 };
@@ -257,4 +258,113 @@ export type OperationalAccessPersonDto = {
 
 export type OperationalAccessPeopleResponse = {
   people: OperationalAccessPersonDto[];
+};
+
+export type OperationalAccessSourcePath =
+  | 'ADMIN_LEVEL'
+  | 'USER_OWN_DATA'
+  | 'AGENT_GROUP_TENANT_WIDE'
+  | 'AGENT_GROUP_RESPONSIBLE_FOR'
+  | 'OVERSIGHT_DIRECT'
+  | 'OVERSIGHT_RESPONSIBLE_PEOPLE'
+  | 'TEMPORARY_COVERAGE'
+  | 'SPECIAL_ACCESS'
+  | 'DENIED';
+
+export type OperationalAccessFieldVisibility = {
+  fieldKey: 'name' | 'email';
+  treatment: 'VISIBLE' | 'MASKED' | 'HIDDEN';
+};
+
+export type OperationalAccessDecisionDto = {
+  allowed: boolean;
+  visible: boolean;
+  editable: boolean;
+  sourcePath: OperationalAccessSourcePath[];
+  explanation: string[];
+  fields: OperationalAccessFieldVisibility[];
+};
+
+export type OperationalAccessResolveActor = {
+  tenantId: string;
+  membershipId: string;
+  userId: string;
+  role: MembershipRole;
+};
+
+export type OperationalAccessResolveDecisionInput = {
+  actor: OperationalAccessResolveActor;
+  targetMembershipId: string;
+  actionKey: OperationalAccessActionKey;
+  effectiveAt: Date;
+};
+
+export type OperationalAccessResolveSetInput = {
+  actor: OperationalAccessResolveActor;
+  actionKey: OperationalAccessActionKey;
+  module: 'personal_cards';
+  effectiveAt: Date;
+};
+
+export type OperationalAccessResolvedSetDto = {
+  mode: 'ALL' | 'IDS';
+  membershipIds: string[];
+  sourcePath: OperationalAccessSourcePath[];
+  explanation: string[];
+};
+
+export type OperationalAccessRuntimePersonDto = {
+  membershipId: string;
+  name: string | null;
+  email: string | null;
+  fieldVisibility: OperationalAccessFieldVisibility[];
+  sourcePath: OperationalAccessSourcePath[];
+  explanation: string[];
+};
+
+export type OperationalAccessRuntimePeopleResponse = {
+  actionKey: OperationalAccessActionKey;
+  module: 'personal_cards';
+  people: OperationalAccessRuntimePersonDto[];
+};
+
+export type OperationalAccessRuntimePersonResponse = {
+  actionKey: OperationalAccessActionKey;
+  module: 'personal_cards';
+  person: OperationalAccessRuntimePersonDto;
+  decision: OperationalAccessDecisionDto;
+};
+
+export type OperationalAccessOversightDto = {
+  overseerMembershipId: string;
+  targetMembershipId: string;
+  includesResponsiblePeople: boolean;
+  reason: string;
+  reviewAt: string;
+};
+
+export type OperationalAccessTemporaryCoverageDto = {
+  id: string;
+  coveringMembershipId: string;
+  coveredMembershipId: string;
+  startsAt: string;
+  expiresAt: string;
+  reason: string;
+  reviewAt: string | null;
+};
+
+export type OperationalAccessSpecialAccessDto = {
+  id: string;
+  membershipId: string;
+  targetMembershipId: string;
+  actionKey: OperationalAccessActionKey;
+  reason: string;
+  reviewAt: string;
+  expiresAt: string;
+};
+
+export type OperationalAccessAdvancedCoverageResponse = {
+  oversight: OperationalAccessOversightDto[];
+  temporaryCoverage: OperationalAccessTemporaryCoverageDto[];
+  specialAccess: OperationalAccessSpecialAccessDto[];
 };

@@ -1,12 +1,12 @@
 # Operational Access API
 
-**Surface:** Tenant admin API and Settings UI (`/admin/settings/operational-access`)  
+**Surface:** Tenant admin Operational Access configuration plus the first backend resolver proof surface  
 **Route prefix:** `/operational-access/*`  
-**Status:** Step 3 configuration foundation only
+**Status:** Resolver proof shipped for one narrow people / Personal Card surface
 
 ## Current boundary
 
-Operational Access is now capability-gated and has a configuration foundation for active Agent groups, but it is **not** a full runtime authorization system yet.
+Operational Access is now capability-gated, configurable for active Agent groups, and consumed by one narrow backend-enforced proof surface.
 
 Shipped in this API:
 
@@ -15,35 +15,39 @@ Shipped in this API:
 - Which Records catalog: **Which records**
 - active Agent-group grant configuration
 - Responsible For exact-person coverage using active tenant membership IDs
-- backend validation and audit for configuration writes
+- Oversight, directed and single-hop in MVP
+- Temporary Coverage with start/end window, reason, and audit metadata
+- Special Access with reason, review date, expiry, and explicit target
+- backend Effective Access Resolver v1 for `personal_cards.view`
+- set-based runtime people filtering through `GET /operational-access/runtime/people`
+- direct decision enforcement through `GET /operational-access/runtime/people/:membershipId`
+- backend masking for the selected proof surface
 
-Not shipped in this API:
+Still not shipped:
 
-- Effective Access Resolver
-- runtime Agent visibility
 - Assigned Areas coverage table or employer/location target assignments
-- Oversight
-- Temporary Coverage
-- Special Access / Person Exceptions
-- search/export/notification visibility changes
-- module consumer integration
+- broad module integration beyond the selected runtime people proof surface
+- search/export/notification/PDF/generated-output integrations
+- full Personal Cards module UI
+- tenant-facing Why UI beyond backend explanation fields in resolver responses
+- operational repair/review queues for expired or review-due coverage
 
-People & Teams group membership remains provisioning-only by itself. A group member does not receive runtime visibility merely because they are in a group or because this configuration exists.
+People & Teams group membership remains provisioning-only by itself. A group member receives runtime visibility only when the backend resolver finds a matching source path such as Admin level, own User record, an active Agent group grant plus matching coverage, active Temporary Coverage, or active Special Access.
 
 `/admin/settings/access` remains Access & Security. It is not Operational Access.
 
 ## Auth and tenant scope
 
-All routes require a fully authenticated tenant Admin session:
+Configuration routes require a fully authenticated tenant Admin session:
 
 - role: `ADMIN`
 - MFA complete
 - email verified
 - tenant-scoped session
 
-`AGENT` and `USER` sessions are rejected. Legacy `MEMBER` normalizes to `USER` and is rejected. Every read/write uses the authenticated tenant context; request parameters cannot widen tenant scope.
+Runtime proof routes require an authenticated verified tenant session. If the actor is Admin, MFA must also be complete. The resolver then decides access for `ADMIN`, `AGENT`, and `USER` server-side.
 
-If `tenants.operational_access_enabled = false`, Operational Access configuration routes fail closed as not found.
+Every read/write uses the authenticated tenant context. Request parameters cannot widen tenant scope. If `tenants.operational_access_enabled = false`, all Operational Access routes fail closed as not found.
 
 ## Product-defined catalog
 
@@ -99,28 +103,11 @@ Response shape:
 
 Important catalog rule: Oversight, Temporary Coverage, and Special Access are **not** Primary Where options.
 
-## Groups
+## Admin configuration routes
 
 ### GET `/operational-access/groups`
 
 Lists active Agent groups only. Admin and User groups are intentionally excluded from this Operational Access foundation.
-
-Response shape:
-
-```ts
-{
-  groups: Array<{
-    id: string;
-    name: string;
-    description: string | null;
-    level: 'AGENT';
-    status: 'ACTIVE';
-    memberCount: number;
-    grantCount: number;
-    responsibleForAssignmentCount: number;
-  }>;
-}
-```
 
 ### GET `/operational-access/groups/:groupId`
 
@@ -166,19 +153,17 @@ Response shape:
       createdAt: string;
     }>;
     safety: {
-      runtimeVisibilityChanged: false;
-      effectiveAccessResolverShipped: false;
+      runtimeVisibilityChanged: boolean;
+      effectiveAccessResolverShipped: boolean;
       notes: string[];
     };
   };
 }
 ```
 
-## Group grants
-
 ### PUT `/operational-access/groups/:groupId/grants`
 
-Full-replacement save for one active Agent group’s grants.
+Full-replacement save for one active Agent group's grants.
 
 Request body:
 
@@ -204,31 +189,11 @@ Validation:
 - duplicate action grants in one request are rejected
 - Oversight / Temporary Coverage / Special Access are rejected because they are not Primary Where options
 
-Response: same as `GET /operational-access/groups/:groupId`.
-
 Audit action: `operational_access.group_grants_saved`.
-
-## Responsible For coverage
 
 ### GET `/operational-access/people`
 
 Lists active tenant memberships that can appear in Responsible For configuration. It marks which memberships are Agents.
-
-Response shape:
-
-```ts
-{
-  people: Array<{
-    membershipId: string;
-    userId: string;
-    email: string;
-    name: string | null;
-    role: 'ADMIN' | 'AGENT' | 'USER';
-    status: 'ACTIVE';
-    isAgent: boolean;
-  }>;
-}
-```
 
 ### PUT `/operational-access/groups/:groupId/responsible-for`
 
@@ -257,9 +222,169 @@ Validation:
 - self-responsibility is rejected
 - duplicate assignments in one request are rejected
 
-Response: same as `GET /operational-access/groups/:groupId`.
-
 Audit action: `operational_access.responsible_for_saved`.
+
+## Advanced coverage configuration
+
+### GET `/operational-access/advanced-coverage`
+
+Returns current Oversight, Temporary Coverage, and Special Access configuration for the authenticated tenant. Admin-only.
+
+### PUT `/operational-access/advanced-coverage/oversight`
+
+Full-replacement save for directed Oversight.
+
+Request body:
+
+```ts
+{
+  entries: Array<{
+    overseerMembershipId: string;
+    targetMembershipId: string;
+    includesResponsiblePeople: boolean;
+    reason: string;
+    reviewAt: string;
+  }>;
+}
+```
+
+Rules:
+
+- overseer and target must be active Agent memberships in the same tenant
+- self-oversight is rejected
+- duplicates are rejected
+- Oversight is directed, not reciprocal
+- Oversight include-team behavior is explicit through `includesResponsiblePeople`
+- MVP Oversight is single-hop; include-team collects only the target person's own base Responsible For set
+
+Audit action: `operational_access.oversight_saved`.
+
+### PUT `/operational-access/advanced-coverage/temporary-coverage`
+
+Full-replacement save for time-bound Temporary Coverage.
+
+Request body:
+
+```ts
+{
+  entries: Array<{
+    coveringMembershipId: string;
+    coveredMembershipId: string;
+    startsAt: string;
+    expiresAt: string;
+    reason: string;
+    reviewAt?: string;
+  }>;
+}
+```
+
+Rules:
+
+- covering and covered memberships must be active Agents in the same tenant
+- `startsAt` must be before `expiresAt`
+- optional `reviewAt` must not be after `expiresAt`
+- expired Temporary Coverage grants nothing
+
+Audit action: `operational_access.temporary_coverage_saved`.
+
+### PUT `/operational-access/advanced-coverage/special-access`
+
+Full-replacement save for rare one-person extra access.
+
+Request body:
+
+```ts
+{
+  entries: Array<{
+    membershipId: string;
+    targetMembershipId: string;
+    actionKey: 'personal_cards.view';
+    reason: string;
+    reviewAt: string;
+    expiresAt: string;
+  }>;
+}
+```
+
+Rules:
+
+- `membershipId` must be an active Agent membership in the same tenant
+- target must be an active membership in the same tenant
+- reason is required
+- review date is required and must not be after expiry
+- expiry is required and must be in the future
+- revoked or expired Special Access grants nothing
+
+Audit action: `operational_access.special_access_saved`.
+
+## Runtime resolver proof routes
+
+### GET `/operational-access/runtime/people`
+
+Returns the backend-resolved visible people set for the authenticated actor and action `personal_cards.view`.
+
+This route is the first set-shape resolver consumer. It does not load all people in the frontend. The backend resolver returns either all tenant memberships for Admin or a tenant-scoped ID set for User/Agent, then the query filters server-side.
+
+Response shape:
+
+```ts
+{
+  actionKey: 'personal_cards.view';
+  module: 'personal_cards';
+  people: Array<{
+    membershipId: string;
+    name: string | null;
+    email: string | null;
+    fieldVisibility: Array<{
+      fieldKey: 'name' | 'email';
+      treatment: 'VISIBLE' | 'MASKED' | 'HIDDEN';
+    }>;
+    sourcePath: string[];
+    explanation: string[];
+  }>;
+}
+```
+
+### GET `/operational-access/runtime/people/:membershipId`
+
+Returns one backend decision and the masked person payload when allowed. Returns forbidden when denied.
+
+Decision shape:
+
+```ts
+{
+  actionKey: 'personal_cards.view';
+  module: 'personal_cards';
+  person: {
+    membershipId: string;
+    name: string | null;
+    email: string | null;
+    fieldVisibility: Array<{ fieldKey: string; treatment: string }>;
+    sourcePath: string[];
+    explanation: string[];
+  };
+  decision: {
+    allowed: boolean;
+    visible: boolean;
+    editable: boolean;
+    sourcePath: string[];
+    explanation: string[];
+    fields: Array<{ fieldKey: string; treatment: string }>;
+  };
+}
+```
+
+Resolver source-path rules:
+
+- Admin: `ADMIN_LEVEL`
+- User: `USER_OWN_DATA`
+- Agent grant + Responsible For: `AGENT_GROUP_RESPONSIBLE_FOR`
+- Oversight: `OVERSIGHT_DIRECT` and optionally `OVERSIGHT_RESPONSIBLE_PEOPLE`
+- Temporary Coverage: `TEMPORARY_COVERAGE`
+- Special Access: `SPECIAL_ACCESS`
+- Denied: `DENIED`
+
+The explanation strings contain source categories only. They must not include hidden field values or sensitive personal data.
 
 ## Fail-closed behavior
 
@@ -267,9 +392,10 @@ Audit action: `operational_access.responsible_for_saved`.
 - Missing/cross-tenant group: not found.
 - Archived or non-Agent group: conflict.
 - Missing/cross-tenant membership target: not found.
-- Deleted group/membership targets are removed by foreign keys and therefore grant nothing.
-- Archived group targets are not writable and should not be consumed by future runtime access.
+- Deleted or inactive group/membership targets are pruned by active-target joins or rejected by validation.
+- Expired Temporary Coverage and expired/revoked Special Access grant nothing.
+- The runtime people proof masks email for Agents and never returns hidden target emails in explanations.
 
-## Runtime visibility boundary
+## Selected-consumer leak boundary
 
-This API stores configuration only. Until the Effective Access Resolver and a real module consumer are implemented, no Agent receives runtime access from these rows.
+The selected consumer is the backend runtime people / Personal Card proof surface. It currently exposes no search, export, notification, PDF, email digest, or generated-output route. Those channels must not consume Operational Access until they use backend-resolved visibility and masking.

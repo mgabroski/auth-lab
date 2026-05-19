@@ -307,11 +307,50 @@ export interface TenantOaGroupGrants {
   which_records_key: string;
 }
 
+export interface TenantOaOversight {
+  created_at: Generated<Timestamp>;
+  created_by_membership_id: string | null;
+  includes_responsible_people: Generated<boolean>;
+  overseer_membership_id: string;
+  reason: string;
+  review_at: Timestamp;
+  target_membership_id: string;
+  tenant_id: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface TenantOaResponsibleFor {
   agent_membership_id: string;
   created_at: Generated<Timestamp>;
   created_by_membership_id: string | null;
   group_id: string;
+  target_membership_id: string;
+  tenant_id: string;
+}
+
+export interface TenantOaTemporaryCoverage {
+  covered_membership_id: string;
+  covering_membership_id: string;
+  created_at: Generated<Timestamp>;
+  created_by_membership_id: string | null;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  reason: string;
+  review_at: Timestamp | null;
+  starts_at: Timestamp;
+  tenant_id: string;
+}
+
+export interface TenantOaSpecialAccess {
+  action_key: string;
+  created_at: Generated<Timestamp>;
+  created_by_membership_id: string | null;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  membership_id: string;
+  reason: string;
+  review_at: Timestamp;
+  revoked_at: Timestamp | null;
   target_membership_id: string;
   tenant_id: string;
 }
@@ -427,7 +466,10 @@ export interface DB {
   tenant_group_members: TenantGroupMembers;
   tenant_groups: TenantGroups;
   tenant_oa_group_grants: TenantOaGroupGrants;
+  tenant_oa_oversight: TenantOaOversight;
   tenant_oa_responsible_for: TenantOaResponsibleFor;
+  tenant_oa_special_access: TenantOaSpecialAccess;
+  tenant_oa_temporary_coverage: TenantOaTemporaryCoverage;
   tenant_personal_family_state: TenantPersonalFamilyState;
   tenant_section_fields: TenantSectionFields;
   tenant_sections: TenantSections;

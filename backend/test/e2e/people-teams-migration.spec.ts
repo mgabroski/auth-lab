@@ -13,6 +13,10 @@ import {
   down as downOperationalAccessGroupGrantsMigration,
   up as upOperationalAccessGroupGrantsMigration,
 } from '../../src/shared/db/migrations/0026_operational_access_group_grants';
+import {
+  down as downOperationalAccessResolverMigration,
+  up as upOperationalAccessResolverMigration,
+} from '../../src/shared/db/migrations/0027_operational_access_resolver_and_exceptions';
 import type { DbExecutor } from '../../src/shared/db/db';
 import { buildTestApp } from '../helpers/build-test-app';
 
@@ -74,6 +78,7 @@ describe('people-teams migration safety', () => {
       await expect(tableExists(deps.db, 'tenant_groups')).resolves.toBe(true);
       await expect(tableExists(deps.db, 'tenant_group_members')).resolves.toBe(true);
 
+      await downOperationalAccessResolverMigration(deps.db);
       await downOperationalAccessGroupGrantsMigration(deps.db);
       await downAgentInviteGroupsMigration(deps.db);
       await downPeopleTeamsMigration(deps.db);
@@ -94,6 +99,7 @@ describe('people-teams migration safety', () => {
       await upPeopleTeamsMigration(deps.db);
       await upAgentInviteGroupsMigration(deps.db);
       await upOperationalAccessGroupGrantsMigration(deps.db);
+      await upOperationalAccessResolverMigration(deps.db);
       await close();
     }
   });

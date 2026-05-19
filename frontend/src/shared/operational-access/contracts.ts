@@ -117,8 +117,8 @@ export type OperationalAccessGroupConfiguration = {
   grants: OperationalAccessGroupGrant[];
   responsibleFor: OperationalAccessResponsibleForAssignment[];
   safety: {
-    runtimeVisibilityChanged: false;
-    effectiveAccessResolverShipped: false;
+    runtimeVisibilityChanged: boolean;
+    effectiveAccessResolverShipped: boolean;
     notes: string[];
   };
 };

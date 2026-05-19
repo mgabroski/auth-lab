@@ -420,7 +420,7 @@ describe('settings read surfaces', () => {
         isRequired: false,
       });
       expect(operationalAccessCard.warnings.join(' ')).toContain(
-        'Group grant and Responsible For configuration foundations are available, but resolver behavior and runtime Agent visibility are not shipped yet',
+        'Group grants, Responsible For, Oversight, Temporary Coverage, and Special Access can feed the backend people resolver proof surface',
       );
     } finally {
       await close();

@@ -11,6 +11,7 @@ import type {
 import { up as upPeopleTeamsMigration } from '../../src/shared/db/migrations/0022_people_teams_foundation';
 import { up as upOperationalAccessCapabilityMigration } from '../../src/shared/db/migrations/0025_operational_access_capability';
 import { up as upOperationalAccessGroupGrantsMigration } from '../../src/shared/db/migrations/0026_operational_access_group_grants';
+import { up as upOperationalAccessResolverMigration } from '../../src/shared/db/migrations/0027_operational_access_resolver_and_exceptions';
 import { getSessionCookieName } from '../../src/shared/session/session.types';
 import { buildTestApp } from '../helpers/build-test-app';
 import { hostForTenant } from '../helpers/tenant-host';
@@ -25,6 +26,7 @@ async function migrateForOperationalAccess(deps: AppDeps): Promise<void> {
   await upPeopleTeamsMigration(deps.db);
   await upOperationalAccessCapabilityMigration(deps.db);
   await upOperationalAccessGroupGrantsMigration(deps.db);
+  await upOperationalAccessResolverMigration(deps.db);
 }
 
 async function createTenant(deps: AppDeps, operationalAccessEnabled = true) {
@@ -251,8 +253,11 @@ describe('operational access group grant foundation', () => {
       expect(validRes.statusCode).toBe(200);
       const validBody = readJson<OperationalAccessGroupConfigurationResponse>(validRes);
       expect(validBody.groupConfiguration.grants).toHaveLength(1);
-      expect(validBody.groupConfiguration.safety.runtimeVisibilityChanged).toBe(false);
-      expect(validBody.groupConfiguration.safety.effectiveAccessResolverShipped).toBe(false);
+      expect(validBody.groupConfiguration.safety.runtimeVisibilityChanged).toBe(true);
+      expect(validBody.groupConfiguration.safety.effectiveAccessResolverShipped).toBe(true);
+      expect(validBody.groupConfiguration.safety.notes.join(' ')).toContain(
+        'backend resolver proof surface',
+      );
 
       const duplicateRes = await app.inject({
         method: 'PUT',
