@@ -159,4 +159,21 @@ describe('AdminSettingsPeopleTeamsPage', () => {
     await expect(AdminSettingsPeopleTeamsPage()).rejects.toThrow('REDIRECT:/app');
     expect(redirectMock).toHaveBeenCalledWith('/app');
   });
+
+  it('redirects AGENT route states away from People & Teams', async () => {
+    const agentMe = makeMe({ membership: { id: 'membership-1', role: 'AGENT' } });
+
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_WORKSPACE',
+        config: makeConfig(),
+        me: agentMe,
+      },
+      me: agentMe,
+    });
+
+    await expect(AdminSettingsPeopleTeamsPage()).rejects.toThrow('REDIRECT:/app');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
+  });
 });

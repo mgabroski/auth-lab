@@ -147,6 +147,10 @@ describe('AdminInviteManagement rendering', () => {
     expect(html).not.toContain('Admin Group');
     expect(html).toContain('provisioning context only');
     expect(html).not.toContain('has operational access');
+    expect(html).not.toContain('Access Grants');
+    expect(html).not.toContain('Assigned Areas');
+    expect(html).not.toContain('Responsible For');
+    expect(html).not.toContain('Effective Access Resolver');
   });
 
   it('renders the no-active-Agent-groups empty state', () => {

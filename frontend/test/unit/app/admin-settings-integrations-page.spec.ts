@@ -196,4 +196,21 @@ describe('AdminSettingsIntegrationsPage', () => {
     await expect(AdminSettingsIntegrationsPage()).rejects.toThrow('REDIRECT:/app');
     expect(redirectMock).toHaveBeenCalledWith('/app');
   });
+
+  it('redirects AGENT route states away from /admin/settings/integrations', async () => {
+    const agentMe = makeMe({ membership: { id: 'membership-1', role: 'AGENT' } });
+
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_WORKSPACE',
+        config: makeConfig(),
+        me: agentMe,
+      },
+      me: agentMe,
+    });
+
+    await expect(AdminSettingsIntegrationsPage()).rejects.toThrow('REDIRECT:/app');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
+  });
 });

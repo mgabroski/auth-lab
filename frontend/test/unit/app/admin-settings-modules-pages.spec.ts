@@ -334,4 +334,72 @@ describe('admin settings modules routes', () => {
     await expect(AdminSettingsPersonalPage()).rejects.toThrow('NOT_FOUND');
     expect(notFoundMock).toHaveBeenCalled();
   });
+
+  it('redirects USER route states away from /admin/settings/modules', async () => {
+    const userMe = makeMe({ membership: { id: 'membership-1', role: 'USER' } });
+
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_WORKSPACE',
+        config: makeConfig(),
+        me: userMe,
+      },
+      me: userMe,
+    });
+
+    await expect(AdminSettingsModulesPage()).rejects.toThrow('REDIRECT:/app');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
+  });
+
+  it('redirects AGENT route states away from /admin/settings/modules', async () => {
+    const agentMe = makeMe({ membership: { id: 'membership-1', role: 'AGENT' } });
+
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_WORKSPACE',
+        config: makeConfig(),
+        me: agentMe,
+      },
+      me: agentMe,
+    });
+
+    await expect(AdminSettingsModulesPage()).rejects.toThrow('REDIRECT:/app');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
+  });
+
+  it('redirects USER route states away from /admin/settings/modules/personal', async () => {
+    const userMe = makeMe({ membership: { id: 'membership-1', role: 'USER' } });
+
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_WORKSPACE',
+        config: makeConfig(),
+        me: userMe,
+      },
+      me: userMe,
+    });
+
+    await expect(AdminSettingsPersonalPage()).rejects.toThrow('REDIRECT:/app');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
+  });
+
+  it('redirects AGENT route states away from /admin/settings/modules/personal', async () => {
+    const agentMe = makeMe({ membership: { id: 'membership-1', role: 'AGENT' } });
+
+    loadAuthBootstrapMock.mockResolvedValue({
+      ok: true,
+      routeState: {
+        kind: 'AUTHENTICATED_WORKSPACE',
+        config: makeConfig(),
+        me: agentMe,
+      },
+      me: agentMe,
+    });
+
+    await expect(AdminSettingsPersonalPage()).rejects.toThrow('REDIRECT:/app');
+    expect(redirectMock).toHaveBeenCalledWith('/app');
+  });
 });

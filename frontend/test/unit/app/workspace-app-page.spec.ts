@@ -131,10 +131,18 @@ describe('WorkspaceAppPage', () => {
     );
     expect(html).toContain('backend-resolved access');
     expect(html).not.toContain('Operational Access');
+    expect(html).not.toContain('Access Grants');
     expect(html).not.toContain('Permissions');
     expect(html).not.toContain('Tasks');
     expect(html).not.toContain('Documents');
     expect(html).not.toContain('Checklists');
+    expect(html).not.toContain('Responsible For');
+    expect(html).not.toContain('Assigned Areas');
+    expect(html).not.toContain('Oversight');
+    expect(html).not.toContain('Temporary Coverage');
+    expect(html).not.toContain('Special Access');
+    expect(html).not.toContain('Managed People');
+    expect(html).not.toContain('Effective Access Resolver');
     expect(html).not.toContain('/admin/settings');
   });
 
