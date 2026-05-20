@@ -2,8 +2,7 @@
  * backend/src/modules/operational-access/dal/operational-access.query-sql.ts
  *
  * WHY:
- * - Raw Kysely queries for Operational Access configuration and the first
- *   backend resolver proof surface.
+ * - Raw Kysely queries for Operational Access configuration and the OA-owned runtime proof surface for `personal_cards.view`.
  * - Keeps tenant scoping and fail-closed reads at the query boundary.
  *
  * RULES:
@@ -598,6 +597,7 @@ export async function insertOversightRowsSql(
   input: {
     tenantId: string;
     actorMembershipId: string;
+    replaceForMembershipIds: string[];
     entries: Array<{
       overseerMembershipId: string;
       targetMembershipId: string;
@@ -607,7 +607,13 @@ export async function insertOversightRowsSql(
     }>;
   },
 ): Promise<void> {
-  await db.deleteFrom('tenant_oa_oversight').where('tenant_id', '=', input.tenantId).execute();
+  if (input.replaceForMembershipIds.length > 0) {
+    await db
+      .deleteFrom('tenant_oa_oversight')
+      .where('tenant_id', '=', input.tenantId)
+      .where('overseer_membership_id', 'in', input.replaceForMembershipIds)
+      .execute();
+  }
   if (input.entries.length === 0) return;
   await db
     .insertInto('tenant_oa_oversight')
@@ -630,6 +636,7 @@ export async function insertTemporaryCoverageRowsSql(
   input: {
     tenantId: string;
     actorMembershipId: string;
+    replaceForMembershipIds: string[];
     entries: Array<{
       coveringMembershipId: string;
       coveredMembershipId: string;
@@ -640,10 +647,13 @@ export async function insertTemporaryCoverageRowsSql(
     }>;
   },
 ): Promise<void> {
-  await db
-    .deleteFrom('tenant_oa_temporary_coverage')
-    .where('tenant_id', '=', input.tenantId)
-    .execute();
+  if (input.replaceForMembershipIds.length > 0) {
+    await db
+      .deleteFrom('tenant_oa_temporary_coverage')
+      .where('tenant_id', '=', input.tenantId)
+      .where('covering_membership_id', 'in', input.replaceForMembershipIds)
+      .execute();
+  }
   if (input.entries.length === 0) return;
   await db
     .insertInto('tenant_oa_temporary_coverage')
@@ -667,6 +677,7 @@ export async function insertSpecialAccessRowsSql(
   input: {
     tenantId: string;
     actorMembershipId: string;
+    replaceForMembershipIds: string[];
     entries: Array<{
       membershipId: string;
       targetMembershipId: string;
@@ -677,7 +688,13 @@ export async function insertSpecialAccessRowsSql(
     }>;
   },
 ): Promise<void> {
-  await db.deleteFrom('tenant_oa_special_access').where('tenant_id', '=', input.tenantId).execute();
+  if (input.replaceForMembershipIds.length > 0) {
+    await db
+      .deleteFrom('tenant_oa_special_access')
+      .where('tenant_id', '=', input.tenantId)
+      .where('membership_id', 'in', input.replaceForMembershipIds)
+      .execute();
+  }
   if (input.entries.length === 0) return;
   await db
     .insertInto('tenant_oa_special_access')
@@ -793,4 +810,50 @@ export async function hasDependentOperationalAccessTablesSql(db: DbExecutor): Pr
   `.execute(db);
 
   return result.rows[0]?.exists === true;
+}
+
+export async function selectAdvancedCoverageVersionSql(
+  db: DbExecutor,
+  tenantId: string,
+): Promise<number> {
+  const row = await db
+    .selectFrom('tenant_oa_advanced_coverage_versions')
+    .select(['version'])
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+
+  return row?.version ?? 1;
+}
+
+export async function assertAdvancedCoverageVersionSql(
+  db: DbExecutor,
+  input: { tenantId: string; expectedVersion: number },
+): Promise<boolean> {
+  const current = await selectAdvancedCoverageVersionSql(db, input.tenantId);
+  return current === input.expectedVersion;
+}
+
+export async function bumpAdvancedCoverageVersionSql(
+  db: DbExecutor,
+  input: { tenantId: string; actorMembershipId: string },
+): Promise<number> {
+  const row = await db
+    .insertInto('tenant_oa_advanced_coverage_versions')
+    .values({
+      tenant_id: input.tenantId,
+      version: 2,
+      updated_by_membership_id: input.actorMembershipId,
+      updated_at: sql`now()`,
+    })
+    .onConflict((oc) =>
+      oc.column('tenant_id').doUpdateSet({
+        version: sql<number>`tenant_oa_advanced_coverage_versions.version + 1`,
+        updated_by_membership_id: input.actorMembershipId,
+        updated_at: sql`now()`,
+      }),
+    )
+    .returning(['version'])
+    .executeTakeFirstOrThrow();
+
+  return row.version;
 }

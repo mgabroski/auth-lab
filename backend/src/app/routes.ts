@@ -8,7 +8,7 @@
  *
  * CURRENT FOUNDATION SCOPE:
  * - core routes: /metrics, /health
- * - module routes: invites, auth, audit, settings, people-teams, operational-access
+ * - module routes: invites, auth, audit, settings, people-teams, personal-cards, operational-access
  * - CP routes: real /cp/accounts create/read/list plus Step 2 saves, review/publish, and status toggle
  *
  * HEALTH ENDPOINT:
@@ -87,6 +87,7 @@ export function registerRoutes(
   deps.audit.registerRoutes(app);
   deps.settings.registerRoutes(app);
   deps.peopleTeams.registerRoutes(app);
+  deps.personalCards.registerRoutes(app);
   deps.operationalAccess.registerRoutes(app);
 
   if (config.controlPlane.enabled) {

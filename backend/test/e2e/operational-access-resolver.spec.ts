@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import type { FastifyInstance } from 'fastify';
 
 import type { AppDeps } from '../../src/app/di';
 import type { MembershipRole } from '../../src/modules/memberships/membership.types';
 import type {
+  OperationalAccessAdvancedCoverageResponse,
   OperationalAccessRuntimePeopleResponse,
   OperationalAccessRuntimePersonResponse,
 } from '../../src/modules/operational-access/operational-access.types';
@@ -11,6 +13,7 @@ import { up as upPeopleTeamsMigration } from '../../src/shared/db/migrations/002
 import { up as upOperationalAccessCapabilityMigration } from '../../src/shared/db/migrations/0025_operational_access_capability';
 import { up as upOperationalAccessGroupGrantsMigration } from '../../src/shared/db/migrations/0026_operational_access_group_grants';
 import { up as upOperationalAccessResolverMigration } from '../../src/shared/db/migrations/0027_operational_access_resolver_and_exceptions';
+import { up as upOperationalAccessAdvancedCoverageVersionsMigration } from '../../src/shared/db/migrations/0028_operational_access_advanced_coverage_versions';
 import { getSessionCookieName } from '../../src/shared/session/session.types';
 import { buildTestApp } from '../helpers/build-test-app';
 import { hostForTenant } from '../helpers/tenant-host';
@@ -21,11 +24,26 @@ function readJson<T>(res: { json: () => unknown }): T {
   return res.json() as T;
 }
 
+async function advancedCoverageVersion(
+  app: FastifyInstance,
+  tenantKey: string,
+  cookie: string,
+): Promise<number> {
+  const res = await app.inject({
+    method: 'GET',
+    url: '/operational-access/advanced-coverage',
+    headers: { host: hostForTenant(tenantKey), cookie },
+  });
+  expect(res.statusCode).toBe(200);
+  return readJson<OperationalAccessAdvancedCoverageResponse>(res).version;
+}
+
 async function migrateForOperationalAccess(deps: AppDeps): Promise<void> {
   await upPeopleTeamsMigration(deps.db);
   await upOperationalAccessCapabilityMigration(deps.db);
   await upOperationalAccessGroupGrantsMigration(deps.db);
   await upOperationalAccessResolverMigration(deps.db);
+  await upOperationalAccessAdvancedCoverageVersionsMigration(deps.db);
 }
 
 async function createTenant(deps: AppDeps) {
@@ -405,6 +423,7 @@ describe('operational access resolver proof surface', () => {
         url: '/operational-access/advanced-coverage/oversight',
         headers: { host: hostForTenant(tenant.key), cookie: admin.cookie },
         payload: {
+          expectedVersion: await advancedCoverageVersion(app, tenant.key, admin.cookie),
           entries: [
             {
               overseerMembershipId: managerA.membershipId,
@@ -432,6 +451,7 @@ describe('operational access resolver proof surface', () => {
         url: '/operational-access/advanced-coverage/oversight',
         headers: { host: hostForTenant(tenant.key), cookie: admin.cookie },
         payload: {
+          expectedVersion: await advancedCoverageVersion(app, tenant.key, admin.cookie),
           entries: [
             {
               overseerMembershipId: managerA.membershipId,
@@ -527,6 +547,7 @@ describe('operational access resolver proof surface', () => {
         url: '/operational-access/advanced-coverage/temporary-coverage',
         headers: { host: hostForTenant(tenant.key), cookie: admin.cookie },
         payload: {
+          expectedVersion: await advancedCoverageVersion(app, tenant.key, admin.cookie),
           entries: [
             {
               coveringMembershipId: covering.membershipId,
@@ -555,6 +576,7 @@ describe('operational access resolver proof surface', () => {
         url: '/operational-access/advanced-coverage/temporary-coverage',
         headers: { host: hostForTenant(tenant.key), cookie: admin.cookie },
         payload: {
+          expectedVersion: await advancedCoverageVersion(app, tenant.key, admin.cookie),
           entries: [
             {
               coveringMembershipId: covering.membershipId,
@@ -608,6 +630,7 @@ describe('operational access resolver proof surface', () => {
         url: '/operational-access/advanced-coverage/special-access',
         headers: { host: hostForTenant(tenant.key), cookie: admin.cookie },
         payload: {
+          expectedVersion: await advancedCoverageVersion(app, tenant.key, admin.cookie),
           entries: [
             {
               membershipId: agent.membershipId,
@@ -627,6 +650,7 @@ describe('operational access resolver proof surface', () => {
         url: '/operational-access/advanced-coverage/special-access',
         headers: { host: hostForTenant(tenant.key), cookie: admin.cookie },
         payload: {
+          expectedVersion: await advancedCoverageVersion(app, tenant.key, admin.cookie),
           entries: [
             {
               membershipId: agent.membershipId,

@@ -106,6 +106,8 @@ import type { PeopleTeamsModule } from '../modules/people-teams/people-teams.mod
 
 import { createOperationalAccessModule } from '../modules/operational-access/operational-access.module';
 import type { OperationalAccessModule } from '../modules/operational-access/operational-access.module';
+import { createPersonalCardsModule } from '../modules/personal-cards/personal-cards.module';
+import type { PersonalCardsModule } from '../modules/personal-cards/personal-cards.module';
 
 import { SsoProviderRegistry } from '../modules/auth/sso/sso-provider-registry';
 import { GoogleSsoAdapter } from '../modules/auth/sso/google/google-sso.adapter';
@@ -146,6 +148,7 @@ export type AppDeps = {
   settings: SettingsModule;
   peopleTeams: PeopleTeamsModule;
   operationalAccess: OperationalAccessModule;
+  personalCards: PersonalCardsModule;
 
   close: () => Promise<void>;
 };
@@ -465,6 +468,9 @@ export async function buildDeps(
 
   const peopleTeams = createPeopleTeamsModule({ db, auditRepo });
   const operationalAccess = createOperationalAccessModule({ db, auditRepo });
+  const personalCards = createPersonalCardsModule({
+    operationalAccessService: operationalAccess.service,
+  });
 
   const settings = createSettingsModule({
     db,
@@ -506,6 +512,7 @@ export async function buildDeps(
     settings,
     peopleTeams,
     operationalAccess,
+    personalCards,
 
     close: async () => {
       await redis.close();

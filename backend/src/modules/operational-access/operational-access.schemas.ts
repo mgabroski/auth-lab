@@ -34,6 +34,8 @@ export const operationalAccessMembershipIdParamSchema = z
 
 export const saveOperationalAccessOversightSchema = z
   .object({
+    expectedVersion: z.number().int().positive(),
+    replaceForMembershipIds: z.array(z.string().uuid()).max(500).default([]),
     entries: z
       .array(
         z
@@ -52,6 +54,8 @@ export const saveOperationalAccessOversightSchema = z
 
 export const saveOperationalAccessTemporaryCoverageSchema = z
   .object({
+    expectedVersion: z.number().int().positive(),
+    replaceForMembershipIds: z.array(z.string().uuid()).max(500).default([]),
     entries: z
       .array(
         z
@@ -71,6 +75,8 @@ export const saveOperationalAccessTemporaryCoverageSchema = z
 
 export const saveOperationalAccessSpecialAccessSchema = z
   .object({
+    expectedVersion: z.number().int().positive(),
+    replaceForMembershipIds: z.array(z.string().uuid()).max(500).default([]),
     entries: z
       .array(
         z

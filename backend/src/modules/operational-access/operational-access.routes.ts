@@ -2,8 +2,7 @@
  * backend/src/modules/operational-access/operational-access.routes.ts
  *
  * WHY:
- * - Declares Operational Access configuration routes and the first narrow
- *   backend resolver proof surface.
+ * - Declares Operational Access configuration routes and the OA-owned runtime proof surface for `personal_cards.view`.
  *
  * RULES:
  * - Admin configuration routes remain admin-only in the controller.

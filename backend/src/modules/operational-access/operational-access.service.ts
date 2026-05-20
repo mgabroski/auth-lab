@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Application service for Operational Access configuration plus the narrow
- *   resolver proof surface.
+ *   resolver proof surface and Personal Cards module consumer.
  * - Owns validation for active Agent groups, product-defined grants, Primary Where,
  *   Which Records, Responsible For, Oversight, Temporary Coverage, and Special Access.
  *
@@ -11,7 +11,7 @@
  * - Backend owns effective access decisions.
  * - Group membership alone grants nothing without a product-defined grant and
  *   matching scope/coverage or Special Access.
- * - The first consumer is a narrow people/Personal Card proof surface only.
+ * - The first real module consumer is the Personal Cards read surface.
  */
 
 import type { AuditRepo } from '../../shared/audit/audit.repo';
@@ -35,9 +35,12 @@ import type {
   OperationalAccessGrantRow,
   OperationalAccessGroupRow,
   OperationalAccessMembershipRow,
+  OperationalAccessOversightRow,
   OperationalAccessResponsibleForRow,
   OperationalAccessRuntimePersonRow,
+  OperationalAccessSpecialAccessRow,
   OperationalAccessStoredGroupRow,
+  OperationalAccessTemporaryCoverageRow,
 } from './dal/operational-access.query-sql';
 import {
   OPERATIONAL_ACCESS_ACTIONS,
@@ -64,7 +67,10 @@ import {
   type OperationalAccessRuntimePersonResponse,
   type OperationalAccessResponsibleForAssignmentDto,
   type OperationalAccessSourcePath,
+  type OperationalAccessTemporaryCoverageDto,
   type OperationalAccessWhichRecordsKey,
+  type OperationalAccessOversightDto,
+  type OperationalAccessSpecialAccessDto,
 } from './operational-access.types';
 
 function toIso(value: Date): string {
@@ -88,9 +94,9 @@ const whichRecordsByKey = new Map(
 );
 
 const SAFETY_NOTES = [
-  'Operational Access configuration is now consumed only by the backend resolver proof surface.',
+  'Operational Access configuration is consumed by the backend resolver proof surface and Personal Cards read surface.',
   'People & Teams group membership remains provisioning-only by itself.',
-  'Assigned Areas and broad module integrations remain deferred.',
+  'Assigned Areas, Review Queue enforcement, and broad module integrations remain deferred.',
 ] as const;
 
 function actionCatalogDto(): OperationalAccessActionCatalogItemDto[] {
@@ -154,6 +160,52 @@ function rowToResponsibleForDto(
   };
 }
 
+function rowToOversightDto(row: OperationalAccessOversightRow): OperationalAccessOversightDto {
+  return {
+    overseerMembershipId: row.overseer_membership_id,
+    targetMembershipId: row.target_membership_id,
+    includesResponsiblePeople: row.includes_responsible_people,
+    reason: row.reason,
+    reviewAt: toIso(row.review_at),
+  };
+}
+
+function rowToTemporaryCoverageDto(
+  row: OperationalAccessTemporaryCoverageRow,
+): OperationalAccessTemporaryCoverageDto {
+  return {
+    id: row.id,
+    coveringMembershipId: row.covering_membership_id,
+    coveredMembershipId: row.covered_membership_id,
+    startsAt: toIso(row.starts_at),
+    expiresAt: toIso(row.expires_at),
+    reason: row.reason,
+    reviewAt: dateToIsoOrNull(row.review_at),
+  };
+}
+
+function rowToSpecialAccessDto(
+  row: OperationalAccessSpecialAccessRow,
+): OperationalAccessSpecialAccessDto {
+  return {
+    id: row.id,
+    membershipId: row.membership_id,
+    targetMembershipId: row.target_membership_id,
+    actionKey: row.action_key as OperationalAccessActionKey,
+    reason: row.reason,
+    reviewAt: toIso(row.review_at),
+    expiresAt: toIso(row.expires_at),
+  };
+}
+
+function errorSummary(error: unknown): { name: string; message: string } {
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message };
+  }
+
+  return { name: 'UnknownError', message: 'Unknown Operational Access mutation failure.' };
+}
+
 function membershipToPersonDto(row: OperationalAccessMembershipRow) {
   const role = requireMembershipRole(row.role);
 
@@ -188,6 +240,8 @@ function visibleFieldsFor(
     return [
       { fieldKey: 'name', treatment: 'HIDDEN' },
       { fieldKey: 'email', treatment: 'HIDDEN' },
+      { fieldKey: 'person.ssn', treatment: 'HIDDEN' },
+      { fieldKey: 'person.date_of_birth', treatment: 'HIDDEN' },
     ];
   }
 
@@ -195,12 +249,16 @@ function visibleFieldsFor(
     return [
       { fieldKey: 'name', treatment: 'VISIBLE' },
       { fieldKey: 'email', treatment: 'MASKED' },
+      { fieldKey: 'person.ssn', treatment: 'MASKED' },
+      { fieldKey: 'person.date_of_birth', treatment: 'HIDDEN' },
     ];
   }
 
   return [
     { fieldKey: 'name', treatment: 'VISIBLE' },
     { fieldKey: 'email', treatment: 'VISIBLE' },
+    { fieldKey: 'person.ssn', treatment: 'VISIBLE' },
+    { fieldKey: 'person.date_of_birth', treatment: 'VISIBLE' },
   ];
 }
 
@@ -260,8 +318,8 @@ export class OperationalAccessService {
         },
         deferred: [
           'Assigned Areas coverage table and UI are deferred until stable employer/location pair IDs exist.',
-          'Oversight, Temporary Coverage, and Special Access are available only as narrow backend resolver inputs.',
-          'The only runtime consumer is the backend people/Personal Card proof surface.',
+          'Oversight, Temporary Coverage, and Special Access are consumed only by the personal_cards.view proof path.',
+          'Runtime consumers are limited to OA-owned runtime people routes and backend Personal Cards read routes.',
         ],
       },
     };
@@ -433,92 +491,202 @@ export class OperationalAccessService {
     auth: OperationalAccessAuditContext,
     input: SaveOperationalAccessOversightInput,
   ): Promise<OperationalAccessAdvancedCoverageResponse> {
-    return this.deps.db.transaction().execute(async (trx) => {
-      const repo = this.deps.repo.withDb(trx);
-      await this.assertCapabilityEnabled(auth.tenantId, repo);
-      await this.validateOversightInput(repo, auth.tenantId, input);
+    try {
+      return await this.deps.db.transaction().execute(async (trx) => {
+        const repo = this.deps.repo.withDb(trx);
+        await this.assertCapabilityEnabled(auth.tenantId, repo);
+        await this.validateOversightInput(repo, auth.tenantId, input);
+        await this.assertAdvancedCoverageVersion(repo, {
+          tenantId: auth.tenantId,
+          expectedVersion: input.expectedVersion,
+        });
 
-      await repo.replaceOversight({
-        tenantId: auth.tenantId,
-        actorMembershipId: auth.membershipId,
-        entries: input.entries.map((entry) => ({
-          overseerMembershipId: entry.overseerMembershipId,
-          targetMembershipId: entry.targetMembershipId,
-          includesResponsiblePeople: entry.includesResponsiblePeople,
-          reason: entry.reason,
-          reviewAt: parseDate(entry.reviewAt),
-        })),
+        const replaceForMembershipIds = uniqueValues([
+          ...input.replaceForMembershipIds,
+          ...input.entries.map((entry) => entry.overseerMembershipId),
+        ]);
+        const before = (await repo.listOversightConfig(auth.tenantId)).map(rowToOversightDto);
+
+        await repo.replaceOversight({
+          tenantId: auth.tenantId,
+          actorMembershipId: auth.membershipId,
+          replaceForMembershipIds,
+          entries: input.entries.map((entry) => ({
+            overseerMembershipId: entry.overseerMembershipId,
+            targetMembershipId: entry.targetMembershipId,
+            includesResponsiblePeople: entry.includesResponsiblePeople,
+            reason: entry.reason,
+            reviewAt: parseDate(entry.reviewAt),
+          })),
+        });
+
+        const after = (await repo.listOversightConfig(auth.tenantId)).map(rowToOversightDto);
+
+        await repo.bumpAdvancedCoverageVersion({
+          tenantId: auth.tenantId,
+          actorMembershipId: auth.membershipId,
+        });
+
+        await this.buildAuditWriter(trx, auth).append('operational_access.oversight_saved', {
+          source: 'OperationalAccessService.saveOversight',
+          replaceForMembershipIds,
+          before,
+          after,
+          expectedVersion: input.expectedVersion,
+          runtimeVisibilityChanged: true,
+        });
+
+        return this.listAdvancedCoverage(auth.tenantId, repo);
       });
-
-      await this.buildAuditWriter(trx, auth).append('operational_access.oversight_saved', {
-        count: input.entries.length,
-        runtimeVisibilityChanged: true,
+    } catch (error) {
+      await this.auditMutationFailure(auth, 'operational_access.oversight_save_failed', {
+        source: 'OperationalAccessService.saveOversight',
+        replaceForMembershipIds: input.replaceForMembershipIds,
+        expectedVersion: input.expectedVersion,
+        requestedEntryCount: input.entries.length,
+        error: errorSummary(error),
       });
-
-      return this.listAdvancedCoverage(auth.tenantId, repo);
-    });
+      throw error;
+    }
   }
 
   async saveTemporaryCoverage(
     auth: OperationalAccessAuditContext,
     input: SaveOperationalAccessTemporaryCoverageInput,
   ): Promise<OperationalAccessAdvancedCoverageResponse> {
-    return this.deps.db.transaction().execute(async (trx) => {
-      const repo = this.deps.repo.withDb(trx);
-      await this.assertCapabilityEnabled(auth.tenantId, repo);
-      await this.validateTemporaryCoverageInput(repo, auth.tenantId, input);
+    try {
+      return await this.deps.db.transaction().execute(async (trx) => {
+        const repo = this.deps.repo.withDb(trx);
+        await this.assertCapabilityEnabled(auth.tenantId, repo);
+        await this.validateTemporaryCoverageInput(repo, auth.tenantId, input);
+        await this.assertAdvancedCoverageVersion(repo, {
+          tenantId: auth.tenantId,
+          expectedVersion: input.expectedVersion,
+        });
 
-      await repo.replaceTemporaryCoverage({
-        tenantId: auth.tenantId,
-        actorMembershipId: auth.membershipId,
-        entries: input.entries.map((entry) => ({
-          coveringMembershipId: entry.coveringMembershipId,
-          coveredMembershipId: entry.coveredMembershipId,
-          startsAt: parseDate(entry.startsAt),
-          expiresAt: parseDate(entry.expiresAt),
-          reason: entry.reason,
-          reviewAt: entry.reviewAt ? parseDate(entry.reviewAt) : null,
-        })),
+        const replaceForMembershipIds = uniqueValues([
+          ...input.replaceForMembershipIds,
+          ...input.entries.map((entry) => entry.coveringMembershipId),
+        ]);
+        const before = (await repo.listTemporaryCoverageConfig(auth.tenantId)).map(
+          rowToTemporaryCoverageDto,
+        );
+
+        await repo.replaceTemporaryCoverage({
+          tenantId: auth.tenantId,
+          actorMembershipId: auth.membershipId,
+          replaceForMembershipIds,
+          entries: input.entries.map((entry) => ({
+            coveringMembershipId: entry.coveringMembershipId,
+            coveredMembershipId: entry.coveredMembershipId,
+            startsAt: parseDate(entry.startsAt),
+            expiresAt: parseDate(entry.expiresAt),
+            reason: entry.reason,
+            reviewAt: entry.reviewAt ? parseDate(entry.reviewAt) : null,
+          })),
+        });
+
+        const after = (await repo.listTemporaryCoverageConfig(auth.tenantId)).map(
+          rowToTemporaryCoverageDto,
+        );
+
+        await repo.bumpAdvancedCoverageVersion({
+          tenantId: auth.tenantId,
+          actorMembershipId: auth.membershipId,
+        });
+
+        await this.buildAuditWriter(trx, auth).append(
+          'operational_access.temporary_coverage_saved',
+          {
+            source: 'OperationalAccessService.saveTemporaryCoverage',
+            replaceForMembershipIds,
+            before,
+            after,
+            expectedVersion: input.expectedVersion,
+            runtimeVisibilityChanged: true,
+          },
+        );
+
+        return this.listAdvancedCoverage(auth.tenantId, repo);
       });
-
-      await this.buildAuditWriter(trx, auth).append('operational_access.temporary_coverage_saved', {
-        count: input.entries.length,
-        runtimeVisibilityChanged: true,
+    } catch (error) {
+      await this.auditMutationFailure(auth, 'operational_access.temporary_coverage_save_failed', {
+        source: 'OperationalAccessService.saveTemporaryCoverage',
+        replaceForMembershipIds: input.replaceForMembershipIds,
+        expectedVersion: input.expectedVersion,
+        requestedEntryCount: input.entries.length,
+        error: errorSummary(error),
       });
-
-      return this.listAdvancedCoverage(auth.tenantId, repo);
-    });
+      throw error;
+    }
   }
 
   async saveSpecialAccess(
     auth: OperationalAccessAuditContext,
     input: SaveOperationalAccessSpecialAccessInput,
   ): Promise<OperationalAccessAdvancedCoverageResponse> {
-    return this.deps.db.transaction().execute(async (trx) => {
-      const repo = this.deps.repo.withDb(trx);
-      await this.assertCapabilityEnabled(auth.tenantId, repo);
-      await this.validateSpecialAccessInput(repo, auth.tenantId, input);
+    try {
+      return await this.deps.db.transaction().execute(async (trx) => {
+        const repo = this.deps.repo.withDb(trx);
+        await this.assertCapabilityEnabled(auth.tenantId, repo);
+        await this.validateSpecialAccessInput(repo, auth.tenantId, input);
+        await this.assertAdvancedCoverageVersion(repo, {
+          tenantId: auth.tenantId,
+          expectedVersion: input.expectedVersion,
+        });
 
-      await repo.replaceSpecialAccess({
-        tenantId: auth.tenantId,
-        actorMembershipId: auth.membershipId,
-        entries: input.entries.map((entry) => ({
-          membershipId: entry.membershipId,
-          targetMembershipId: entry.targetMembershipId,
-          actionKey: entry.actionKey,
-          reason: entry.reason,
-          reviewAt: parseDate(entry.reviewAt),
-          expiresAt: parseDate(entry.expiresAt),
-        })),
+        const replaceForMembershipIds = uniqueValues([
+          ...input.replaceForMembershipIds,
+          ...input.entries.map((entry) => entry.membershipId),
+        ]);
+        const before = (await repo.listSpecialAccessConfig(auth.tenantId)).map(
+          rowToSpecialAccessDto,
+        );
+
+        await repo.replaceSpecialAccess({
+          tenantId: auth.tenantId,
+          actorMembershipId: auth.membershipId,
+          replaceForMembershipIds,
+          entries: input.entries.map((entry) => ({
+            membershipId: entry.membershipId,
+            targetMembershipId: entry.targetMembershipId,
+            actionKey: entry.actionKey,
+            reason: entry.reason,
+            reviewAt: parseDate(entry.reviewAt),
+            expiresAt: parseDate(entry.expiresAt),
+          })),
+        });
+
+        const after = (await repo.listSpecialAccessConfig(auth.tenantId)).map(
+          rowToSpecialAccessDto,
+        );
+
+        await repo.bumpAdvancedCoverageVersion({
+          tenantId: auth.tenantId,
+          actorMembershipId: auth.membershipId,
+        });
+
+        await this.buildAuditWriter(trx, auth).append('operational_access.special_access_saved', {
+          source: 'OperationalAccessService.saveSpecialAccess',
+          replaceForMembershipIds,
+          before,
+          after,
+          expectedVersion: input.expectedVersion,
+          runtimeVisibilityChanged: true,
+        });
+
+        return this.listAdvancedCoverage(auth.tenantId, repo);
       });
-
-      await this.buildAuditWriter(trx, auth).append('operational_access.special_access_saved', {
-        count: input.entries.length,
-        runtimeVisibilityChanged: true,
+    } catch (error) {
+      await this.auditMutationFailure(auth, 'operational_access.special_access_save_failed', {
+        source: 'OperationalAccessService.saveSpecialAccess',
+        replaceForMembershipIds: input.replaceForMembershipIds,
+        expectedVersion: input.expectedVersion,
+        requestedEntryCount: input.entries.length,
+        error: errorSummary(error),
       });
-
-      return this.listAdvancedCoverage(auth.tenantId, repo);
-    });
+      throw error;
+    }
   }
 
   async listAdvancedCoverage(
@@ -526,38 +694,18 @@ export class OperationalAccessService {
     repo: OperationalAccessRepo = this.deps.repo,
   ): Promise<OperationalAccessAdvancedCoverageResponse> {
     await this.assertCapabilityEnabled(tenantId, repo);
-    const [oversight, temporaryCoverage, specialAccess] = await Promise.all([
+    const [version, oversight, temporaryCoverage, specialAccess] = await Promise.all([
+      repo.getAdvancedCoverageVersion(tenantId),
       repo.listOversightConfig(tenantId),
       repo.listTemporaryCoverageConfig(tenantId),
       repo.listSpecialAccessConfig(tenantId),
     ]);
 
     return {
-      oversight: oversight.map((entry) => ({
-        overseerMembershipId: entry.overseer_membership_id,
-        targetMembershipId: entry.target_membership_id,
-        includesResponsiblePeople: entry.includes_responsible_people,
-        reason: entry.reason,
-        reviewAt: toIso(entry.review_at),
-      })),
-      temporaryCoverage: temporaryCoverage.map((entry) => ({
-        id: entry.id,
-        coveringMembershipId: entry.covering_membership_id,
-        coveredMembershipId: entry.covered_membership_id,
-        startsAt: toIso(entry.starts_at),
-        expiresAt: toIso(entry.expires_at),
-        reason: entry.reason,
-        reviewAt: dateToIsoOrNull(entry.review_at),
-      })),
-      specialAccess: specialAccess.map((entry) => ({
-        id: entry.id,
-        membershipId: entry.membership_id,
-        targetMembershipId: entry.target_membership_id,
-        actionKey: entry.action_key as OperationalAccessActionKey,
-        reason: entry.reason,
-        reviewAt: toIso(entry.review_at),
-        expiresAt: toIso(entry.expires_at),
-      })),
+      version,
+      oversight: oversight.map(rowToOversightDto),
+      temporaryCoverage: temporaryCoverage.map(rowToTemporaryCoverageDto),
+      specialAccess: specialAccess.map(rowToSpecialAccessDto),
     };
   }
 
@@ -822,12 +970,25 @@ export class OperationalAccessService {
     };
   }
 
+  private async assertAdvancedCoverageVersion(
+    repo: OperationalAccessRepo,
+    input: { tenantId: string; expectedVersion: number },
+  ): Promise<void> {
+    const matches = await repo.advancedCoverageVersionMatches(input);
+    if (!matches)
+      throw OperationalAccessErrors.advancedCoverageVersionConflict(input.expectedVersion);
+  }
+
   private async validateOversightInput(
     repo: OperationalAccessRepo,
     tenantId: string,
     input: SaveOperationalAccessOversightInput,
   ): Promise<void> {
     const seen = new Set<string>();
+
+    for (const membershipId of input.replaceForMembershipIds) {
+      await this.assertActiveAgentMembership(repo, tenantId, membershipId);
+    }
 
     for (const entry of input.entries) {
       const key = `${entry.overseerMembershipId}:${entry.targetMembershipId}`;
@@ -847,6 +1008,10 @@ export class OperationalAccessService {
     input: SaveOperationalAccessTemporaryCoverageInput,
   ): Promise<void> {
     const seen = new Set<string>();
+
+    for (const membershipId of input.replaceForMembershipIds) {
+      await this.assertActiveAgentMembership(repo, tenantId, membershipId);
+    }
 
     for (const entry of input.entries) {
       const startsAt = parseDate(entry.startsAt);
@@ -875,6 +1040,10 @@ export class OperationalAccessService {
   ): Promise<void> {
     const now = new Date();
     const seen = new Set<string>();
+
+    for (const membershipId of input.replaceForMembershipIds) {
+      await this.assertActiveAgentMembership(repo, tenantId, membershipId);
+    }
 
     for (const entry of input.entries) {
       const reviewAt = parseDate(entry.reviewAt);
@@ -1044,6 +1213,17 @@ export class OperationalAccessService {
         throw OperationalAccessErrors.targetMembershipRequired(assignment.targetMembershipId);
       }
     }
+  }
+
+  private async auditMutationFailure(
+    context: OperationalAccessAuditContext,
+    action: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    await this.buildAuditWriter(this.deps.db, context).append(action, {
+      ...metadata,
+      runtimeVisibilityChanged: false,
+    });
   }
 
   private buildAuditWriter(db: DbExecutor, context: OperationalAccessAuditContext): AuditWriter {

@@ -136,7 +136,9 @@ function makeOperationalAccessFoundation(): OperationalAccessFoundationResponse 
           reason: 'Responsible For can safely use active tenant membership IDs.',
         },
       },
-      deferred: ['The only runtime consumer is the backend people/Personal Card proof surface.'],
+      deferred: [
+        'Runtime consumers are limited to OA-owned runtime people routes and backend Personal Cards read routes.',
+      ],
     },
     groups: [
       {
@@ -207,7 +209,7 @@ describe('OperationalAccessSettingsPage', () => {
     expect(html).toContain('Which records');
     expect(html).toContain('Managers');
     expect(html).toContain('Manage tasks');
-    expect(html).toContain('Backend resolver proof is active only for the narrow people surface.');
+    expect(html).toContain('Backend-filtered runtime proof is active only for Personal Cards.');
     expect(html).not.toContain('permission engine');
     expect(html).not.toContain('ABAC');
     expect(html).not.toContain('IAM');

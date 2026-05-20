@@ -2,16 +2,24 @@
  * frontend/src/shared/operational-access/browser-api.ts
  *
  * WHY:
- * - Centralizes browser-side Operational Access configuration API calls.
- * - These calls save configuration only; they do not resolve or grant runtime visibility.
+ * - Centralizes browser-side Operational Access admin writes and the first
+ *   Personal Cards module read calls.
+ * - Runtime read calls return backend-resolved, already-masked DTOs; the
+ *   frontend must not compute effective access.
  */
 
 import { apiFetch } from '@/shared/api-client';
 import { readApiError, type ApiHttpError } from '@/shared/auth/api-errors';
 import type {
+  OperationalAccessAdvancedCoverageResponse,
   OperationalAccessGroupConfigurationResponse,
+  PersonalCardDetailResponse,
+  PersonalCardsListResponse,
   SaveOperationalAccessGroupGrantsRequest,
+  SaveOperationalAccessOversightRequest,
   SaveOperationalAccessResponsibleForRequest,
+  SaveOperationalAccessSpecialAccessRequest,
+  SaveOperationalAccessTemporaryCoverageRequest,
 } from './contracts';
 
 export type BrowserOperationalAccessSuccess<T> = {
@@ -72,4 +80,52 @@ export function saveOperationalAccessResponsibleFor(
       body: JSON.stringify(input),
     },
   );
+}
+
+export function saveOperationalAccessOversight(
+  input: SaveOperationalAccessOversightRequest,
+): Promise<BrowserOperationalAccessResult<OperationalAccessAdvancedCoverageResponse>> {
+  return requestJson<OperationalAccessAdvancedCoverageResponse>(
+    '/operational-access/advanced-coverage/oversight',
+    {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function saveOperationalAccessTemporaryCoverage(
+  input: SaveOperationalAccessTemporaryCoverageRequest,
+): Promise<BrowserOperationalAccessResult<OperationalAccessAdvancedCoverageResponse>> {
+  return requestJson<OperationalAccessAdvancedCoverageResponse>(
+    '/operational-access/advanced-coverage/temporary-coverage',
+    {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function saveOperationalAccessSpecialAccess(
+  input: SaveOperationalAccessSpecialAccessRequest,
+): Promise<BrowserOperationalAccessResult<OperationalAccessAdvancedCoverageResponse>> {
+  return requestJson<OperationalAccessAdvancedCoverageResponse>(
+    '/operational-access/advanced-coverage/special-access',
+    {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function listPersonalCards(): Promise<
+  BrowserOperationalAccessResult<PersonalCardsListResponse>
+> {
+  return requestJson<PersonalCardsListResponse>('/personal/cards');
+}
+
+export function getPersonalCard(
+  membershipId: string,
+): Promise<BrowserOperationalAccessResult<PersonalCardDetailResponse>> {
+  return requestJson<PersonalCardDetailResponse>(`/personal/cards/${membershipId}`);
 }

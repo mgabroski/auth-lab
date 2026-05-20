@@ -4,14 +4,14 @@
  * WHY:
  * - Provides the capability-gated Operational Access admin configuration shell.
  * - Renders backend-owned configuration read models and points admins to the
- *   narrow backend resolver proof boundary.
+ *   Personal Cards backend-resolved module proof boundary.
  *
  * RULES:
  * - Admin-only via auth bootstrap route state.
  * - Hidden/404 unless the backend Settings overview includes the operationalAccess card.
  * - Do not compute effective access in the frontend.
  * - Do not claim broad runtime Agent visibility or all-module integration is shipped.
- * - The backend resolver proof surface is narrow and backend-owned.
+ * - The Personal Cards proof surface is backend-owned; broader module rollout is not claimed.
  */
 
 import React, { type CSSProperties } from 'react';
@@ -158,7 +158,7 @@ export default async function OperationalAccessSettingsPage() {
     <AuthenticatedShell
       eyebrow="Hubins admin workspace"
       title="Operational Access"
-      subtitle="Configure Agent group toolboxes and coverage. Backend resolver proof is active only for the narrow people surface."
+      subtitle="Configure Agent group toolboxes and coverage. Runtime proof is limited to backend-filtered Personal Cards."
       me={routeState.me}
     >
       <div style={{ display: 'grid', gap: '16px' }}>
@@ -189,7 +189,7 @@ export default async function OperationalAccessSettingsPage() {
               Responsible For uses exact active tenant people. Assigned Areas waits for stable area
               IDs.
             </li>
-            <li>Backend resolver proof is active only for the narrow people surface.</li>
+            <li>Backend-filtered runtime proof is active only for Personal Cards.</li>
             <li>/admin/settings/access remains Access &amp; Security.</li>
           </ul>
         </section>

@@ -126,7 +126,7 @@ Archives an active tenant group. This is the only lifecycle removal path in the 
 - no hard delete is implemented.
 - no restore is implemented.
 - the archived group is removed from normal active group lists.
-- this People & Teams API does not run resolver behavior; resolver proof routes live under `/operational-access/runtime/*`.
+- this People & Teams API does not run resolver behavior; OA-owned resolver proof routes live under `/operational-access/runtime/*`, and the first real module proof routes live under `/personal/cards*`.
 - writes `people_teams.group_archived` audit event.
 
 ## GET `/people-teams/groups/:groupId/members`
@@ -227,4 +227,4 @@ Only `ACTIVE` memberships for the authenticated tenant are returned.
 
 People & Teams remains the group and membership foundation. Operational Access consumes active `AGENT` groups through `/operational-access/*`, but group membership alone is still provisioning-only and does not grant runtime visibility.
 
-Operational Access grants, Responsible For, Oversight, Temporary Coverage, Special Access, and resolver proof routes are stored and served separately from People & Teams group records. Admin/User groups and archived groups cannot receive Agent Operational Access grants. `/admin/settings/access` remains Access & Security and is not the Operational Access surface.
+Operational Access grants, Responsible For, Oversight, Temporary Coverage, Special Access, OA-owned resolver proof routes, and Personal Cards module proof routes are stored and served separately from People & Teams group records. Admin/User groups and archived groups cannot receive Agent Operational Access grants. `/admin/settings/access` remains Access & Security and is not the Operational Access surface.

@@ -125,4 +125,13 @@ export const OperationalAccessErrors = {
       actionKey,
     });
   },
+
+  advancedCoverageVersionConflict(expectedVersion: number) {
+    return AppError.conflict(
+      'Operational Access advanced coverage changed. Refresh and try again.',
+      {
+        expectedVersion,
+      },
+    );
+  },
 } as const;

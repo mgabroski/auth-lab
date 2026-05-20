@@ -677,6 +677,7 @@ Run these from the repo root unless noted.
 | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Backend Settings proof suite                    | `yarn workspace @auth-lab/backend test -- settings-proof-closure.spec.ts settings-foundation.spec.ts settings-access.spec.ts settings-account.spec.ts settings-concurrency.spec.ts settings-cp-cascade.spec.ts settings-modules-personal.spec.ts settings-integrations.spec.ts settings-read-surfaces.spec.ts settings-readiness-gate.spec.ts` | migration/backfill and retired-scaffold removal, required/optional CP cascade, account/personal concurrency, conflicts, placeholder/absent behavior, account non-gating, personal completion                                                       |
 | Backend People & Teams proof suite              | `yarn workspace @auth-lab/backend test -- people-teams-read.spec.ts people-teams-groups.spec.ts people-teams-members.spec.ts people-teams-migration.spec.ts`                                                                                                                                                                                   | tenant-scoped group reads/writes, membership management, admin-only protection, archived-group behavior, migration rollback safety, and audit coverage                                                                                             |
+| Backend Operational Access foundation proof     | `yarn workspace @auth-lab/backend test -- operational-access-foundation.spec.ts operational-access-resolver.spec.ts operational-access-governance-hardening.spec.ts personal-cards-operational-access.spec.ts`                                                                                                                                 | capability gating, admin-only config, group membership grants nothing, grant + coverage behavior, direct detail bypass denial, oversight, temporary coverage, Special Access, masking, Why safety, scoped advanced saves, and audit hardening      |
 | Backend role/invite provisioning proof          | `yarn workspace @auth-lab/backend test -- admin-invites.spec.ts invites-accept.spec.ts auth-sso-google-callback.spec.ts auth-sso-microsoft-callback.spec.ts backend-admin-guards.spec.ts`                                                                                                                                                      | canonical role outputs, legacy MEMBER-to-USER compatibility, public/SSO USER provisioning, Agent invite group validation, SSO Agent invite activation, token preservation on failed Agent group revalidation, and AGENT/USER admin-guard rejection |
 | Frontend Settings and People & Teams unit proof | `yarn workspace frontend test:unit -- admin-settings people-teams`                                                                                                                                                                                                                                                                             | SSR page loaders and component rendering contract for Settings pages                                                                                                                                                                               |
 | Frontend role/workspace proof                   | `yarn workspace frontend test:unit -- workspace-app-page admin-invite-management admin-settings`                                                                                                                                                                                                                                               | ADMIN / AGENT / USER routing, Agent/User admin Settings guard behavior, User/Agent invite UI language, Agent group selection rules, and neutral workspace shell without fake Operational Access surfaces                                           |
@@ -755,14 +756,14 @@ CI green alone is not a substitute for truthful QA docs and runbooks. Keep this 
 
 ## Operational Access Step 4 QA notes
 
-Operational Access QA is now executable for configuration foundation, advanced coverage, Special Access, and the selected backend people / Personal Card resolver proof surface.
+Operational Access QA is now executable for configuration foundation, advanced coverage, Special Access, the OA-owned runtime people proof surface, and the first real module proof surface at `/personal/cards`.
 
 Executable now:
 
 - Capability disabled tenants do not expose `/admin/settings/operational-access`.
 - Capability enabled tenants expose the admin-only Operational Access settings page.
 - Agent/User sessions cannot access admin-only Operational Access configuration routes or `/admin/settings/operational-access`.
-- Runtime proof routes use backend-resolved access for Admin, Agent, and User actors.
+- Runtime proof routes and Personal Cards module routes use backend-resolved access for Admin, Agent, and User actors.
 - Active Agent groups can receive valid product-defined grants.
 - Archived groups and non-Agent groups cannot receive Agent Operational Access grants.
 - Invalid action keys, invalid Primary Where values, invalid Which Records values, and invalid action/where/record combinations are rejected.
@@ -772,15 +773,24 @@ Executable now:
 - Agent group membership alone still does not create runtime visibility.
 - Agent with grant but no coverage receives a safe empty runtime people set.
 - Agent with grant plus Responsible For sees only matching people.
+- `/personal/cards` list is backend-filtered and never relies on frontend filtering.
+- `/personal/cards/:membershipId` denies unauthorized direct detail bypass.
+- User sees own/self-service Personal Card only.
+- Admin sees by Admin level and the source path reports Admin-level truth.
 - Oversight is directed, non-reciprocal, and single-hop.
 - Oversight include-team false versus true behavior is proven.
 - Temporary Coverage grants only during the active time window and expires automatically.
-- Special Access requires reason, review date, expiry, and exact target.
-- Runtime people output masks email for Agents and backend explanations avoid hidden field values.
+- Special Access requires reason, review date, expiry, and exact target/action.
+- Special Access expiry fails closed.
+- Advanced coverage saves are subject-scoped and must not wipe unrelated rows.
+- Advanced coverage saves require the current `expectedVersion`; stale saves fail with 409 and do not overwrite current rows.
+- Advanced coverage and Special Access success audit includes meaningful before/after detail.
+- Rejected advanced coverage/Special Access mutations write failure audit where infrastructure supports it.
+- Runtime people and Personal Cards output masks email for Agents, masks/hides sensitive proof fields for Agents, omits fields outside the proof card, and backend explanations avoid hidden field values.
 
 Still not executable:
 
 - Assigned Areas coverage, because stable employer/location pair IDs do not exist yet.
-- Broad module integrations beyond the selected runtime people proof surface.
+- Broad module integrations beyond the selected Personal Cards proof surface.
 - Search/export/notification/PDF/generated-output visibility propagation.
-- Full Personal Cards UI runtime flow.
+- Full Personal Cards UI runtime flow; only backend module API proof is executable now.

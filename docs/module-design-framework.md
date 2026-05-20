@@ -37,11 +37,11 @@ If this framework conflicts with that guide, the 9.5 guide wins.
 
 Current shipped truth must remain explicit:
 
-- Operational Access is future target work, not currently shipped.
-- Agent operational grants are not shipped.
-- Primary Where, Which Records, Additional Coverage, Special Access, Why explanations, and the Effective Access Resolver are not shipped.
-- Current `/admin/settings/access` is Access & Security, not future Operational Access.
-- People & Teams groups are currently management/provisioning foundations, not runtime operational grants.
+- Operational Access is partially shipped as a capability-gated foundation: admin shell, product-defined group grants, Primary Where / Which Records storage and validation, Responsible For, Oversight, Temporary Coverage, Special Access, backend resolver proof, and first real Personal Cards module proof.
+- Full all-module Operational Access rollout is not shipped. Assigned Areas and Review Queue runtime enforcement remain deferred until stable target contexts exist.
+- Search/export/notification/generated-output propagation is not shipped and must be designed per module before those channels consume Operational Access.
+- Current `/admin/settings/access` is Access & Security, not Operational Access.
+- People & Teams groups remain management/provisioning foundations by themselves; group membership alone grants no runtime visibility.
 
 ---
 
@@ -433,9 +433,9 @@ Current repo truth:
 
 - current backend runtime roles are `ADMIN | AGENT | USER`
 - legacy `MEMBER` is a compatibility alias for `USER`
-- current `/admin/settings/access` is Access & Security, not future Operational Access
-- future Agent operational groups, coverage keys, Primary Where, Which Records, Additional Coverage, Special Access, Why explanations, and the Effective Access Resolver are not implemented yet
-- People & Teams groups are currently management/provisioning foundations, not runtime operational grants
+- current `/admin/settings/access` is Access & Security, not Operational Access
+- the capability-gated Operational Access foundation and first Personal Cards backend module proof are implemented, but broad module rollout is not
+- People & Teams groups are management/provisioning foundations by themselves; group membership alone grants no runtime visibility
 
 Locked 9.5 mental model:
 
@@ -676,7 +676,7 @@ Required checks:
 
 #### 7.9.14 Future QA expectations
 
-Operational Access QA planning for a module must stay future/not executable until the supporting runtime surfaces exist.
+Operational Access QA planning for a module is executable only when that module has a supporting backend runtime surface. Today this is true for the narrow Personal Cards backend read proof only; future modules must add their own proof before claiming runtime coverage.
 
 Future QA must cover:
 

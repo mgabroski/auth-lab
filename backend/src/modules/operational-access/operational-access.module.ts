@@ -3,7 +3,7 @@
  *
  * WHY:
  * - Top-level module boundary for Operational Access configuration plus the
- *   narrow resolver proof surface.
+ *   `personal_cards.view` resolver proof surface.
  * - Composes product-defined grant configuration, base/advanced coverage,
  *   Special Access, and backend-owned effective access decisions.
  */

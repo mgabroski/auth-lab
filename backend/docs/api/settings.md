@@ -62,7 +62,7 @@ The separate Operational Access shell, when enabled by CP capability, is served 
 Route treatment is locked as follows:
 
 - Live v1 Settings surfaces: `/settings/bootstrap`, `/settings/overview`, `/settings/access`, `/settings/account`, `/settings/modules`, `/settings/modules/personal`, `/settings/integrations`, and the People & Teams management surface backed by `/people-teams/*`.
-- Capability-gated Operational Access shell: `/admin/settings/operational-access` appears only when `GET /settings/overview` returns the `operationalAccess` card because the CP-owned `operational_access_enabled` capability is true. It has no backend `/settings/operational-access` endpoint; configuration and resolver-proof endpoints are under `/operational-access/*`.
+- Capability-gated Operational Access shell: `/admin/settings/operational-access` appears only when `GET /settings/overview` returns the `operationalAccess` card because the CP-owned `operational_access_enabled` capability is true. It has no backend `/settings/operational-access` endpoint; configuration and OA-owned resolver-proof endpoints are under `/operational-access/*`; the first real module proof endpoints are under `/personal/cards*`.
 - Placeholder-only v1 surface: `/settings/communications`. It returns a minimal placeholder DTO and exposes no live configuration or mutation behavior.
 - Overview-card-only v1 surface: Workspace Experience. It appears only as an overview card and has no backend route.
 - Absent v1 surface: Permissions. It has no overview card, no backend route, and no tenant configuration API.
@@ -616,7 +616,7 @@ The following remain intentionally unimplemented in the current repo state:
 - Integrations provider connection/recovery routes
 - Integrations sync or mapping routes
 - Assigned Areas Operational Access routes
-- broad Operational Access module-consumer routes beyond the selected runtime people proof surface
+- broad Operational Access module-consumer routes beyond the selected Personal Cards proof surface
 - Operational Access search/export/notification/PDF/generated-output integrations
 - Permissions routes
 - Communications write routes
@@ -632,7 +632,7 @@ Their absence is intentional and must stay aligned with the locked roadmap.
 
 When the CP-owned `operational_access_enabled` capability is true, `GET /settings/overview` includes the `operationalAccess` card linking to `/admin/settings/operational-access`.
 
-That page renders backend-owned Operational Access configuration read models from `/operational-access/*`: product-defined actions, Primary Where choices, Which Records choices, active Agent groups, Responsible For coverage, and advanced coverage readiness. It must not compute effective access in frontend code.
+That page renders backend-owned Operational Access configuration read models from `/operational-access/*`: product-defined actions, Primary Where choices, Which Records choices, active Agent groups, Responsible For coverage, and advanced coverage readiness. The first real module proof lives at `/personal/cards*`. Frontend code must not compute effective access.
 
 The selected backend resolver proof surface is `/operational-access/runtime/people`, not a Settings API endpoint.
 

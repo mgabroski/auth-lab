@@ -127,7 +127,8 @@ export const OPERATIONAL_ACCESS_WHICH_RECORDS = [
   {
     key: 'personal_cards_requiring_attention',
     label: 'Personal Cards requiring attention',
-    description: 'Personal Cards in a product-defined attention/review queue.',
+    description:
+      'Personal Cards inside the backend-visible Personal Cards proof scope. Workflow-specific attention queues remain deferred until a real queue model ships.',
     category: 'Personal',
   },
 ] as const;
@@ -272,7 +273,7 @@ export type OperationalAccessSourcePath =
   | 'DENIED';
 
 export type OperationalAccessFieldVisibility = {
-  fieldKey: 'name' | 'email';
+  fieldKey: 'name' | 'email' | 'person.ssn' | 'person.date_of_birth';
   treatment: 'VISIBLE' | 'MASKED' | 'HIDDEN';
 };
 
@@ -364,6 +365,7 @@ export type OperationalAccessSpecialAccessDto = {
 };
 
 export type OperationalAccessAdvancedCoverageResponse = {
+  version: number;
   oversight: OperationalAccessOversightDto[];
   temporaryCoverage: OperationalAccessTemporaryCoverageDto[];
   specialAccess: OperationalAccessSpecialAccessDto[];

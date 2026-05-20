@@ -18,11 +18,14 @@ import type {
   OperationalAccessWhichRecordsKey,
 } from '../operational-access.types';
 import {
+  assertAdvancedCoverageVersionSql,
+  bumpAdvancedCoverageVersionSql,
   insertOversightRowsSql,
   insertSpecialAccessRowsSql,
   insertTemporaryCoverageRowsSql,
   replaceGroupGrantsSql,
   replaceResponsibleForAssignmentsSql,
+  selectAdvancedCoverageVersionSql,
   selectActiveAgentGroupsSql,
   selectActiveGroupMemberSql,
   selectActiveMembershipSql,
@@ -64,6 +67,24 @@ export class OperationalAccessRepo {
 
   getTenantCapability(tenantId: string): Promise<OperationalAccessTenantCapabilityRow | undefined> {
     return selectOperationalAccessTenantCapabilitySql(this.db, tenantId);
+  }
+
+  getAdvancedCoverageVersion(tenantId: string): Promise<number> {
+    return selectAdvancedCoverageVersionSql(this.db, tenantId);
+  }
+
+  advancedCoverageVersionMatches(input: {
+    tenantId: string;
+    expectedVersion: number;
+  }): Promise<boolean> {
+    return assertAdvancedCoverageVersionSql(this.db, input);
+  }
+
+  bumpAdvancedCoverageVersion(input: {
+    tenantId: string;
+    actorMembershipId: string;
+  }): Promise<number> {
+    return bumpAdvancedCoverageVersionSql(this.db, input);
   }
 
   listActiveAgentGroups(tenantId: string): Promise<OperationalAccessGroupRow[]> {
@@ -196,6 +217,7 @@ export class OperationalAccessRepo {
   replaceOversight(input: {
     tenantId: string;
     actorMembershipId: string;
+    replaceForMembershipIds: string[];
     entries: Array<{
       overseerMembershipId: string;
       targetMembershipId: string;
@@ -210,6 +232,7 @@ export class OperationalAccessRepo {
   replaceTemporaryCoverage(input: {
     tenantId: string;
     actorMembershipId: string;
+    replaceForMembershipIds: string[];
     entries: Array<{
       coveringMembershipId: string;
       coveredMembershipId: string;
@@ -225,6 +248,7 @@ export class OperationalAccessRepo {
   replaceSpecialAccess(input: {
     tenantId: string;
     actorMembershipId: string;
+    replaceForMembershipIds: string[];
     entries: Array<{
       membershipId: string;
       targetMembershipId: string;

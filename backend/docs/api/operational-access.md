@@ -1,12 +1,12 @@
 # Operational Access API
 
-**Surface:** Tenant admin Operational Access configuration plus the first backend resolver proof surface  
-**Route prefix:** `/operational-access/*`  
-**Status:** Resolver proof shipped for one narrow people / Personal Card surface
+**Surface:** Tenant admin Operational Access configuration plus the first Personal Cards module proof surface  
+**Route prefixes:** `/operational-access/*`, `/personal/cards*`  
+**Status:** Resolver proof shipped for `personal_cards.view`; first real module proof is Personal Cards
 
 ## Current boundary
 
-Operational Access is now capability-gated, configurable for active Agent groups, and consumed by one narrow backend-enforced proof surface.
+Operational Access is now capability-gated, configurable for active Agent groups, and consumed by one narrow backend-enforced Personal Cards proof surface.
 
 Shipped in this API:
 
@@ -21,14 +21,15 @@ Shipped in this API:
 - backend Effective Access Resolver v1 for `personal_cards.view`
 - set-based runtime people filtering through `GET /operational-access/runtime/people`
 - direct decision enforcement through `GET /operational-access/runtime/people/:membershipId`
+- first normal module API consumer through `GET /personal/cards` and `GET /personal/cards/:membershipId`
 - backend masking for the selected proof surface
 
 Still not shipped:
 
 - Assigned Areas coverage table or employer/location target assignments
-- broad module integration beyond the selected runtime people proof surface
+- broad module integration beyond the selected Personal Cards proof surface
 - search/export/notification/PDF/generated-output integrations
-- full Personal Cards module UI
+- full Personal Cards module UI; only the backend read API proof is shipped
 - tenant-facing Why UI beyond backend explanation fields in resolver responses
 - operational repair/review queues for expired or review-due coverage
 
@@ -45,7 +46,7 @@ Configuration routes require a fully authenticated tenant Admin session:
 - email verified
 - tenant-scoped session
 
-Runtime proof routes require an authenticated verified tenant session. If the actor is Admin, MFA must also be complete. The resolver then decides access for `ADMIN`, `AGENT`, and `USER` server-side.
+Runtime proof routes and Personal Cards module read routes require an authenticated verified tenant session. If the actor is Admin, MFA must also be complete. The resolver then decides access for `ADMIN`, `AGENT`, and `USER` server-side.
 
 Every read/write uses the authenticated tenant context. Request parameters cannot widen tenant scope. If `tenants.operational_access_enabled = false`, all Operational Access routes fail closed as not found.
 
@@ -228,16 +229,18 @@ Audit action: `operational_access.responsible_for_saved`.
 
 ### GET `/operational-access/advanced-coverage`
 
-Returns current Oversight, Temporary Coverage, and Special Access configuration for the authenticated tenant. Admin-only.
+Returns current Oversight, Temporary Coverage, and Special Access configuration for the authenticated tenant. Admin-only. Response includes `version`, the required optimistic-concurrency value for the next advanced coverage write.
 
 ### PUT `/operational-access/advanced-coverage/oversight`
 
-Full-replacement save for directed Oversight.
+Subject-scoped replacement save for directed Oversight. By default the request replaces Oversight rows for the overseer memberships present in `entries`. `replaceForMembershipIds` may be supplied to explicitly clear or replace specific overseer subjects without wiping unrelated tenant rows.
 
 Request body:
 
 ```ts
 {
+  expectedVersion: number;
+  replaceForMembershipIds?: string[];
   entries: Array<{
     overseerMembershipId: string;
     targetMembershipId: string;
@@ -256,17 +259,21 @@ Rules:
 - Oversight is directed, not reciprocal
 - Oversight include-team behavior is explicit through `includesResponsiblePeople`
 - MVP Oversight is single-hop; include-team collects only the target person's own base Responsible For set
+- save is subject-scoped and must not wipe unrelated overseer rows
+- `expectedVersion` must match the current advanced coverage version or the write returns 409
 
-Audit action: `operational_access.oversight_saved`.
+Audit actions: `operational_access.oversight_saved`; rejected writes use `operational_access.oversight_save_failed` where failure audit is available. Success metadata includes before/after details, actor/tenant context, replace subjects, source service, and runtime-visibility impact.
 
 ### PUT `/operational-access/advanced-coverage/temporary-coverage`
 
-Full-replacement save for time-bound Temporary Coverage.
+Subject-scoped replacement save for time-bound Temporary Coverage. By default the request replaces Temporary Coverage rows for covering memberships present in `entries`. `replaceForMembershipIds` may be supplied to explicitly clear or replace specific covering subjects without wiping unrelated tenant rows.
 
 Request body:
 
 ```ts
 {
+  expectedVersion: number;
+  replaceForMembershipIds?: string[];
   entries: Array<{
     coveringMembershipId: string;
     coveredMembershipId: string;
@@ -284,17 +291,21 @@ Rules:
 - `startsAt` must be before `expiresAt`
 - optional `reviewAt` must not be after `expiresAt`
 - expired Temporary Coverage grants nothing
+- save is subject-scoped and must not wipe unrelated covering rows
+- `expectedVersion` must match the current advanced coverage version or the write returns 409
 
-Audit action: `operational_access.temporary_coverage_saved`.
+Audit actions: `operational_access.temporary_coverage_saved`; rejected writes use `operational_access.temporary_coverage_save_failed` where failure audit is available. Success metadata includes before/after details, actor/tenant context, replace subjects, source service, and runtime-visibility impact.
 
 ### PUT `/operational-access/advanced-coverage/special-access`
 
-Full-replacement save for rare one-person extra access.
+Subject-scoped replacement save for rare one-person extra access. By default the request replaces Special Access rows for memberships present in `entries`. `replaceForMembershipIds` may be supplied to explicitly clear or replace specific subjects without wiping unrelated tenant rows.
 
 Request body:
 
 ```ts
 {
+  expectedVersion: number;
+  replaceForMembershipIds?: string[];
   entries: Array<{
     membershipId: string;
     targetMembershipId: string;
@@ -314,8 +325,63 @@ Rules:
 - review date is required and must not be after expiry
 - expiry is required and must be in the future
 - revoked or expired Special Access grants nothing
+- save is subject-scoped and must not wipe unrelated Special Access rows
+- `expectedVersion` must match the current advanced coverage version or the write returns 409
 
-Audit action: `operational_access.special_access_saved`.
+Audit actions: `operational_access.special_access_saved`; rejected writes use `operational_access.special_access_save_failed` where failure audit is available. Success metadata includes before/after details, actor/tenant context, replace subjects, source service, exact target/action metadata, and runtime-visibility impact.
+
+## Personal Cards module proof routes
+
+These are normal module read APIs. They are not admin configuration APIs and they do not let the frontend compute access. The controller authenticates the tenant actor, delegates to the backend PersonalCardsService, and returns a server-built card read model. The service consumes Operational Access decisions, applies field-level masking/hiding, and returns only server-filtered/masked DTOs.
+
+### GET `/personal/cards`
+
+Returns the Personal Card list that the authenticated actor may see for `personal_cards.view`. The response uses `cards[]`, not raw people rows, and each card contains server-decided fields.
+
+Response shape:
+
+```ts
+{
+  actionKey: 'personal_cards.view';
+  module: 'personal_cards';
+  whichRecordsApplied: 'personal_cards_requiring_attention';
+  cards: Array<{
+    membershipId: string;
+    title: string | null;
+    fields: Array<{
+      fieldKey: 'person.name' | 'person.work_email' | 'person.ssn' | 'person.date_of_birth';
+      label: string;
+      sensitivity: 'STANDARD' | 'SENSITIVE';
+      treatment: 'VISIBLE' | 'MASKED' | 'HIDDEN';
+      value: string | null;
+    }>;
+    sourcePath: string[];
+    explanation: string[];
+  }>;
+}
+```
+
+Rules:
+
+- Admin sees tenant people by Admin level.
+- User sees only own/self-service record.
+- Agent with only group membership sees an empty list.
+- Agent with grant but no matching coverage sees an empty list.
+- Agent with grant plus matching Responsible For / Oversight / Temporary Coverage / Special Access sees only matching records.
+- List filtering happens in the backend query path; frontend filtering is not the enforcement boundary.
+- Sensitive proof fields (`person.ssn`, `person.date_of_birth`) are masked or hidden by the server decision.
+- Fields outside the shipped proof card are omitted from the DTO and fail closed for this proof surface.
+
+### GET `/personal/cards/:membershipId`
+
+Returns one Personal Card when the backend resolver allows it. Unauthorized direct detail access returns forbidden according to repo convention.
+
+Rules:
+
+- Direct detail bypass must not expose records omitted from the list.
+- Why/sourcePath output may explain source categories, but must not include hidden values.
+- This endpoint is the first real-module Operational Access integration proof.
+- The current proof includes deterministic sensitive proof fields to verify masking/hiding without claiming full Personal Settings field-card runtime is complete.
 
 ## Runtime resolver proof routes
 
@@ -336,7 +402,7 @@ Response shape:
     name: string | null;
     email: string | null;
     fieldVisibility: Array<{
-      fieldKey: 'name' | 'email';
+      fieldKey: 'name' | 'email' | 'person.ssn' | 'person.date_of_birth';
       treatment: 'VISIBLE' | 'MASKED' | 'HIDDEN';
     }>;
     sourcePath: string[];
@@ -393,9 +459,10 @@ The explanation strings contain source categories only. They must not include hi
 - Archived or non-Agent group: conflict.
 - Missing/cross-tenant membership target: not found.
 - Deleted or inactive group/membership targets are pruned by active-target joins or rejected by validation.
+- Current OA persistence uses tenant/membership foreign keys with cascade cleanup for hard-deleted tenants/memberships. This is intentional fail-closed behavior for the current foundation: deleted targets cannot keep granting access. Audit events preserve mutation history; later remediation/orphan-retention UI remains deferred.
 - Expired Temporary Coverage and expired/revoked Special Access grant nothing.
 - The runtime people proof masks email for Agents and never returns hidden target emails in explanations.
 
 ## Selected-consumer leak boundary
 
-The selected consumer is the backend runtime people / Personal Card proof surface. It currently exposes no search, export, notification, PDF, email digest, or generated-output route. Those channels must not consume Operational Access until they use backend-resolved visibility and masking.
+The selected consumers are the OA-owned runtime people proof routes and the backend Personal Cards module read routes. They currently expose no search, export, notification, PDF, email digest, or generated-output route. Those channels must not consume Operational Access until they use backend-resolved visibility and masking.

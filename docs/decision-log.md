@@ -86,6 +86,7 @@ Do not write ADRs for:
 | ADR-0032 | Oversight Is Directed, Single-Hop, And Dynamically Resolved                                                                 | LOCKED | access / hierarchy            |
 | ADR-0033 | Operational Access Tenant Surface Is Guarded By `operational_access_enabled`                                                | LOCKED | CP / settings / access        |
 | ADR-0034 | Search, Notifications, Exports, And High-Sensitivity Domains Must Consume Resolver Output                                   | LOCKED | access / security / modules   |
+| ADR-0035 | Operational Access First Real Module Proof Is Personal Cards With Scoped Governance Saves                                   | LOCKED | access / Personal Cards       |
 
 ---
 
@@ -1218,7 +1219,7 @@ LOCKED
 
 ### Decision
 
-Future advanced Operational Access setup is gated by a tenant capability:
+Advanced Operational Access setup is gated by a tenant capability:
 
 ```text
 operational_access_enabled
@@ -1228,7 +1229,7 @@ When false, simple Admin/User tenants must not see advanced Operational Access s
 
 When true, Agents, Agent Groups as operational grant subjects, Primary Where, Which Records, Additional Coverage, Special Access, and resolver-backed access can be made available according to implementation readiness.
 
-This capability is future target planning. It is not currently shipped as a live Operational Access feature flag in this repo.
+This capability is shipped as a live fail-closed feature flag in this repo. It enables only the current Operational Access foundation and Personal Cards proof surface; it does not imply all-module Operational Access rollout.
 
 ### Why
 
@@ -1236,9 +1237,9 @@ Many tenants need only Admins and Users. Showing operational-grant setup to simp
 
 ### Consequences
 
-- CP/tenant planning must include a future capability boundary for Operational Access.
+- CP owns enable/disable for the capability only; CP does not manage runtime Operational Access assignments.
 - Settings/People & Teams UX must not expose advanced Operational Access controls for simple tenants.
-- Docs and QA must continue to mark Operational Access not shipped until the capability, UI, resolver, and module consumers exist.
+- Docs and QA must distinguish the shipped foundation and Personal Cards proof from deferred all-module rollout, Assigned Areas, Review Queue enforcement, and search/export/notification/generated-output propagation.
 
 ### Supersedes
 
@@ -1282,6 +1283,42 @@ Search, notifications, exports, generated PDFs, and emails are common data-leak 
 ### Supersedes
 
 Any module design where search, notifications, exports, generated documents, or high-sensitivity records bypass backend Effective Access.
+
+## ADR-0035 — Operational Access First Real Module Proof Is Personal Cards With Scoped Governance Saves
+
+### Status
+
+LOCKED
+
+### Decision
+
+The first real Operational Access module consumer is the backend Personal Cards read surface:
+
+- `GET /personal/cards`
+- `GET /personal/cards/:membershipId`
+
+These endpoints consume the backend Operational Access resolver for `personal_cards.view`. They must server-filter list results, deny unauthorized direct detail access, return a module-owned Personal Card read model with server-decided field visibility/masking, include sensitive-field masking/hiding proof for `person.ssn` and `person.date_of_birth`, omit fields outside the shipped proof card, and expose only safe sourcePath / Why explanations. Frontend code may render this output but must not compute effective access or filter records into compliance.
+
+Operational Access-owned runtime proof endpoints under `/operational-access/runtime/people` remain useful resolver proof surfaces, but closure proof must treat `/personal/cards` as the first normal module API integration.
+
+Advanced coverage saves for Oversight, Temporary Coverage, and Special Access are versioned and subject-scoped. They may replace rows for the affected subject memberships only through `replaceForMembershipIds` plus subjects present in the payload. They require the current `expectedVersion` and must not use stale full-tenant replacement semantics that can wipe unrelated advanced access rows. Success audit records before/after detail; rejected sensitive mutations write failure audit where the shared audit infrastructure can persist the failure.
+
+### Why
+
+Operational Access needed proof that a real module API, not only an OA-owned diagnostic endpoint, can consume backend-resolved access safely. Advanced coverage also needed mutation hardening so a stale admin save cannot erase unrelated manager coverage, temporary backup, or one-person exception records. The tenant-scoped advanced coverage version provides a simple optimistic-concurrency boundary.
+
+### Consequences
+
+- The shipped runtime proof is narrow: `personal_cards.view` only.
+- Assigned Areas, Review Queue enforcement, broad Which Records enforcement across all modules, search/export/notification/generated-output propagation, and a full Personal Cards UI remain not fully shipped.
+- Group membership alone still grants no runtime visibility.
+- CP still only enables/disables `operational_access_enabled`; CP does not manage runtime assignments.
+- `/admin/settings/access` remains Access & Security.
+- Future module integrations must follow the same pattern: backend-resolved set/detail decisions, server-side filtering, direct-bypass denial, masking, and safe Why output.
+
+### Supersedes
+
+Any interpretation that the Operational Access runtime proof is only an OA-owned route, or that advanced coverage saves may replace all tenant advanced access rows by default.
 
 ## Maintenance Rules
 
